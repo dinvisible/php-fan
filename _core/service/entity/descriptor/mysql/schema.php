@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\entity\descriptor\mysql;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\entity\descriptor\mysql;
 
 /**
  * Get table description by information_schema
@@ -21,188 +25,154 @@ class schema extends \fan\core\service\entity\descriptor\mysql
      * Data Base Name
      * @var string
      */
-    protected $sDbName = null;
+    protected ?string $dbName = null;
 
     /**
      * Connection to database
      * @var \fan\core\service\database
      */
-    protected $oConnectionSchema = null;
+    protected ?object $connectionSchema = null;
 
     /**
      * Array of Table Info
      * @var string
      */
-    protected $aTableInfo = null;
+    protected ?array $tableInfo = null;
 
     /**
      * Array of Constraints
      * @var string
      */
-    protected $aConstraints = null;
+    protected ?array $constraints = null;
 
-    public function __construct(\fan\core\service\entity\description $oDescription)
+    public function __construct(\fan\core\service\entity\description $description)
     {
-        parent::__construct($oDescription);
-//throw new \fan\project\exception\model\reverse($oDescription->getEntity());
+        parent::__construct($description);
+//throw new \fan\project\exception\model\reverse($description->getEntity());
 
-        $aCheckParam = array(
+        $checkParam = [
             'ENGINE'     => null,
             'PERSISTENT' => 0,
             'HOST'       => 'localhost',
             'DATABASE'   => null,
             'USER'       => null,
             'PASSWORD'   => '',
-        );
-        $oConnect = $oDescription->getEntity()->getConnection();
-        $aParam = $oConnect->getConnectionParam();
-        foreach ($aCheckParam as $k => $v) {
-            if (!isset($aParam[$k])) {
+        ];
+        $connect = $description->getEntity()->getConnection();
+        $param = $connect->getConnectionParam();
+        foreach ($checkParam as $k => $v) {
+            if (!isset($param[$k])) {
                 if (is_null($v)) {
-                    throw new \project\exception\model\reverse($oDescription->getEntity(), 'Undefined required connect parameter ' . $k . ' for connection ' . $oConnect->getConnectionName());
+                    throw new \project\exception\model\reverse($description->getEntity(), 'Undefined required connect parameter ' . $k . ' for connection ' . $connect->getConnectionName());
                 } else {
-                    $aParam[$k] = $v;
+                    $param[$k] = $v;
                 }
             }
         }
 
         try {
-            $this->oConnectionSchema = \fan\project\service\database::instanceByParam(array(
-                'ENGINE'     => $aParam['ENGINE'],
-                'PERSISTENT' => $aParam['PERSISTENT'],
-                'HOST'       => $aParam['HOST'],
+            $this->connectionSchema = $this->containerService('database_by_param', [
+                'ENGINE'     => $param['ENGINE'],
+                'PERSISTENT' => $param['PERSISTENT'],
+                'HOST'       => $param['HOST'],
                 'DATABASE'   => 'information_schema',
-                'USER'       => $aParam['USER'],
-                'PASSWORD'   => $aParam['PASSWORD'],
+                'USER'       => $param['USER'],
+                'PASSWORD'   => $param['PASSWORD'],
                 'SCENARIO'   => '',
-            ), 'shema');
-        } catch (\fan\project\exception\database $oExp) {
-            $oExp->disableLog();
-            throw new \fan\project\exception\model\reverse($oDescription->getEntity());
+            ], 'shema');
+        } catch (\fan\project\exception\database $exp) {
+            $exp->disableLog();
+            throw new \fan\project\exception\model\reverse($description->getEntity());
         }
 
-        $this->sDbName = $aParam['DATABASE'];
-    } // function __construct
+        $this->dbName = (string)$param['DATABASE'];
+    }
 
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Check - is Table exists in DB
-     * @return boolean
-     */
-    public function isTableExists()
+    public function isTableExists(): bool
     {
-        $aInfo = $this->_getTableInfo();
-        return !empty($aInfo);
-    } // function isTableExists
-    /**
-     * Return 2x array with description of fields, like:
-     * column_name => (type, length, default, collation, attribute, null, auto_increment, comment, mime_type)
-     * @return array
-     */
-    public function getFields()
+        $info = $this->_getTableInfo();
+        return !empty($info);
+    }
+    public function getFields(): array
     {
-        $aResult = array();
+        $result = [];
         foreach ($this->_getFields() as $v) {
             //Doesn't used: CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, COLUMN_KEY
-            preg_match('/^\w+\((.*)\)\s*(.*)$/', $v['COLUMN_TYPE'], $aMatches);
-            $aField = array(
+            preg_match('/^\w+\((.*)\)\s*(.*)$/', (string)$v['COLUMN_TYPE'], $matches);
+            $field = [
                 'type'           => $v['DATA_TYPE'],
-                'length'         => empty($aMatches) ? null : $aMatches[1],
+                'length'         => empty($matches) ? null : $matches[1],
                 'default'        => empty($v['COLUMN_DEFAULT']) ? null : $v['COLUMN_DEFAULT'],
                 'collation'      => $v['COLLATION_NAME'],
                 'charset'        => $v['CHARACTER_SET_NAME'],
-                'attribute'      => empty($aMatches) ? null : $aMatches[2],
-                'null'           => strtoupper($v['IS_NULLABLE']) == 'YES',
-                'auto_increment' => strtolower($v['EXTRA']) == 'auto_increment',
+                'attribute'      => empty($matches) ? null : $matches[2],
+                'null'           => strtoupper((string)$v['IS_NULLABLE']) === 'YES',
+                'auto_increment' => strtolower((string)$v['EXTRA']) === 'auto_increment',
                 'comment'        => empty($v['COLUMN_COMMENT']) ? null : $v['COLUMN_COMMENT'],
                 //'mime_type'      => '',
-            );
+            ];
 
-            $this->_resetDefaultVal($aField);
+            $this->_resetDefaultVal($field);
 
-            $aResult[$v['COLUMN_NAME']] = $aField;
+            $result[(string)$v['COLUMN_NAME']] = $field;
         }
 
         foreach ($this->getKeys() as $k0 => $v0) {
             foreach ($v0['fields'] as $k1 => $v1) {
-                $aResult[$k1]['keys'][] = $k0;
+                $result[$k1]['keys'][] = $k0;
             }
         }
-        return $aResult;
-    } // function getFields
+        return $result;
+    }
 
-    /**
-     * Return 2x array with description of Relations, like:
-     * number => (name, field, ref_db, ref_table, ref_field, on_delete, on_update)
-     * @return array
-     */
-    public function getRelations()
+    public function getRelations(): array
     {
-        $aResult = array();
+        $result = [];
         foreach ($this->_getConstraints() as $v) {
-            $aResult[] = array(
+            $result[] = [
                 'name'      => $v['CONSTRAINT_NAME'],
                 'field'     => $v['COLUMN_NAME'],
-                'ref_db'    => $v['UNIQUE_CONSTRAINT_SCHEMA'] == $this->sDbName ? null : $v['UNIQUE_CONSTRAINT_SCHEMA'],
+                'ref_db'    => (string)$v['UNIQUE_CONSTRAINT_SCHEMA'] === (string)$this->dbName ? null : $v['UNIQUE_CONSTRAINT_SCHEMA'],
                 'ref_table' => $v['REFERENCED_TABLE_NAME'],
                 'ref_field' => $v['REFERENCED_COLUMN_NAME'],
                 'on_delete' => strtolower($v['DELETE_RULE']),
                 'on_update' => strtolower($v['UPDATE_RULE']),
-            );
+            ];
         }
 
-        return $aResult;
-    } // function getRelations
+        return $result;
+    }
 
-    /**
-     * Return string with Engine of Table
-     * @return string
-     */
-    public function getEngine()
+    public function getEngine(): mixed
     {
-        $aInfo = $this->_getTableInfo();
-        return $aInfo['ENGINE'];
-    } // function getEngine
-    /**
-     * Return string with Create Time of Table
-     * @return string
-     */
-    public function getCreateTime()
+        $info = $this->_getTableInfo();
+        return $info['ENGINE'];
+    }
+    public function getCreateTime(): mixed
     {
-        $aInfo = $this->_getTableInfo();
-        return $aInfo['CREATE_TIME'];
-    } // function getTableCollation
-    /**
-     * Return string with Table Collation
-     * @return string
-     */
-    public function getTableCollation()
+        $info = $this->_getTableInfo();
+        return $info['CREATE_TIME'];
+    }
+    public function getTableCollation(): mixed
     {
-        $aInfo = $this->_getTableInfo();
-        return $aInfo['TABLE_COLLATION'];
-    } // function getTableCollation
-    /**
-     * Return string with comment OR null if comment doesn't exist
-     * @return string
-     */
-    public function getComment()
+        $info = $this->_getTableInfo();
+        return $info['TABLE_COLLATION'];
+    }
+    public function getComment(): mixed
     {
-        $aInfo = $this->_getTableInfo();
-        return $aInfo['TABLE_COMMENT'];
-    } // function getComment
+        $info = $this->_getTableInfo();
+        return $info['TABLE_COMMENT'];
+    }
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Get source Table-Info
-     * @return array
-     */
-    protected function _getTableInfo()
+    protected function _getTableInfo(): array
     {
-        if (is_null($this->aTableInfo)) {
-            $aTmp = $this->oConnectionSchema->getAll(
+        if (is_null($this->tableInfo)) {
+            $tmp = $this->connectionSchema->getAll(
                     '
 SELECT
     *
@@ -210,21 +180,17 @@ FROM `TABLES`
 WHERE
     `TABLE_SCHEMA` = ?
     AND `TABLE_NAME` = ?',
-                    array($this->sDbName, $this->sTableName)
+                    [$this->dbName, $this->tableName]
             );
-            $this->aTableInfo = empty($aTmp[0]) ? array() : $aTmp[0];
+            $this->tableInfo = empty($tmp[0]) ? [] : $tmp[0];
         }
-        return $this->aTableInfo;
-    } // function _getTableInfo
+        return $this->tableInfo;
+    }
 
-    /**
-     * Get source Fields
-     * @return array
-     */
-    protected function _getFields()
+    protected function _getFields(): array
     {
-        if (empty($this->aSrcFields)) {
-            $this->aSrcFields = $this->oConnectionSchema->getAll(
+        if (empty($this->srcFields)) {
+            $this->srcFields = $this->connectionSchema->getAll(
                     '
 SELECT
     *
@@ -234,20 +200,16 @@ WHERE
     AND `TABLE_NAME` = ?
 ORDER BY
     `ORDINAL_POSITION`',
-                    array($this->sDbName, $this->sTableName)
+                    [$this->dbName, $this->tableName]
             );
         }
-        return $this->aSrcFields;
-    } // function _getFields
+        return $this->srcFields;
+    }
 
-    /**
-     * Get source Constraints
-     * @return array
-     */
-    protected function _getConstraints()
+    protected function _getConstraints(): array
     {
-        if (is_null($this->aConstraints)) {
-            $aTmp = $this->oConnectionSchema->execute(
+        if (is_null($this->constraints)) {
+            $tmp = $this->connectionSchema->execute(
                     '
 SELECT
     REF.*,
@@ -264,11 +226,10 @@ WHERE
     AND USG.`TABLE_NAME` = ?
 ORDER BY
     USG.`ORDINAL_POSITION`',
-                    array($this->sDbName, $this->sTableName, $this->sDbName, $this->sTableName)
+                    [$this->dbName, $this->tableName, $this->dbName, $this->tableName]
             );
-            $this->aConstraints = empty($aTmp) ? array() : $aTmp;
+            $this->constraints = empty($tmp) ? [] : $tmp;
         }
-        return $this->aConstraints;
-    } // function _getConstraints
-} // class \fan\core\service\entity\descriptor\mysql\schema
-?>
+        return $this->constraints;
+    }
+}

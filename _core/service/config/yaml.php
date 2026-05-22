@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\config;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\config;
 /**
  * Description of ini
  *
@@ -21,8 +25,7 @@ class yaml extends base
      * File extention
      * @var string
      */
-    protected $sFileExtention = 'yaml';
+    protected string $fileExtention = 'yaml';
 
     //put your code here
-} // class \fan\core\service\config\yaml
-?>
+}

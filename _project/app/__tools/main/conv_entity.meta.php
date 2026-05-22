@@ -1,48 +1,50 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Convert entity tools meta
  * @version 05.02.005 (12.02.2015)
  */
-return array(
-    'own' => array(
+return [
+    'own' => [
         'title' => 'Tool for convert entity from old (PHP-FAN4) to new (PHP-FAN5) format',
 
-        'form' => array(
+        'form' => [
             'action_method'  => 'POST',
             'request_type'   => 'P',
             'form_key_name'  => 'conv_entity',
             'form_id'        => 'conv_entity',
-            'fields' => array(
-                'source_dir' => array(
+            'fields' => [
+                'source_dir' => [
                     'label'          => 'Source directory',
                     'input_type'     => 'text',
                     'is_required'    => true,
-                ),
-                'source_mask' => array(
+                ],
+                'source_mask' => [
                     'label'          => 'Regexp for select files',
                     'input_type'     => 'text',
                     'is_required'    => true,
-                ),
-                'dest_dir' => array(
+                ],
+                'dest_dir' => [
                     'label'          => 'Destination directory',
                     'input_type'     => 'text',
                     'is_required'    => true,
-                ),
+                ],
 
-            ),
-        ), //form
+            ],
+        ], //form
 
         'dontCrawl' => true,
 
-        'cache' => array(
+        'cache' => [
             'mode' => 1,
-        ),
-        'roles' => array (
-            array (
+        ],
+        'roles' => [
+            [
                 'condition'    => 'tools_access',
                 'transfer_out' => '~/',
-            ),
-        ),
-    ),
-);
-?>
+            ],
+        ],
+    ],
+];

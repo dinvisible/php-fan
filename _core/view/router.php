@@ -1,4 +1,7 @@
-<?php namespace fan\core\view;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view;
 /**
  * View element of Block
  *
@@ -20,209 +23,166 @@ abstract class router implements \ArrayAccess, \Countable
      * Parent block
      * @var \fan\core\block\base
      */
-    protected $oBlock;
+    protected ?object $block = null;
     /**
      * Array of Keepers
      * @var array
      */
-    protected $aKeepers = array();
+    protected array $keepers = [];
     /**
      * Default Route Keeper
      * @var string
      */
-    protected $sDefaultKey = null;
+    protected ?string $defaultKey = null;
 
-    /**
-     * Constructor of View router
-     * @param fan\core\block\base $oBlock
-     */
-    public function __construct(\fan\core\block\base $oBlock)
+    public function __construct(\fan\core\block\base $block)
     {
-        if (empty($this->aKeepers) || !is_array($this->aKeepers)) {
+        if (empty($this->keepers) || !is_array($this->keepers)) {
             throw new \fan\project\exception\block\fatal($this, 'Keepers list doesn\'t set at the class "' . get_class($this) . '"');
         }
-        if (empty($this->sDefaultKey)) {
-            reset($this->aKeepers);
-            $this->sDefaultKey = key($this->aKeepers);
-        } elseif (!array_key_exists($this->sDefaultKey, $this->aKeepers)) {
-            throw new \fan\project\exception\block\fatal($this, 'Incorrect default Keepers key "' . $this->sDefaultKey . '" at the class "' . get_class($this) . '"');
+        if (empty($this->defaultKey)) {
+            reset($this->keepers);
+            $this->defaultKey = key($this->keepers);
+        } elseif (!array_key_exists($this->defaultKey, $this->keepers)) {
+            throw new \fan\project\exception\block\fatal($this, 'Incorrect default Keepers key "' . $this->defaultKey . '" at the class "' . get_class($this) . '"');
         }
-        $this->oBlock = $oBlock;
-    } // function __construct
+        $this->block = $block;
+    }
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
 
-    public function __set($sKey, $mValue)
+    public function __set(string $key, mixed $value): void
     {
-        $this->set($sKey, $mValue);
-    } // function __set
+        $this->set((string)$key, $value);
+    }
 
-    public function __get($sKey)
+    public function __get(string $key): mixed
     {
-        return $this->get($sKey);
-    } // function __get
+        return $this->get((string)$key);
+    }
 
-    public function __isset($sKey)
+    public function __isset(string $key): bool
     {
-        return !empty($this->aKeepers[$sKey]);
-    } // function __isset
+        $key = (string)$key;
+        return !empty($this->keepers[$key]);
+    }
 
     // ======== Required Interface methods ======== \\
 
-    public function offsetSet($sKey, $mValue)
+    public function offsetSet(mixed $key, mixed $value): void
     {
-        $this->set($sKey, $mValue);
-    } // function offsetSet
+        $this->set((string)$key, $value);
+    }
 
-    public function offsetGet($sKey)
+    public function offsetGet(mixed $key): mixed
     {
-        return $this->get($sKey);
-    } // function offsetGet
+        return $this->get((string)$key);
+    }
 
-    public function offsetExists($sKey)
+    public function offsetExists(mixed $key): bool
     {
-        return array_key_exists($sKey, $this->aKeepers);
-    } // function offsetExists
+        $key = (string)$key;
+        return array_key_exists($key, $this->keepers);
+    }
 
-    public function offsetUnset($sKey)
+    public function offsetUnset(mixed $key): void
     {
     } // offsetUnset
     // ======== Main Interface methods ======== \\
-    /**
-     * Set special or default view data
-     * @param string $sKey
-     * @param mixed $mValue
-     * @return \fan\core\view\router
-     */
-    public function set($sKey, $mValue)
+    public function set(mixed $key, mixed $value): static
     {
+        $key = (string)$key;
         if ($this->_checkSetter()) {
-            if (array_key_exists($sKey, $this->aKeepers)) {
-                $this->_getKeeper($sKey)->set(null, $mValue);
+            if (array_key_exists($key, $this->keepers)) {
+                $this->_getKeeper($key)->set(null, $value);
             } else {
-                $sMethod = 'set' . ucfirst(strtolower($this->sDefaultKey));
-                if (method_exists($this, $sMethod)) {
-                    $this->$sMethod($mValue);
+                $method = 'set' . ucfirst(strtolower($this->defaultKey));
+                if (method_exists($this, $method)) {
+                    $this->$method($value);
                 } else {
-                    $oKeeper = $this->_getKeeper($this->sDefaultKey);
-                    $oKeeper->set($sKey, $mValue);
+                    $keeper = $this->_getKeeper((string)$this->defaultKey);
+                    $keeper->set($key, $value);
                 }
             }
         }
         return $this;
-    } // function set
+    }
 
-    /**
-     * Get special or default view data
-     * @param string $sKey
-     * @param mixed $mDefault
-     * @param boolean $bLogError
-     * @return mixed
-     */
-    public function get($sKey, $mDefault = null, $bLogError = true)
+    public function get(string $key, mixed $default = null, bool $logError = true): mixed
     {
-        $sMethod = 'get' . ucfirst(strtolower($sKey));
-        if (method_exists($this, $sMethod)) {
-            return $this->$sMethod();
+        $method = 'get' . ucfirst(strtolower($key));
+        if (method_exists($this, $method)) {
+            return $this->$method();
         }
-        if (array_key_exists($sKey, $this->aKeepers)) {
-            return $this->_getKeeper($sKey);
+        if (array_key_exists($key, $this->keepers)) {
+            return $this->_getKeeper($key);
         }
-        $oKeeper = $this->_getKeeper($this->sDefaultKey);
-        return $oKeeper->get($sKey, $mDefault, $bLogError);
-    } // function get
+        $keeper = $this->_getKeeper((string)$this->defaultKey);
+        return $keeper->get($key, $default, $logError);
+    }
 
-    /**
-     * Set Several value of view
-     * @param array $aValues
-     * @return \fan\core\view\router
-     */
-    public function setSeveral($aValues)
+    public function setSeveral(array $values): static
     {
-        foreach ($aValues as $k => $v) {
+        foreach ($values as $k => $v) {
             $this->set($k, $v);
         }
         return $this;
-    } // function setSeveral
+    }
 
-    /**
-     * Get block-owner
-     * @return \fan\core\block\base
-     */
-    public function getBlock()
+    public function getBlock(): \fan\core\block\base
     {
-        return $this->oBlock;
-    } // function getBlock
+        return $this->block;
+    }
 
-    /**
-     * Alias of getAll-method
-     * @return array
-     */
-    public function toArray()
+    public function toArray(): array
     {
         return $this->getAll();
-    } // function toArray
+    }
 
-    /**
-     * Get All data as array
-     * @return array
-     */
-    public function getAll()
+    public function getAll(): array
     {
-        if (count($this->aKeepers) == 1) {
-            return $this->_getKeeper($this->sDefaultKey)->toArray();
+        if (count($this->keepers) === 1) {
+            return $this->_getKeeper((string)$this->defaultKey)->toArray();
         }
-        $aResult = array();
-        foreach ($this->aKeepers as $k => $v) {
-            $aResult[$k] = adduceToArray($v);
+        $result = [];
+        foreach ($this->keepers as $k => $v) {
+            $result[$k] = adduceToArray($v);
         }
-        return $aResult;
-    } // function getAll
+        return $result;
+    }
 
-    /**
-     * Count of Keepers
-     * @return integer
-     */
-    public function count()
+    public function count(): int
     {
-        return count($this->aKeepers);
-    } // function count
+        return count($this->keepers);
+    }
 
     // ======== Private/Protected methods ======== \\
     /**
-     * Get Keeper
-     * @param string $sKey
-     * @return \fan\core\view\keeper
      * @throws \fan\core\exception\block\fatal
      */
-    public function _getKeeper($sKey)
+    public function _getKeeper(string $key): \fan\core\view\keeper
     {
-        if (!array_key_exists($sKey, $this->aKeepers)) {
-            throw new \fan\project\exception\block\fatal($this, 'Incorrect name of Keeper "' . $sKey . '"');
+        if (!array_key_exists($key, $this->keepers)) {
+            throw new \fan\project\exception\block\fatal($this, 'Incorrect name of Keeper "' . $key . '"');
         }
-        if (empty($this->aKeepers[$sKey])) {
-            $sMethod = '_get' . ucfirst($sKey) . 'Keeper';
-            $this->aKeepers[$sKey] = method_exists($this, $sMethod) ? $this->$sMethod() : new \fan\project\view\keeper($this);
+        if (empty($this->keepers[$key])) {
+            $method = '_get' . ucfirst($key) . 'Keeper';
+            $this->keepers[$key] = method_exists($this, $method) ? $this->$method() : new \fan\project\view\keeper($this);
         }
-        return $this->aKeepers[$sKey];
-    } // function _getKeeper
+        return $this->keepers[$key];
+    }
 
-    /**
-     * Check Setter
-     * @return boolean
-     */
-    protected function _checkSetter()
+    protected function _checkSetter(): bool
     {
-        $aTrace = debug_backtrace();
-        foreach ($aTrace as $v) {
+        $trace = debug_backtrace();
+        foreach ($trace as $v) {
             if (!isset($v['object'])) {
                 return false;
             }
-            if ($v['object'] != $this) {
-                return $v['object'] == $this->oBlock;
+            if ($v['object'] !== $this) {
+                return $v['object'] === $this->block;
             }
         }
         return false;
-    } // function _checkSetter
-} // class \fan\core\view\router
-?>
+    }
+}

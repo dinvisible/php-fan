@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\cache;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\cache;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * ADOdb wrapper for template engine
@@ -17,31 +20,19 @@ use fan\project\exception\service\fatal as fatalException;
  */
 class memcached extends base
 {
-    /**
-     * Method for load data from cache
-     * Must define property $this->mData and $this->aMetaData
-     */
-    protected function _loadData($bLoadMetaOnly)
+    protected function _loadData(bool $loadMetaOnly): bool
     {
-
+        return false;
     }
 
-    /**
-     * Method for save data to cache
-     * Must define property $this->mData and $this->aMetaData
-     */
-    protected function _saveData()
+    protected function _saveData(): static
     {
-
+        return $this;
     }
 
-    /**
-     * Delete cached data
-     */
-    protected function _deleteData()
+    protected function _deleteData(): static
     {
-
+        return parent::_deleteData();
     }
 
-} // class \fan\core\service\cache\memcached
-?>
+}

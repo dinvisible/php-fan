@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * CURL service
@@ -17,348 +20,250 @@ use fan\project\exception\service\fatal as fatalException;
  */
 class curl extends \fan\core\base\service\multi
 {
-    /**
-     * @var array Service's Instances
-     */
-    private static $aInstances;
+    private static ?array $instances = null;
 
     /**
      * @var handle CURL instance
      */
-    protected $oCurl;
+    protected ?object $curl = null;
 
-    /**
-     * @var string URL
-     */
-    protected $sUrl = '';
+    protected string $url = '';
 
     /**
      * @var index - for separate the same URL
      */
-    protected $nIndex = 0;
+    protected int|float|string $index = 0;
 
-    /**
-     * @var array getted headers
-     */
-    protected $aHeaders = array();
+    protected array $headers = [];
 
     /**
      * Content (result of CURL-request)
      * @var string
      */
-    protected $sContent = null;
+    protected ?string $content = null;
+
+    protected string $separator = "\n";
+
+    protected bool $separateResponse = true;
 
     /**
-     * @var string line Separator
+     * @param mixed $url URL used as the external request target.
      */
-    protected $sSeparator = "\n";
-
-    /**
-     *
-     * @var boolean Response
-     */
-    protected $bSeparateResponse = true;
-
-    /**
-     * Service's constructor
-     */
-    protected function __construct($sUrl, $nIndex)
+    protected function __construct(string $url, int|float|string $index)
     {
-        $this->nIndex = $nIndex;
-        $this->sUrl   = $sUrl;
+        $this->index = $index;
+        $this->url   = (string)$url;
         parent::__construct(true);
 
-        $this->oCurl = curl_init($sUrl);
+        $this->curl = curl_init($this->url);
 
         $this->setOption(CURLOPT_RETURNTRANSFER, 1);
         $this->setOption(CURLOPT_HEADER, 1);
         $this->setOption(CURLINFO_HEADER_OUT, 1);
 
-        $oConf = $this->oConfig;
-        if ($oConf['CURLOPT_PROXY']) {
-           $this->setOption(CURLOPT_PROXY, $oConf['CURLOPT_PROXY']);
+        $conf = $this->config;
+        if ($conf['CURLOPT_PROXY']) {
+           $this->setOption(CURLOPT_PROXY, $conf['CURLOPT_PROXY']);
         }
-        if ($oConf['CURLOPT_PROXYUSERPWD']) {
-           $this->setOption(CURLOPT_PROXYUSERPWD, $oConf['CURLOPT_PROXYUSERPWD']);
+        if ($conf['CURLOPT_PROXYUSERPWD']) {
+           $this->setOption(CURLOPT_PROXYUSERPWD, $conf['CURLOPT_PROXYUSERPWD']);
         }
-    } // function __construct
+    }
 
-    /**
-     * Service's destructor
-     *
-     */
     public function __destruct()
     {
         $this->close();
-    } // function __destruct
-
-    /**
-     * Get Service's instance of current service
-     * @return \fan\core\service\curl
-     */
-    public static function instance($sUrl, $nIndex = 0)
-    {
-        if (!isset(self::$aInstances[$nIndex][$sUrl])) {
-            new self($sUrl, $nIndex);
-        }
-        return self::$aInstances[$nIndex][$sUrl];
-    } // function instance
-
-    /**
-     * Set CURL-option
-     * @param integer $nKey
-     * @param mixed $mVal
-     * @return \fan\core\service\curl
-     */
-    public function setOption($nKey, $mVal)
-    {
-        curl_setopt($this->oCurl, $nKey, $mVal);
-        return $this;
-    } // function setOption
-
-    /**
-     * Set curl headers
-     * @param array $aHeaders array of additional Headers
-     * @return \fan\core\service\curl
-     */
-    public function setHeaders($aHeaders = array())
-    {
-        if ($aHeaders) {
-            $this->setOption(CURLOPT_HTTPHEADER, adduceToArray($aHeaders));
-        }
-        return $this;
-    } // function setHeaders
-
-    /**
-     * Set CURL-timeout
-     * @param integer $nTimeout
-     * @return \fan\core\service\curl
-     */
-    public function setTimeout($nTimeout)
-    {
-        $this->setOption(CURLOPT_TIMEOUT, $nTimeout);
-        return $this;
-    } // function setTimeout
-
-    /**
-     * Set CURL-Cookies
-     * @param string $mCookies
-     * @return \fan\core\service\curl
-     */
-    public function setCookies($mCookies)
-    {
-        if (is_array($mCookies)) {
-            $sCookies = '';
-            foreach ($mCookies as $k => $v) {
-                if (!empty ($sCookies)) {
-                    $sCookies .= '; ';
-                }
-                $sCookies .= $k . '=' . $v;
-            }
-        } else {
-            $sCookies = $mCookies;
-        }
-        $this->setOption(CURLOPT_COOKIE, $sCookies);
-        return $this;
-    } // function setCookies
-
-    /**
-     * Get CURL-Cookies
-     * @param string $mKey
-     * @return mixed
-     */
-    public function getCookies($mKey = null)
-    {
-        $aMatches = null;
-        if (preg_match_all('/(\w+)\=(.*?)\;\s*/', $this->getResponseHeaders('Set-Cookie'), $aMatches, PREG_SET_ORDER)) {
-            $aResult = array();
-            foreach($aMatches as $v){
-                $aResult[$v[1]] = $v[2];
-            }
-            return $mKey ? array_val($aResult, $mKey) : $aResult;
-        }
-        return null;
-    } // function getCookies
-
-    /**
-     * Close Curl
-     * @return \fan\core\service\curl
-     */
-    public function close()
-    {
-        if (!is_null($this->oCurl)) {
-            curl_close($this->oCurl);
-            $this->oCurl = null;
-            self::$aInstances[$this->sUrl] = null;
-        }
-        return $this;
-    } // function close
-
-    /**
-     * Get Request-Headers
-     * @return string
-     */
-    public function getRequestHeaders()
-    {
-        return $this->getInfo(CURLINFO_HEADER_OUT);
-    } // function getRequestHeaders
-
-    /**
-     * Get curl information
-     * @param number $nOption
-     * @return mixed
-     */
-    public function getInfo($nOption = null)
-    {
-        return is_null($nOption) ? curl_getinfo($this->oCurl) : curl_getinfo($this->oCurl, $nOption);
-    } // function getInfo
-
-    /**
-     * Get curl error
-     * @return string
-     */
-    public function getError()
-    {
-        return curl_error($this->oCurl);
-    } // function getError
-
-    /**
-     * Execute request
-     * @param mixed $mPostData Post data
-     * @return string Content
-     */
-    public function exec($mPostData = null, $bAllowExcept = true)
-    {
-
-        if (!is_null($mPostData)) {
-            if (is_array($mPostData)) {
-                $mOptData = array();
-                foreach ($mPostData as $k => $v) {
-                    if (is_array($v)) {
-                        $this->_convPostArray($mOptData, $k, $v);
-                    } else {
-                        $mOptData[$k] = $v;
-                    }
-                }
-            } else {
-                $mOptData = $mPostData;
-            }
-            $this->setOption(CURLOPT_POST, 1);
-            $this->setOption(CURLOPT_POSTFIELDS, $mOptData);
-        }
-
-        $this->aHeaders = array();
-        $this->sContent = null;
-
-        $sData = curl_exec($this->oCurl);
-        if ($sData) {
-            $sSeparator = $this->_getSeparator($sData);
-            list($sHeaders, $sBody) = explode($sSeparator . $sSeparator, $sData, 2);
-            $sHeaders1 = '';
-            while (trim($sHeaders) == 'HTTP/1.1 100 Continue') {
-                list($sHeaders, $sBody) = explode($sSeparator . $sSeparator, $sBody, 2);
-                $sHeaders1 .= $sHeaders . $sSeparator;
-            }
-            foreach (explode($sSeparator, $sHeaders1 . $sHeaders) as $v0) {
-                if (strstr($v0, ':')) {
-                    list($k, $v) = explode(':', $v0, 2);
-                    $k = trim($k);
-                    if (!isset($this->aHeaders[$k])) {
-                        $this->aHeaders[$k] = '';
-                    } else {
-                        $this->aHeaders[$k] .= '; ';
-                    }
-                    $this->aHeaders[$k] .= trim($v);
-                } elseif (substr($v0, 0, 5) == 'HTTP/') {
-                    $this->aHeaders['HTTP'] = trim($v0);
-                }
-            }
-            $this->sContent = $sBody;
-        }
-
-        $sErr = $this->getError();
-        if ($sErr && $bAllowExcept) {
-            throw new fatalException($this, 'There is CURL error ocured: <b>' . $sErr . '</b>');
-        }
-
-        return $this->getContent();
-    } // function exec
-
-    /**
-     * Set Off flag bSeparateResponse
-     * @return \fan\core\service\curl
-     */
-    public function setSeparateResponse($bSeparate = false)
-    {
-        $this->bSeparateResponse = $bSeparate;
-        return $this;
     }
 
     /**
-     * Get Response Headers
-     * @param string $sKey - name of header
-     * @return mixed array of headers or value of header
+     * @param mixed $url URL used as the external request target.
      */
-    public function getResponseHeaders($sKey = null)
+    public static function instance(string $url, int|float|string $index = 0): static
     {
-        return $sKey ? array_val($this->aHeaders, $sKey) : $this->aHeaders;
-    } // function getResponseHeaders
+        $url = (string)$url;
+        if (!isset(self::$instances[$index][$url])) {
+            new self($url, $index);
+        }
+        return self::$instances[$index][$url];
+    }
 
-    /**
-     * Get Content (result of CURL-request)
-     * @return string
-     */
-    public function getContent()
+    public function setOption(int $key, mixed $val): static
     {
-        return $this->sContent;
-    } // function getContent
+        curl_setopt($this->curl, $key, $val);
+        return $this;
+    }
+
+    public function setHeaders(array $headers = []): static
+    {
+        if ($headers) {
+            $this->setOption(CURLOPT_HTTPHEADER, adduceToArray($headers));
+        }
+        return $this;
+    }
+
+    public function setTimeout(int $timeout): static
+    {
+        $this->setOption(CURLOPT_TIMEOUT, $timeout);
+        return $this;
+    }
+
+    public function setCookies(mixed $cookies): static
+    {
+        if (is_array($cookies)) {
+            $cookies = '';
+            foreach ($cookies as $k => $v) {
+                if (!empty ($cookies)) {
+                    $cookies .= '; ';
+                }
+                $cookies .= $k . '=' . $v;
+            }
+        } else {
+            $cookies = (string)$cookies;
+        }
+        $this->setOption(CURLOPT_COOKIE, $cookies);
+        return $this;
+    }
+
+    public function getCookies(?string $key = null): mixed
+    {
+        $matches = null;
+        if (preg_match_all('/(\w+)\=(.*?)\;\s*/', (string)$this->getResponseHeaders('Set-Cookie'), $matches, PREG_SET_ORDER)) {
+            $result = [];
+            foreach ($matches as $v){
+                $result[$v[1]] = $v[2];
+            }
+            return $key ? array_val($result, $key) : $result;
+        }
+        return null;
+    }
+
+    public function close(): static
+    {
+        if (!is_null($this->curl)) {
+            curl_close($this->curl);
+            $this->curl = null;
+            self::$instances[$this->url] = null;
+        }
+        return $this;
+    }
+
+    public function getRequestHeaders(): mixed
+    {
+        return $this->getInfo(CURLINFO_HEADER_OUT);
+    }
+
+    public function getInfo(int|float|null $option = null): mixed
+    {
+        return is_null($option) ? curl_getinfo($this->curl) : curl_getinfo($this->curl, (int)$option);
+    }
+
+    public function getError(): string
+    {
+        return curl_error($this->curl);
+    }
+
+    public function exec(mixed $postData = null, bool $allowExcept = true): ?string
+    {
+
+        if (!is_null($postData)) {
+            if (is_array($postData)) {
+                $optData = [];
+                foreach ($postData as $k => $v) {
+                    if (is_array($v)) {
+                        $this->_convPostArray($optData, (string)$k, $v);
+                    } else {
+                        $optData[$k] = $v;
+                    }
+                }
+            } else {
+                $optData = $postData;
+            }
+            $this->setOption(CURLOPT_POST, 1);
+            $this->setOption(CURLOPT_POSTFIELDS, $optData);
+        }
+
+        $this->headers = [];
+        $this->content = null;
+
+        $data = curl_exec($this->curl);
+        if ($data) {
+            $separator = $this->_getSeparator($data);
+            list($headers, $body) = explode($separator . $separator, $data, 2);
+            $headers1 = '';
+            while (trim($headers) === 'HTTP/1.1 100 Continue') {
+                list($headers, $body) = explode($separator . $separator, $body, 2);
+                $headers1 .= $headers . $separator;
+            }
+            foreach (explode($separator, $headers1 . $headers) as $v0) {
+                if (strstr($v0, ':')) {
+                    list($k, $v) = explode(':', $v0, 2);
+                    $k = trim($k);
+                    if (!isset($this->headers[$k])) {
+                        $this->headers[$k] = '';
+                    } else {
+                        $this->headers[$k] .= '; ';
+                    }
+                    $this->headers[$k] .= trim($v);
+                } elseif (substr($v0, 0, 5) === 'HTTP/') {
+                    $this->headers['HTTP'] = trim($v0);
+                }
+            }
+            $this->content = $body;
+        }
+
+        $err = $this->getError();
+        if ($err && $allowExcept) {
+            throw new fatalException($this, 'There is CURL error ocured: <b>' . $err . '</b>');
+        }
+
+        return $this->getContent();
+    }
+
+    public function setSeparateResponse(bool $separate = false): static
+    {
+        $this->separateResponse = (bool)$separate;
+        return $this;
+    }
+
+    public function getResponseHeaders(?string $key = null): mixed
+    {
+        return $key ? array_val($this->headers, $key) : $this->headers;
+    }
+
+    public function getContent(): ?string
+    {
+        return $this->content;
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Save service's Instance
-     * @return \fan\core\service\curl
-     */
-    protected function _saveInstance()
+    protected function _saveInstance(): static
     {
-        self::$aInstances[$this->nIndex][$this->sUrl] = $this;
+        self::$instances[$this->index][$this->url] = $this;
         return $this;
-    } // function _saveInstance
+    }
 
-    /**
-     * Get Separator
-     * @param string $sData - CURL-data
-     * @return string
-     */
-    protected function _getSeparator($sData = null)
+    protected function _getSeparator(?string $data = null): string
     {
-        if ($sData) {
-            $nPos = strpos($sData, "\r");
-            if ($nPos) {
-                $this->sSeparator = $nPos && $sData{$nPos + 1} == "\n" ? "\r\n" : "\r";
+        if ($data) {
+            $pos = strpos($data, "\r");
+            if ($pos) {
+                $this->separator = $pos && $data[$pos + 1] === "\n" ? "\r\n" : "\r";
             }
         }
-        return $this->sSeparator;
-    } // function _getSeparator
+        return $this->separator;
+    }
 
-    /**
-     * Convertation array for POST-data
-     * @param array $aOptData - Converted data
-     * @param string $sKey - element key
-     * @param mixed $mData - element value
-     * @return \fan\core\service\curl
-     */
-    protected function _convPostArray(&$aOptData, $sKey, $mData)
+    protected function _convPostArray(array &$optData, string $key, array $data): static
     {
-        foreach ($mData as $k => $v) {
+        foreach ($data as $k => $v) {
             if (is_array($v)) {
-                $this->_convPostArray($aOptData, $sKey . '[' . $k . ']', $v);
+                $this->_convPostArray($optData, $key . '[' . $k . ']', $v);
             } else {
-                $aOptData[$sKey . '[' . $k . ']'] = $v;
+                $optData[$key . '[' . $k . ']'] = $v;
             }
         }
         return $this;
-    } // function _convPostArray
+    }
 
-} // class \fan\core\service\curl
-?>
+}

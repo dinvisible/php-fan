@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Meta data of index
  *
@@ -14,15 +17,14 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.01.002 (01.05.2013)
  */
-return array(
-    'own' => array(
+return [
+    'own' => [
         'title' => 'Log viewer tools',
 
         'dontCrawl' => true,
 
-        'cache' => array(
+        'cache' => [
             'mode' => 1,
-        ),
-    ),
-);
-?>
+        ],
+    ],
+];

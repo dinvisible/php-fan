@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\admin;
 /**
  * Admin table data class for loader block
  *
@@ -20,288 +24,240 @@ class data_table extends data
      * Form error
      * @var array
      */
-    protected $aInsEtt = array();
+    protected array $insEtt = [];
 
-    /**
-     * Validate Data
-     * @param array $aEdit
-     * @param array $aInsert
-     * @return boolean
-     */
-    public function validateData(&$aEdit, &$aInsert)
+    public function validateData(array &$edit, array &$insert): bool
     {
-        $aTmpErr = array();
-        $this->validateDataOnce($aEdit, 'edit', $aTmpErr);
-        $this->validateDataOnce($aInsert, 'ins', $aTmpErr);
-        if ($aTmpErr) {
-            $aErrMsg = array();
-            foreach ($aTmpErr as $v) {
-                $aErrMsg[] = implode('; ', $v);
+        $tmpErr = [];
+        $this->validateDataOnce($edit, 'edit', $tmpErr);
+        $this->validateDataOnce($insert, 'ins', $tmpErr);
+        if ($tmpErr) {
+            $errMsg = [];
+            foreach ($tmpErr as $v) {
+                $errMsg[] = implode('; ', $v);
             }
-            $this->aErrorMsg[] = implode('\n', $aErrMsg);
+            $this->errorMsg[] = implode('\n', $errMsg);
             return false;
         }
         return true;
-    } // function validateData
+    }
 
-    /**
-     * Validate Data
-     */
-    protected function validateDataOnce(&$aData, $sType, &$aTmpErr)
+    protected function validateDataOnce(array &$data, string $type, array &$tmpErr): void
     {
-        foreach ($aData as $nId => &$v) {
-            $aErr = $this->doValidate($v, $sType, $nId);
-            foreach ($aErr as $fld => $err) {
-                if (!isset($aTmpErr[$fld]) || !in_array($err, $aTmpErr[$fld])) {
-                    if (!isset($aTmpErr[$fld])) {
-                        $aTmpErr[$fld] = array();
+        foreach ($data as $id => &$v) {
+            $err = $this->doValidate($v, $type, $id);
+            foreach ($err as $fld => $err) {
+                if (!isset($tmpErr[$fld]) || !in_array($err, $tmpErr[$fld])) {
+                    if (!isset($tmpErr[$fld])) {
+                        $tmpErr[$fld] = [];
                     }
-                    $aTmpErr[$fld][] = $err;
+                    $tmpErr[$fld][] = $err;
                 }
             }
         }
-    } // function validateDataOnce
+    }
 
     /**
-     * Parse changed/inserted Data
-     * @param array $aEdit
-     * @param array $aInsert
-     * @return \fan\core\block\admin\data
+     * Transforms data between supported representations.
      */
-    public function parseData($aEdit, $aInsert)
+    public function parseData(array $edit, array $insert): ?static
     {
-        $sEttAcces = $this->getMeta('check_access4edit');
-        $aFields   = $this->getMeta(array('table_struct', 'columns'));
-        foreach ($aEdit as $id => $v){
-            $oEtt = $this->loadEntityById($id);
-            if ($sEttAcces && !$oEtt->$sEttAcces($v)) {
-                $this->bIsError = true;
-                return;
+        $ettAcces = $this->getMeta('check_access4edit');
+        $fields   = adduceToArray($this->getMeta(['table_struct', 'columns']));
+        foreach ($edit as $id => $v){
+            $ett = $this->loadEntityById($id);
+            if ($ettAcces && !$ett->$ettAcces($v)) {
+                $this->isError = true;
+                return null;
             }
-            $this->saveRow($oEtt, $v, $aFields);
-            if (!$this->checkDBerror($oEtt, 'Can\'t update row ' . $id . ': ')) {
-                return;
+            $this->saveRow($ett, $v, $fields);
+            if (!$this->checkDBerror($ett, 'Can\'t update row ' . $id . ': ')) {
+                return null;
             }
         }
-        $aConvId = $this->getMeta(array('addParam', 'convId'), array());
-        if ($this->getMeta(array('table_struct', 'newData'), true) || $aConvId) {
-            $aAddFields = array_keys(adduceToArray($this->getMeta(array('addParam', 'default_val'), array())));
-            if (!empty($aConvId[1])) {
-                $aAddFields[] = $aConvId[1];
+        $convId = $this->getMeta(['addParam', 'convId'], []);
+        if ($this->getMeta(['table_struct', 'newData'], true) || $convId) {
+            $addFields = array_keys(adduceToArray($this->getMeta(['addParam', 'default_val'], [])));
+            if (!empty($convId[1])) {
+                $addFields[] = $convId[1];
             }
-            foreach ($aInsert as $ik => $v){
-                if (!$aConvId || isset($v[@$aConvId[1]])) {
-                    $oEtt = gr($this->getMeta('entity'));
-                    foreach ($this->getMeta(array('addParam', 'default_val'), array()) as $k => $add) {
+            foreach ($insert as $ik => $v){
+                if (!$convId || isset($v[$convId[1] ?? null])) {
+                    $ett = gr((string)$this->getMeta('entity'));
+                    foreach ($this->getMeta(['addParam', 'default_val'], []) as $k => $add) {
                         if (!array_key_exists($k, $v)) {
                             $v[$k] = $add;
                         }
                     }
-                    $this->saveRow($oEtt, $v, $aFields, $aAddFields);
-                    if (!$this->checkDBerror($oEtt, 'Can\'t insert data: ')) {
-                        return;
+                    $this->saveRow($ett, $v, $fields, $addFields);
+                    if (!$this->checkDBerror($ett, 'Can\'t insert data: ')) {
+                        return null;
                     }
-                    $this->aInsEtt[$ik] = $oEtt;
+                    $this->insEtt[$ik] = $ett;
                 }
             }
         }
         return $this;
-    } // function parseData
+    }
 
-    /**
-     * Parse delete Data
-     */
-    public function deleteData($aDel)
+    public function deleteData(array $del): void
     {
-        if ($this->getMeta(array('table_struct', 'showDel'), true)) {
-            $sEttAcces = $this->getMeta('check_access4delete');
-            foreach ($aDel as $id => $v){
-                $oEtt = $this->loadEntityById($id);;
-                if ($sEttAcces && !$oEtt->$sEttAcces($v)) {
-                    $this->bIsError = true;
+        if ($this->getMeta(['table_struct', 'showDel'], true)) {
+            $ettAcces = $this->getMeta('check_access4delete');
+            foreach ($del as $id => $v){
+                $ett = $this->loadEntityById($id);;
+                if ($ettAcces && !$ett->$ettAcces($v)) {
+                    $this->isError = true;
                     return;
                 }
-                $oEtt->delete();
-                if (!$this->checkDBerror($oEtt, 'Can\'t delete row ' . $id . ': ')) {
+                $ett->delete();
+                if (!$this->checkDBerror($ett, 'Can\'t delete row ' . $id . ': ')) {
                     return;
                 }
             }
         }
-    } // function deleteData
+    }
 
 
-    /**
-     * Init Template Vars
-     */
-    public function initTplVar()
+    public function initTplVar(): void
     {
-        foreach (array('isHead' => true, 'showId' => true, 'showDel' => true) as $k =>$v) {
-            $this->setTemplateVar($k, $this->getMeta(array('table_struct', $k), $v));
+        foreach (['isHead' => true, 'showId' => true, 'showDel' => true] as $k =>$v) {
+            $this->setTemplateVar($k, $this->getMeta(['table_struct', $k], $v));
         }
-        $aTplCols  = array();
-        $aMetaCols = $this->getMeta(array('table_struct', 'columns'), array());
-        foreach ($aMetaCols as $k => $v) {
-            $aTplCols[$v['field']] = adduceToArray($v);
+        $tplCols  = [];
+        $metaCols = $this->getMeta(['table_struct', 'columns'], []);
+        foreach ($metaCols as $k => $v) {
+            $tplCols[$v['field']] = adduceToArray($v);
         }
-        $this->setTemplateVar('columns', $aTplCols);
+        $this->setTemplateVar('columns', $tplCols);
 
-        $aOpRight  = adduceToArray($this->getMeta('open_right'));
-        if ($aOpRight) {
-            foreach ($aOpRight as $f => &$o) {
-                if(!empty($o['key'])) {
-                    $this->aAddParam['open_right'][$f] = $o['key']; // ToDo: What is it?
+        $opRight  = adduceToArray($this->getMeta('open_right'));
+        if ($opRight) {
+            foreach ($opRight as $f => &$o) {
+                if (!empty($o['key'])) {
+                    $this->addParam['open_right'][$f] = $o['key']; // ToDo: What is it?
                 }
-                if(empty($o['pos'])) {
+                if (empty($o['pos'])) {
                     $o['pos'] = 'before';
                 }
-                if(empty($o['pat'])) {
+                if (empty($o['pat'])) {
                     $o['pat'] = 'open_r1';
                 }
             }
-            $this->setTemplateVar('aOpRight', $aOpRight);
+            $this->setTemplateVar('aOpRight', $opRight);
         }
 
-        $aHdOrder = adduceToArray($this->getMeta('order'));
-        if ($aHdOrder) {
-            $this->setTemplateVar('hdOrder', $aHdOrder);
-            foreach ($this->getMeta(array('table_struct', 'columns'), array()) as $v) {
-                if(isset($v['field']) && isset($aHdOrder[$v['field']])) {
-                    $this->aAddParam['label'][$v['field']] = isset($v['head']) ? adduceToArray($v['head']) : null;
+        $hdOrder = adduceToArray($this->getMeta('order'));
+        if ($hdOrder) {
+            $this->setTemplateVar('hdOrder', $hdOrder);
+            foreach ($this->getMeta(['table_struct', 'columns'], []) as $v) {
+                if (isset($v['field']) && isset($hdOrder[$v['field']])) {
+                    $this->addParam['label'][$v['field']] = isset($v['head']) ? adduceToArray($v['head']) : null;
                 }
             }
         }
-    } // function initTplVar
+    }
 
-    /**
-     * Get Content ExtraData
-     */
-    public function getExtraData()
+    public function getExtraData(): array
     {
-        $aRet = parent::getExtraData();
-        $aHdOrder = $this->getMeta('order');
-        if ($aHdOrder && !isset($aRet['order'])) {
-            $aRet['order'] = $aHdOrder;
+        $ret = parent::getExtraData();
+        $hdOrder = $this->getMeta('order');
+        if ($hdOrder && !isset($ret['order'])) {
+            $ret['order'] = $hdOrder;
         }
-        if (!$this->getMeta(array('table_struct', 'newData'), true)) {
-            $aRet['not_new'] = 1;
+        if (!$this->getMeta(['table_struct', 'newData'], true)) {
+            $ret['not_new'] = 1;
         }
-        return $aRet;
-    } // function getExtraData
+        return $ret;
+    }
 
-    /**
-     * Get Content Data
-     * @param $bCacheEnable boolean Cache Enable
-     * @return array
-     */
-    public function getContentData($bCacheEnable = true)
+    public function getContentData(bool $cacheEnable = true): array
     {
-        $sEttKey = $this->getMeta('entity_key', null);
-        $aFld = array();
-        foreach ($this->getMeta(array('table_struct', 'columns'), array()) as $v) {
-            if(@$v['field'] && !(@$v['notSQL'])) {
-                $aFld[] = $v['field'];
+        $ettKey = $this->getMeta('entity_key', null);
+        $ettKey = is_null($ettKey) ? null : (string)$ettKey;
+        $fld = [];
+        foreach ($this->getMeta(['table_struct', 'columns'], []) as $v) {
+            if (!empty($v['field']) && empty($v['notSQL'])) {
+                $fld[] = $v['field'];
             }
         }
 
-        $aData = $this->getData();
+        $data = $this->getData();
 
-        $sOrder = '';
-        $aOrder = isset($aData['order']) ? $aData['order'] : $this->getMeta('order');
-        if ($aOrder) {
-            foreach ($aOrder as $k => $v) {
+        $orderData = isset($data['order']) ? $data['order'] : $this->getMeta('order');
+        $order = '';
+        if ($orderData) {
+            foreach (adduceToArray($orderData) as $k => $v) {
                 if ($v) {
-                    $sOrder .= $k . ($v == 1 ? ' ASC' : ' DESC') . ',';
+                    $order .= $k . ((int)$v === 1 ? ' ASC' : ' DESC') . ',';
                 }
             }
-            if ($sOrder) {
-                $sOrder = ' ORDER BY ' . substr($sOrder, 0, -1);
+            if ($order) {
+                $order = ' ORDER BY ' . substr($order, 0, -1);
             }
         }
 
-        if (empty($aData['page'])) {
-            $aData['page'] = 1;
+        if (empty($data['page'])) {
+            $data['page'] = 1;
         }
-        $oEtt = ge($this->getMeta('entity'));
-        list($nQtt, $nOffset) = $this->definePager($aData['page'], $oEtt, $sEttKey);
+        $ett = ge((string)$this->getMeta('entity'));
+        list($qtt, $offset) = $this->definePager($data['page'], $ett, $ettKey);
 
-        $mId = $oEtt->getDescription()->getPrimeryKey();
-        if (is_array($mId)) {
-            $aFld = array_merge($mId, $aFld);
+        $id = $ett->getDescription()->getPrimeryKey();
+        if (is_array($id)) {
+            $fld = array_merge($id, $fld);
         } else {
-            array_unshift($aFld, $mId);
+            array_unshift($fld, $id);
         }
-        return $this->getArrayAssoc($oEtt, $sEttKey, $aFld, $nQtt, $nOffset, $sOrder, !$this->getMeta('editId', false));
-    } // function getContentData
+        return $this->getArrayAssoc($ett, $ettKey, $fld, $qtt, $offset, $order, !$this->getMeta('editId', false));
+    }
 
-    /**
-     * Run Aggregate Request
-     * @param \fan\core\base\model\entity $oEtt
-     * @param string $sEttKey
-     * @param array $aFld
-     * @param number $nQtt
-     * @param number $nOffset
-     * @param string $sOrder
-     * @return \fan\core\base\model\rowset
-     */
-    protected function getArrayAssoc(\fan\core\base\model\entity $oEtt, $sEttKey, $aFld, $nQtt, $nOffset, $sOrder, $bExcludeId = true)
+    protected function getArrayAssoc(\fan\core\base\model\entity $ett, ?string $ettKey, array $fld, int|float $qtt, int|float $offset, string $order, bool $excludeId = true): array
     {
-        /* @var $oRowset \fan\core\model\rowset */
-        $oRowset = $sEttKey ?
-            $oEtt->getRowsetByKey($sEttKey, $this->getCondition(), $nQtt, $nOffset, $sOrder) :
-            $oEtt->getRowsetByParam($this->getCondition(), $nQtt, $nOffset, $sOrder);
-        return $oRowset->getArrayAssoc($aFld, $bExcludeId, '_');
-    } // function getArrayAssoc
+        /* @var $rowset \fan\core\model\rowset */
+        $rowset = $ettKey ?
+            $ett->getRowsetByKey($ettKey, $this->getCondition(), $qtt, $offset, $order) :
+            $ett->getRowsetByParam($this->getCondition(), $qtt, $offset, $order);
+        return $rowset->getArrayAssoc($fld, $excludeId, '_');
+    }
 
-    /**
-     * Get field label
-     * @param string $sName
-     * @return string
-     */
-    public function getFieldLabel($sName)
+    public function getFieldLabel(mixed $name): mixed
     {
-        foreach ($this->getMeta(array('table_struct', 'columns'), array()) as $v) {
-            if ($v['field'] == $sName && @$v['head']) {
+        foreach ($this->getMeta(['table_struct', 'columns'], []) as $v) {
+            if ((string)$v['field'] === (string)$name && !empty($v['head'])) {
                 return $v['head'];
             }
         }
-        return $sName;
-    } // function getFieldLabel
+        return $name;
+    }
 
     /**
-     * Load entity by Id
-     * @param number $nId
-     * @return entity_base
+     * @param int|float $id Unique identifier used to locate the target item.
      */
-    protected function loadEntityById($nId)
+    protected function loadEntityById(int|float|string $id): \fan\core\base\model\row
     {
-        return gr($this->getMeta('entity'), $nId);
-    } // function loadEntityById
+        return gr((string)$this->getMeta('entity'), $id);
+    }
 
-    /**
-     * Define pager data
-     * @param number $nPage
-     * @param aggr_entity_base $oAggr
-     * @return array
-     */
-    protected function definePager($nPage, $oEtt, $sEttKey)
+    protected function definePager(int|float|string $page, \fan\core\base\model\entity $ett, ?string $ettKey): array
     {
-        if (!$nPage) {
-            $nQtt = $nOffset = -1;
+        if (!$page) {
+            $qtt = $offset = -1;
         } else {
-            $nQttElm = $sEttKey ? $oEtt->getCountByKey($sEttKey, $this->getCondition()) : $oEtt->getCountByParam($this->getCondition());
-            $nQtt = $this->getMeta('elmPerPage');
-            $nPageQtt = ceil($nQttElm / $nQtt);
-            if ($nPage > $nPageQtt) {
-                $nPage = $nPageQtt;
-                if ($nPage < 1) {
-                    $nPage = 1;
+            $page = is_numeric($page) ? (int)$page : 1;
+            $qttElm = $ettKey ? $ett->getCountByKey((string)$ettKey, $this->getCondition()) : $ett->getCountByParam($this->getCondition());
+            $qtt = (int)$this->getMeta('elmPerPage');
+            $pageQtt = ceil($qttElm / $qtt);
+            if ($page > $pageQtt) {
+                $page = $pageQtt;
+                if ($page < 1) {
+                    $page = 1;
                 }
             }
-            $nOffset = ($nPage - 1) * $nQtt;
-            $this->setJson(array('pager' => array($nPage, $nQttElm < 1 ? 1 : $nPageQtt, $nQttElm)));
+            $offset = ($page - 1) * $qtt;
+            $this->setJson(['pager' => [$page, $qttElm < 1 ? 1 : $pageQtt, $qttElm]]);
         }
-        return array($nQtt, $nOffset);
-    } // function definePager
+        return [$qtt, $offset];
+    }
 
-} // class \fan\core\block\admin\data_table
-?>
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\admin;
 /**
  * Admin structure class for loader block
  *
@@ -16,5 +20,4 @@
  */
 class structure extends \fan\core\block\admin\structure
 {
-} // class \fan\project\block\admin\structure
-?>
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\user;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\user;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * User-data engine by data from config-file
@@ -22,189 +26,145 @@ class config extends base
      * Config of Authentication Data
      * @var \fan\core\service\config\row
      */
-    protected $oAuthConfig;
+    protected ?object $authConfig = null;
 
-    /**
-     * Constructor of user engine
-     * @param mixed $mIdentifyer
-     * /
-    public function __construct($mIdentifyer)
+    public function makePasswordHash(string $password): string
     {
-        parent::__construct($mIdentifyer);
-    } // function __construct */
-
-    // ======== Static methods ======== \\
-    // ======== Main Interface methods ======== \\
-
-    /**
-     * Convert text of password to text of hash
-     * @param string $sPassword
-     * @return string
-     */
-    public function makePasswordHash($sPassword)
-    {
-        $sLogin = array_val($this->aData, 'login', $this->mIdentifyer);
-        return $sLogin ? md5($sLogin . $sPassword . $this->oConfig->get('ENGINE_KEY')) : '';
-    } // function makePasswordHash
+        $login = array_val($this->data, 'login', $this->identifyer);
+        return $login ? md5((string)$login . $password . (string)$this->config->get('ENGINE_KEY')) : '';
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Load and Save User Data and return TRUE if success
-     * @return boolean
-     */
-    protected function _loadData()
+    protected function _loadData(): bool
     {
-        $this->aData = array();
+        $this->data = [];
 
-        $sFile = $this->oConfig->get('ENGINE_SOURCE', 'auth');
-        $sKey  = $this->oConfig->get('ENGINE_KEY');
-        if (empty($sKey)) {
+        $file = $this->config->get('ENGINE_SOURCE', 'auth');
+        $key  = $this->config->get('ENGINE_KEY');
+        if (empty($key)) {
             return false;
         }
 
-        $this->oAuthConfig = \fan\project\service\config::instance($sFile)->get($sKey);
+        $this->authConfig = $this->containerService('config', (string)$file)->get((string)$key);
 
-        $oRule = $this->_getAccessRule();
-        if (empty($oRule)) {
+        $rule = $this->_getAccessRule();
+        if (empty($rule)) {
             return false;
         }
 
-        $sMainRole = $this->oAuthConfig->main_role;
-        if (empty($sMainRole) || !is_string($sMainRole)) {
-            throw new fatalException($this->oFacade, 'Main role isn\'t set in config-file "' . $sFile . '" for "' . $sKey . '"!');
+        $mainRole = $this->authConfig->main_role;
+        if (empty($mainRole) || !is_string($mainRole)) {
+            throw new fatalException($this->facade, 'Main role isn\'t set in config-file "' . $file . '" for "' . $key . '"!');
         }
 
-        if ($this->mIdentifyer == 'anonymous') {
-            if (!empty($oRule['is_anonymous'])) {
-                $this->aData = $this->_getAnonymousData($oRule);
+        if ((string)$this->identifyer === 'anonymous') {
+            if (!empty($rule['is_anonymous'])) {
+                $this->data = $this->_getAnonymousData($rule);
             }
         } else {
-            $this->aData = $this->_getAuthorizedData($oRule);
+            $this->data = $this->_getAuthorizedData($rule);
         }
-        return !empty($this->aData);
-    } // function _loadData
+        return !empty($this->data);
+    }
 
-    /**
-     * Get Data of Anonymous user
-     * @param \fan\core\service\config\row $oRule
-     * @return array
-     */
-    protected function _getAnonymousData(\fan\core\service\config\row $oRule)
+    protected function _getAnonymousData(\fan\core\service\config\row $rule): array
     {
-        $this->bIsValid = true;
+        $this->isValid = true;
 
-        $aData = array(
+        $data = [
             'id'       => 'anonymous',
             'login'    => 'anonymous',
             'password' => $this->makePasswordHash(''),
-            'roles'    => array(),
-        );
+            'roles'    => [],
+        ];
 
-        $aData['roles'][$this->oAuthConfig->main_role] = null;
+        $data['roles'][$this->authConfig->main_role] = null;
 
-        $this->_mergeRoles($aData['roles'], $oRule->add_roles);
-        return $aData;
-    } // function _getAnonymousData
+        $this->_mergeRoles($data['roles'], $rule->add_roles);
+        return $data;
+    }
 
-    protected function _getAuthorizedData($oRule)
+    protected function _getAuthorizedData(object $rule): array
     {
-        $oAuth = $this->_getAuthentication();
-        if (empty($oAuth)) {
-            return array();
+        $auth = $this->_getAuthentication();
+        if (empty($auth)) {
+            return [];
         }
 
-        $aData = array(
-            'id'       => $oAuth->login,
-            'roles'    => array(),
-        );
+        $data = [
+            'id'       => $auth->login,
+            'roles'    => [],
+        ];
         foreach ($this->_getKeyList() as $k) {
-            if (isset($oAuth->$k) && !isset($aData[$k])) {
-                $aData[$k] = $oAuth->$k;
+            if (isset($auth->$k) && !isset($data[$k])) {
+                $data[$k] = $auth->$k;
             }
         }
 
-        $aData['roles'][$this->oAuthConfig->main_role] = null;
+        $data['roles'][$this->authConfig->main_role] = null;
 
-        $this->_mergeRoles($aData['roles'], $oRule->add_roles);
-        $this->_mergeRoles($aData['roles'], $oAuth->roles);
-        return $aData;
-    } // function _getAuthorizedData
+        $this->_mergeRoles($data['roles'], $rule->add_roles);
+        $this->_mergeRoles($data['roles'], $auth->roles);
+        return $data;
+    }
 
-    /**
-     * Save User Data and return TRUE if success
-     * @return boolean
-     */
-    protected function _saveData()
+    protected function _saveData(): bool
     {
         return false;
-    } // function _saveData
+    }
 
-    /**
-     * Validate User Data before saving
-     * @return boolean
-     */
-    protected function _validateForSave()
+    protected function _validateForSave(): bool
     {
         return false;
-    } // function _validateForSave
+    }
 
-    /**
-     * Get Access Rule from config
-     * @return \fan\core\service\config\row
-     */
-    protected function _getAccessRule()
+    protected function _getAccessRule(): mixed
     {
-        $aKeys = array('re_domain' => 'SERVER_NAME', 're_server_ip' => 'SERVER_ADDR', 're_client_ip' => 'REMOTE_ADDR');
-        if (!empty($this->oAuthConfig['RULE'])) {
-            foreach ($this->oAuthConfig['RULE'] as $oRule) {
-                foreach ($aKeys as $k0 => $k1) {
-                    if (!empty($oRule[$k0]) && !preg_match($oRule[$k0], $_SERVER[$k1])) {
+        $keys = ['re_domain' => 'SERVER_NAME', 're_server_ip' => 'SERVER_ADDR', 're_client_ip' => 'REMOTE_ADDR'];
+        if (!empty($this->authConfig['RULE'])) {
+            foreach ($this->authConfig['RULE'] as $rule) {
+                foreach ($keys as $k0 => $k1) {
+                    if (!empty($rule[$k0]) && !preg_match((string)$rule[$k0], (string)($_SERVER[$k1] ?? ''))) {
                         continue 2;
                     }
                 }
-                return $oRule;
+                return $rule;
             }
         }
         return null;
-    } // function _getAccessRule
+    }
 
-    protected function _getAuthentication()
+    protected function _getAuthentication(): mixed
     {
-        foreach ($this->oAuthConfig['AUTHENTICATION'] as $oAuth) {
-            foreach ($this->oConfig['IDENTIFYERS'] as $v) {
-                if ($oAuth->$v == $this->mIdentifyer) {
-                    return $oAuth;
+        foreach ($this->authConfig['AUTHENTICATION'] as $auth) {
+            foreach ($this->config['IDENTIFYERS'] as $v) {
+                if ((string)$auth->$v === (string)$this->identifyer) {
+                    return $auth;
                 }
             }
         }
         return null;
-    } // function _getAuthentication
+    }
 
-    /**
-     * Merge Rule
-     * @param array $aTarget
-     * @param mixed $mSource
-     */
-    protected function _mergeRoles(&$aTarget, $mSource)
+    protected function _mergeRoles(array &$target, mixed $source): void
     {
-        if (!empty($mSource) && is_string($mSource)) {
-            $aRules = array($mSource);
-        } elseif (!empty($mSource) && is_array($mSource)) {
-            $aRules = $mSource;
-        } elseif (is_object($mSource) && method_exists($mSource, 'toArray')) {
-            $aRules = $mSource->toArray();
+        if (!empty($source) && is_string($source)) {
+            $rules = [$source];
+        } elseif (!empty($source) && is_array($source)) {
+            $rules = $source;
+        } elseif (is_object($source) && method_exists($source, 'toArray')) {
+            $rules = $source->toArray();
         } else {
             return;
         }
 
-        foreach ($aRules as $v) {
-            $aTarget[$v] = null;
+        foreach ($rules as $v) {
+            $target[(string)$v] = null;
         }
-    } // function _mergeRoles
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\service\user\config
-?>
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\core\plain;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\plain;
 //use fan\project\exception\plain\fatal as fatalException;
 /**
  * Base access for plain files (uploaded to the server) class
@@ -22,107 +26,81 @@ class captcha
      * Handler object
      * @var \fan\core\service\plain
      */
-    protected $oHandler;
+    protected ?object $handler = null;
 
     /**
      * Plain config object
      * @var \fan\core\service\config\row
      */
-    protected $oConfig;
+    protected ?object $config = null;
 
     /**
      * Plain config object
      * @var \fan\core\service\captcha
      */
-    protected $oCaptcha;
+    protected ?object $captcha = null;
 
     /**
      * Key of plain controller
      * @var string
      */
-    protected $sKey;
+    protected ?string $key = null;
 
     /**
      * @var
      */
-    protected $sApp = null;
+    protected ?string $app = null;
 
-    /**
-     * Constructor of Plain controller captcha
-     * @param boolean $bAllowIni
-     */
-    public function __construct(\fan\core\service\plain $oHandler, $sKey)
+    public function __construct(\fan\core\service\plain $handler, $key)
     {
-        $this->oHandler = $oHandler;
-        $this->sKey     = $sKey;
+        $this->handler = $handler;
+        $this->key     = (string)$key;
 
-        $aHandle = $oHandler->getHandleData();
-        $this->oCaptcha = service('captcha', $aHandle['mReqKey']);
-    } // function __construct
+        $handle = $handler->getHandleData();
+        $this->captcha = service('captcha', (string)$handle['reqKey']);
+    }
 
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Get Captcha
-     * @return array|string
-     */
-    public function getCaptcha()
+    public function getCaptcha(): string
     {
-        //return 'getCaptcha-' . $this->oCaptcha->getText() . '!!!!';
+        //return 'getCaptcha-' . $this->captcha->getText() . '!!!!';
         //return $this->_prepare()->_init()->_getContent();
         return $this->_init()->_getContent();
     } // getCaptcha
 
-    /**
-     * Get Key
-     * @return string
-     */
-    public function getKey()
+    public function getKey(): ?string
     {
-        return $this->sKey;
+        return $this->key;
     } // getKey
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Init data
-     * @return \fan\core\plain\captcha
-     */
-    protected function _init()
+    protected function _init(): static
     {
-        //$this->oHandler->setErrorMessage(msg('ERROR_REQUESTED_FILE_IS_NOT_FOUND'));
-        $aHeaders = $this->oCaptcha->getHeaders();
-        foreach ($aHeaders as $k => $v) {
-            $this->oHandler->addHeader($k, $v);
+        //$this->handler->setErrorMessage(msg('ERROR_REQUESTED_FILE_IS_NOT_FOUND'));
+        $headers = $this->captcha->getHeaders();
+        foreach ($headers as $k => $v) {
+            $this->handler->addHeader($k, $v);
         }
         return $this;
-    } // function _init
+    }
 
-    /**
-     * Get content OR content outputer
-     * @return array|string
-     */
-    protected function _getContent()
+    protected function _getContent(): string
     {
-        return $this->oCaptcha->getBinaryData();
-    } // function _getContent
+        return $this->captcha->getBinaryData();
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
 
-    /**
-     * Method required for interface of plain controller
-     * @param \fan\core\service\config\row $oConfig
-     * @return \fan\core\plain\captcha
-     */
-    public function setConfig(\fan\core\service\config\row $oConfig)
+    public function setConfig(\fan\core\service\config\row $config): static
     {
-        if (empty($this->oConfig)) {
-            $this->oConfig = $oConfig;
+        if (empty($this->config)) {
+            $this->config = $config;
         }
         return $this;
     } // setConfig
 
-} // class \fan\core\plain\captcha
-?>
+}

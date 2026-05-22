@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Meta-data of pager quantifier
  * Note:
@@ -17,11 +20,11 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 03.002
  */
-return array(
-    'own' => array(
+return [
+    'own' => [
         'initOrder' => 850,
 
-        'form' => array(
+        'form' => [
             'action_method'     => 'GET',
             'request_type'      => 'G',
             'redirect_required' => false,
@@ -30,13 +33,12 @@ return array(
 
             'form_key_name' => 'pager_quantifier',
 
-            'fields' => array(
-                'pager_quantifier' => array(
+            'fields' => [
+                'pager_quantifier' => [
                     'label'       => 'Elements per page',
                     'input_type'  => 'select',
-                ),
-            ),
-        ),
-    ),
-);
-?>
+                ],
+            ],
+        ],
+    ],
+];

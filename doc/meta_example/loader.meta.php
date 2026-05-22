@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Example of meta file for block
  * Note:
@@ -16,11 +19,11 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 02.004
  */
-return array(
-    'own' => array(
-        'json' => array (
+return [
+    'own' => [
+        'json' => [
             //Many-dimensional array of src JSON-object
-        ),
+        ],
 
         'notUseTemplate' => true OR false, // NR. true - do not parse template automaticaly. By default: false
         'template' => 'used_template_name(NR - it is need to set when template_name not equal to class_name)',
@@ -28,19 +31,18 @@ return array(
         /**
          * All parameters below it is possible to set as "own"-part, amd in "common"-part
          */
-        'tplVars' => array( // variable, which sets in template automaticaly
+        'tplVars' => [ // variable, which sets in template automaticaly
             'tplVar1' => 'Value of variable 1',
             'tplVar2' => 'Value of variable 2',
-        ),
+        ],
 
         'text' => 'srctext',
 
-        'roles' => array (
-            array (
+        'roles' => [
+            [
                 'condition'    => '(role_A|role_B)&!role_C',
                 'transfer_int' => 'transferURL',
-            ),
-        ),
-    ),
-);
-?>
+            ],
+        ],
+    ],
+];

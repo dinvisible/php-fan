@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\tab;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\tab;
 
 /**
  * Description of delegate
@@ -21,35 +24,25 @@ abstract class delegate extends engine
      * Facade of service
      * @var \fan\core\service\config\base
      */
-    protected $oConfig = null;
+    protected ?object $config = null;
 
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Set Facade
-     * @param \fan\core\base\service $oFacade
-     */
-    public function setFacade(\fan\core\base\service $oFacade)
+    public function setFacade(\fan\core\base\service $facade): static
     {
-        parent::setFacade($oFacade);
-        $this->oConfig = $oFacade->getConfig();
+        parent::setFacade($facade);
+        $this->config = $facade->getConfig();
         return $this;
-    } // function setFacade
+    }
 
-    /**
-     * Get service's Config
-     * @param string $mKey Config key
-     * @return mixed
-     */
-    public function getConfig($mKey = null, $mDefault = null)
+    public function getConfig(mixed $key = null, mixed $default = null): mixed
     {
-        return is_null($mKey) || !is_object($this->oConfig) ? $this->oConfig : $this->oConfig->get($mKey, $mDefault);
-    } // function getConfig
+        return is_null($key) || !is_object($this->config) ? $this->config : $this->config->get($key, $default);
+    }
 
     // ======== Private/Protected methods ======== \\
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
-} // class \fan\core\service\tab\delegate
-?>
+}

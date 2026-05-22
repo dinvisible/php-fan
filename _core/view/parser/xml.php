@@ -1,4 +1,7 @@
-<?php namespace fan\core\view\parser;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view\parser;
 /**
  * View parser XML-type
  *
@@ -17,55 +20,40 @@
 class xml extends \fan\core\view\parser
 {
     // ======== Static methods ======== \\
-    /**
-     * Get View-Format
-     * @return string
-     */
-    final static public function getFormat() {
+    final static public function getFormat(): string {
         return 'xml';
-    } // function getFormat
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Get Final Content Code
-     * @return string
-     */
-    public function getFinalContent()
+    public function getFinalContent(): string|false
     {
-        $oDom = new \DOMDocument('1.0', 'iso-8859-1');
-        $oEelement = new \DOMElement($this->oRootBlock->getBlockName());
-        $oDom->appendChild($oEelement);
-        $this->_makeDomElements($oEelement, $this->aResult);
-        $sResult = $oDom->saveXML();
-        $this->_setHeaders($sResult, 'text/xml', '');
-        return $sResult;
-    } // function getFinalContent
+        $dom = new \DOMDocument('1.0', 'iso-8859-1');
+        $eelement = new \DOMElement($this->rootBlock->getBlockName());
+        $dom->appendChild($eelement);
+        $this->_makeDomElements($eelement, $this->result);
+        $result = $dom->saveXML();
+        $this->_setHeaders($result, 'text/xml', '');
+        return $result;
+    }
 
     // ======== Protected methods ======== \\
-    /**
-     * Make Dom Elements
-     * @param \DOMNode $oParent
-     * @param type $aData
-     * @return \fan\core\view\parser\xml
-     */
-    protected function _makeDomElements(\DOMNode $oParent, $aData)
+    protected function _makeDomElements(\DOMNode $parent, $data): static
     {
-        foreach ($aData as $k => $v) {
+        foreach ($data as $k => $v) {
             if (is_numeric($k)) { // It is mend. //ToDo: Do numeric keys as several elements with the same name
                 continue;
             }
-            $oEelement = new \DOMElement($k);
-            $oParent->appendChild($oEelement);
+            $eelement = new \DOMElement((string)$k);
+            $parent->appendChild($eelement);
             if (is_scalar($v)) {
-                $oEelement->appendChild(new \DOMText($v));
+                $eelement->appendChild(new \DOMText((string)$v));
             } elseif (is_array($v)) {
-                $this->_makeDomElements($oEelement, $v);
+                $this->_makeDomElements($eelement, $v);
             }
         }
         return $this;
-    } // function _makeDomElements
+    }
 
-} // class \fan\core\view\parser\xml
-?>
+}

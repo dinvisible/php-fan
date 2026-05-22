@@ -1,4 +1,8 @@
-<?php namespace fan\core\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Class of tab handler
@@ -15,10 +19,10 @@ use fan\project\exception\service\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.006 (20.04.2015)
  *
- * @method boolean isUseHttps() isUseHttps(array|string $mKey)
- * @method string getCurrentURI() getCurrentURI(boolean $bCorLng, boolean $bAddExt, boolean $bAddQueryStr, boolean $bAddFirstSlash)
- * @method string getURI() getURI(string $sUrn, string $sType, boolean $bUseSid, boolean $bProtocol)
- * @method string addQuery() addQuery(string $sUrn, string $sKey, string $sVal)
+ * @method boolean isUseHttps() isUseHttps(array|string $key)
+ * @method string getCurrentURI() getCurrentURI(boolean $corLng, boolean $addExt, boolean $addQueryStr, boolean $addFirstSlash)
+ * @method string getURI() getURI(string $urn, string $type, boolean $useSid, boolean $protocol)
+ * @method string addQuery() addQuery(string $urn, string $key, string $val)
  * @method string getDefaultExtension() getDefaultExtension()
  */
 class tab extends \fan\core\base\service\single
@@ -26,288 +30,210 @@ class tab extends \fan\core\base\service\single
     /**
      *  Marker of URN application prefix
      */
-    const URN_AP = '~';
+    public const URN_AP = '~';
 
-    /**
-     * @var array Error transfer flags
-     */
-    protected static $aErrTransfer = array();
+    protected static array $errTransfer = [];
 
-    /**
-     * @var array
-     */
-    protected $aEngine = array();
+    protected array $engine = [];
 
-    /**
-     * @var array
-     */
-    protected $aDelegateRule = array(
-        'urlMaker' => array('isUseHttps', 'getCurrentURI', 'getModifiedCurrentURI', 'getURI', 'addQuery', 'getDefaultExtension'),
-    );
+    protected array $delegateRule = [
+        'urlMaker' => ['isUseHttps', 'getCurrentURI', 'getModifiedCurrentURI', 'getURI', 'addQuery', 'getDefaultExtension'],
+    ];
 
     /**
      * @var \fan\core\service\matcher
      */
-    protected $oMatcher = null;
+    protected ?object $matcher = null;
 
     /**
      * View Type definder
      * @var \fan\core\view\definer
      */
-    protected $oViewDefiner = null;
+    protected ?object $viewDefiner = null;
     /**
      * Value of View Type
      * @var string
      */
-    protected $sViewClass = null;
+    protected ?string $viewClass = null;
 
-    /**
-     * @var string Current Application Name
-     */
-    protected $sAppName = null;
+    protected ?string $appName = null;
 
     /**
      * Current parsed data
      * @var \fan\core\service\matcher\item\parsed
      */
-    protected $aCurrentData = null;
+    protected ?object $currentData = null;
 
     /**
      * Last parsed data
      * @var \fan\core\service\matcher\item\parsed
      */
-    protected $aLastData = null;
+    protected ?object $lastData = null;
 
     /**
      * @var \fan\core\block\base Main Tab block
      */
-    protected $oMainBlock = null;
+    protected ?object $mainBlock = null;
 
     /**
      * @var \fan\core\block\base Root Tab block
      */
-    protected $oRootBlock = null;
+    protected ?object $rootBlock = null;
 
     /**
      * @var \fan\core\block\base Current (performent at this time) Tab block
      */
-    protected $oCurrentBlock = null;
+    protected ?object $currentBlock = null;
 
     /**
      * Meta-data for this Tab
      * @var array
      */
-    protected $aTabMeta = array();
+    protected array $tabMeta = [];
 
     /**
      * Blocks Meta-data from the Main-block
      * @var array
      */
-    protected $aBlocksMeta = array();
+    protected array $blocksMeta = [];
 
     /**
      * Default Meta-data by Tab-configuration according to View-Type
      * @var array
      */
-    protected $aDefaultMeta = array();
+    protected array $defaultMeta = [];
 
     /**
      * One-dimensional hash-array for call other blocks
      * @var array
      */
-    protected $aBlocks = array();
+    protected array $blocks = [];
 
     /**
      * Two-dimensional array for init data blocks
      * @var array
      */
-    protected $aInitOrder = array();
+    protected array $initOrder = [];
 
     /**
      * It is made content for show
      * @var string|array
      */
-    protected $mContent = '';
+    protected mixed $content = '';
 
     /**
      * Stage of Tab processing
      * @var string
      */
-    protected $sStage = null;
+    protected ?string $stage = null;
 
-    /**
-     * @var boolean Enable/Disable Cache
-     */
-    protected $bCacheEnable = true;
+    protected bool $cacheEnable = true;
     /**
      * @var number Cache File Time
      */
-    protected $nCacheFileTime = null;
+    protected int|float|null $cacheFileTime = null;
     /**
      * @var number Cache Expire Time
      */
-    protected $nCacheExpireTime = null;
+    protected int|float|null $cacheExpireTime = null;
 
-    /**
-     * @var array - times stamps for calculate performance
-     */
-    protected $aTimesStamp;
-    /**
-     * @var boolean allow to check performance
-     */
-    protected $bCheckPerformance;
-    /**
-     * @var boolean allow to debug operations
-     */
-    protected $bAllowDebug = null;
+    protected ?array $timesStamp = null;
+    protected ?bool $checkPerformance = null;
+    protected ?bool $allowDebug = null;
 
 
-    /**
-     * Service tab constructor
-     * @param boolean $bAllowIni
-     */
-    protected function __construct($bAllowIni = true)
+    protected function __construct(bool $allowIni = true)
     {
-        parent::__construct($bAllowIni);
-        $this->oMatcher = \fan\project\service\matcher::instance();
-    } // function __construct
+        parent::__construct($allowIni);
+        $this->matcher = \fan\project\service\matcher::instance();
+    }
 
     // ======== Static methods ======== \\
 
-    /**
-     *
-     * @return string|array
-     */
-    public static function getContent()
+    public static function getContent(): mixed
     {
-        return \fan\project\service\tab::instance()->_controlTabTransfer()->mContent;
+        return self::staticContainerService('tab')->_controlTabTransfer()->content;
     }
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Get Current Content Block
-     * @return \fan\core\block\base
-     */
-    public function getMainBlock()
+    public function getMainBlock(): ?object
     {
-        return $this->oMainBlock;
-    } // function getMainBlock
+        return $this->mainBlock;
+    }
 
-    /**
-     * Get Application Name
-     * @return string
-     */
-    public function getAppName()
+    public function getAppName(): ?string
     {
-        return $this->sAppName;
-    } // function getAppName
+        return $this->appName;
+    }
 
-    /**
-     * Get Current Root Block
-     * @return \fan\core\block\base
-     */
-    public function getRootBlock()
+    public function getRootBlock(): ?object
     {
-        return $this->oRootBlock;
-    } // function getRootBlock
+        return $this->rootBlock;
+    }
 
-    /**
-     * Get View Definer
-     * @return \fan\core\view\definer
-     */
-    public function getViewDefiner()
+    public function getViewDefiner(): object
     {
-        if(empty($this->oViewDefiner)) {
-            $this->oViewDefiner = new \fan\project\view\definer($this->oConfig->get('VIEW_DEFINER', array())->toArray());
+        if (empty($this->viewDefiner)) {
+            $this->viewDefiner = new \fan\project\view\definer($this->config->get('VIEW_DEFINER', [])->toArray());
         }
-        return $this->oViewDefiner;
-    } // function getViewDefiner
-    /**
-     * Get View Class
-     * @return string
-     */
-    public function getViewClass()
+        return $this->viewDefiner;
+    }
+    public function getViewClass(): ?string
     {
-        return $this->sViewClass;
-    } // function getViewClass
+        return $this->viewClass;
+    }
 
-    /**
-     * Check is Block "Root" or "Main"
-     * @param \fan\core\block\base $oBlock
-     * @return array
-     */
-    public function checkBlockStatus(\fan\core\block\base $oBlock)
+    public function checkBlockStatus(\fan\core\block\base $block): array
     {
-        return array($oBlock == $this->oRootBlock, $oBlock == $this->oMainBlock);
-    } // function checkBlockStatus
+        return [$block === $this->rootBlock, $block === $this->mainBlock];
+    }
 
-    /**
-     * Get Tab Meta from the Main Block
-     * @param mixed $mKey
-     * @param mixed $mDefautValue
-     * @return array
-     */
-    public function getTabMeta($mKey = null, $mDefautValue = null)
+    public function getTabMeta(mixed $key = null, mixed $defautValue = null): mixed
     {
-        if (is_null($mKey)) {
-            return $this->aTabMeta;
+        if (is_null($key)) {
+            return $this->tabMeta;
         }
-        $mRet = array_get_element($this->aTabMeta, $mKey);
-        return is_null($mRet) ? $mDefautValue : $mRet;
-    } // function getTabMeta
+        $ret = array_get_element($this->tabMeta, $key);
+        return is_null($ret) ? $defautValue : $ret;
+    }
 
-    /**
-     * Get Block Meta from the Main Block
-     * @param string $sName
-     * @return array
-     */
-    public function getBlocksMetaByMain($sName)
+    public function getBlocksMetaByMain(string $name): array
     {
-        return isset($this->aBlocksMeta[$sName]) && is_array($this->aBlocksMeta[$sName]) ? $this->aBlocksMeta[$sName] : array();
-    } // function getBlocksMetaByMain
+        return isset($this->blocksMeta[$name]) && is_array($this->blocksMeta[$name]) ? $this->blocksMeta[$name] : [];
+    }
 
-    /**
-     * Get Default Meta from Tab-config
-     * @return array
-     */
-    public function getDefaultMeta()
+    public function getDefaultMeta(): array
     {
-        return $this->aDefaultMeta;
-    } // function getDefaultMeta
+        return $this->defaultMeta;
+    }
 
-    /**
-     * Check Tab Roles - it is need to call this method ecach time when roles of curent member are changed
-     * @param string $sDbOper
-     * @param boolean $bAllowTransfer
-     * @return boolean
-     */
-    public function checkTabRoles($sDbOper = null, $bAllowTransfer = true)
+    public function checkTabRoles(?string $dbOper = null, bool $allowTransfer = true): bool
     {
-        $aCond = $this->getTabMeta('roles');
-        if ($aCond) {
+        $cond = $this->getTabMeta('roles');
+        if ($cond) {
             do {
-                foreach ($aCond as $v) {
+                foreach ($cond as $v) {
                     if (!role($v['condition'])) {
-                        $aTransfer = $v;
+                        $transfer = $v;
                         break 2;
                     }
                 }
                 return true;
             } while (false);
 
-            if ($bAllowTransfer) {
-                $oServSes = \fan\project\service\session::instance();
-                $sExpire_URL = $oServSes->isExpired() && !$this->getTabMeta('notRedirectByExpire', false) ? $this->oConfig['EXPIRE_URL'] : null;
+            if ($allowTransfer) {
+                $servSes = $this->containerService('session');
+                $expire_URL = $servSes->isExpired() && !$this->getTabMeta('notRedirectByExpire', false) ? $this->config['EXPIRE_URL'] : null;
 
-                if ($sExpire_URL) {
-                    transfer_out($sExpire_URL, null, $sDbOper);
-                } elseif (!empty($aTransfer['transfer_sham'])) {
-                    transfer_sham($this->getURI($aTransfer['transfer_sham']), null, $sDbOper);
-                } elseif (!empty($aTransfer['transfer_int'])) {
-                    transfer_int($this->getURI($aTransfer['transfer_int']), null, $sDbOper);
-                } elseif (!empty($aTransfer['transfer_out'])) {
-                    transfer_out($this->getURI($aTransfer['transfer_out']), null, $sDbOper);
+                if ($expire_URL) {
+                    transfer_out($expire_URL, null, $dbOper);
+                } elseif (!empty($transfer['transfer_sham'])) {
+                    transfer_sham($this->getURI($transfer['transfer_sham']), null, $dbOper);
+                } elseif (!empty($transfer['transfer_int'])) {
+                    transfer_int($this->getURI($transfer['transfer_int']), null, $dbOper);
+                } elseif (!empty($transfer['transfer_out'])) {
+                    transfer_out($this->getURI($transfer['transfer_out']), null, $dbOper);
                 } else {
                     $this->_parseError403();
                 }
@@ -316,180 +242,120 @@ class tab extends \fan\core\base\service\single
             }
         }
         return true;
-    } // function checkTabRoles
+    }
 
-    /**
-     * Load by path (from meta-data)
-     * Return class of block
-     * @param string $sPath
-     * @return string
-     */
-    public function loadBlock($sPath)
+    public function loadBlock(string $path): ?string
     {
-        if ($sPath{0} != '{') {
-            $sPath = '{CAPP}/' . $sPath;
+        $path = (string)$path;
+        if ($path[0] !== '{') {
+            $path = '{CAPP}/' . $path;
         }
-        if (substr($sPath, -4) != '.php') {
-            $sPath .= '.php';
+        if (substr($path, -4) !== '.php') {
+            $path .= '.php';
         }
-        $oLoader = \bootstrap::getLoader();
-        return $oLoader->loadBlockByPath($sPath);
-    } // function loadBlock
+        $loader = \bootstrap::getLoader();
+        return $loader->loadBlockByPath($path);
+    }
 
-    /**
-     * Set Current Block
-     * @param \fan\core\block\base $oBlock
-     * @return \fan\core\service\tab
-     */
-    public function setCurrentBlock($oBlock)
+    public function setCurrentBlock(\fan\core\block\base $block): static
     {
-        $this->oCurrentBlock = $oBlock;
+        $this->currentBlock = $block;
         return $this;
-    } // function setCurrentBlock
+    }
 
-    /**
-     * Get Current Block
-     * @return \fan\core\block\base
-     */
-    public function getCurrentBlock()
+    public function getCurrentBlock(): ?object
     {
-        return $this->oCurrentBlock;
-    } // function getCurrentBlock
+        return $this->currentBlock;
+    }
 
     /**
-     * Set Tab Block
-     * @param type $oBlock
-     * @param type $sName
-     * @return \fan\core\service\tab
      * @throws \fan\project\exception\service\fatal
      */
-    public function setTabBlock($oBlock, $sName)
+    public function setTabBlock(\fan\core\block\base $block, string $name): static
     {
-        if (isset($this->aBlocks[$sName])) {
-            throw new fatalException($this, 'Set dublicate of block with name "' . $sName . '"');
+        if (isset($this->blocks[$name])) {
+            throw new fatalException($this, 'Set dublicate of block with name "' . $name . '"');
         }
-        $this->aBlocks[$sName] = $oBlock;
-        $nOrder = $oBlock->getMeta('initOrder', $this->getDefaultInitNum());
-        if (!isset($this->aInitOrder[$nOrder])) {
-            $this->aInitOrder[$nOrder] = array();
+        $this->blocks[$name] = $block;
+        $order = $block->getMeta('initOrder', $this->getDefaultInitNum());
+        if (!isset($this->initOrder[$order])) {
+            $this->initOrder[$order] = [];
         }
-        $this->aInitOrder[$nOrder][] = $oBlock;
+        $this->initOrder[$order][] = $block;
         return $this;
-    } // function setTabBlock
+    }
 
-    /**
-     * Get Tab Block object
-     * @param sting $sBlockName - name of block
-     * @param boolean $bAllowException - Allow Exception if name of block is incorrect
-     * @return \fan\core\block\base
-     */
-    public function getTabBlock($sBlockName, $bAllowException = true)
+    public function getTabBlock(string $blockName, bool $allowException = true): ?object
     {
-        if (!isset($this->aBlocks[$sBlockName])) {
-            if ($bAllowException) {
-                throw new fatalException($this, 'Call undefined block with name "' . $sBlockName . '"');
+        if (!isset($this->blocks[$blockName])) {
+            if ($allowException) {
+                throw new fatalException($this, 'Call undefined block with name "' . $blockName . '"');
             }
             return null;
         }
-        return $this->aBlocks[$sBlockName];
-    } // function getTabBlock
+        return $this->blocks[$blockName];
+    }
 
-    /**
-     * Check: Is Tab Block object
-     * @param sting $sBlockName - name of block
-     * @return boolean
-     */
-    public function isSetBlock($sBlockName)
+    public function isSetBlock(string $blockName): bool
     {
-        return isset($this->aBlocks[$sBlockName]);
-    } // function isSetBlock
+        return isset($this->blocks[$blockName]);
+    }
 
-    /**
-     * Get Stage of Tab processing
-     * @return string
-     */
-    public function getTabStage()
+    public function getTabStage(): ?string
     {
-        return $this->sStage;
-    } // function getTabStage
+        return $this->stage;
+    }
 
-    /**
-     * Get Default Init-order number
-     * @return numeric
-     */
-    public function getDefaultInitNum()
+    public function getDefaultInitNum(): mixed
     {
         return $this->getConfig('INIT_ORDER_NUM', 1000);
-    } // function getDefaultInitNum
+    }
 
-    /**
-     * Check is Allowed Debug-operations
-     * @return boolean
-     */
-    public function isDebugAllowed()
+    public function isDebugAllowed(): bool
     {
-        if (is_null($this->bAllowDebug)) {
-            $aDebugConfig      = \fan\project\service\config::instance()->get('debug');
-            $this->bAllowDebug = $aDebugConfig['ENABLED'] && $aDebugConfig['DEBUG_IP'] && !empty($_SERVER['SERVER_ADDR']) && preg_match($aDebugConfig['DEBUG_IP'], $_SERVER['SERVER_ADDR']);
+        if (is_null($this->allowDebug)) {
+            $debugConfig      = $this->containerService('config')->get('debug');
+            $this->allowDebug = $debugConfig['ENABLED'] && $debugConfig['DEBUG_IP'] && !empty($_SERVER['SERVER_ADDR']) && preg_match($debugConfig['DEBUG_IP'], $_SERVER['SERVER_ADDR']);
         }
-        return $this->bAllowDebug;
-    } // function isDebugAllowed
+        return $this->allowDebug;
+    }
 
-    /**
-     * getSubscriber
-     * @return subscriber
-     */
-    public function getSubscriber()
+    public function getSubscriber(): object
     {
-        if (empty($this->aEngine['subscriber'])) {
-            $this->aEngine['subscriber'] = $this->_getEngine('subscriber');
+        if (empty($this->engine['subscriber'])) {
+            $this->engine['subscriber'] = $this->_getEngine('subscriber');
         }
-        return $this->aEngine['subscriber'];
-    } // function getSubscriber
+        return $this->engine['subscriber'];
+    }
 
     // ----------- Methods of block cache ------------- \\
-    /**
-     * @param numeric $nFileTime
-     * @param numeric $nExpireTime
-     * @return \fan\core\service\tab
-     */
-    public function setFileTime($nFileTime, $nExpireTime)
+    public function setFileTime(int|float $fileTime, int|float $expireTime): static
     {
-        $this->nCacheFileTime = $this->nCacheFileTime ? $nFileTime : max($this->nCacheFileTime, $nFileTime);
-        if ($nExpireTime) {
-           $this->nCacheExpireTime = $this->nCacheExpireTime ? $nExpireTime : min($this->nCacheExpireTime, $nExpireTime);
+        $this->cacheFileTime = $this->cacheFileTime ? $fileTime : max($this->cacheFileTime, $fileTime);
+        if ($expireTime) {
+           $this->cacheExpireTime = $this->cacheExpireTime ? $expireTime : min($this->cacheExpireTime, $expireTime);
         }
         return $this;
-    } // function setFileTime
+    }
 
-    /**
-     * Is allowed Block Cache
-     * @return boolean
-     */
-    public function isCacheEnabled()
+    public function isCacheEnabled(): bool
     {
-        return $this->bCacheEnable;
-    } // function getCacheMode
-    /**
-     * Disable Cache
-     * @return \fan\core\service\tab
-     */
-    public function disableCache()
+        return $this->cacheEnable;
+    }
+    public function disableCache(): static
     {
-        $this->bCacheEnable = false;
+        $this->cacheEnable = false;
         return $this;
-    } // function disableCache
+    }
 
     // ======== Private/Protected methods ======== \\
 
     /**
-     * Control of Transfer while Tab content making
-     * @return string|array
      * @throws fatalException
      */
-    protected function _controlTabTransfer()
+    protected function _controlTabTransfer(): static
     {
-        $nMaxQttTransfer = $this->getConfig('MAX_QTT_TRANSFER', 10);
+        $maxQttTransfer = $this->getConfig('MAX_QTT_TRANSFER', 10);
         do {
             try {
                 // Preparing Tab-property. Parse error of request and set Main block
@@ -497,13 +363,13 @@ class tab extends \fan\core\base\service\single
                      ->_resetProperty()
                      ->_parseError();
 
-                if (empty($this->mContent)) {
+                if (empty($this->content)) {
                     // Set Tab meta. Check Tab Roles
                     $this->_setTabMeta()
                          ->checkTabRoles();
 
                     // Set View Class. Set Meta data for Other block by Main block. Set Default Meta by View-type. Make Tab-content.
-                    $this->_setViewClass($this->oMainBlock->getViewParserName())
+                    $this->_setViewClass($this->mainBlock->getViewParserName())
                          ->_setBlocksMetaByMain()
                          ->_setDefaultMeta()
                          ->_makeContent();
@@ -512,139 +378,127 @@ class tab extends \fan\core\base\service\single
                 return $this;
             } catch (\fan\core\base\transfer $e) {
                 // Catch and make transfer
-                $sTransferType = $e->getTransferType();
+                $transferType = $e->getTransferType();
 
-                $bModify = $sTransferType == 'out' ? null : false;
-                $sUri = $this->getURI($e->getRequest(), 'link', $bModify, $bModify);
+                $modify = $transferType === 'out' ? null : false;
+                $uri = $this->getURI($e->getRequest(), 'link', $modify, $modify);
 
                 // Out transfer
-                if ($sTransferType == 'out') {
-                    \fan\project\service\header::instance()->sendLocation($sUri);
+                if ($transferType === 'out') {
+                    $this->containerService('header')->sendLocation($uri);
                 }
 
-                $this->oMatcher->setUri($sUri, $e->getHost(), $e->isShiftCurrent());
+                $this->matcher->setUri($uri, $e->getHost(), $e->isShiftCurrent());
             }
-        } while ($this->oMatcher->getLastIndex() < $nMaxQttTransfer);
+        } while ($this->matcher->getLastIndex() < $maxQttTransfer);
 
         // Exception if quantity of Transfer is more Max
-        $sTrList = '';
-        foreach ($this->oMatcher->getStack() as $v) {
-            $sTrList .= "\n" . $v['source'];
+        $trList = '';
+        foreach ($this->matcher->getStack() as $v) {
+            $trList .= "\n" . $v['source'];
         }
-        throw new fatalException($this, 'To many transfers: ' . $sTrList);
-    } // function _controlTabTransfer
+        throw new fatalException($this, 'To many transfers: ' . $trList);
+    }
 
-    /**
-     * Check Aliases before defime main_request and add_request
-     * @return \fan\core\service\tab
-     */
-    protected function _checkAlias()
+    protected function _checkAlias(): static
     {
-        if ($this->oMatcher->getCurrentIndex() == 0) {
-            $aReqData   = $this->oMatcher->getLastItem()->getParsedSrc();
-            $sAliasFile = \bootstrap::parsePath($this->getConfig('ALIAS_FILE_PATH', '{PROJECT}/data/url_alias.php'));
-            if (!empty($aReqData) && is_readable($sAliasFile)) {
-                $aAliasData = include $sAliasFile;
-                if (!empty($aAliasData)) {
-                    $sReqPath = '/' . implode('/', $aReqData);
-                    array_unshift($aReqData, $sReqPath);
-                    $sPrev = '';
-                    foreach ($aReqData as $k => $v) {
-                        // Define $sCheck
+        if ($this->matcher->getCurrentIndex() === 0) {
+            $reqData   = $this->matcher->getLastItem()->getParsedSrc();
+            $aliasFile = (string)\bootstrap::parsePath((string)$this->getConfig('ALIAS_FILE_PATH', '{PROJECT}/data/url_alias.php'));
+            if (!empty($reqData) && is_readable($aliasFile)) {
+                $aliasData = \fan\project\adapter\php_array_file::load($aliasFile, []);
+                if (!empty($aliasData)) {
+                    $reqPath = '/' . implode('/', $reqData);
+                    array_unshift($reqData, $reqPath);
+                    $prev = '';
+                    foreach ($reqData as $k => $v) {
+                        // Define $check
                         if (empty($k)) {
-                            $sCheck = $v;
+                            $check = $v;
                         } else {
-                            $sCheck = $sPrev . '/' . $v . '/*';
-                            $sPrev .= '/' . $v;
+                            $check = $prev . '/' . $v . '/*';
+                            $prev .= '/' . $v;
                         }
 
-                        if (isset($aAliasData[$sCheck])) {
-                            // Define $sDestPath
-                            @list($sType, $sDestPath) = explode(':', $aAliasData[$sCheck], 2);
-                            if (!empty($sType) && empty($sDestPath)) {
-                                $sDestPath = $sType;
-                                $sType = 'sham';
+                        if (isset($aliasData[$check])) {
+                            // Define $destPath
+                            [$type, $destPath] = array_pad(explode(':', $aliasData[$check], 2), 2, null);
+                            if (!empty($type) && empty($destPath)) {
+                                $destPath = $type;
+                                $type = 'sham';
                             }
                             if ($k) {
-                                if (substr($sDestPath, -1) != '/') {
-                                    $sDestPath .= '/';
+                                if (substr($destPath, -1) !== '/') {
+                                    $destPath .= '/';
                                 }
-                                $sDestPath .= substr($sReqPath, strlen($sCheck) - 1);
+                                $destPath .= substr($reqPath, strlen($check) - 1);
                             }
 
                             // Validate data
-                            if (empty($sType) || !in_array($sType, array('out', 'int', 'sham'))) {
-                                throw new fatalException($this, 'Alias transfer type has incorrect value "' . $sType . '" for request "' . $sReqPath . '".');
+                            if (empty($type) || !in_array($type, ['out', 'int', 'sham'])) {
+                                throw new fatalException($this, 'Alias transfer type has incorrect value "' . $type . '" for request "' . $reqPath . '".');
                             }
-                            if (empty($sDestPath)) {
-                                throw new fatalException($this, 'Alias transfer doesn\'t have path for "' . $sReqPath . '".');
+                            if (empty($destPath)) {
+                                throw new fatalException($this, 'Alias transfer doesn\'t have path for "' . $reqPath . '".');
                             }
-                            if (!is_string($sDestPath)) {
-                                throw new fatalException($this, 'Alias transfer has icorrect path for "' . $sReqPath . '".');
+                            if (!is_string($destPath)) {
+                                throw new fatalException($this, 'Alias transfer has icorrect path for "' . $reqPath . '".');
                             }
 
-                            if (substr($sDestPath, -1) != '/') {
-                                $sDestPath = $this->_getPathWithExt($sDestPath);
+                            if (substr($destPath, -1) !== '/') {
+                                $destPath = $this->_getPathWithExt($destPath);
                             }
-                            call_user_func('transfer_' . $sType, $sDestPath);
+                            call_user_func('transfer_' . $type, $destPath);
                         }
                     }
                 }
             }
         }
         return $this;
-    } // function _checkAlias
+    }
 
-    /**
-     * Reset Tab property for new content
-     * @return \fan\core\service\tab
-     */
-    protected function _resetProperty()
+    protected function _resetProperty(): static
     {
-        $this->sStage       = 'preparing';
-        $this->oMainBlock   = null;
-        $this->oRootBlock   = null;
-        $this->aTabMeta     = array();
-        $this->aBlocksMeta  = array();
-        $this->aBlocks      = array();
-        $this->aInitOrder   = array();
-        $this->sViewClass   = null;
-        $this->mContent     = '';
-        $this->sAppName     = \fan\project\service\application::instance()->getAppName();
-        $this->aCurrentData = $this->oMatcher->getCurrentParsedData();
-        $this->aLastData    = $this->oMatcher->getLastParsedData();
-        $this->aTimesStamp  = array();
-        $this->bCheckPerformance = $this->getConfig('CHECK_PERFORMANCE', false);
+        $this->stage       = 'preparing';
+        $this->mainBlock   = null;
+        $this->rootBlock   = null;
+        $this->tabMeta     = [];
+        $this->blocksMeta  = [];
+        $this->blocks      = [];
+        $this->initOrder   = [];
+        $this->viewClass   = null;
+        $this->content     = '';
+        $this->appName     = $this->containerService('application')->getAppName();
+        $this->currentData = $this->matcher->getCurrentParsedData();
+        $this->lastData    = $this->matcher->getLastParsedData();
+        $this->timesStamp  = [];
+        $this->checkPerformance = $this->readBooleanFlag($this->getConfig('CHECK_PERFORMANCE', 0), 'CHECK_PERFORMANCE');
         return $this;
-    } // function _resetProperty
+    }
 
-    /**
-     * Parse Error of Request to Tab
-     * @return \fan\core\service\tab
-     */
-    public function _parseError()
+    public function _parseError(): static
     {
-        $aMainRequest = $this->aLastData['main_request'];
-        if (empty($aMainRequest) && (empty(self::$aErrTransfer) || end(self::$aErrTransfer) == 404)) {
-            $aTransferor = $this->getConfig('transferor');
-            if (!empty($aTransferor)) {
-                if (!is_array_alt($aTransferor)) {
+        $mainRequest = $this->lastData['main_request'];
+        if (empty($mainRequest) && (empty(self::$errTransfer) || (int)end(self::$errTransfer) === 404)) {
+            $transferor = $this->getConfig('transferor');
+            if (!empty($transferor)) {
+                if (!is_array_alt($transferor)) {
                     throw new fatalException($this, 'Point transferor isn\'t array.');
                 }
-                foreach ($aTransferor as $sClass) {
-                    call_user_func(array($sClass, 'checkRequest'), $this->aLastData['src_path'], $this->aLastData['app_prefix']);
+                foreach ($transferor as $class) {
+                    call_user_func([$class, 'checkRequest'], $this->lastData['src_path'], $this->lastData['app_prefix']);
                 }
             }
-            $this->mContent = $this->_parseError404(false);
+            $this->content = $this->_parseError404(false);
             return $this;
         }
 
-        if (!empty($aMainRequest)) {
-            $sFile = $this->aLastData['file'];
-            if (!empty($sFile)) {
-                $oLoader = \bootstrap::getLoader();
-                if (!$oLoader->loadBlockByPath($sFile)) {
-                    $this->mContent = $this->_parseError404(true);
+        if (!empty($mainRequest)) {
+            $file = $this->lastData['file'];
+            if (!empty($file)) {
+                $loader = \bootstrap::getLoader();
+                if (!$loader->loadBlockByPath($file)) {
+                    $this->content = $this->_parseError404(true);
                     return $this;
                 }
             }
@@ -652,394 +506,351 @@ class tab extends \fan\core\base\service\single
         // Define Main Block.
         $this->_setMainBlock();
         return $this;
-    } // function _parseError
+    }
 
-    /**
-     * Get Tab Content
-     * @return \fan\core\service\tab
-     */
-    public function _makeContent()
+    public function _makeContent(): static
     {
         // Start creating blocks
-        $this->sStage = 'creating';
-        $nStartTime   = microtime(true);
+        $this->stage = 'creating';
+        $startTime   = microtime(true);
         if ($this->_createRootBlock()) {
-            $this->aTimesStamp['creating'] = microtime(true) - $nStartTime;
+            $this->timesStamp['creating'] = microtime(true) - $startTime;
 
             // Init data blocks
-            $this->sStage = 'init';
+            $this->stage = 'init';
             $this->_initBlocks($this->_getInitBlocks());
 
             // Additional init for base blocks
-            $this->sStage = 'after_init';
+            $this->stage = 'after_init';
             $this->_runAfterInit();
 
-            $nInitTime = microtime(true);
+            $initTime = microtime(true);
 
             // Get output Content
-            $this->sStage   = 'output';
-            $this->mContent = $this->_getFinalContent($this->oRootBlock);
-            $this->_fixPerformance($nStartTime, $nInitTime);
+            $this->stage   = 'output';
+            $this->content = $this->_getFinalContent($this->rootBlock);
+            $this->_fixPerformance($startTime, $initTime);
         } else {
-            $this->mContent = $this->_parseError500('Root block isn\'t defined.');
+            $this->content = $this->_parseError500('Root block isn\'t defined.');
         }
 
         return $this;
-    } // function _makeContent
+    }
 
-    /**
-     * Set View Class
-     * @param string $sViewClass
-     * @return \fan\core\service\tab
-     */
-    protected function _setViewClass($sViewClass)
+    protected function _setViewClass(string $viewClass): static
     {
-        if (empty($sViewClass)) {
+        if (empty($viewClass)) {
             throw new fatalException($this, 'Type of view can\'t be empty.');
         }
-        $sClass = '\fan\project\view\parser\\' . $sViewClass;
-        if (!class_exists($sClass, true)) {
-            throw new fatalException($this, 'Class "' . $sClass . '" isn\'t found. Please check your "View definer"');
+        $class = '\fan\project\view\parser\\' . $viewClass;
+        if (!class_exists($class, true)) {
+            throw new fatalException($this, 'Class "' . $class . '" isn\'t found. Please check your "View definer"');
         }
-        $this->sViewClass = $sClass;
+        $this->viewClass = $class;
         return $this;
-    } // function _setViewClass
+    }
 
-    /**
-     * Create Root Block
-     * @return boolean
-     */
-    protected function _createRootBlock()
+    protected function _createRootBlock(): bool
     {
-        $aRootMeta  = $this->_getRootMeta();
-        $oRootBlock = $this->_defineRootBlock($aRootMeta);
-        if (empty($oRootBlock)) {
+        $rootMeta  = $this->_getRootMeta();
+        $rootBlock = $this->_defineRootBlock($rootMeta);
+        if (empty($rootBlock)) {
             return false;
         }
-        $this->oRootBlock = $oRootBlock;
+        $this->rootBlock = $rootBlock;
         return true;
     } // _createRootBlock
 
-    /**
-     * Init Blocks
-     * @param array $aInitOrderBlock
-     * @return \fan\core\service\tab
-     */
-    protected function _initBlocks($aInitOrderBlock)
+    protected function _initBlocks(array $initOrderBlock): static
     {
-        $nPrevTime = microtime(true);
-        foreach ($aInitOrderBlock as $aBlocks) {
-            foreach ($aBlocks as $oBlock) {
-                $this->setCurrentBlock($oBlock);
-                $oBlock->setDynamicMeta();
-                if (!$oBlock->getRoleCondition()) {
-                    if ($oBlock->checkRunInit()) {
-                        $oBlock->init();
+        $prevTime = microtime(true);
+        foreach ($initOrderBlock as $blocks) {
+            foreach ($blocks as $block) {
+                $this->setCurrentBlock($block);
+                $block->setDynamicMeta();
+                if (!$block->getRoleCondition()) {
+                    if ($block->checkRunInit()) {
+                        $block->init();
                     }
-                    if (method_exists($oBlock, 'initRequired')) {
-                        $oBlock->initRequired();
+                    if (method_exists($block, 'initRequired')) {
+                        $block->initRequired();
                     }
                 }
-                if ($this->bCheckPerformance) {
-                    $sBlName = $oBlock->getBlockName();
-                    $nCurTime = microtime(true);
-                    $this->aTimesStamp['init'][$sBlName] = $nCurTime - $nPrevTime;
-                    $nPrevTime = $nCurTime;
+                if ($this->checkPerformance) {
+                    $blName = $block->getBlockName();
+                    $curTime = microtime(true);
+                    $this->timesStamp['init'][$blName] = $curTime - $prevTime;
+                    $prevTime = $curTime;
                 }
             }
         }
         return $this;
     } // _initBlocks
-    /**
-     * Additional init for "main", "carcass" and "root"
-     * @return \fan\core\service\tab
-     */
-    protected function _runAfterInit()
+    protected function _runAfterInit(): static
     {
-        $nStartTime = microtime(true);
-        foreach (array('main', 'carcass', 'root') as $sBlockName) {
-            $oBlock = $this->getTabBlock($sBlockName, false);
-            if ($oBlock) {
-                $oBlock->runAfterInit();
+        $startTime = microtime(true);
+        foreach (['main', 'carcass', 'root'] as $blockName) {
+            $block = $this->getTabBlock($blockName, false);
+            if ($block) {
+                $block->runAfterInit();
             }
         }
-        $this->aTimesStamp['after_init'] = microtime(true) - $nStartTime;
+        $this->timesStamp['after_init'] = microtime(true) - $startTime;
         return $this;
     } // _runAfterInit
 
-    /**
-     * Get Final View Content
-     * @param \fan\core\block\base $oRootBlock
-     * @return string
-     */
-    protected function _getFinalContent(\fan\core\block\base $oRootBlock)
+    protected function _getFinalContent(\fan\core\block\base $rootBlock): mixed
     {
-        $nDebugMode = $this->_getDebugMode();
-        if ($nDebugMode > 0) {
-            $sClass = '\fan\project\view\parser\\' . ($nDebugMode == 1 && $this->oMainBlock->getViewFormat() == 'html' ? 'debug1' : 'debug2');
+        $debugMode = $this->_getDebugMode();
+        if ($debugMode > 0) {
+            $class = '\fan\project\view\parser\\' . ($debugMode === 1 && $this->mainBlock->getViewFormat() === 'html' ? 'debug1' : 'debug2');
         } else {
-            $sClass = $this->getViewClass();
+            $class = (string)$this->getViewClass();
             if ($this->isDebugAllowed()) {
-                $oDebug = \fan\project\service\debug::instance();
-                /* @var $oDebug \fan\core\service\debug */
-                $oDebug->setExtFiles($oRootBlock, 0);
+                $debug = \fan\project\service\debug::instance();
+                /* @var $debug \fan\core\service\debug */
+                $debug->setExtFiles($rootBlock, false);
             }
         }
-        /* @var $oViewParser \fan\core\view\parser */
-        $oViewParser = new $sClass($this->oMainBlock);
-        $oViewParser->startParsing($oRootBlock);
-        return $oViewParser->getFinalContent();
-    } // function _getFinalContent
+        /* @var $viewParser \fan\core\view\parser */
+        $viewParser = new $class($this->mainBlock);
+        $viewParser->startParsing($rootBlock);
+        return $viewParser->getFinalContent();
+    }
 
-    /**
-     * Define Root Block
-     * @param array $aRootMeta
-     * @return \fan\core\block\base
-     */
-    protected function _defineRootBlock($aRootMeta)
+    protected function _defineRootBlock(array $rootMeta): ?object
     {
-        $aDefaultMeta = $this->getDefaultMeta();
-        $sRootPath = $this->getTabMeta(
+        $defaultMeta = $this->getDefaultMeta();
+        $rootPath = $this->getTabMeta(
                 'root',
-                array_val($aDefaultMeta, array('main', 'root'))
+                array_val($defaultMeta, ['main', 'root'])
         );
-        $sCarcassPath = $this->getTabMeta(
+        $carcassPath = $this->getTabMeta(
                 'carcass',
-                array_val($aDefaultMeta, array('main', 'carcass'))
+                array_val($defaultMeta, ['main', 'carcass'])
         );
 
-        $sBlockName = 'root';
-        if (empty($sRootPath)) {
-            $sRootPath    = $sCarcassPath;
-            $sCarcassPath = null;
-            $sBlockName   = 'carcass';
+        $blockName = 'root';
+        if (empty($rootPath)) {
+            $rootPath    = $carcassPath;
+            $carcassPath = null;
+            $blockName   = 'carcass';
         }
 
-        if (empty($sRootPath)) {
-            $this->oMainBlock->finishConstruct(null, $aRootMeta, true);
-            return $this->oMainBlock;
+        if (empty($rootPath)) {
+            $this->mainBlock->finishConstruct(null, $rootMeta, true);
+            return $this->mainBlock;
         }
 
-        if (empty($sCarcassPath)) {
-            $aRootMeta['own']['embeddedBlocks']['main'] = '{MAIN}';
-        } elseif (!isset($aRootMeta['own']['embeddedBlocks']['carcass'])) {
-            $aRootMeta['own']['embeddedBlocks']['carcass'] = $sCarcassPath;
+        if (empty($carcassPath)) {
+            $rootMeta['own']['embeddedBlocks']['main'] = '{MAIN}';
+        } elseif (!isset($rootMeta['own']['embeddedBlocks']['carcass'])) {
+            $rootMeta['own']['embeddedBlocks']['carcass'] = $carcassPath;
         }
 
-        $sRootClass = $this->loadBlock($sRootPath);
-        if (empty($sRootClass)) {
+        $rootClass = $this->loadBlock($rootPath);
+        if (empty($rootClass)) {
             return null;
         }
 
-        $oRootBlock = new $sRootClass($sBlockName, $this, null, $aRootMeta, true);
-        return $oRootBlock;
-    } // function _defineRootBlock
+        $rootBlock = new $rootClass($blockName, $this, null, $rootMeta, true);
+        return $rootBlock;
+    }
 
-    /**
-     * Get Root-Meta
-     * @return array
-     */
-    protected function _getRootMeta()
+    protected function _getRootMeta(): array
     {
-        $aDefaultMeta = $this->getDefaultMeta();
-        if (!empty($aDefaultMeta) && is_object($aDefaultMeta)) {
-            $aDefaultMeta = method_exists($aDefaultMeta, 'toArray') ? $aDefaultMeta->toArray() : array();
+        $defaultMeta = $this->getDefaultMeta();
+        if (!empty($defaultMeta) && is_object($defaultMeta)) {
+            $defaultMeta = method_exists($defaultMeta, 'toArray') ? $defaultMeta->toArray() : [];
         }
 
-        $oLocale = service('locale');
-        if ($oLocale->isEnabled() && empty($aDefaultMeta['common']['tplVars']['sLng'])) {
-            $aDefaultMeta['common']['tplVars']['sLng'] = $oLocale->getLanguage();
+        $locale = $this->containerService('locale');
+        if ($locale->isEnabled() && empty($defaultMeta['common']['tplVars']['sLng'])) {
+            $defaultMeta['common']['tplVars']['sLng'] = $locale->getLanguage();
         }
 
-        return array(
-            'own'    => array_val($aDefaultMeta, 'root',   array()),
-            'common' => array_val($aDefaultMeta, 'common', array()),
-        );
-    } // function _getRootMeta
+        return [
+            'own'    => array_val($defaultMeta, 'root',   []),
+            'common' => array_val($defaultMeta, 'common', []),
+        ];
+    }
 
-    /**
-     * Get Init Order array
-     * @return array
-     */
-    protected function _getInitBlocks()
+    protected function _getInitBlocks(): array
     {
-        ksort($this->aInitOrder);
-        return $this->aInitOrder;
-    } // function _getInitBlocks
+        ksort($this->initOrder);
+        return $this->initOrder;
+    }
 
-    /**
-     *
-     * @return string|array
-     */
-    protected function _parseError403()
+    protected function _parseError403(): mixed
     {
-        \fan\project\service\header::instance()->error403(false);
-        if (!in_array(403, self::$aErrTransfer)) {
-            array_push(self::$aErrTransfer, 403);
-            $sUrn = $this->getConfig('error_403', self::URN_AP . '/error403');
-            transfer_sham($this->_getPathWithExt($sUrn));
+        $this->containerService('header')->error403(false);
+        if (!in_array(403, self::$errTransfer)) {
+            array_push(self::$errTransfer, 403);
+            $urn = $this->getConfig('error_403', self::URN_AP . '/error403');
+            transfer_sham($this->_getPathWithExt($urn));
         }
 
-        $oFirstItem = $this->oMatcher->getItem(0);
-        $oRunner    = \bootstrap::getRunner();
-        return $oRunner->showError(array('urn', $oFirstItem['source']['request']), 'error_403', false);
-    } // function _parseError403
+        $firstItem = $this->matcher->getItem(0);
+        $runner    = \bootstrap::getRunner();
+        return $runner->showError(['urn', $firstItem['source']['request']], 'error_403', false);
+    }
 
-    /**
-     *
-     * @return string|array
-     */
-    protected function _parseError404($bForse)
+    protected function _parseError404(bool $forse): mixed
     {
-        \fan\project\service\header::instance()->error404(false);
-        if (empty($bForse) && empty(self::$aErrTransfer)) {
-            array_push(self::$aErrTransfer, 404);
-            $sUrn = $this->getConfig('error_404', self::URN_AP . '/error404');
-            transfer_sham($this->_getPathWithExt($sUrn));
+        $this->containerService('header')->error404(false);
+        if (empty($forse) && empty(self::$errTransfer)) {
+            array_push(self::$errTransfer, 404);
+            $urn = $this->getConfig('error_404', self::URN_AP . '/error404');
+            transfer_sham($this->_getPathWithExt($urn));
         }
 
-        $oFirstItem = $this->oMatcher->getItem(0);
-        trigger_error(var_export($oFirstItem->parsed->toArray(), true), E_USER_WARNING);
+        $firstItem = $this->matcher->getItem(0);
+        \bootstrap::logError(var_export($firstItem->parsed->toArray(), true));
 
-        $oRunner = \bootstrap::getRunner();
-        return $oRunner->showError(array('urn', $oFirstItem['source']['request']), 'error_404', false);
-    } // function _parseError404
+        $runner = \bootstrap::getRunner();
+        return $runner->showError(['urn', $firstItem['source']['request']], 'error_404', false);
+    }
 
-    /**
-     *
-     * @return string|array
-     */
-    protected function _parseError500($sErrorLog = null)
+    protected function _parseError500(?string $errorLog = null): mixed
     {
-        if (!empty($sErrorLog)) {
-            \fan\project\service\error::instance()->logErrorMessage($sErrorLog, 'Tab Error');
+        if (!empty($errorLog)) {
+            $this->containerService('error')->logErrorMessage($errorLog, 'Tab Error');
         }
-        \fan\project\service\header::instance()->error500(false);
-        if (!in_array(500, self::$aErrTransfer)) {
-            array_push(self::$aErrTransfer, 500);
-            $sUrn = $this->getConfig('error_500', self::URN_AP . '/error500');
-            transfer_sham($this->_getPathWithExt($sUrn));
+        $this->containerService('header')->error500(false);
+        if (!in_array(500, self::$errTransfer)) {
+            array_push(self::$errTransfer, 500);
+            $urn = $this->getConfig('error_500', self::URN_AP . '/error500');
+            transfer_sham($this->_getPathWithExt($urn));
         }
 
-        $oRunner = \bootstrap::getRunner();
-        return $oRunner->showError(array(), 'error_500', false);
-    } // function _parseError500
+        $runner = \bootstrap::getRunner();
+        return $runner->showError([], 'error_500', false);
+    }
 
-    /**
-     *
-     * @return string|array
-     */
-    protected function _getPathWithExt($sUrn, $sDefaultExt = 'html')
+    protected function _getPathWithExt(string $urn, string $defaultExt = 'html'): string
     {
-        $sExt = $this->getConfig('default_extension', $sDefaultExt);
-        if (empty($sExt)) {
-            return $sUrn;
+        $urn = (string)$urn;
+        $ext = (string)$this->getConfig('default_extension', $defaultExt);
+        if (empty($ext)) {
+            return $urn;
         }
-        $sExt = '.' . $sExt;
-        return substr($sUrn, -strlen($sExt)) == $sExt ?
-                $sUrn :
-                $sUrn . $sExt;
-    } // function _getPathWithExt
+        $ext = '.' . $ext;
+        return substr($urn, -strlen($ext)) === $ext ?
+                $urn :
+                $urn . $ext;
+    }
 
-    /**
-     * Set Current Main Content Block
-     * @return \fan\core\block\base
-     */
-    protected function _setMainBlock()
+    protected function _setMainBlock(): static
     {
-        $aMainRequest = $this->aLastData['main_request'];
-        $sClass = \bootstrap::getLoader()->loadBlockByMR($this->sAppName, $aMainRequest);
-        if (empty($sClass)) { // ToDo: check it!
-            $this->mContent = $this->_parseError500('Main class for Main Request "' . implode('/', $aMainRequest) . '" isn\'t found.');
+        $mainRequest = $this->lastData['main_request'];
+        $class = \bootstrap::getLoader()->loadBlockByMR($this->appName, $mainRequest);
+        if (empty($class)) { // ToDo: check it!
+            $this->content = $this->_parseError500('Main class for Main Request "' . implode('/', $mainRequest) . '" isn\'t found.');
         } else {
-            $this->oMainBlock = new $sClass('main', $this, null, null, false);
+            $this->mainBlock = new $class('main', $this, null, [], false);
         }
         return $this;
-    } // function _setMainBlock
+    }
 
-    /**
-     * Set Meta-data for this Tab
-     */
-    protected function _setTabMeta()
+    protected function _setTabMeta(): static
     {
-        $this->aTabMeta = $this->getMainBlock()->metaMaker->assembleTab();
+        $this->tabMeta = $this->getMainBlock()->metaMaker->assembleTab();
         return $this;
-    } // function _setTabMeta
+    }
 
-    /**
-     * Set Meta-data from the Main Block
-     */
-    protected function _setBlocksMetaByMain()
+    protected function _setBlocksMetaByMain(): static
     {
-        $this->aBlocksMeta = $this->getMainBlock()->metaMaker->assembleOther();
+        $this->blocksMeta = $this->getMainBlock()->metaMaker->assembleOther();
         return $this;
-    } // function _setBloksMetaByMain
+    }
 
-    /**
-     * Set Default Meta-data by View-type from Tab-config
-     */
-    protected function _setDefaultMeta()
+    protected function _setDefaultMeta(): static
     {
-        $this->aDefaultMeta = $this->getConfig(array('DEFAULT_META', $this->oMainBlock->getViewFormat()), array());
+        $this->defaultMeta = $this->readArrayConfigValue(
+            $this->getConfig(['DEFAULT_META', $this->mainBlock->getViewFormat()], []),
+            'DEFAULT_META.' . $this->mainBlock->getViewFormat()
+        );
         return $this;
-    } // function _setDefaultMeta
+    }
 
-    /**
-     * Set Debug mode
-     * @return number
-     */
-    public function _getDebugMode()
+    protected function readArrayConfigValue(mixed $value, string $configPath): array
     {
-        $nDebugMode = 0;
+        if ($value instanceof \fan\core\base\data) {
+            return $value->toArray();
+        }
+
+        if (is_array($value)) {
+            return $value;
+        }
+
+        throw new \UnexpectedValueException(
+            sprintf('Configuration "%s" must be an array, %s given.', $configPath, get_debug_type($value))
+        );
+    }
+
+    public function _getDebugMode(): int
+    {
+        $debugMode = 0;
         if ($this->isDebugAllowed()) {
-            $oSR    = \fan\project\service\request::instance();
-            $oSC    = \fan\project\service\cookie::instance();
-            $sKey   = $this->getConfig('debug_key', 'debug');
-            $nDebug = $oSR->get($sKey, 'PGC', 0);
-            if (in_array($nDebug, array(1, 2, 10, 20))) {
-                $nDebugMode = (int)substr($nDebug, 0, 1);
-                $nDebugG = $oSR->get($sKey, 'PG', 0);
-                if ($nDebugG > 9) {
-                    $oSC->set($sKey, $nDebugMode);
-                } elseif (!is_null($nDebugG)) {
-                    $oSC->delete($sKey);
+            $sr    = $this->containerService('request');
+            $sc    = \fan\project\service\cookie::instance();
+            $key   = $this->getConfig('debug_key', 'debug');
+            $debug = $sr->get($key, 'PGC', 0);
+            if (in_array($debug, [1, 2, 10, 20])) {
+                $debugMode = (int)substr((string)$debug, 0, 1);
+                $debugG = $sr->get($key, 'PG', 0);
+                if ($debugG > 9) {
+                    $sc->set($key, $debugMode);
+                } elseif (!is_null($debugG)) {
+                    $sc->delete($key);
                 }
-            } elseif (!is_null($nDebug)) {
-                $oSC->delete($sKey);
+            } elseif (!is_null($debug)) {
+                $sc->delete($key);
             }
         }
-        return $nDebugMode;
-    } // function _getDebugMode
+        return $debugMode;
+    }
 
-    /**
-     * Fix Performance
-     * @return number
-     */
-    protected function _fixPerformance($nStartTime, $nInitTime)
+    protected function readBooleanFlag(mixed $value, string $name): bool
     {
-        if ($this->bCheckPerformance) {
-            $sCurTime = microtime(true);
-            $this->aTimesStamp['init_sum'] = sprintf('%01.6f', $nInitTime - $nStartTime - $this->aTimesStamp['consruct']);
-            $this->aTimesStamp['add_init'] = sprintf('  %01.6f', $this->aTimesStamp['after_init']);
-            $this->aTimesStamp['output']   = sprintf('  %01.6f', $sCurTime  - $nInitTime);
-            $this->aTimesStamp['total']    = sprintf('   %01.6f', $sCurTime  - $nStartTime);
-            $this->aTimesStamp['creating'] = sprintf('%01.6f', $this->aTimesStamp['consruct']);
-
-            $nLen = 0;
-            foreach (array_keys($this->aTimesStamp['init']) as $k) {
-                $nLen = max($nLen, strlen($k));
-            }
-
-            arsort($this->aTimesStamp['init']);
-            foreach ($this->aTimesStamp['init'] as $k => &$v) {
-                $v = sprintf(str_repeat(' ', $nLen - strlen($k)) . '%01.6f', $v);
-            }
-
-            l('<pre style="font-family: Courier, monospace">' . htmlentities(var_export($this->aTimesStamp, true), ENT_NOQUOTES, 'UTF-8') . '</pre>', 'Estimate Performance by elements');
+        if (is_bool($value)) {
+            return $value;
         }
-    } // function _fixPerformance
+        if (is_int($value) || is_float($value)) {
+            return (bool)$value;
+        }
+        $value = trim((string)$value);
+        if (is_numeric($value)) {
+            return (bool)(int)$value;
+        }
+
+        throw new \UnexpectedValueException('Boolean config "' . $name . '" must be numeric.');
+    }
+
+    protected function _fixPerformance(float $startTime, float $initTime): void
+    {
+        if ($this->checkPerformance) {
+            $curTime = microtime(true);
+            $this->timesStamp['init_sum'] = sprintf('%01.6f', $initTime - $startTime - $this->timesStamp['consruct']);
+            $this->timesStamp['add_init'] = sprintf('  %01.6f', $this->timesStamp['after_init']);
+            $this->timesStamp['output']   = sprintf('  %01.6f', $curTime  - $initTime);
+            $this->timesStamp['total']    = sprintf('   %01.6f', $curTime  - $startTime);
+            $this->timesStamp['creating'] = sprintf('%01.6f', $this->timesStamp['consruct']);
+
+            $len = 0;
+            foreach (array_keys($this->timesStamp['init']) as $k) {
+                $len = max($len, strlen($k));
+            }
+
+            arsort($this->timesStamp['init']);
+            foreach ($this->timesStamp['init'] as $k => &$v) {
+                $v = sprintf(str_repeat(' ', $len - strlen($k)) . '%01.6f', $v);
+            }
+
+            l('<pre style="font-family: Courier, monospace">' . htmlentities(var_export($this->timesStamp, true), ENT_NOQUOTES, 'UTF-8') . '</pre>', 'Estimate Performance by elements');
+        }
+    }
 
     // ======== The magic methods ======== \\
 
-} // class \fan\core\service\tab
-?>
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\core\base\model;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\base\model;
 use fan\project\exception\model\entity\fatal as fatalException;
 /**
  * Description of row
@@ -15,130 +19,102 @@ use fan\project\exception\model\entity\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.011 (03.10.2015)
  */
-class row implements \ArrayAccess, \Serializable
+class row implements \ArrayAccess
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * Saved data
      * @var array
      */
-    protected $aSrcData = array();
+    protected array $srcData = [];
     /**
      * Saved data
      * @var array
      */
-    protected $aData = array();
+    protected array $data = [];
     /**
      * Changed fields
      * @var array
      */
-    protected $aChanged = array();
+    protected array $changed = [];
 
     /**
      * Object of Entity Class
      * @var \fan\core\base\model\entity
      */
-    protected $oEntity = null;
+    protected ?object $entity = null;
     /**
      * Object of Rowset Class
      * @var \fan\core\base\model\rowset
      */
-    protected $oRowset = null;
+    protected ?object $rowset = null;
 
     /**
      * Field Info
      * @var array
      */
-    protected $aFieldInfo = array();
+    protected array $fieldInfo = [];
 
     /**
      * This property true if data is load
      * @var boolean
      */
-    protected $bIsDataLoad = false;
+    protected bool $isDataLoad = false;
     /**
      * This property true if Init Id Only without Loading (Used for update part/full of Row-data)
      * @var boolean
      */
-    protected $bInitIdOnly = false;
+    protected bool $initIdOnly = false;
 
-    /**
-     * @var string Current local field suffix
-     */
-    protected $sCurrentLocal;
-    /**
-     * @var string Default local field suffix
-     */
-    protected $sDefaultLocal;
+    protected ?string $currentLocal = null;
+    protected ?string $defaultLocal = null;
 
     /**
      * Flag for show error message
      * @var boolean
      */
-    protected $bShowError = true;
+    protected bool $showError = true;
 
-    /**
-     * Row-data constructor
-     * @param \fan\core\base\model\entity $oEntity
-     * @param array $aData
-     */
-    public function __construct(\fan\core\base\model\entity $oEntity, &$aData = array(), \fan\core\base\model\rowset $oRowset = null)
+    public function __construct(
+        \fan\core\base\model\entity $entity,
+        array &$data = [],
+        ?\fan\core\base\model\rowset $rowset = null,
+        ?\fan\core\di\container_interface $serviceContainer = null
+    )
     {
-        $this->oEntity = $oEntity;
-        $this->oRowset = $oRowset;
-        $this->_fixLoadedData($aData);
+        $this->setServiceContainer($serviceContainer);
+        $this->entity = $entity;
+        $this->rowset = $rowset;
+        $this->_fixLoadedData($data);
 
         $this->_restoreProperties();
-    } // function __construct
+    }
 
     // ======== Methods for redefine in children classes ======== \\
 
-    /**
-     * This method will be run after entity is loaded
-     */
-    protected function _runAfterLoad()
+    protected function _runAfterLoad(): void
     {
     }
-    /**
-     * This method will be run after entity load is fail
-     */
-    protected function _runAfterLoadFail()
+    protected function _runAfterLoadFail(): void
     {
     }
-    /**
-     * This method will be run before entity Insert new record
-     */
-    protected function _runBeforeInsert()
+    protected function _runBeforeInsert(): void
     {
     }
-    /**
-     * This method will be run before entity Update record
-     */
-    protected function _runBeforeUpdate()
+    protected function _runBeforeUpdate(): void
     {
     }
-    /**
-     * This method will be run after entity Insert new record
-     */
-    protected function _runAfterInsert($aChanged)
+    protected function _runAfterInsert(array $changed): void
     {
     }
-    /**
-     * This method will be run after entity Update record
-     */
-    protected function _runAfterUpdate($aChanged)
+    protected function _runAfterUpdate(array $changed): void
     {
     }
-    /**
-     * This method will be run after entity Save (Insert/Update) record
-     */
-    protected function _runAfterSave($aChanged)
+    protected function _runAfterSave(array $changed): void
     {
     }
-    /**
-     * This method will be run after entity record is deleted
-     * @param mixed $mDelId - deleted ID
-     */
-    protected function _runAfterDelete($mDelId)
+    protected function _runAfterDelete(mixed $delId): void
     {
     }
 
@@ -146,360 +122,299 @@ class row implements \ArrayAccess, \Serializable
 
     // ======== Main Interface methods ======== \\
     /**
-     * Get Config of Entity
-     * @param string $sKey
-     * @param null $mDefault
-     * @return \fan\core\service\config\row
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    public function getConfig($sKey = null, $mDefault = null)
+    public function getConfig(?string $key = null, mixed $default = null): mixed
     {
-        return $this->getEntity()->getConfig($sKey, $mDefault);
-    } // function getConfig
+        return $this->getEntity()->getConfig($key, $default);
+    }
 
-    /**
-     * Load current entity by ID
-     * @param mixed $mRowId
-     * @param boolean $bIdIsEncrypt
-     * @return \fan\core\base\model\row
-     */
-    public function loadById($mRowId, $bIdIsEncrypt = false)
+    public function loadById(mixed $rowId, bool $idIsEncrypt = false): mixed
     {
-        $mParam = is_null($mRowId) ? null : $this->getEntity()->getParamById($mRowId, $bIdIsEncrypt);
-        $this->loadByParam($mParam, 0, null);
+        $param = is_null($rowId) ? null : $this->getEntity()->getParamById($rowId, (bool)$idIsEncrypt);
+        $this->loadByParam($param, 0, null);
         return $this;
-    } // function loadById
+    }
 
-    /**
-     * Load current entity by parameters
-     * @param array|object $mParam
-     * @param numeric $nOffset
-     * @param string $sOrderBy
-     * @return \fan\core\base\model\row
-     */
-    public function loadByParam($mParam, $nOffset = 0, $sOrderBy = null)
+    public function loadByParam(array|object|null $param, int|float $offset = 0, ?string $orderBy = null): static
     {
-        $oEtt = $this->getEntity();
-        if (!empty($this->aChanged)) {
-            $sName = $oEtt->getName();
-            trigger_error('Load new data for changed row. Entity "' . $sName . '". Id=' . $this->getId(false), E_USER_NOTICE);
-        } elseif ($this->bIsDataLoad) {
-            $sName = $oEtt->getName();
-            trigger_error('Load new data for loaded row. Entity "' . $sName . '". Id=' . $this->getId(false), E_USER_NOTICE);
+        $ett = $this->getEntity();
+        if (!empty($this->changed)) {
+            $name = $ett->getName();
+            throw new \LogicException('Load new data for changed row. Entity "' . $name . '". Id=' . $this->getId(false));
+        } elseif ($this->isDataLoad) {
+            $name = $ett->getName();
+            throw new \LogicException('Load new data for loaded row. Entity "' . $name . '". Id=' . $this->getId(false));
         }
 
-        if (is_null($mParam)) {
-            $aData = array();
+        if (is_null($param)) {
+            $data = [];
         } else {
-            $aData =& $oEtt->getDataByParam($mParam, 1, $nOffset, $sOrderBy, true);
+            $data =& $ett->getDataByParam($param, 1, $offset, $orderBy, true);
         }
-        $this->_fixLoadedData($aData);
+        $this->_fixLoadedData($data);
         return $this;
-    } // function loadByParam
-
-    /**
-     * Init Id Only without Loading (only for update part/full of Row-data)
-     * @param type $mRowId
-     * @return \fan\core\base\model\row
-     * @throws fatalException
-     */
-    public function initIdOnly($mRowId)
-    {
-        if ($this->bIsDataLoad) {
-            throw new fatalException($this->getEntity(), 'Call "initIdOnly"-method for loaded data!');
-        }
-        $mPrimeryKey = $this->getEntity()->description->getPrimeryKey();
-        if (is_string($mPrimeryKey)) {
-            $this->set($mPrimeryKey, $mRowId, false);
-        } else {
-            foreach ($mPrimeryKey as $k) {
-                $this->set($k, $mRowId[$k], false);
-            }
-        }
-        $this->bInitIdOnly = true;
-        return $this;
-    } // function initIdOnly
-
-    /**
-     * Get value of data
-     * @param number $sFieldName
-     * @return mixed
-     */
-    public function get($sFieldName, $mDefaultVal = null, $bAllowException = true)
-    {
-        $sFullFieldName = $sFieldName;
-        if ($sFieldName{0} == '{' && substr($sFieldName, -1) == '}') {
-            $sFieldName = substr($sFieldName, 1, -1);
-            if (array_key_exists($sFieldName . $this->_getCurrentLocal(), $this->aData)) {
-                $sFullFieldName = $sFieldName . $this->_getCurrentLocal();
-            } elseif (array_key_exists($sFieldName . $this->_getDefaultLocal(), $this->aData)) {
-                $sFullFieldName = $sFieldName . $this->_getDefaultLocal();
-            }
-        }
-
-        $sMethod = 'get_' . $sFullFieldName;
-        if (method_exists($this, $sMethod)) {
-            return $this->$sMethod($mDefaultVal, $bAllowException);
-        }
-        if ($sFieldName != $sFullFieldName) {
-            $sMethod = 'get_' . $sFieldName;
-            if (method_exists($this, $sMethod)) {
-                return $this->$sMethod($mDefaultVal, $bAllowException);
-            }
-        }
-        return $this->_getFieldValue($sFullFieldName, $mDefaultVal, $bAllowException);
-    } // function get
-    /**
-     * Get value of row be Name and current local
-     * @param string $sName
-     * @param mixed $mDefaultVal
-     * @param boolean $bAllowException
-     * @return mixed
-     */
-    public function getByLocal($sName, $mDefaultVal = null, $bAllowException = true)
-    {
-        return $this->get('{' . $sName . '}', $mDefaultVal, $bAllowException);
     }
 
     /**
-     * Set value of data
-     * @param array|entity $mValue
-     * @return \fan\core\base\data
+     * @throws fatalException
      */
-    public function set($sFieldName, $mValue, $bAllowException = true)
+    public function initIdOnly(mixed $rowId): static
     {
-        $sFullFieldName = $sFieldName;
+        if ($this->isDataLoad) {
+            throw new fatalException($this->getEntity(), 'Call "initIdOnly"-method for loaded data!');
+        }
+        $primeryKey = $this->getEntity()->description->getPrimeryKey();
+        if (is_string($primeryKey)) {
+            $this->set($primeryKey, $rowId, false);
+        } else {
+            foreach ($primeryKey as $k) {
+                $this->set($k, $rowId[$k], false);
+            }
+        }
+        $this->initIdOnly = true;
+        return $this;
+    }
 
-        if ($sFieldName{0} == '{' && substr($sFieldName, -1) == '}') {
-            $sFieldName = substr($sFieldName, 1, -1);
-            $sFullFieldName = $sFieldName . $this->_getCurrentLocal();
+    /**
+     * @param mixed $defaultVal Fallback value returned when no explicit value is available.
+     */
+    public function get(string|int|float $fieldName, mixed $defaultVal = null, bool $allowException = true): mixed
+    {
+        $fieldName = (string)$fieldName;
+        $fullFieldName = $fieldName;
+        if ($fieldName[0] === '{' && substr($fieldName, -1) === '}') {
+            $fieldName = substr($fieldName, 1, -1);
+            if (array_key_exists($fieldName . $this->_getCurrentLocal(), $this->data)) {
+                $fullFieldName = $fieldName . $this->_getCurrentLocal();
+            } elseif (array_key_exists($fieldName . $this->_getDefaultLocal(), $this->data)) {
+                $fullFieldName = $fieldName . $this->_getDefaultLocal();
+            }
+        }
+
+        $method = 'get_' . $fullFieldName;
+        if (method_exists($this, $method)) {
+            return $this->$method($defaultVal, $allowException);
+        }
+        if ($fieldName !== $fullFieldName) {
+            $method = 'get_' . $fieldName;
+            if (method_exists($this, $method)) {
+                return $this->$method($defaultVal, $allowException);
+            }
+        }
+        return $this->_getFieldValue($fullFieldName, $defaultVal, $allowException);
+    }
+    /**
+     * @param mixed $defaultVal Fallback value returned when no explicit value is available.
+     */
+    public function getByLocal(string $name, mixed $defaultVal = null, bool $allowException = true): mixed
+    {
+        return $this->get('{' . $name . '}', $defaultVal, $allowException);
+    }
+
+    /**
+     * @param array|entity $value Value that should be applied or transformed.
+     */
+    public function set(string|int|float $fieldName, mixed $value, bool $allowException = true): static
+    {
+        $fieldName = (string)$fieldName;
+        $fullFieldName = $fieldName;
+
+        if ($fieldName[0] === '{' && substr($fieldName, -1) === '}') {
+            $fieldName = substr($fieldName, 1, -1);
+            $fullFieldName = $fieldName . $this->_getCurrentLocal();
         }
 
         // Set main value of field by one of ways
         do {
-            $sMethod  = 'set_' . $sFullFieldName;
-            if(method_exists($this, $sMethod)) {
-                $this->$sMethod($mValue, $bAllowException);
+            $method  = 'set_' . $fullFieldName;
+            if (method_exists($this, $method)) {
+                $this->$method($value, $allowException);
                 break;
-            } elseif ($sFullFieldName != $sFieldName) {
-                $sMethod  = 'set_' . $sFieldName;
-                if(method_exists($this, $sMethod)) {
-                    $this->$sMethod($mValue, $bAllowException);
+            } elseif ($fullFieldName !== $fieldName) {
+                $method  = 'set_' . $fieldName;
+                if (method_exists($this, $method)) {
+                    $this->$method($value, $allowException);
                     break;
                 }
             }
-            $this->_setFieldValue($sFullFieldName, $mValue, $bAllowException);
+            $this->_setFieldValue($fullFieldName, $value, $allowException);
         } while (false);
 
         // If New row - duplicate value for default local if it isn't set
-        if (!$this->bIsDataLoad && $sFullFieldName != $sFieldName) {
-            $sDefaultFieldName = $sFieldName . $this->_getDefaultLocal();
-            if (!isset($this->aData[$sDefaultFieldName])) {
-                $this->_setFieldValue($sDefaultFieldName, $this->aData[$sFullFieldName], $bAllowException);
+        if (!$this->isDataLoad && $fullFieldName !== $fieldName) {
+            $defaultFieldName = $fieldName . $this->_getDefaultLocal();
+            if (!isset($this->data[$defaultFieldName])) {
+                $this->_setFieldValue($defaultFieldName, $this->data[$fullFieldName], $allowException);
             }
         }
 
         return $this;
-    } // function set
+    }
 
     /**
-     * Set some localized field by current local
-     * @param string $sName
-     * @param mixed $mValue
-     * @param boolean $bAllowException
-     * @return \fan\core\base\data
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function setByLocal($sName, $mValue = null, $bAllowException = true)
+    public function setByLocal(string $name, mixed $value = null, bool $allowException = true): static
     {
-        return $this->set('{' . $sName . '}', $mValue, $bAllowException);
-    } // function setByLocal
+        return $this->set('{' . $name . '}', $value, $allowException);
+    }
 
-    /**
-     * Gets All Fields by array
-     * @return array Fields
-     */
-    public function toArray()
+    public function toArray(): array
     {
         return $this->getFields(null, true);
-    } // function toArray
-    /**
-     * Gets All Fields by array
-     * @return array Fields
-     */
-    public function getFields($mKeys = null, $bAllExists = true)
+    }
+    public function getFields(mixed $keys = null, bool $allExists = true): array
     {
-        if (is_null($mKeys)) {
-            if ($bAllExists) {
-                $mKeys = array_keys($this->aData);
+        if (is_null($keys)) {
+            if ($allExists) {
+                $keys = array_keys($this->data);
             } else {
-                $aInfo = $this->_getFullFieldsInfo();
-                $mKeys = empty($aInfo) ? array() : array_keys($aInfo);
+                $info = $this->_getFullFieldsInfo();
+                $keys = empty($info) ? [] : array_keys($info);
             }
-        } elseif (!is_array_alt($mKeys)) {
-            if (!is_scalar($mKeys)) {
+        } elseif (!is_array_alt($keys)) {
+            if (!is_scalar($keys)) {
                 throw new fatalException($this->getEntity(), 'Incorrect Field Keys.');
             }
-            $mKeys = array($mKeys);
+            $keys = [$keys];
         }
 
-        $aResult = array();
-        foreach($mKeys as $k) {
-            $aResult[$k] = $this->get($k, null, $this->bIsDataLoad);
+        $result = [];
+        foreach ($keys as $k) {
+            $result[$k] = $this->get($k, null, $this->isDataLoad);
         }
-        return $aResult;
-    } // function getFields
+        return $result;
+    }
 
-    /**
-     * Set All Fields together
-     * @param array $aFields field -> value pairs
-     * @param boolean $bIsSave
-     * @return \fan\core\base\model\row
-     */
-    public function setFields($aFields, $bIsSave = false)
+    public function setFields(mixed $fields, bool $isSave = false): static
     {
-        if (is_array($aFields)) {
-            foreach ($aFields as $sFieldName => $mValue) {
-                $this->set($sFieldName, $mValue);
+        if (is_array($fields)) {
+            foreach ($fields as $fieldName => $value) {
+                $this->set($fieldName, $value);
             }
         }
-        if ($bIsSave) {
+        if ($isSave) {
             $this->save();
         }
         return $this;
-    } // function setFields
+    }
 
-    /**
-     * Get Row from Top linked table
-     * @param string $sByField
-     * @param boolean $bLogEmptyVal
-     * @return \fan\core\base\model\row
-     */
-    public function getTopRow($sByField, $bLogEmptyVal = false)
+    public function getTopRow(string $byField, bool $logEmptyVal = false): ?\fan\core\base\model\row
     {
-        $oErr = service('error');
-        /* @var $oErr \fan\core\service\error */
-        $sErrHeader = 'Error while get Top Row';
-        $mVal = $this->get($sByField, null, false);
-        if (empty($mVal)) {
-            if ($bLogEmptyVal) {
-                $oErr->logErrorMessage('Value for field "' . $sByField . '" is empty', $sErrHeader);
+        $err = $this->containerService('error');
+        /* @var $err \fan\core\service\error */
+        $errHeader = 'Error while get Top Row';
+        $val = $this->get($byField, null, false);
+        if (empty($val)) {
+            if ($logEmptyVal) {
+                $err->logErrorMessage('Value for field "' . $byField . '" is empty', $errHeader);
             }
             return null;
         }
 
-        $oEtt = $this->oEntity;
-        $aTmp = $oEtt->description->relations;
-        $aRel = null;
-        foreach ($aTmp as $v) {
-            if ($v['field'] == $sByField) {
-                $aRel = $v;
+        $ett = $this->entity;
+        $tmp = $ett->description->relations;
+        $rel = null;
+        foreach ($tmp as $v) {
+            if ((string)$v['field'] === (string)$byField) {
+                $rel = $v;
                 break;
             }
         }
-        if (empty($aRel)) {
-            $oErr->logErrorMessage('Incorrect linked field "' . $sByField . '"', $sErrHeader);
+        if (empty($rel)) {
+            $err->logErrorMessage('Incorrect linked field "' . $byField . '"', $errHeader);
             return null;
         }
 
-        $oTopEtt = $oEtt->getService()->getEntityByTable($aRel['ref_table'], $oEtt->getConnectionName());
-        if (empty($oTopEtt)) {
-            $oErr->logErrorMessage('Linked entity for field "' . $sByField . '" is not found', $sErrHeader);
+        $topEtt = $ett->getService()->getEntityByTable($rel['ref_table'], $ett->getConnectionName());
+        if (empty($topEtt)) {
+            $err->logErrorMessage('Linked entity for field "' . $byField . '" is not found', $errHeader);
             return null;
         }
-        return $oTopEtt->getRowByParam(array($v['ref_field'] => $mVal));
-    } // function getTopRow
+        return $topEtt->getRowByParam([$v['ref_field'] => $val]);
+    }
 
-    /**
-     * Get Rowset from linked tables
-     * @param string $sByField
-     * @return \fan\core\base\model\row
-     */
-    public function getBottomRowset($sTableName, $nQtt = -1, $nOffset = -1, $sOrderBy = '')
+    public function getBottomRowset(string|int|float $tableName, int|float $qtt = -1, int|float $offset = -1, string $orderBy = ''): ?\fan\core\base\model\rowset
     {
-        $oErr = service('error');
-        /* @var $oErr \fan\core\service\error */
-        $sErrHeader = 'Error while get Bottom Rowset';
+        $err = $this->containerService('error');
+        /* @var $err \fan\core\service\error */
+        $errHeader = 'Error while get Bottom Rowset';
 
-        $oCurEtt    = $this->getEntity();
-        $oBottomEtt = $oCurEtt->getService()->getEntityByTable($sTableName, $oCurEtt->getConnectionName());
-        if (empty($oBottomEtt)) {
-            $oErr->logErrorMessage('Can\'t get entity for table "' . $sTableName . '"', $sErrHeader);
+        $curEtt    = $this->getEntity();
+        $bottomEtt = $curEtt->getService()->getEntityByTable((string)$tableName, $curEtt->getConnectionName());
+        if (empty($bottomEtt)) {
+            $err->logErrorMessage('Can\'t get entity for table "' . $tableName . '"', $errHeader);
             return null;
         }
 
-        $aTmp = $oBottomEtt->description->relations;
-        $aRel = null;
-        foreach ($aTmp as $v) {
-            if ($v['ref_table'] == $oCurEtt->getTableName()) {
-                $aRel = $v;
+        $tmp = $bottomEtt->description->relations;
+        $rel = null;
+        foreach ($tmp as $v) {
+            if ((string)$v['ref_table'] === (string)$curEtt->getTableName()) {
+                $rel = $v;
                 break;
             }
         }
-        if (empty($aRel)) {
-            $oErr->logErrorMessage('Incorrect linked table "' . $sTableName . '"', $sErrHeader);
+        if (empty($rel)) {
+            $err->logErrorMessage('Incorrect linked table "' . $tableName . '"', $errHeader);
             return null;
         }
 
-        return $oBottomEtt->getRowsetByParam(array($v['field'] => $this->getId()), $nQtt, $nOffset, $sOrderBy);
-    } // function getBottomRowset
+        return $bottomEtt->getRowsetByParam(
+            [$v['field'] => $this->getId()],
+            is_numeric($qtt) ? $qtt + 0 : -1,
+            is_numeric($offset) ? $offset + 0 : -1,
+            (string)$orderBy
+        );
+    }
 
-    /**
-     * Revert all changes of this row
-     * @return \fan\core\base\model\row
-     */
-    public function revert()
+    public function revert(): static
     {
-        foreach ($this->aSrcData as $sFieldName => $mValue) {
-            $this->aData[$sFieldName] = $mValue;
+        foreach ($this->srcData as $fieldName => $value) {
+            $this->data[$fieldName] = $value;
         }
-        $this->aChanged = array();
+        $this->changed = [];
         return $this;
-    } // function revert
+    }
 
-    /**
-     * Save this row
-     * @return \fan\core\base\model\row
-     */
-    public function save()
+    public function save(): static
     {
-        $aChanged = $this->aChanged;
-        if (!empty($aChanged)) {
-            if ($this->bIsDataLoad || $this->bInitIdOnly) {
+        $changed = $this->changed;
+        if (!empty($changed)) {
+            if ($this->isDataLoad || $this->initIdOnly) {
                 $this->_runBeforeUpdate();
                 $this->_updateRow();
-                $this->_runAfterUpdate($aChanged);
+                $this->_runAfterUpdate($changed);
             } else {
                 $this->_runBeforeInsert();
                 $this->_insertRow();
-                $this->_runAfterInsert($aChanged);
+                $this->_runAfterInsert($changed);
             }
-            $this->_runAfterSave($aChanged);
+            $this->_runAfterSave($changed);
             //\fan\project\service\cache::instance()->clearCacheByEntity($this);
         }
         return $this;
-    } // function save
+    }
 
-    /**
-     * Delete record
-     * @return boolean
-     */
-    public function delete()
+    public function delete(): bool
     {
-        if ($this->bIsDataLoad) {
-            $oEtt   = $this->getEntity();
-            $mDelId = $this->getId(false, true);
-            if ($mDelId) {
-                $oDesigner = $oEtt->getDesigner('delete');
-                /* @var $oDesigner \fan\core\service\entity\designer\delete */
-                $sQuery    = $oDesigner->setDeleteByParam($this->getId(false, true, true))->assemble();
-                $aAdjParam = $oDesigner->getAdjustedParam();
-                $oConnect = $oEtt->getConnection();
-                $oConnect->execute($sQuery, $aAdjParam);
-                if ($oConnect->isError()) {
+        if ($this->isDataLoad) {
+            $ett   = $this->getEntity();
+            $delId = $this->getId(false, true);
+            if ($delId) {
+                $designer = $ett->getDesigner('delete');
+                /* @var $designer \fan\core\service\entity\designer\delete */
+                $query    = $designer->setDeleteByParam($this->getId(false, true, true))->assemble();
+                $adjParam = $designer->getAdjustedParam();
+                $connect = $ett->getConnection();
+                $connect->execute($query, $adjParam);
+                if ($connect->isError()) {
                     return false;
                 }
 
                 $this->_resetProperty(false);
-                $this->_runAfterDelete($mDelId);
+                $this->_runAfterDelete($delId);
                 //\fan\project\service\cache::instance()->clearCacheByEntity($this);
                 return true;
             } else {
@@ -507,520 +422,457 @@ class row implements \ArrayAccess, \Serializable
             }
         }
         return false;
-    } // function delete
+    }
 
-    /**
-     */
-    public function getId($bAllowException = true, $bUseSourceValue = false, $bAlwaysArray = false)
+    public function getId(bool $allowException = true, bool $useSourceValue = false, bool $alwaysArray = false): mixed
     {
-        $mIdKey = $this->getEntity()->description->getPrimeryKey();
-        if (is_array($mIdKey)) {
-            $aResult = array();
-            foreach ($mIdKey as $k) {
-                $aResult[$k] = $bUseSourceValue && isset($this->aSrcData[$k]) ? $this->aSrcData[$k] : $this->get($k, null, $bAllowException);
+        $idKey = $this->getEntity()->description->getPrimeryKey();
+        if (is_array($idKey)) {
+            $result = [];
+            foreach ($idKey as $k) {
+                $result[$k] = $useSourceValue && isset($this->srcData[$k]) ? $this->srcData[$k] : $this->get($k, null, $allowException);
             }
-            return $aResult;
+            return $result;
         }
-        $mResult = $bUseSourceValue && isset($this->aSrcData[$mIdKey]) ? $this->aSrcData[$mIdKey] : $this->_getFieldValue($mIdKey, null, $bAllowException);
-        return $bAlwaysArray ? array($mIdKey => $mResult) : $mResult;
-    } // function getId
+        $result = $useSourceValue && isset($this->srcData[$idKey]) ? $this->srcData[$idKey] : $this->_getFieldValue($idKey, null, $allowException);
+        return $alwaysArray ? [$idKey => $result] : $result;
+    }
 
     /**
-     * Set Id
-     * @param mixed $mIdVal
      * @throws fatalException
      */
-    public function setId($mIdVal)
+    public function setId(mixed $idVal): void
     {
-        $mIdKey = $this->getEntity()->description->getPrimeryKey();
-        if(is_array($mIdKey)) {
-            foreach($mIdVal as $k => $v) {
-                if(!in_array($k, $mIdKey)) {
+        $idKey = $this->getEntity()->description->getPrimeryKey();
+        if (is_array($idKey)) {
+            foreach ($idVal as $k => $v) {
+                if (!in_array($k, $idKey)) {
                     throw new fatalException($this, 'Incorrect id name (as array)!');
                 }
 
                 $this->_setFieldValue($k, $v);
             }
         } else {
-            $this->_setFieldValue($mIdKey, $mIdVal);
+            $this->_setFieldValue($idKey, $idVal);
         }
-    } // function setId
+    }
 
-    /**
-     * Get instance of Entity
-     * @return \fan\core\base\model\entity
-     */
-    public function getEntity()
+    public function getEntity(): \fan\core\base\model\entity
     {
-        return $this->oEntity;
-    } // function getEntity
-    /**
-     * Get instance of Rowset
-     * @return \fan\core\base\model\rowset
-     */
-    public function getRowset()
+        return $this->entity;
+    }
+    public function getRowset(): ?\fan\core\base\model\rowset
     {
-        return $this->oRowset;
-    } // function getRowset
+        return $this->rowset;
+    }
 
-    /**
-     * Chek is Data loaded
-     * @return boolean true - if data load succesfuly
-     */
-    public function checkIsLoad()
+    public function checkIsLoad(): bool
     {
-        return $this->bIsDataLoad;
-    } // function checkIsLoad
+        return $this->isDataLoad;
+    }
 
-    /**
-     * Gets All source Fields
-     * @return array Fields
-     */
-    public function getSrcFields()
+    public function getSrcFields(): array
     {
-        return $this->aSrcData;
-    } // function getSrcFields
+        return $this->srcData;
+    }
 
-    /**
-     * Gets Changed Elements
-     * @return array Fields
-     */
-    public function getChangedElm()
+    public function getChangedElm(): array
     {
-        return $this->aChanged;
-    } // function getChangedElm
+        return $this->changed;
+    }
 
-    /**
-     * Get default values for Insert operation
-     */
-    public function getDefaultValue()
+    public function getDefaultValue(): array
     {
-        $aDefaultValue = array();
+        $defaultValue = [];
         foreach ($this->_getFullFieldsInfo() as $k => $v) {
             if (!$v['auto_increment']) {
-                $aDefaultValue[$k] = $v['default'];
+                $defaultValue[$k] = $v['default'];
             }
         }
-        return $aDefaultValue;
-    } // function getDefaultValue
+        return $defaultValue;
+    }
 
-    /**
-     */
-    public function getDebugInfo()
+    public function getDebugInfo(): array
     {
-        return array(
+        return [
             'entity_name' => $this->getEntity()->getName(true),
             'data'        => $this->getFields(),
-            'src_data'    => $this->aSrcData,
-            'changed'     => $this->aChanged,
-            'flags'       => array(
-                'is_load'    => $this->bIsDataLoad,
-                'show_error' => $this->bShowError,
-                'local'      => $this->sCurrentLocal
-            ),
+            'src_data'    => $this->srcData,
+            'changed'     => $this->changed,
+            'flags'       => [
+                'is_load'    => $this->isDataLoad,
+                'show_error' => $this->showError,
+                'local'      => $this->currentLocal
+            ],
             'connection' => $this->getEntity()->getConnectionName(),
-        );
-    } // function getDebugInfo
+        ];
+    }
 
-    /**
-     * Set Show Error
-     * @param boolean $bShowError
-     * @return \fan\core\base\model\row
-     */
-    public function setShowError($bShowError)
+    public function setShowError(bool $showError): static
     {
-        $this->bShowError = !empty($bShowError);
+        $this->showError = !empty($showError);
         return $this;
-    } // function setShowError
+    }
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Fix Loaded Data
-     * @param array $aData
-     * @return boolean
-     */
-    protected function _fixLoadedData(&$aData)
+    protected function _fixLoadedData(array &$data): bool
     {
-        if (empty($aData)) {
+        if (empty($data)) {
             $this->_resetProperty();
         } else {
-            $this->bIsDataLoad = true;
-            $this->aSrcData    =  $aData;
-            $this->aData       =& $aData;
-            $this->aChanged    = array();
+            $this->isDataLoad = true;
+            $this->srcData    =  $data;
+            $this->data       =& $data;
+            $this->changed    = [];
         }
-        return $this->bIsDataLoad;
-    } // function _fixLoadedData
+        return $this->isDataLoad;
+    }
 
-    /**
-     * Insert DB-row
-     * @return \fan\core\base\model\row
-     */
-    protected function _insertRow()
+    protected function _insertRow(): static
     {
-        if (empty($this->aChanged)) {
+        if (empty($this->changed)) {
             return $this;
         }
 
         $this->_setDefault();
-        if (empty($this->aData)) {
+        if (empty($this->data)) {
             return $this;
         }
 
-        $oEtt      = $this->getEntity();
-        $oConnect  = $oEtt->getConnection();
-        $oDesigner = $oEtt->getDesigner('insert');
-        /* @var $oDesigner \fan\core\service\entity\designer\insert */
-        $sQuery    = $oDesigner->setInsertByParam($this->aData)->assemble();
-        $aAdjParam = $oDesigner->getAdjustedParam();
-        $oConnect->execute($sQuery, $aAdjParam);
+        $ett      = $this->getEntity();
+        $connect  = $ett->getConnection();
+        $designer = $ett->getDesigner('insert');
+        /* @var $designer \fan\core\service\entity\designer\insert */
+        $query    = $designer->setInsertByParam($this->data)->assemble();
+        $adjParam = $designer->getAdjustedParam();
+        $connect->execute($query, $adjParam);
 
-        $sErrMsg = $oConnect->getErrorMessage();
-        if (!$sErrMsg) {
+        $errMsg = $connect->getErrorMessage();
+        if (!$errMsg) {
             foreach ($this->_getFullFieldsInfo() as $k => $v) {
-                if ($v['auto_increment'] && empty($this->aData[$k])) {
-                    $this->aData[$k] = $oConnect->getInsertId();
-                } elseif (!isset($this->aData[$k])) {
-                    $this->aData[$k] = null;
+                if ($v['auto_increment'] && empty($this->data[$k])) {
+                    $this->data[$k] = $connect->getInsertId();
+                } elseif (!isset($this->data[$k])) {
+                    $this->data[$k] = null;
                 }
             }
 
-            $this->bIsDataLoad = true;
-            $this->aChanged    = array();
+            $this->isDataLoad = true;
+            $this->changed    = [];
 
-            //ToDo: if ($this->bCacheIt) {}
-        } elseif ($this->bShowError) {
-            service('error')->logErrorMessage($sErrMsg, 'Data isn\'t inserted.', 'Entity name: ' . $oEtt->getName(true) . "\n\n" . $sQuery . "\nData: " . var_export($aAdjParam, true));
+            //ToDo: if ($this->cacheIt) {}
+        } elseif ($this->showError) {
+            $this->containerService('error')->logErrorMessage($errMsg, 'Data isn\'t inserted.', 'Entity name: ' . $ett->getName(true) . "\n\n" . $query . "\nData: " . var_export($adjParam, true));
         }
         return $this;
-    } // function _insertRow
+    }
 
     /**
-     * Update DB-row
-     * @return \fan\core\base\model\row
      * @throws fatalException
      */
-    protected function _updateRow()
+    protected function _updateRow(): static
     {
-        if (empty($this->aChanged)) {
+        if (empty($this->changed)) {
             return $this;
         } // check rows
 
-        $oEtt     = $this->getEntity();
-        $aIdValue = $this->getId(false, true);
-        if (empty($aIdValue)) {
-            throw new fatalException($oEtt, 'Update impossible. ID isn\'t set!');
+        $ett     = $this->getEntity();
+        $idValue = $this->getId(false, true);
+        if (empty($idValue)) {
+            throw new fatalException($ett, 'Update impossible. ID isn\'t set!');
         }
 
-        $oConnect  = $oEtt->getConnection();
-        $oDesigner = $oEtt->getDesigner('update');
-        /* @var $oDesigner \fan\core\service\entity\designer\update */
-        $sQuery    = $oDesigner->setUpdateByParam($this->aChanged, $this->getId(false, true, true))->assemble();
-        $aAdjParam = $oDesigner->getAdjustedParam();
-        $oConnect->execute($sQuery, $aAdjParam);
+        $connect  = $ett->getConnection();
+        $designer = $ett->getDesigner('update');
+        /* @var $designer \fan\core\service\entity\designer\update */
+        $query    = $designer->setUpdateByParam($this->changed, $this->getId(false, true, true))->assemble();
+        $adjParam = $designer->getAdjustedParam();
+        $connect->execute($query, $adjParam);
 
-        $sErrMsg = $oConnect->getErrorMessage();
-        if (!$sErrMsg) {
-            $this->aChanged = array();
-        } elseif ($this->bShowError) {
-            service('error')->logErrorMessage($sErrMsg, 'Data isn\'t updated.', 'Entity name: ' . $oEtt->getName(true) . "\n\n" . $sQuery . "\nData: " . var_export($aAdjParam, true));
+        $errMsg = $connect->getErrorMessage();
+        if (!$errMsg) {
+            $this->changed = [];
+        } elseif ($this->showError) {
+            $this->containerService('error')->logErrorMessage($errMsg, 'Data isn\'t updated.', 'Entity name: ' . $ett->getName(true) . "\n\n" . $query . "\nData: " . var_export($adjParam, true));
         }
         return $this;
-    } // function _updateRow
+    }
 
     /**
-     * Get field-info
-     * @param string $sFieldName
-     * @param boolean $bAllowException
-     * @return array
      * @throws fatalException
      */
-    protected function _getFieldInfo($sFieldName, $bAllowException = true, $bForse = false)
+    protected function _getFieldInfo(string $fieldName, bool $allowException = true, bool $forse = false): array
     {
-        $aFieldInfo = $this->_getFullFieldsInfo($bForse);
-        if (!isset($aFieldInfo[$sFieldName])) {
-            $sErrorMessage  = 'Incorrect field name "' . $sFieldName . '" for ';
-            $sErrorMessage .= empty($this->oEntity) ? 'unknown table.' : 'table "' . $this->oEntity->getTableName() . '".';
-            if ($bAllowException) {
-                throw new fatalException($this->getEntity(), $sErrorMessage);
+        $fieldInfo = $this->_getFullFieldsInfo($forse);
+        if (!isset($fieldInfo[$fieldName])) {
+            $errorMessage  = 'Incorrect field name "' . $fieldName . '" for ';
+            $errorMessage .= empty($this->entity) ? 'unknown table.' : 'table "' . $this->entity->getTableName() . '".';
+            if ($allowException) {
+                throw new fatalException($this->getEntity(), $errorMessage);
             }
-            trigger_error($sErrorMessage, E_USER_NOTICE);
-            return null;
+            throw new \OutOfBoundsException($errorMessage);
         }
-        return $aFieldInfo[$sFieldName];
-    } // function _getFieldInfo
+        return $fieldInfo[$fieldName];
+    }
 
-    /**
-     * Get Full Info about Fields
-     * @return array
-     */
-    protected function _getFullFieldsInfo($bForse = false)
+    protected function _getFullFieldsInfo(bool $forse = false): array
     {
-        if (empty($this->aFieldInfo) || $bForse) {
-            $this->aFieldInfo = $this->getEntity()->description->getFields($bForse);
+        if (empty($this->fieldInfo) || $forse) {
+            $this->fieldInfo = $this->getEntity()->description->getFields($forse);
         }
-        return $this->aFieldInfo;
-    } // function _getFullFieldsInfo
+        return $this->fieldInfo;
+    }
 
-    /**
-     * Is String Type field
-     * @param string $sType
-     * @return boolean
-     */
-    protected function _isStringType($sType)
+    protected function _isStringType(mixed $type): bool
     {
-        return in_array(strtolower($sType), array('char', 'varchar', 'blob', 'text', 'mediumblob', 'mediumtext', 'longblob'));
-    } // function _isStringType
+        return in_array(strtolower((string)$type), ['char', 'varchar', 'blob', 'text', 'mediumblob', 'mediumtext', 'longblob']);
+    }
 
-    /**
-     * Is Number Type field
-     * @param string $sType
-     * @return boolean
-     */
-    protected function _isNumberType($sType)
+    protected function _isNumberType(mixed $type): bool
     {
-        return in_array(strtolower($sType), array('tinyint', 'bit', 'bool', 'smallint', 'mediumint', 'int', 'integer', 'bigint', 'float', 'double', 'decimal', 'dec'));
-    } // function _isNumberType
+        return in_array(strtolower((string)$type), ['tinyint', 'bit', 'bool', 'smallint', 'mediumint', 'int', 'integer', 'bigint', 'float', 'double', 'decimal', 'dec']);
+    }
 
 
     /**
-     * Get value of data
-     * @param number $sFieldName
-     * @return mixed
+     * @param mixed $defaultVal Fallback value returned when no explicit value is available.
      */
-    protected function _getFieldValue($sFieldName, $mDefaultVal = null, $bAllowException = true)
+    protected function _getFieldValue(string|int|float $fieldName, mixed $defaultVal = null, bool $allowException = true): mixed
     {
-        if ($this->bInitIdOnly || $bAllowException) {
-            $this->_checkGetWrongValue($sFieldName);
+        $fieldName = (string)$fieldName;
+        if ($this->initIdOnly || $allowException) {
+            $this->_checkGetWrongValue($fieldName);
         }
-        return isset($this->aData[$sFieldName]) ? $this->aData[$sFieldName] : $mDefaultVal;
-    } // function _getFieldValue
+        return isset($this->data[$fieldName]) ? $this->data[$fieldName] : $defaultVal;
+    }
 
     /**
-     * Set value of data
-     * @param array|entity $mValue
-     * @return \fan\core\base\data
+     * @param array|entity $value Value that should be applied or transformed.
      */
-    protected function _setFieldValue($sFieldName, $mValue, $bAllowException = true)
+    protected function _setFieldValue(string|int|float $fieldName, mixed $value, bool $allowException = true): static
     {
-        $aFieldInfo = $this->_getFieldInfo($sFieldName, $bAllowException);
-        if ($aFieldInfo) {
-            $bIsNumber = $this->_isNumberType($aFieldInfo['type']);
-            $bIsString = $this->_isStringType($aFieldInfo['type']);
+        $fieldName = (string)$fieldName;
+        $fieldInfo = $this->_getFieldInfo($fieldName, $allowException);
+        if ($fieldInfo) {
+            $isNumber = $this->_isNumberType($fieldInfo['type']);
+            $isString = $this->_isStringType($fieldInfo['type']);
 
-            if (is_null($mValue) && (!$aFieldInfo['null'] && !$aFieldInfo['auto_increment'])) {
-                $mValue = $bIsNumber ? 0 : ($bIsString ? '' : null);
-            } elseif ($bIsString) {
-                if (is_array($mValue)) {
-                    service('error')->logErrorMessage('Value of field "' . $sFieldName . '" can\'t be set as Array', 'Error set value of row', '', true, false);
-                    $mValue = '';
+            if (is_null($value) && (!$fieldInfo['null'] && !$fieldInfo['auto_increment'])) {
+                $value = $isNumber ? 0 : ($isString ? '' : null);
+            } elseif ($isString) {
+                if (is_array($value)) {
+                    $this->containerService('error')->logErrorMessage('Value of field "' . $fieldName . '" can\'t be set as Array', 'Error set value of row', '', true, false);
+                    $value = '';
                 } else {
-                    $mValue = (string)$mValue;
+                    $value = (string)$value;
                 }
-                if (isset($aFieldInfo['length'])) {
-                    $bIsUtf8 = $aFieldInfo['charset'] == 'utf8';
-                    if (call_user_func($bIsUtf8 ? 'mb_strlen' : 'strlen', $mValue) > $aFieldInfo['length']) {
-                        $mValue = call_user_func($bIsUtf8 ? 'mb_substr' : 'substr', $mValue, 0, $aFieldInfo['length']);
+                if (isset($fieldInfo['length'])) {
+                    $isUtf8 = (string)$fieldInfo['charset'] === 'utf8';
+                    if (call_user_func($isUtf8 ? 'mb_strlen' : 'strlen', $value) > $fieldInfo['length']) {
+                        $value = call_user_func($isUtf8 ? 'mb_substr' : 'substr', $value, 0, $fieldInfo['length']);
                         //ToDo: Notify about truncated data, by Config parameter
                     }
                 }
             }
 
-            if (!array_key_exists($sFieldName, $this->aData) || $this->aData[$sFieldName] != $mValue) {
-                $this->aChanged[$sFieldName] = $mValue;
+            $currentValue = $this->data[$fieldName] ?? null;
+            $isChanged = $isNumber
+                ? (float)$currentValue !== (float)$value
+                : ($isString ? (string)$currentValue !== (string)$value : $currentValue !== $value);
+            if (!array_key_exists($fieldName, $this->data) || $isChanged) {
+                $this->changed[$fieldName] = $value;
             }
-            $this->aData[$sFieldName] = $mValue;
+            $this->data[$fieldName] = $value;
         }
         return $this;
-    } // function _setFieldValue
-    /**
-     * Set default values for Insert operation
-     */
-    protected function _setDefault()
+    }
+    protected function _setDefault(): static
     {
         foreach ($this->getDefaultValue() as $k => $v) {
             // ToDo: Set default value for enum if it is not null
-            if((!isset($this->aData[$k]) || is_null($this->aData[$k])) && !is_null($v)) {
-                $this->aData[$k] = $v;
+            if ((!isset($this->data[$k]) || is_null($this->data[$k])) && !is_null($v)) {
+                $this->data[$k] = $v;
             }
         }
         return $this;
-    } // function _setDefault
+    }
 
-    /**
-     * Set all Property as new Row
-     * @param type $bFull
-     * @return \fan\core\base\model\row
-     */
-    protected function _resetProperty($bFull = true)
+    protected function _resetProperty(bool $full = true): static
     {
-        $this->bIsDataLoad = false;
-        if($bFull) {
-            $this->aSrcData = array();
+        $this->isDataLoad = false;
+        if ($full) {
+            $this->srcData = [];
         }
-        $this->aData    = array();
-        $this->aChanged = array();
+        $this->data    = [];
+        $this->changed = [];
 
         return $this;
-    } // function _resetProperty
+    }
 
-    /**
-     * Get Current Local field suffix
-     * @return string
-     */
-    protected function _getCurrentLocal()
+    protected function _getCurrentLocal(): string
     {
-        if (!$this->sCurrentLocal) {
-            $this->sCurrentLocal = '_' . service('locale')->getLanguage();
+        if (!$this->currentLocal) {
+            $this->currentLocal = '_' . $this->containerService('locale')->getLanguage();
         }
-        return $this->sCurrentLocal;
-    } // function _getCurrentLocal
+        return $this->currentLocal;
+    }
 
 
-    /**
-     * Get Default Local field suffix
-     * @return string
-     */
-    protected function _getDefaultLocal()
+    protected function _getDefaultLocal(): string
     {
-        if (!$this->sDefaultLocal) {
-            $this->sDefaultLocal = '_' . service('locale')->getDefaultLanguage();
+        if (!$this->defaultLocal) {
+            $this->defaultLocal = '_' . $this->containerService('locale')->getDefaultLanguage();
         }
-        return $this->sDefaultLocal;
-    } // function _getDefaultLocal
+        return $this->defaultLocal;
+    }
 
     /**
-     * Check Get Wrong Value
-     * @param string $sFieldName
      * @throws fatalException
      */
-    protected function _checkGetWrongValue($sFieldName)
+    protected function _checkGetWrongValue(string $fieldName): void
     {
-        if ($this->bInitIdOnly && !array_key_exists($sFieldName, $this->aChanged)) {
-            throw new fatalException($this->getEntity(), 'This instance has been created for UPDATE DB-row. You can\'t read "' . $sFieldName . '" because it contains wrong value now! ');
+        if ($this->initIdOnly && !array_key_exists($fieldName, $this->changed)) {
+            throw new fatalException($this->getEntity(), 'This instance has been created for UPDATE DB-row. You can\'t read "' . $fieldName . '" because it contains wrong value now! ');
         }
-        if (!array_key_exists($sFieldName, $this->aData)) {
-            throw new fatalException($this->getEntity(), 'Call for unset field "' . $sFieldName . '"! ' . "\n Exist fields:" . var_export($this->aData, true));
+        if (!array_key_exists($fieldName, $this->data)) {
+            throw new fatalException($this->getEntity(), 'Call for unset field "' . $fieldName . '"! ' . "\n Exist fields:" . var_export($this->data, true));
         }
-    } // function _checkGetWrongValue
+    }
 
-    /**
-     * Restore Current object Properties
-     * @return \fan\core\base\model\row
-     */
-    protected function _restoreProperties()
+    protected function _restoreProperties(): static
     {
-        $this->bShowError = $this->getConfig('SHOW_ERROR', $this->bShowError);
+        $this->showError = (bool)$this->getConfig('SHOW_ERROR', $this->showError);
         return $this;
-    } // function _restoreProperties
+    }
 
-    /**
-     * Convert value to string
-     * @param mixed $mVal
-     * @return string
-     */
-    protected function _convToString($mVal)
+    protected function _convToString(mixed $val): string
     {
-        switch (gettype($mVal)) {
+        switch (gettype($val)) {
         case 'NULL':
             return 'NULL';
         case 'string':
-            return '"' . $mVal . '"';
+            return '"' . $val . '"';
         case 'boolean':
-            return $mVal ? 'true' : 'false';
+            return $val ? 'true' : 'false';
         case 'object':
-            return 'object ' . get_class($mVal);
+            return 'object ' . get_class($val);
         }
-        return (string)$mVal;
-    } // function _restoreProperties
+        return (string)$val;
+    }
 
     // ======== The magic methods ======== \\
-    public function __set($sFieldName, $mValue)
-    {
-        $this->set($sFieldName, $mValue);
-    }
-
-    public function __get($sFieldName)
-    {
-        return $this->get($sFieldName);
-    }
     /**
-     * Call to unset entity method
-     * @param string $sMethod method name
-     * @param array $aArgs arguments
-     * @return mixed Value return by engine
+     * Handles dynamic property writes for this current component.
+     *
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function __call($sMethod, $aArgs)
+    public function __set(string $fieldName, mixed $value): void
     {
-        if(substr($sMethod, 0, 4) == 'set_') {
-            return $this->set(substr($sMethod, 4), isset($aArgs[0]) ? $aArgs[0] : null);
-        } elseif (substr($sMethod, 0, 4) == 'get_') {
-            return $this->get(substr($sMethod, 4), isset($aArgs[0]) ? $aArgs[0] : null, isset($aArgs[1]) ? $aArgs[1] : true);
-        } else {
-            throw new fatalException($this->getEntity(), 'Incorrect call of entity method: "' . $sMethod . '"');
-        }
-    } // function __call
+        $this->set((string)$fieldName, $value);
+    }
 
-    public function __toString() {
-        $sRet = '';
-        foreach ($this->aData as $k => $v) {
-            $sRet .= empty($sRet) ? '' : ', ';
-            $sRet .= $k . ' => ' . $this->_convToString($v);
+    /**
+     * Handles dynamic property reads for this current component.
+     */
+    public function __get(string $fieldName): mixed
+    {
+        return $this->get((string)$fieldName);
+    }
+    public function __call(string $method, array $args): mixed
+    {
+        $method = (string)$method;
+        if (substr($method, 0, 4) === 'set_') {
+            return $this->set(substr($method, 4), isset($args[0]) ? $args[0] : null);
+        } elseif (substr($method, 0, 4) === 'get_') {
+            return $this->get(substr($method, 4), isset($args[0]) ? $args[0] : null, isset($args[1]) ? $args[1] : true);
+        } else {
+            throw new fatalException($this->getEntity(), 'Incorrect call of entity method: "' . $method . '"');
         }
-        return '(' . $sRet . ')';
+    }
+
+    /**
+     * Implements PHP magic behavior for this current component.
+     */
+    public function __toString(): string {
+        $ret = '';
+        foreach ($this->data as $k => $v) {
+            $ret .= empty($ret) ? '' : ', ';
+            $ret .= $k . ' => ' . $this->_convToString($v);
+        }
+        return '(' . $ret . ')';
     }
 
     // ======== Required Interface methods ======== \\
-    public function offsetSet($sFieldName, $mValue)
+    /**
+     * @param mixed $value Value that should be applied or transformed.
+     */
+    public function offsetSet(mixed $fieldName, mixed $value): void
     {
-        $this->set($sFieldName, $mValue);
+        $this->set((string)$fieldName, $value);
     }
 
-    public function offsetExists($sFieldName)
+    public function offsetExists(mixed $fieldName): bool
     {
-        return isset($this->aData[$sFieldName]);
+        return isset($this->data[$fieldName]);
     }
 
-    public function offsetUnset($sFieldName)
+    public function offsetUnset(mixed $fieldName): void
     {
-        $this->set($sFieldName, null);
+        $this->set((string)$fieldName, null);
     }
 
-    public function offsetGet($sFieldName)
+    public function offsetGet(mixed $fieldName): mixed
     {
-        return $this->get($sFieldName);
+        return $this->get((string)$fieldName);
     }
 
-    public function serialize()
+    public function serialize(): string
     {
-        return serialize(array(
+        return \fan\core\adapter\safe_serializer::encodePhpSnapshot($this->__serialize());
+    }
+
+    public function __serialize(): array
+    {
+        return [
             'mainParam'  => $this->getEntity()->getMainParam(),
-            'srcData'    => $this->aSrcData,
-            'data'       => $this->aData,
-            'changed'    => $this->aChanged,
-            'isDataLoad' => $this->bIsDataLoad,
-            'initIdOnly' => $this->bInitIdOnly,
-        ));
+            'srcData'    => $this->srcData,
+            'data'       => $this->data,
+            'changed'    => $this->changed,
+            'isDataLoad' => $this->isDataLoad,
+            'initIdOnly' => $this->initIdOnly,
+        ];
     }
 
-    public function unserialize($sData)
+    public function unserialize(string $data): void
     {
-        $aData = unserialize($sData);
+        $data = \fan\core\adapter\safe_serializer::decodePhpSnapshot((string)$data, []);
+        if (!is_array($data)) {
+            throw new \UnexpectedValueException('Model row snapshot must decode to an array.');
+        }
 
-        $this->aSrcData    = $aData['srcData'];
-        $this->aData       = $aData['data'];
-        $this->aChanged    = $aData['changed'];
-        $this->bIsDataLoad = $aData['isDataLoad'];
-        $this->bInitIdOnly = $aData['initIdOnly'];
+        $this->__unserialize($data);
+    }
 
-        $aParam = $aData['mainParam'];
-        $oServ  = service('entity', $aParam['collection']);
-        $this->oEntity = empty($aParam['name']) ?
-                $oServ->getAnonymous($aParam['class'], $aParam['param']) :
-                $oServ->get($aParam['name'], $aParam['param']);
-        $this->oEntity->setConnectionName($aParam['connection']['name'])->setConnectionKey($aParam['connection']['key']);
+    public function __unserialize(array $data): void
+    {
+        $this->restoreSerializedData($data);
+    }
+
+    private function restoreSerializedData(array $data): void
+    {
+        $this->srcData    = $data['srcData'];
+        $this->data       = $data['data'];
+        $this->changed    = $data['changed'];
+        $this->isDataLoad = $data['isDataLoad'];
+        $this->initIdOnly = $data['initIdOnly'];
+
+        $param = $data['mainParam'];
+        $serv  = $this->containerService('entity', $param['collection']);
+        $this->entity = empty($param['name']) ?
+                $serv->getAnonymous($param['class'], $param['param']) :
+                $serv->get($param['name'], $param['param']);
+        $this->entity->setConnectionName((string)$param['connection']['name'])->setConnectionKey($param['connection']['key']);
 
         $this->_restoreProperties();
     }
-} // class \fan\core\base\model\row
-?>
+}

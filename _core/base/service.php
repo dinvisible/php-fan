@@ -1,7 +1,14 @@
-<?php namespace fan\core\base;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\base;
+
+use fan\core\di\container_interface;
 use fan\project\exception\service\fatal as fatalException;
+
 /**
- * Base abstract service
+ * Base abstract service.
  *
  * This file is part PHP-FAN (php-framework from Alexandr Nosov)
  * Copyright (C) 2005-2007 Alexandr Nosov, http://www.alex.4n.com.ua/
@@ -12,350 +19,290 @@ use fan\project\exception\service\fatal as fatalException;
  * Do not remove this comment if you want to use script!
  * Не удаляйте данный комментарий, если вы хотите использовать скрипт!
  *
- * @author: Alexandr Nosov (alex@4n.com.ua)
- * @version of file: 05.02.008 (15.09.2015)
- * @abstract
+ * @author Alexandr Nosov (alex@4n.com.ua)
+ * @version 05.02.008 (15.09.2015)
  */
 abstract class service
 {
-    /**
-     * Listeners of all services
-     * @var array
-     */
-    private static $aListeners = array();
+    use \fan\core\di\container_aware_trait;
 
     /**
-     * service's configuration data
-     * @var \fan\core\service\config\row
+     * @var array<string, array<string, callable[]>>
      */
-    protected $oConfig = null;
+    private static array $listeners = [];
 
     /**
-     * @var array
+     * @var \fan\core\service\config\row|null
      */
-    protected $aDelegate = array();
+    protected ?object $config = null;
 
     /**
-     * @var array
+     * @var array<string, object>
      */
-    protected $aDelegateRule = array();
+    protected array $delegate = [];
 
     /**
-     * DB-operation ('rollback', 'commit', 'nothing' OR null) when the Exception is occurred
-     * @var string
+     * @var array<string, string[]>
      */
-    protected $sExceptionDbOper = null;
+    protected array $delegateRule = [];
 
     /**
-     * Log-method using when the Exception is occurred
-     * @var string
+     * DB operation on exception: rollback, commit, nothing, or null.
+     *
+     * @var string|null
      */
-    private $sExceptionLog = null;
+    protected ?string $exceptionDbOper = null;
 
     /**
-     * service's constructor
-     * @param boolean $bAllowIni
+     * Error logging strategy on exception: php, service, nothing, or null.
+     *
+     * @var string|null
      */
-    protected function __construct($bAllowIni = true)
+    private ?string $exceptionLog = null;
+
+    protected function __construct($allowIni = true, ?container_interface $serviceContainer = null)
     {
-        if ($bAllowIni) {
+        $this->setServiceContainer($serviceContainer);
+
+        if ($allowIni) {
             \bootstrap::getInitializer()->setServiceParam(get_class($this));
         }
-        $this->_saveInstance()->_setConfig()->resetEnabled();
-    } // function __construct
 
-    // ======== Static methods ======== \\
+        $this->_saveInstance()
+            ->_setConfig()
+            ->resetEnabled();
+    }
 
-    /**
-     * Get service's instance by class name
-     * @return object Aservice Service's instance
-     */
-    public static function checkName($sName)
+    public static function checkName($name): string
     {
-        return substr($sName, 0, 8) == 'fan\core' ? 'fan\project' . substr($sName, 8) : $sName;
-    } // function checkName
+        return substr($name, 0, 8) === 'fan\core'
+            ? 'fan\project' . substr($name, 8)
+            : $name;
+    }
 
-    // ======== Main Interface methods ======== \\
+    abstract public function isSingleton(): bool;
 
-    /**
-     * Is singleton
-     * @return boolean
-     */
-    abstract public function isSingleton();
-
-    /**
-     * Check is service enabled
-     * @return boolean
-     */
-    public function isEnabled()
+    public function getContainerService(string $serviceName, mixed ...$arguments): mixed
     {
-        return (boolean)$this->getConfig('ENABLED', true);
-    } // function isEnabled
+        return $this->containerService($serviceName, ...$arguments);
+    }
 
-    /**
-     * Reset flag of enabled
-     */
-    public function resetEnabled()
+    public function isEnabled(): bool
+    {
+        return (bool)$this->getConfig('ENABLED', true);
+    }
+
+    public function resetEnabled(): static
     {
         $this->_getConfigurator()->reset(get_class_name($this), 'ENABLED');
+
         return $this;
-    } // function resetEnabled
+    }
 
-    /**
-     * Get service's Config
-     * @param string $mKey Config key
-     * @param mixed $mDefault Default value
-     * @return mixed
-     */
-    public function getConfig($mKey = null, $mDefault = null)
+    public function getConfig($key = null, $default = null): mixed
     {
-        return is_null($mKey) || is_null($this->oConfig) ? $this->oConfig : $this->oConfig->get($mKey, $mDefault);
-    } // function getConfig
-
-    /**
-     * Set DB-operation ('rollback', 'commit', 'nothing' OR null) when the Exception is occurred
-     * @param string $sExceptionDbOper
-     * @return \fan\core\base\service
-     */
-    public function setExceptionDbOper($sExceptionDbOper = null)
-    {
-        if (in_array($sExceptionDbOper, array('rollback', 'commit', 'nothing')) || is_null($sExceptionDbOper)) {
-            $this->sExceptionDbOper = $sExceptionDbOper;
-        }
-        return $this;
-    } // function setExceptionDbOper
-
-    /**
-     * Get DB-operation ('rollback', 'commit', 'nothing' OR null) when the Exception is occurred
-     * If method return NULL operation can be defined another way
-     * @return string|null
-     */
-    public function getExceptionDbOper()
-    {
-        return $this->sExceptionDbOper;
-    } // function getExceptionDbOper
-
-    /**
-     * Get Type of logging Error-message ('php', 'service', 'nothing' OR null) when the Exception is occurred
-     * If method return NULL Method can be defined another way
-     * @return string
-     */
-    public function getExceptionLogType()
-    {
-        return empty($this->sExceptionLog) ? 'service' : $this->sExceptionLog;
-    } // function getExceptionLogType
-
-    /**
-     * Set Type of logging Error-message ('php', 'service', 'nothing' OR null)
-     * @return \fan\core\base\service
-     */
-    public function setExceptionLogType($sExceptionLog)
-    {
-        if (in_array($sExceptionLog, array('php', 'service', 'nothing')) || is_null($sExceptionLog)) {
-            $this->sExceptionLog = $sExceptionLog;
-        }
-        return $this;
-    } // function setExceptionLogType
-
-    /**
-     * Add listener to service
-     * @param string $sEventName
-     * @param callback $mCallBack
-     * @return \fan\core\base\service
-     */
-    public function addListener($sEventName, $mCallBack)
-    {
-        $this->_subscribeForService(get_class_name($this), $sEventName, $mCallBack);
-        return $this;
-    } // function addListener
-
-    // ======== Private/Protected methods ======== \\
-
-    /**
-     * Save service's Instance
-     * @return \fan\core\base\service
-     */
-    protected function _saveInstance()
-    {
-        return $this;
-    } // function _saveInstance
-
-    /**
-     * Set service's Config
-     * @return object Aservice Service's instance
-     */
-    protected function _setConfig()
-    {
-        $this->oConfig = $this->_getConfigurator()->getServiceConfig($this);
-        return $this;
-    } // function _setConfig
-
-    /**
-     * Get Cached Data for current service
-     * @param string $sKey
-     * @param mixed $mDefault
-     * @return mixed
-     */
-    protected function _getCacheData($sKey, $mDefault = null)
-    {
-        $oCache = service('cache', 'service_data');
-        /* @var $oCache \fan\core\service\cache */
-        $aData  = $oCache->get(get_class_name($this), array());
-        return array_val($aData, $sKey, $mDefault);
-    } // function _getCacheData
-    /**
-     * Set Cached Data for current service
-     * @param string $sKey
-     * @param mixed $mValue
-     * @return \fan\core\base\service
-     */
-    protected function _setCacheData($sKey, $mValue)
-    {
-        $oCache = service('cache', 'service_data');
-        /* @var $oCache \fan\core\service\cache */
-        $sName  = get_class_name($this);
-        $aData  = $oCache->get($sName, array());
-        $aData[$sKey] = $mValue;
-        $oCache->set($sName, $aData);
-        return $this;
-    } // function _setCacheData
-
-    /**
-     * Get Configurator
-     * @return \fan\core\service\config
-     */
-    protected function _getConfigurator()
-    {
-        return service('config', 'service');
-    } // function _getConfigurator
-
-    /**
-     * Get Service Engine
-     * @param string $sClass
-     * @return object|string
-     */
-    protected function _getEngine($sName, $bObject = true)
-    {
-        $sClass = get_class($this) . '\\' . $sName;
-        if (substr($sClass, 0, 9) == 'fan\core\\') {
-            $sClass = 'fan\project\\' . substr($sClass, 9);
+        if (null === $key || null === $this->config) {
+            return $this->config;
         }
 
-        if (!\bootstrap::loadClass($sClass, true)) {
+        return $this->config->get($key, $default);
+    }
+
+    public function setExceptionDbOper(?string $exceptionDbOper = null): self
+    {
+        if (
+            null === $exceptionDbOper ||
+            in_array($exceptionDbOper, ['rollback', 'commit', 'nothing'], true)
+        ) {
+            $this->exceptionDbOper = $exceptionDbOper;
+        }
+
+        return $this;
+    }
+
+    public function getExceptionDbOper(): ?string
+    {
+        return $this->exceptionDbOper;
+    }
+
+    public function getExceptionLogType(): string
+    {
+        return null === $this->exceptionLog ? 'service' : $this->exceptionLog;
+    }
+
+    public function setExceptionLogType($exceptionLog): self
+    {
+        if (
+            null === $exceptionLog ||
+            in_array($exceptionLog, ['php', 'service', 'nothing'], true)
+        ) {
+            $this->exceptionLog = $exceptionLog;
+        }
+
+        return $this;
+    }
+
+    /**
+     * @param callable $callBack Callable invoked to complete the delegated operation.
+     */
+    public function addListener(string $eventName, callable $callBack): self
+    {
+        $this->_subscribeForService(get_class_name($this), $eventName, $callBack);
+
+        return $this;
+    }
+
+    protected function _saveInstance(): static
+    {
+        return $this;
+    }
+
+    protected function _setConfig(): static
+    {
+        $this->config = $this->_getConfigurator()->getServiceConfig($this);
+
+        return $this;
+    }
+
+    protected function _getCacheData(string $key, mixed $default = null): mixed
+    {
+        $cache = $this->containerService('cache', 'service_data');
+        /* @var $cache \fan\core\service\cache */
+        $data = $cache->get(get_class_name($this), []);
+
+        return array_val($data, $key, $default);
+    }
+
+    protected function _setCacheData(string $key, mixed $value): self
+    {
+        $cache = $this->containerService('cache', 'service_data');
+        /* @var $cache \fan\core\service\cache */
+        $name = get_class_name($this);
+        $data = $cache->get($name, []);
+        $data[$key] = $value;
+        $cache->set($name, $data);
+
+        return $this;
+    }
+
+    protected function _getConfigurator(): object
+    {
+        return $this->containerService('config', 'service');
+    }
+
+    protected function _getEngine($name, $object = true): mixed
+    {
+        $class = get_class($this) . '\\' . $name;
+
+        if (substr($class, 0, 9) === 'fan\core\\') {
+            $class = 'fan\project\\' . substr($class, 9);
+        }
+
+        if (!\bootstrap::loadClass($class, true)) {
             return null;
         }
 
-        $sClass = '\\' . $sClass;
-        if (!$bObject) {
-            return $sClass;
+        $class = '\\' . $class;
+        if (!$object) {
+            return $class;
         }
 
-        $oObject = new $sClass();
-        if (method_exists($oObject, 'setFacade')) {
-            $oObject->setFacade($this);
+        $object = new $class();
+        if (method_exists($object, 'setFacade')) {
+            $object->setFacade($this);
         }
-        return $oObject;
-    } // function _getEngine
+
+        return $object;
+    }
 
     /**
-     * Get delegate class
-     * @param string $sClass
-     * @return object
      * @throws \fan\core\exception\service\fatal
      */
-    protected function _getDelegate($sClass)
+    protected function _getDelegate(mixed $class): mixed
     {
-        if (empty($this->aDelegate[$sClass])) {
-            $this->aDelegate[$sClass] = $this->_getEngine('delegate\\' . $sClass);
-            if (empty($this->aDelegate[$sClass])) {
-                throw new fatalException($this, 'Delegate service class "' . $sClass . '" isn\'t found!');
-            }
+        if (!empty($this->delegate[$class])) {
+            return $this->delegate[$class];
         }
-        return $this->aDelegate[$sClass];
-    } // function _getDelegate
 
-    /**
-     * Extension of method Call
-     * @param string $sMethod
-     * @param array $aArgs
-     * @return boolean
-     */
-    protected function _extensionCall($sMethod, $aArgs)
+        $this->delegate[$class] = $this->_getEngine('delegate\\' . $class);
+        if (empty($this->delegate[$class])) {
+            throw new fatalException($this, 'Delegate service class "' . $class . '" isn\'t found!');
+        }
+
+        return $this->delegate[$class];
+    }
+
+    protected function _extensionCall(string $method, array $args): bool
     {
         return false;
-    } // function _extensionCall
+    }
 
     /**
-     * Make Exception of Service
-     * @param sting $sLogErrMsg
-     * @param sting $sExceptionDbOper
-     * @param numeric $nCode
-     * @param \Exception $oPrevious
      * @throws \fan\core\exception\service\fatal
      */
-    protected function _makeServiceException($sLogErrMsg, $sExceptionDbOper = 'rollback', $nCode = E_USER_ERROR, $oPrevious = null)
-    {
-        if (is_null($this->sExceptionDbOper)) {
-            $this->sExceptionDbOper = $sExceptionDbOper;
+    protected function _makeServiceException(
+        string $logErrMsg,
+        ?string $exceptionDbOper = 'rollback',
+        int $code = E_USER_ERROR,
+        ?\Exception $previous = null
+    ): void {
+        if (null === $this->exceptionDbOper) {
+            $this->exceptionDbOper = $exceptionDbOper;
         }
-        throw new fatalException($this, $sLogErrMsg, $nCode, $oPrevious);
-    } // function _makeServiceException
+
+        throw new fatalException($this, $logErrMsg, $code, $previous);
+    }
 
     /**
-     * Subscribe For Service
-     * @param string $sServiceName
-     * @param string $sEventName
-     * @param callback $mCallBack
+     * @param callable $callBack Callable invoked to complete the delegated operation.
+     *
      * @throws \fan\core\exception\service\fatal
      */
-    protected function _subscribeForService($sServiceName, $sEventName, $mCallBack)
+    protected function _subscribeForService(string $serviceName, string $eventName, callable $callBack): void
     {
-        if (!is_callable($mCallBack)) {
+        if (!is_callable($callBack)) {
             throw new fatalException($this, 'Incorrect callback-function for subscribing.');
         }
-        if (!isset(self::$aListeners[$sServiceName][$sEventName])) {
-            self::$aListeners[$sServiceName][$sEventName] = array();
+
+        if (!isset(self::$listeners[$serviceName][$eventName])) {
+            self::$listeners[$serviceName][$eventName] = [];
         }
-        self::$aListeners[$sServiceName][$sEventName][] = $mCallBack;
-    } // function _broadcastMessage
-    /**
-     * Broadcast Message for listeners
-     * @param string $sEventName
-     * @param mixed $mData
-     */
-    protected function _broadcastMessage($sEventName, $mData)
+
+        self::$listeners[$serviceName][$eventName][] = $callBack;
+    }
+
+    protected function _broadcastMessage(string $eventName, mixed $data): void
     {
-        $sServiceName = get_class_name($this);
-        if (isset(self::$aListeners[$sServiceName][$sEventName])) {
-            foreach (self::$aListeners[$sServiceName][$sEventName] as $v) {
-                call_user_func($v, $mData);
-            }
-        }
-    } // function _broadcastMessage
+        $serviceName = get_class_name($this);
 
-    // ======== The magic methods ======== \\
+        if (!isset(self::$listeners[$serviceName][$eventName])) {
+            return;
+        }
+
+        foreach (self::$listeners[$serviceName][$eventName] as $callBack) {
+            call_user_func($callBack, $data);
+        }
+    }
 
     /**
-     * Call to unset tab method
-     * @param string $sMethod method name
-     * @param array $aArgs arguments
-     * @return mixed Value return by engine
      * @throws \fan\core\exception\service\fatal
      */
-    public function __call($sMethod, $aArgs)
+    public function __call(string $method, array $args): mixed
     {
-        foreach ($this->aDelegateRule as $sClass => $aMethods) {
-            if (in_array($sMethod, $aMethods)) {
-                $aCallBack = array($this->_getDelegate($sClass), $sMethod);
-                return is_null($aCallBack[0]) ? null : call_user_func_array($aCallBack, empty($aArgs) ? array() : $aArgs);
+        foreach ($this->delegateRule as $class => $methods) {
+            if (!in_array($method, $methods, true)) {
+                continue;
             }
-        }
-        if (!$this->_extensionCall($sMethod, $aArgs)) {
-            throw new fatalException($this, 'Incorrect call of service - unknown method "' . $sMethod . '"!');
-        }
-    } // function __call
 
-    // ======== Required Interface methods ======== \\
+            $delegate = $this->_getDelegate($class);
 
-} // class \fan\core\base\service
-?>
+            return null === $delegate
+                ? null
+                : call_user_func_array([$delegate, $method], empty($args) ? [] : $args);
+        }
+
+        if (!$this->_extensionCall($method, $args)) {
+            throw new fatalException($this, 'Incorrect call of service - unknown method "' . $method . '"!');
+        }
+    }
+}

@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 use fan\project\exception\error500 as error500;
 /**
@@ -21,348 +24,265 @@ class cache extends \fan\core\base\service\multi
     /**
      * Type of cache for config
      */
-    const CONFIG_TYPE = 'config';
+    public const CONFIG_TYPE = 'config';
 
     /**
      * Service's Instances
      * @var \fan\core\service\cache[]
      */
-    private static $aInstances = array();
+    private static array $instances = [];
 
     /**
      * Current cached data
      * @var string
      */
-    protected $sType;
+    protected ?string $type = null;
 
     /**
      * Engines of current cache type
      * @var \fan\core\service\cache\base[]
      */
-    protected $aEngine = null;
+    protected ?array $engine = null;
 
     /**
      * Configuration of Cache-config
      * @var array
      */
-    protected $aConfigCache = null;
+    protected ?array $configCache = null;
 
-    /**
-     * Service's constructor
-     * @param string $sType
-     * @param string $sGroup
-     */
-    protected function __construct($sType)
+    protected function __construct(string $type)
     {
-        if ($sType == self::CONFIG_TYPE) {
-            $this->aConfigCache = \bootstrap::getConfigCache();
-            if (empty($this->aConfigCache)) {
+        $type = (string)$type;
+        if ($type === self::CONFIG_TYPE) {
+            $this->configCache = \bootstrap::getConfigCache();
+            if (empty($this->configCache)) {
                 throw new \Exception('Config Cache in bootstrap isn\'t defined.', E_USER_ERROR);
             }
         } else {
-            parent::__construct(empty(self::$aInstances));
+            parent::__construct(empty(self::$instances));
         }
-        if (!isset(self::$aInstances[$sType])) {
-            self::$aInstances[$sType] = $this;
+        if (!isset(self::$instances[$type])) {
+            self::$instances[$type] = $this;
         }
-        $this->sType = $sType;
-    } // function __construct
+        $this->type = $type;
+    }
 
     // ======== Static methods ======== \\
     /**
-     * Get Instance of cache for service of config
-     * @return \fan\core\service\cache
      * @throws error500
      */
-    public static function configInstance()
+    public static function configInstance(): ?static
     {
         try {
-            if (!empty(self::$aInstances)) {
+            if (!empty(self::$instances)) {
                 throw new error500('It\'s inpossible to get config-Instance after make another Instances.', E_USER_ERROR);
             }
-            $oConfigCache = new self(self::CONFIG_TYPE);
-            $oConfigCache->get('service');
-        } catch (\Exception $oExc) {
-            \bootstrap::logError($oExc->getMessage());
+            $configCache = new self(self::CONFIG_TYPE);
+            $configCache->get('service');
+        } catch (\Exception $exc) {
+            \bootstrap::logError($exc->getMessage());
             return null;
         }
-        return self::$aInstances[self::CONFIG_TYPE];
-    } // function instance
+        return self::$instances[self::CONFIG_TYPE];
+    }
 
     /**
-     * Get instance of cache service
-     * @param string $sType
-     * @return \fan\core\service\cache
      * @throws fatalException
      */
-    public static function instance($sType = null)
+    public static function instance(mixed $type = null): static
     {
-        if (is_null($sType)) {
-            $oConfig = \fan\project\service\config::instance();
-            $sType   = $oConfig->get('cache')->get('DEFAULT_TYPE');
-            if (empty($sType)) {
-                throw new fatalException($oConfig, 'Default CACHE-type doesn\'t set in config-file.');
+        if (is_null($type)) {
+            $config = self::staticContainerService('config');
+            $type   = $config->get('cache')->get('DEFAULT_TYPE');
+            if (empty($type)) {
+                throw new fatalException($config, 'Default CACHE-type doesn\'t set in config-file.');
             }
         }
-        if ($sType == self::CONFIG_TYPE) {
+        $type = (string)$type;
+        if ($type === self::CONFIG_TYPE) {
             throw new error500('It\'s inpossible to get config-Instance by usual way.', E_USER_ERROR);
         }
-        if (!isset(self::$aInstances[$sType])) {
-            new self($sType);
+        if (!isset(self::$instances[$type])) {
+            new self($type);
         }
-        return self::$aInstances[$sType];
-    } // function instance
+        return self::$instances[$type];
+    }
 
     // ======== Main Interface methods ======== \\
 
     /**
-     * Get data value
-     * @param string $sKey
-     * @param mixed $mDefault
-     * @return mixed
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    public function get($sKey, $mDefault = null)
+    public function get(string $key, mixed $default = null): mixed
     {
-        return $this->getEngine($sKey)->get($mDefault);
-    } // function get
+        return $this->getEngine($key)->get($default);
+    }
 
     /**
-     * Set data value
-     * @param string $sKey
-     * @param mixed $mValue
-     * @param boolean $bAutoSave
-     * @return \fan\core\service\cache
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function set($sKey, $mValue, $bAutoSave = true)
+    public function set(string $key, mixed $value, bool $autoSave = true): static
     {
-        $this->getEngine($sKey)->set($mValue, $bAutoSave);
+        $this->getEngine($key)->set($value, $autoSave);
         return $this;
-    } // function set
+    }
 
     /**
-     * Get Cached value by Key OR if not exists Make New data by callback-function
-     * @param string $sKey
-     * @param mixed $mCallBack
-     * @param boolean $bAutoSave
-     * @return mixed
+     * @param mixed $callBack Callable invoked to complete the delegated operation.
+     *
      * @throws fatalException
      */
-    public function getOrDefine($sKey, $mCallBack, $bAutoSave = true)
+    public function getOrDefine(string $key, mixed $callBack, bool $autoSave = true): mixed
     {
-        $oEngine = $this->getEngine($sKey);
-        if ($oEngine->isLoaded()) {
-            $mResult = $oEngine->get();
-        } elseif (is_callable($mCallBack)) {
-            $mResult = call_user_func($mCallBack, $sKey);
-            $oEngine->set($mResult, $bAutoSave);
+        $engine = $this->getEngine($key);
+        if ($engine->isLoaded()) {
+            $result = $engine->get();
+        } elseif (is_callable($callBack)) {
+            $result = call_user_func($callBack, $key);
+            $engine->set($result, $autoSave);
         } else {
             throw new fatalException($this, 'Callback for cache is not callable.');
         }
-        return $mResult;
-    } // function getOrDefine
+        return $result;
+    }
+
+    public function getMeta(string $key, bool $loadMetaOnly = false): array
+    {
+        return $this->getEngine($key)->getMeta($loadMetaOnly);
+    }
+
+    public function getExtraMeta(string $key, string $param): mixed
+    {
+        return $this->getEngine($key)->getExtraMeta($param);
+    }
 
     /**
-     * Get Meta-data
-     * @param string $sKey
-     * @param boolean $bLoadMetaOnly
-     * @return array
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function getMeta($sKey, $bLoadMetaOnly = false)
+    public function setExtraMeta(string $key, string $param, mixed $value): static
     {
-        return $this->getEngine($sKey)->getMeta($bLoadMetaOnly);
-    } // function getMeta
-
-    /**
-     * Get Extra Meta-data
-     * @param string $sKey
-     * @param string $sParam
-     * @return mixed
-     */
-    public function getExtraMeta($sKey, $sParam)
-    {
-        return $this->getEngine($sKey)->getExtraMeta($sParam);
-    } // function getExtraMeta
-
-    /**
-     * Set Extra Meta-data
-     * @param string $sKey
-     * @param string $sParam
-     * @param mixed $mValue
-     * @return \fan\core\service\cache
-     */
-    public function setExtraMeta($sKey, $sParam, $mValue)
-    {
-        $this->getEngine($sKey)->setExtraMeta($sParam, $mValue);
+        $this->getEngine($key)->setExtraMeta($param, $value);
         return $this;
-    } // function setExtraMeta
+    }
 
     /**
-     * Set Extra Meta-data
-     * @param string $sKey
-     * @param string $sParam
-     * @param mixed $mValue
-     * @return \fan\core\service\cache
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function checkExtraMeta($sKey, $sParam, $mValue, $sMethod = 'equal', $bAllowDelete = false)
+    public function checkExtraMeta(string $key, string $param, mixed $value, string $method = 'equal', bool $allowDelete = false): bool
     {
-        $mSrcValue = $this->getExtraMeta($sKey, $sParam);
-        if (is_null($mSrcValue)) {
+        $srcValue = $this->getExtraMeta($key, $param);
+        if (is_null($srcValue)) {
             return true;
         }
+        $normalizedValue = is_scalar($value) || $value === null ? (string)$value : $value;
+        $normalizedSrcValue = is_scalar($srcValue) || $srcValue === null ? (string)$srcValue : $srcValue;
 
-        switch ($sMethod) {
+        switch ($method) {
         case 'equal':
-            $bResult = $mValue == $mSrcValue;
+            $result = $normalizedValue === $normalizedSrcValue;
             break;
 
         case 'not_equal':
-            $bResult = $mValue != $mSrcValue;
+            $result = $normalizedValue !== $normalizedSrcValue;
             break;
 
         case 'less':
-            $bResult = $mValue < $mSrcValue;
+            $result = $value < $srcValue;
             break;
 
         case 'more':
-            $bResult = $mValue > $mSrcValue;
+            $result = $value > $srcValue;
             break;
 
         case 'less_or_equal':
-            $bResult = $mValue <= $mSrcValue;
+            $result = $value <= $srcValue;
             break;
 
         case 'more_or_equal':
-            $bResult = $mValue >= $mSrcValue;
+            $result = $value >= $srcValue;
             break;
 
         default:
-            throw new fatalException($this, 'Incorrect check method "' . $sMethod . '", for verify Extra Meta.');
+            throw new fatalException($this, 'Incorrect check method "' . $method . '", for verify Extra Meta.');
         }
 
-        if (!$bResult && $bAllowDelete) {
-            $this->delete($sKey);
+        if (!$result && $allowDelete) {
+            $this->delete($key);
         }
-        return $bResult;
-    } // function checkExtraMeta
+        return $result;
+    }
 
-    /**
-     * Check is data Actual
-     * @return boolean
-     */
-    public function isActual($sKey)
+    public function isActual(string $key): bool
     {
-        return $this->getEngine($sKey)->isActual();
-    } // function isActual
+        return $this->getEngine($key)->isActual();
+    }
 
-    /**
-     * Set Lifetime
-     * @param string $sKey
-     * @param integer $iTime
-     * @return \fan\core\service\cache
-     */
-    public function setLifetime($sKey, $iTime)
+    public function setLifetime(string $key, int $time): static
     {
-        $this->getEngine($sKey)->setLifetime($iTime);
+        $this->getEngine($key)->setLifetime($time);
         return $this;
-    } // function setLifetime
+    }
 
-    /**
-     * Start time of create cache must be later than pointed
-     * @param string $sKey
-     * @param string $sDateTime
-     * @return boolean
-     */
-    public function setStartLimit($sKey, $sDateTime)
+    public function setStartLimit(string $key, string $dateTime): bool
     {
-        $this->getEngine($sKey)->setStartLimit($sDateTime);
-        return $this->isActual($sKey);
-    } // function setStartLimit
+        $this->getEngine($key)->setStartLimit($dateTime);
+        return $this->isActual($key);
+    }
 
     /**
-     * Compare date/time of Source File with date/time of cache
-     * @param string $sKey
-     * @param string $sFilePath
-     * @return boolean
      * @throws fatalException
      */
-    public function checkSourceFile($sKey, $sFilePath)
+    public function checkSourceFile(string $key, string $filePath): bool
     {
-        if (!is_file($sFilePath)) {
-            throw new fatalException($this, 'Incorrect path to  file "' . $sFilePath . '".');
+        if (!is_file($filePath)) {
+            throw new fatalException($this, 'Incorrect path to  file "' . $filePath . '".');
         }
-        return  $this->checkExtraMeta($sKey, 'file_size', filesize($sFilePath), 'equal', true) &&
-                $this->setStartLimit($sKey, date ('Y-m-d H:i:s', filemtime($sFilePath)));
-    } // function checkSourceFile
+        return  $this->checkExtraMeta($key, 'file_size', filesize($filePath), 'equal', true) &&
+                $this->setStartLimit($key, date ('Y-m-d H:i:s', filemtime($filePath)));
+    }
 
-    /**
-     * Save cahe-data
-     * @param string $sKey
-     * @return \fan\core\service\cache
-     */
-    public function save($sKey)
+    public function save(string $key): static
     {
-        $this->getEngine($sKey)->save();
+        $this->getEngine($key)->save();
         return $this;
-    } // function save
+    }
 
-    /**
-     * Delete cahe-data
-     * @param string $sKey
-     * @return \fan\core\service\cache
-     */
-    public function delete($sKey)
+    public function delete(string $key): static
     {
-        $this->getEngine($sKey)->delete();
+        $this->getEngine($key)->delete();
         return $this;
-    } // function delete
+    }
 
-    /**
-     * Set Extra Path for cahce directory
-     * Allows to separate data for subdirectories
-     * @param type $sKey
-     * @param type $sExtraPath
-     * @return \fan\core\service\cache
-     */
-    public function setExtraPath($sKey, $sExtraPath)
+    public function setExtraPath(string $key, string $extraPath): static
     {
-        $this->getEngine($sKey)->setExtraPath($sExtraPath);
+        $this->getEngine((string)$key)->setExtraPath((string)$extraPath);
         return $this;
-    } // function setExtraPath
+    }
 
-    /**
-     * Check is data saved
-     * @param string $sKey
-     * @return boolean
-     */
-    public function isSaved($sKey)
+    public function isSaved(string $key): bool
     {
-        return $this->getEngine($sKey)->isSaved();
-    } // function isSaved
+        return $this->getEngine($key)->isSaved();
+    }
 
-    /**
-     * Get Data-engine
-     * @param string $sKey
-     * @return \fan\core\service\cache\base
-     */
-    public function getEngine($sKey)
+    public function getEngine(string $key): \fan\core\service\cache\base
     {
-        if (!isset($this->aEngine[$sKey])) {
-            if ($this->sType == self::CONFIG_TYPE) {
-                $aConfig = $this->aConfigCache;
-            } elseif (($oConfig = $this->getConfig(array('TYPE', $this->sType)))) {
-                $aConfig = $oConfig->toArray();
+        if (!isset($this->engine[$key])) {
+            if ($this->type === self::CONFIG_TYPE) {
+                $config = $this->configCache;
+            } elseif (($config = $this->getConfig(['TYPE', $this->type]))) {
+                $config = $config->toArray();
             } else {
-                throw new fatalException($this, 'Not found configuration for "' . $this->sType . '".');
+                throw new fatalException($this, 'Not found configuration for "' . $this->type . '".');
             }
 
-            if (empty($aConfig['ENGINE'])) {
+            if (empty($config['ENGINE'])) {
                 throw new fatalException($this, 'Cache engine isn\'t defined.');
             }
-            $sClass  = $this->_getEngine($aConfig['ENGINE'], false);
-            $this->aEngine[$sKey] = new $sClass($this, $this->sType, $sKey, $aConfig);
+            $class  = $this->_getEngine($config['ENGINE'], false);
+            $this->engine[$key] = new $class($this, $this->type, $key, $config);
         }
-        return $this->aEngine[$sKey];
-    } // function getEngine
+        return $this->engine[$key];
+    }
 
 
     // ======== Private/Protected methods ======== \\
@@ -371,5 +291,4 @@ class cache extends \fan\core\base\service\multi
 
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\service\cache
-?>
+}

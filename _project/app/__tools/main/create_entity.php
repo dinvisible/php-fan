@@ -1,4 +1,8 @@
-<?php namespace fan\app\__tools\main;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__tools\main;
 /**
  * create_entity block
  * @version 05.02.001 (10.03.2014)
@@ -10,57 +14,54 @@ class create_entity extends \fan\project\block\form\injector
      * Object of database-service
      * @var \fan\core\service\database
      */
-    protected $oDb = null;
+    protected ?object $db = null;
 
     /**
      * Entity dir
      * @var string
      */
-    protected $sEttDir = '';
+    protected string $ettDir = '';
 
-    /**
-     * Init block
-     */
-    public function init()
+    public function init(): void
     {
-        $aTableList = array();
+        $tableList = [];
 
-        $oReq = service('request');
-        /* @var $oReq \fan\core\service\request */
-        $sCon  = $oReq->get('connection',   'G');
-        $sNsPr = $oReq->get('ns_pref',      'G');
-        $sRE   = $oReq->get('table_regexp', 'G');
+        $req = $this->containerService('request');
+        /* @var $req \fan\core\service\request */
+        $con  = $req->get('connection',   'G');
+        $nsPr = $req->get('ns_pref',      'G');
+        $re   = $req->get('table_regexp', 'G');
 
-        if (!empty($sCon) && !empty($sNsPr)) {
-            $this->sEttDir = \bootstrap::getLoader()->getPathByNS($sNsPr);
-            if (!empty($this->sEttDir)) {
-                $this->oDb = service('database', $sCon);
+        if (!empty($con) && !empty($nsPr)) {
+            $this->ettDir = \bootstrap::getLoader()->getPathByNS($nsPr);
+            if (!empty($this->ettDir)) {
+                $this->db = $this->containerService('database', $con);
                 $this->_parseForm();
 
-                $this->oDb->setResultTypes(MYSQL_NUM);
-                $aTmp = $this->oDb->getCol('SHOW TABLES', 0);
-                if (!empty($sRE)) {
-                    foreach ($aTmp as $v) {
-                        if (preg_match($sRE, $v)) {
-                            $aTableList[] = $v;
+                $this->db->setResultTypes(MYSQL_NUM);
+                $tmp = $this->db->getCol('SHOW TABLES', 0);
+                if (!empty($re)) {
+                    foreach ($tmp as $v) {
+                        if (preg_match($re, $v)) {
+                            $tableList[] = $v;
                         }
                     }
                 } else {
-                    $aTableList = $aTmp;
+                    $tableList = $tmp;
                 }
-                $aTableList = array_flip($aTableList);
-                ksort($aTableList);
-                $sSep  = \fan\core\bootstrap\loader::DEFAULT_DIR_SEPARATOR;
+                $tableList = array_flip($tableList);
+                ksort($tableList);
+                $sep  = \fan\core\bootstrap\loader::DEFAULT_DIR_SEPARATOR;
 
-                foreach ($aTableList as $sTableName => &$v) {
-                    $sDir = $this->sEttDir . $sSep . $sTableName;
-                    if (is_dir($sDir)) {
-                        if (!is_file($sDir . $sSep . 'entity.php')) {
-                            $v = array('red', 'File of entity-class is not set.');
-                        } elseif (!is_file($sDir . $sSep . 'row.php')) {
-                            $v = array('yellow', 'File of row-class is not set.');
+                foreach ($tableList as $tableName => &$v) {
+                    $dir = $this->ettDir . $sep . $tableName;
+                    if (is_dir($dir)) {
+                        if (!is_file($dir . $sep . 'entity.php')) {
+                            $v = ['red', 'File of entity-class is not set.'];
+                        } elseif (!is_file($dir . $sep . 'row.php')) {
+                            $v = ['yellow', 'File of row-class is not set.'];
                         } else {
-                            $v = array();
+                            $v = [];
                         }
                     } else {
                         $v = null;
@@ -70,28 +71,25 @@ class create_entity extends \fan\project\block\form\injector
         }
         /*
         */
-        $this->view['CurrentDb']  =  $sCon;
-        $this->view['aTableList'] = $aTableList;
+        $this->view['CurrentDb']  =  $con;
+        $this->view['aTableList'] = $tableList;
     }
 
-    /**
-     * On submit
-     */
-    protected function onSubmit()
+    protected function onSubmit(): void
     {
-        $sNsPr = trim(service('request')->get('ns_pref', 'G'), '\\');
-        $sSep  = \fan\core\bootstrap\loader::DEFAULT_DIR_SEPARATOR;
-        $aTbl = $this->getForm()->getFieldValue('tbl');
-        if (!empty($aTbl)) {
-            foreach ($aTbl as $sTableName => $v) {
-                $sDir = $this->sEttDir . $sSep . $sTableName;
-                if (!is_dir($sDir)) {
-                    //$aParam = $this->getParamByDb($sTableName);
+        $nsPr = trim($this->containerService('request')->get('ns_pref', 'G'), '\\');
+        $sep  = \fan\core\bootstrap\loader::DEFAULT_DIR_SEPARATOR;
+        $tbl = $this->getForm()->getFieldValue('tbl');
+        if (!empty($tbl)) {
+            foreach ($tbl as $tableName => $v) {
+                $dir = $this->ettDir . $sep . $tableName;
+                if (!is_dir($dir)) {
+                    //$param = $this->getParamByDb($tableName);
 
-                    mkdir($sDir);
-                    file_put_contents ($sDir . $sSep . 'entity.php' , '<?php namespace ' . $sNsPr . '\\' . $sTableName . ';
+                    mkdir($dir);
+                    file_put_contents ($dir . $sep . 'entity.php' , '<?php namespace ' . $nsPr . '\\' . $tableName . ';
 /**
- * Entity of `' . $sTableName . '` table
+ * Entity of `' . $tableName . '` table
  * @version 1.0
  */
 class entity extends \fan\project\base\model\entity
@@ -109,12 +107,12 @@ class entity extends \fan\project\base\model\entity
      * ============================= [ Private/protected methods ] ============================ *
      */
 
-} // class ' . $sNsPr . '\\' . $sTableName . '\entity
+}
 ?>');
 
-                    file_put_contents ($sDir . $sSep . 'row.php' , '<?php namespace ' . $sNsPr . '\\' . $sTableName . ';
+                    file_put_contents ($dir . $sep . 'row.php' , '<?php namespace ' . $nsPr . '\\' . $tableName . ';
 /**
- * Row of `' . $sTableName . '` table' . $this->getMethodList($sTableName) . '
+ * Row of `' . $tableName . '` table' . $this->getMethodList($tableName) . '
  * @version 1.0
  */
 class row extends \fan\project\base\model\row
@@ -136,70 +134,58 @@ class row extends \fan\project\base\model\row
      * ============================= [ Private/protected methods ] ============================ *
      */
 
-} // class ' . $sNsPr . '\\' . $sTableName . '\row
+}
 ?>');
                 }
             }
         }
     }
 
-    /**
-     * Get table parameters by Database
-     */
-    protected function getMethodList($sTableName)
+    protected function getMethodList($tableName): string
     {
-        $sRet = '';
-        foreach ($this->getFields($sTableName) as $v) {
+        $ret = '';
+        foreach ($this->getFields($tableName) as $v) {
             if (strstr($v['Type'], 'char') || strstr($v['Type'], 'date') || strstr($v['Type'], 'enum')) {
-                $sType = 'string';
+                $type = 'string';
             } elseif (strstr($v['Type'], 'int')) {
-                $sType = 'integer';
+                $type = 'integer';
             } elseif (strstr($v['Type'], 'float')) {
-                $sType = 'float';
+                $type = 'float';
             } else {
-                $sType = 'mixed';
+                $type = 'mixed';
             }
-            $sRet .= "\n" . ' * @method void set_' . $v['Field'] . '()';
-            $sRet .= "\n" . ' * @method ' . $sType . ' get_' . $v['Field'] . '()';
+            $ret .= "\n" . ' * @method void set_' . $v['Field'] . '()';
+            $ret .= "\n" . ' * @method ' . $type . ' get_' . $v['Field'] . '()';
         }
 
-        return $sRet;
+        return $ret;
     }
-    /**
-     * Get table parameters by Database
-     */
-    protected function getParamByDb($sTableName)
+    protected function getParamByDb($tableName): array
     {
-        $aIndex = array();
-        foreach ($this->getFields($sTableName) as $v) {
-            if ($v['Key'] == 'PRI') {
-                $aIndex[] = $v['Field'];
+        $index = [];
+        foreach ($this->getFields($tableName) as $v) {
+            if ((string)$v['Key'] === 'PRI') {
+                $index[] = $v['Field'];
             }
         }
 
-        $aTmp = $this->oDb->getRow('SHOW CREATE TABLE `' . $sTableName . '`');
-        $sCrt = $aTmp['Create Table'];
-        $aTopKeys = array();
-        if (preg_match_all('/FOREIGN\s+KEY\s*\(\`?(\w+)\`?\)\s*REFERENCES\s+\`?(\w+)\`?\s+\(\`?(\w+)\`?\)/im', $sCrt, $aMatches) && @$aMatches[0]) {
-            foreach ($aMatches[1] as $k => $sField) {
-                $aTopKeys[$sField] = $aMatches[2][$k];
+        $tmp = $this->db->getRow('SHOW CREATE TABLE `' . $tableName . '`');
+        $crt = $tmp['Create Table'];
+        $topKeys = [];
+        if (preg_match_all('/FOREIGN\s+KEY\s*\(\`?(\w+)\`?\)\s*REFERENCES\s+\`?(\w+)\`?\s+\(\`?(\w+)\`?\)/im', $crt, $matches) && !empty($matches[0])) {
+            foreach ($matches[1] as $k => $field) {
+                $topKeys[$field] = $matches[2][$k];
             }
         }
 
-        return array(
-            'primary'  => count($aIndex) < 2 ? @$aIndex[0] : $aIndex,
-            'top_keys' => $aTopKeys,
-        );
+        return [
+            'primary'  => count($index) < 2 ? ($index[0] ?? null) : $index,
+            'top_keys' => $topKeys,
+        ];
     }
 
-    /**
-     * Get list of fields
-     * @param string $sTableName
-     * @return array
-     */
-    protected function getFields($sTableName)
+    protected function getFields(string $tableName): array
     {
-        return $this->oDb->getAll('DESCRIBE `' . $sTableName . '`');
-    } // function getFields
-} // class \fan\app\__tools\main\create_entity
-?>
+        return $this->db->getAll('DESCRIBE `' . $tableName . '`');
+    }
+}

@@ -1,4 +1,9 @@
-<?php namespace fan\core\block;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block;
+use fan\core\di\container_interface;
 use fan\project\exception\block\fatal as fatalException;
 /**
  * Base abstract all type of block
@@ -26,971 +31,735 @@ use fan\project\exception\block\fatal as fatalException;
  * @property-read \fan\core\service\tab $tab
  * @property \fan\core\view\router $view
  *
- * @method mixed getSessionData() getSessionData(array|string $mKey, mixed $mDefaultValue = null, boolean $bRemoveFromSes = false)
- * @method mixed setSessionData() setSessionData(array|string $mKey, mixed $mValue)
- * @method mixed removeSessionData() removeSessionData(array|string $mKey)
+ * @method mixed getSessionData() getSessionData(array|string $key, mixed $defaultValue = null, boolean $removeFromSes = false)
+ * @method mixed setSessionData() setSessionData(array|string $key, mixed $value)
+ * @method mixed removeSessionData() removeSessionData(array|string $key)
  *
- * @method \fan\core\service\tab\subscriber _subscribeForEvent() subscribeForEvent(string $sEventName, string $sListenerMethod = 'eventHandler')
- * @method \fan\core\service\tab\subscriber _subscribeByName() subscribeByName(string $sBroadcasterName, string $sEventName, string $sListenerMethod = 'eventHandler')
- * @method \fan\core\service\tab\subscriber _subscribeByClass() subscribeByClass(string $sClassName, string $sEventName, string $sListenerMethod = 'eventHandler')
- * @method \fan\core\service\tab\subscriber _unSubscribeForEvent() unSubscribeForEvent(string $sEventName, string $sListenerMethod = 'eventHandler')
- * @method \fan\core\service\tab\subscriber _unSubscribeByName() unSubscribeByName(string $sBroadcasterName, string $sEventName, string $sListenerMethod = 'eventHandler')
- * @method \fan\core\service\tab\subscriber _unSubscribeByClass() unSubscribeByClass(string $sClassName, string $sEventName, string $sListenerMethod = 'eventHandler')
- * @method \fan\core\service\tab\subscriber _broadcastEvent() broadcastEvent(string $sEventName, array $aData = array())
+ * @method \fan\core\service\tab\subscriber _subscribeForEvent() subscribeForEvent(string $eventName, string $listenerMethod = 'eventHandler')
+ * @method \fan\core\service\tab\subscriber _subscribeByName() subscribeByName(string $broadcasterName, string $eventName, string $listenerMethod = 'eventHandler')
+ * @method \fan\core\service\tab\subscriber _subscribeByClass() subscribeByClass(string $className, string $eventName, string $listenerMethod = 'eventHandler')
+ * @method \fan\core\service\tab\subscriber _unSubscribeForEvent() unSubscribeForEvent(string $eventName, string $listenerMethod = 'eventHandler')
+ * @method \fan\core\service\tab\subscriber _unSubscribeByName() unSubscribeByName(string $broadcasterName, string $eventName, string $listenerMethod = 'eventHandler')
+ * @method \fan\core\service\tab\subscriber _unSubscribeByClass() unSubscribeByClass(string $className, string $eventName, string $listenerMethod = 'eventHandler')
+ * @method \fan\core\service\tab\subscriber _broadcastEvent() broadcastEvent(string $eventName, array $data = [])
  */
 abstract class base
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * Name of block
      * @var string
      */
-    protected $sBlockName = '';
+    protected string $blockName = '';
     /**
      * Flag: Current block is "Root"
      * @var boolean
      */
-    protected $bIsRoot = false;
+    protected bool $isRoot = false;
     /**
      * Flag: Current block is "Main"
      * @var boolean
      */
-    protected $bIsMain = false;
+    protected bool $isMain = false;
 
     /**
      * Service Tab
      * @var \fan\core\service\tab
      */
-    protected $oTab;
+    protected ?object $tab = null;
 
     /**
      * Meta-Maker instance
      * @var \fan\core\base\meta\maker
      */
-    private $oMetaMaker;
+    private ?object $metaMaker = null;
     /**
      * MetaData
-     * @var \fan\core\base\meta\row[]
+     * @var \fan\core\base\meta\row|null
      */
-    protected $aMeta;
+    protected ?object $meta = null;
     /**
      * Flag indicating that the dynamic meta-data are formed
      * @var boolean
      */
-    protected $bIsDynMeta = false;
+    protected bool $isDynMeta = false;
 
     /**
      * Role Conditions
      * @var array
      */
-    protected $aRoleCondition = null;
+    protected ?array $roleCondition = null;
 
     /**
      * View data router
      * @var \fan\core\view\router
      */
-    private $oView;
+    private ?object $view = null;
     /**
      * Path to template
      * @var string
      */
-    private $sTemplate;
+    private ?string $template = null;
 
     /**
      * Container block
      * @var \fan\core\block\base
      */
-    private $oContainer;
+    private ?object $container = null;
 
     /**
      * Embedded Blocks
      * @var \fan\core\block\base[]
      */
-    private $aEmbeddedBlocks = array();
+    private array $embeddedBlocks = [];
 
     /**
      * DB-operation ('rollback', 'commit', 'nothing' OR null) when the Exception is occurred
      * @var string
      */
-    protected $sExceptionDbOper = null;
+    protected ?string $exceptionDbOper = null;
 
     /**
      * Request-service
      * @var \fan\core\service\request
      */
-    private $oRequest;
+    private ?object $request = null;
 
-    /**
-     * @var array
-     */
-    protected $aDelegateRule = array(
-        'ordinary' => array(
-            'getSessionData'    => array('this', 'getSession', 'get'),
-            'setSessionData'    => array('this', 'getSession', 'set'),
-            'removeSessionData' => array('this', 'getSession', 'remove'),
-        ),
-        'identified' => array(
-            '_subscribeForEvent'   => array('tab', 'getSubscriber', 'subscribeForEvent'),
-            '_subscribeByName'     => array('tab', 'getSubscriber', 'subscribeByName'),
-            '_subscribeByClass'    => array('tab', 'getSubscriber', 'subscribeByClass'),
-            '_unSubscribeForEvent' => array('tab', 'getSubscriber', 'unSubscribeForEvent'),
-            '_unSubscribeByName'   => array('tab', 'getSubscriber', 'unSubscribeByName'),
-            '_unSubscribeByClass'  => array('tab', 'getSubscriber', 'unSubscribeByClass'),
-            '_broadcastEvent'      => array('tab', 'getSubscriber', 'broadcastEvent'),
-        ),
-    );
+    protected array $delegateRule = [
+        'ordinary' => [
+            'getSessionData'    => ['this', 'getSession', 'get'],
+            'setSessionData'    => ['this', 'getSession', 'set'],
+            'removeSessionData' => ['this', 'getSession', 'remove'],
+        ],
+        'identified' => [
+            '_subscribeForEvent'   => ['tab', 'getSubscriber', 'subscribeForEvent'],
+            '_subscribeByName'     => ['tab', 'getSubscriber', 'subscribeByName'],
+            '_subscribeByClass'    => ['tab', 'getSubscriber', 'subscribeByClass'],
+            '_unSubscribeForEvent' => ['tab', 'getSubscriber', 'unSubscribeForEvent'],
+            '_unSubscribeByName'   => ['tab', 'getSubscriber', 'unSubscribeByName'],
+            '_unSubscribeByClass'  => ['tab', 'getSubscriber', 'unSubscribeByClass'],
+            '_broadcastEvent'      => ['tab', 'getSubscriber', 'broadcastEvent'],
+        ],
+    ];
 
-    /**
-     * Block constructor
-     * @param string $sBlockName Block Name
-     * @param \fan\core\service\tab $oTab Service tab
-     * @param base $oContainer Block's Container
-     * @param array $aContainerMeta - array of Container block Meta
-     * @param boolean $bFullConstr - allow to finish Construction of block
-     */
-    public function __construct($sBlockName = null, \fan\core\service\tab $oTab = null, base $oContainer = null, $aContainerMeta = array(), $bFullConstr = true)
+    public function __construct(
+        string|int|null $blockName = null,
+        ?\fan\core\service\tab $tab = null,
+        ?base $container = null,
+        array $containerMeta = [],
+        bool $fullConstr = true,
+        ?container_interface $serviceContainer = null
+    )
     {
+        $this->setServiceContainer($serviceContainer);
         $this->_transferor(); // Unconditional transfer to another block
 
-        $this->sBlockName = $sBlockName;
-        $this->oTab       = empty($oTab) ? service('tab') : $oTab;
-        $this->oRequest   = service('request');
+        $this->blockName = (string)$blockName;
+        $this->tab       = empty($tab) ? $this->containerService('tab') : $tab;
+        $this->request   = $this->containerService('request');
 
-        if (!empty($sBlockName)) {
-            $this->oTab->setCurrentBlock($this);
+        if (!empty($blockName)) {
+            $this->tab->setCurrentBlock($this);
         }
 
-        $this->oMetaMaker = $this->_createMetaMaker();
+        $this->metaMaker = $this->_createMetaMaker();
 
-        if ($bFullConstr) {
-            $this->finishConstruct($oContainer, $aContainerMeta);
+        if ($fullConstr) {
+            $this->finishConstruct($container, $containerMeta);
         }
-    } // function __construct
+    }
 
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Finish Construction of block
-     * @param \fan\core\block\base $oContainer
-     * @param array $aContainerMeta
-     * @param boolean $bAllowSetEmbedded
-     */
-    public function finishConstruct($oContainer = null, $aContainerMeta = array(), $bAllowSetEmbedded = true)
+    public function finishConstruct(?base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
     {
-        if (!empty($oContainer)) {
-            $this->oContainer = $oContainer;
+        if (!empty($container)) {
+            $this->container = $container;
         }
-        if (!empty($aContainerMeta)) {
-            $this->oMetaMaker->setContainerMeta($aContainerMeta);
+        if (!empty($containerMeta)) {
+            $this->metaMaker->setContainerMeta($containerMeta);
         }
-        $this->oMetaMaker->setMainBlockMeta();
+        $this->metaMaker->setMainBlockMeta();
 
-        $this->aMeta = $this->oMetaMaker->assembleBlock();
+        $this->meta = $this->metaMaker->assembleBlock();
 
         $this->_makeDynamicMeta(false);
 
-        $this->oView = $this->_createViewRouter();
+        $this->view = $this->_createViewRouter();
 
-        if (!empty($this->sBlockName)) {
+        if (!empty($this->blockName)) {
             $this->_doRoleOperations();
             if ($this->getRoleCondition()) {
                 return;
             }
 
             // ToDo: Maybe this should be set Tab-block even if the role dosn't permit it
-            $this->oTab->setTabBlock($this, $this->sBlockName);
-            list($this->bIsRoot, $this->bIsMain) = $this->oTab->checkBlockStatus($this);
+            $this->tab->setTabBlock($this, $this->blockName);
+            list($this->isRoot, $this->isMain) = $this->tab->checkBlockStatus($this);
         }
 
         $this->_setTemplate();
         $this->_preparseMeta();
 
-        if ($bAllowSetEmbedded) {
+        if ($allowSetEmbedded) {
             $this->_setEmbeddedBlocks();
         }
 
         $this->_postCreate();
-    } // function finishConstruct
+    }
 
-    /**
-     * Init block data
-     */
-    public function init()
+    public function init(): void
     {
-    } // function init
-    /**
-     * Required init block data
-     */
-    public function initRequired()
+    }
+    public function initRequired(): void
     {
-    } // function initRequired
-    /**
-     * This method run ayer init all blocks, just only for "main", "carcass" and "root" blocks
-     */
-    public function runAfterInit()
+    }
+    public function runAfterInit(): void
     {
-    } // function runAfterInit
+    }
 
 
-    /**
-     * Get Block Name
-     * @return string
-     */
-    public function getBlockName()
+    public function getBlockName(): string
     {
-        return $this->sBlockName;
-    } // function getBlockName
+        return $this->blockName;
+    }
+
+    public function getTab(): ?object
+    {
+        return $this->tab;
+    }
+
+    public function getContainer(): ?object
+    {
+        return $this->container;
+    }
+
+    public function getMetaMaker(): object
+    {
+        return $this->metaMaker;
+    }
 
     /**
-     * Get Instance of tab
-     * @return \fan\core\service\tab
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    public function getTab()
+    public function getMeta(string|array|null $key = null, mixed $default = null, bool $convToArray = false): mixed
     {
-        return $this->oTab;
-    } // function getTab
+        $meta = $this->metaMaker->getMeta($key, $default);
+        return $convToArray && is_object($meta) && $meta instanceof \fan\core\base\meta\row ? $meta->toArray() : $meta;
+    }
+
+    public function getMetaVar(string|array|null $key = null): mixed
+    {
+        trigger_error('Method "getMetaVar" is deprecated. Use "getMeta" instead.', E_USER_DEPRECATED);
+        return $this->getMeta($key);
+    }
 
     /**
-     * Get Instance of Container-block
-     * @return \fan\core\block\base
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function getContainer()
+    protected function setMeta(string|array $key, mixed $value): static
     {
-        return $this->oContainer;
-    } // function getContainer
-
-    /**
-     * Get Meta Maker
-     * @return \fan\core\base\meta\maker
-     */
-    public function getMetaMaker()
-    {
-        return $this->oMetaMaker;
-    } // function getMetaMaker
-
-    /**
-     * Get Meta-data
-     * @param string|array $mKey
-     * @param mixed $mDefault
-     * @return \fan\core\base\meta\row
-     */
-    public function getMeta($mKey = null, $mDefault = null, $bConvToArray = false)
-    {
-        $oMeta = $this->oMetaMaker->getMeta($mKey, $mDefault);
-        return $bConvToArray && is_object($oMeta) && $oMeta instanceof \fan\core\base\meta\row ? $oMeta->toArray() : $oMeta;
-    } // function getMeta
-
-    /**
-     * DEPRECATED (!)
-     * Get Meta-data (This method added for compatible with previous version)
-     * @param string|array $mKey
-     * @return mixed
-     */
-    public function getMetaVar($mKey = null)
-    {
-        trigger_error('Use Method "getMeta" instead "getMetaVar".', E_USER_NOTICE);
-        return $this->getMeta($mKey);
-    } // function getMetaVar
-
-    /**
-     * Set value of meta-element
-     * @param string|array $mKey - key of var
-     * @param mixed $mValue - value
-     * @return \fan\core\block\base
-     */
-    protected function setMeta($mKey, $mValue)
-    {
-        $this->oMetaMaker->setMeta($mKey, $mValue);
+        $this->metaMaker->setMeta($key, $value);
         return $this;
-    } // function setMeta
+    }
 
     /**
-     * Add/mix new Meta-data (as array or \core\base\meta\row) with exist Meta-data
-     * @param array|\fan\core\base\meta\row $mValue
-     * @return \fan\core\block\base
+     * @param array|\fan\core\base\meta\row $value Value that should be applied or transformed.
      */
-    protected function addMeta($mValue)
+    protected function addMeta(array|\fan\core\base\meta\row $value): static
     {
-        if (true) {
-            $oMaker = $this->oMetaMaker;
-            foreach ($mValue as $k => $v) {
-                $oMaker->setMeta($k, $v);
-            }
-        } else {
-            trigger_error('Incorrect value for method "addMeta".', E_USER_WARNING);
+        $maker = $this->metaMaker;
+        foreach ($value as $k => $v) {
+            $maker->setMeta($k, $v);
         }
         return $this;
-    } // function addMeta
+    }
 
     /**
-     * Set value of meta-element (This method added for compatible with previous version)
-     * @param mixed $mKey - key of var
-     * @param mixed $mValue - value
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function setMetaVar($mKey, $mValue)
+    protected function setMetaVar(mixed $key, mixed $value): static
     {
-        trigger_error('Use Method "setMeta" instead "setMetaVar".', E_USER_NOTICE);
-        return $this->setMeta($mKey, $mValue);
-    } // function setMetaVar
+        trigger_error('Method "setMetaVar" is deprecated. Use "setMeta" instead.', E_USER_DEPRECATED);
+        return $this->setMeta($key, $value);
+    }
 
-    /**
-     * Make Delayed Dynamic Meta-data
-     * @return link
-     */
-    public function makeDelayedMeta(\fan\core\base\meta\row $aMeta)
+    public function makeDelayedMeta(\fan\core\base\meta\row $meta): void
     {
-        foreach ($aMeta as $k => $v) {
+        foreach ($meta as $k => $v) {
             if (is_object($v)) {
                 if ($v instanceof \fan\core\base\meta\delayed) {
-                    $aMeta[$k] = $v->getValue();
+                    $meta[$k] = $v->getValue();
                 } elseif ($v instanceof \fan\core\base\meta\row) {
                     $this->makeDelayedMeta($v);
                 }
             }
         }
-    } // function makeDelayedMeta
+    }
 
-    /**
-     * get Dynamic Meta-data
-     * Allows to create metadata dynamically.
-     * Returns generated metadata to add them to the basic meta
-     * @param array $aMeta Allow change meta in the parent chain
-     * @return array
-     */
-    public function getDynamicMeta($aMeta)
+    public function getDynamicMeta(mixed $meta): array
     {
-        return array();
-    } // function getDynamicMeta
+        return [];
+    }
 
-    /**
-     * Set Dynamic Meta-data
-     * Create metadata dynamically.
-     * This procedure is performed just before the initialization block.
-     * Procedure include two basic operations: "makeDelayedMeta" and "makeDynamicMeta"
-     */
-    public function setDynamicMeta()
+    public function setDynamicMeta(): static
     {
         //ToDo: Replace \fan\core\base\meta\delayed to special Flag in \fan\core\base\meta\row
-        if(class_exists('\fan\core\base\meta\delayed', false)) {
-            $this->makeDelayedMeta($this->aMeta);
+        if (class_exists('\fan\core\base\meta\delayed', false)) {
+            $this->makeDelayedMeta($this->meta);
         }
         $this->_makeDynamicMeta(true);
         return $this;
-    } // function setDynamicMeta
+    }
 
-    /**
-     * Get Role Conditions if role isn't fit
-     * @return boolean
-     */
-    public function getRoleCondition()
+    public function getRoleCondition(): ?array
     {
-        if (!is_null($this->aRoleCondition)) {
-            return empty($this->aRoleCondition) ? null : $this->aRoleCondition;
+        if (!is_null($this->roleCondition)) {
+            return empty($this->roleCondition) ? null : $this->roleCondition;
         }
-        $this->aRoleCondition = array();
+        $this->roleCondition = [];
 
-        $aRoles = $this->getMeta('roles', array(), true);
-        if (!$aRoles) {
+        $roles = $this->getMeta('roles', [], true);
+        if (!$roles) {
             return null;
         }
 
-        foreach ($aRoles as $v) {
-            if(isset($v['condition']) && !role($v['condition'])) {
-                $this->aRoleCondition = $v;
+        foreach ($roles as $v) {
+            if (isset($v['condition']) && !role($v['condition'])) {
+                $this->roleCondition = $v;
                 return $v;
             }
         }
         return null;
-    } // function getRoleCondition
+    }
 
-    /**
-     * Get Suffix of Class of View-Parser (withot namespace)
-     * This method can be redefined in Main-block
-     *   and must return suffix of class-name of View-parcer
-     * @return string
-     */
-    public function getViewParserName()
+    public function getViewParserName(): string
     {
-        $oDefiner = $this->oTab->getViewDefiner();
-        return $oDefiner->getViewParserName();
-    } // function getViewParserName
+        $definer = $this->tab->getViewDefiner();
+        return $definer->getViewParserName();
+    }
 
-    /**
-     * Get View Type
-     * @return string
-     */
-    public function getViewFormat()
+    public function getViewFormat(): string
     {
-        return call_user_func(array($this->oTab->getViewClass(), 'getFormat'));
-    } // function getViewFormat
+        return call_user_func([$this->tab->getViewClass(), 'getFormat']);
+    }
 
-    /**
-     * Get View Router
-     * @return \fan\core\view\router
-     */
-    public function getView()
+    public function getView(): ?object
     {
-        return $this->oView;
-    } // function getView
+        return $this->view;
+    }
 
-    /**
-     * Get All View data
-     * @return array
-     */
-    public function getViewData()
+    public function getViewData(): array
     {
         $this->_preOutput();
-        return $this->oView->getAll();
-    } // function getViewData
+        return $this->view->getAll();
+    }
 
-    /**
-     * Get Template
-     * @return string
-     */
-    public function getTemplate()
+    public function getTemplate(): ?string
     {
-        return $this->sTemplate;
-    } // function getTemplate
+        return $this->template;
+    }
 
     /**
-     * Set Template file
-     * @param string $sTemplatePath
-     * @param boolean $bAllowException
-     * @return boolean
      * @throws \fan\core\exception\block\fatal
      */
-    public function setTemplate($sTemplatePath, $bAllowException = true)
+    public function setTemplate(string $templatePath, bool $allowException = true): bool
     {
-        if (is_file($sTemplatePath)) {
-            $this->sTemplate = $sTemplatePath;
+        if (is_file($templatePath)) {
+            $this->template = $templatePath;
             return true;
-        } elseif ($bAllowException) {
-            throw new fatalException($this, 'Incorrect template path "' . $sTemplatePath . '"');
+        } elseif ($allowException) {
+            throw new fatalException($this, 'Incorrect template path "' . $templatePath . '"');
         }
         return false;
-    } // function setTemplate
+    }
 
-    /**
-     * Get Request
-     * @return \fan\core\service\request
-     */
-    public function getRequest()
+    public function getRequest(): ?object
     {
-        return $this->oRequest;
-    } // function getRequest
+        return $this->request;
+    }
 
-    /**
-     * Get Namespace of current block
-     * @return string
-     */
-    public function getNamespace()
+    public function getNamespace(): ?string
     {
-        $sName = get_class($this);
-        $nPos  = strrpos($sName, '\\');
-        return $nPos === false ? null : substr($sName, 0, $nPos + 1);
-    } // function getNamespace
+        $name = get_class($this);
+        $pos  = strrpos((string)$name, '\\');
+        return $pos === false ? null : substr((string)$name, 0, $pos + 1);
+    }
 
-    /**
-     * Get Embedded Blocks
-     * @return \fan\core\block\base[]
-     */
-    public function getEmbeddedBlocks()
+    public function getEmbeddedBlocks(): array
     {
-        return $this->aEmbeddedBlocks;
-    } // function getEmbeddedBlocks
+        return $this->embeddedBlocks;
+    }
 
-    /**
-     * Get Embedded Blocks
-     * @return \fan\core\block\base[]
-     */
-    public function getEmbeddedBlock($sKey)
+    public function getEmbeddedBlock(string|int $key): object
     {
-        if (!isset($this->aEmbeddedBlocks[$sKey])) {
-            trigger_error('Call to unknown Embedded Block "' . $sKey . '"', E_USER_WARNING);
-            return null;
+        if (!isset($this->embeddedBlocks[$key])) {
+            throw new \fan\project\exception\block\local($this, 'Call to unknown Embedded Block "' . $key . '"', E_USER_WARNING);
         }
-        return $this->aEmbeddedBlocks[$sKey];
-    } // function getEmbeddedBlocks
+        return $this->embeddedBlocks[$key];
+    }
 
-    /**
-     * Get DB-operation ('rollback', 'commit', 'nothing' OR null) when the Exception is occurred
-     * If method return NULL operation can be defined another way
-     * @return string|null
-     */
-    public function getExceptionDbOper()
+    public function getExceptionDbOper(): ?string
     {
-        return $this->sExceptionDbOper;
-    } // function getExceptionDbOper
+        return $this->exceptionDbOper;
+    }
 
-    /**
-     * Get instance of block's session
-     * @return \fan\core\service\session
-     */
-    public function getSession()
+    public function getSession(): object
     {
-        return service('session', array(get_class($this), 'block'));
-    } // function getSession
+        return $this->containerService('session', get_class($this), 'block');
+    }
 
-    /**
-     * Check - is allowed to Run Init of block
-     * @return boolean
-     */
-    public function checkRunInit()
+    public function checkRunInit(): bool
     {
         return true;
-    } // function checkRunInit
+    }
 
-    /**
-     * Get debug block information
-     */
-    public function getDebugInfo()
+    public function getDebugInfo(): array
     {
-        $aMetaSourse = $this->oMetaMaker->getSource();
-        $aParentPaths  = service('reflector')->getParentPaths($this);
-        $sCurrentPath = substr(reset($aParentPaths), 0, -3);
+        $metaSourse = $this->metaMaker->getSource();
+        $parentPaths  = service('reflector')->getParentPaths($this);
+        $currentPath = substr((string)reset($parentPaths), 0, -3);
 
-        return array(
-            'blockName'      => $this->sBlockName,
+        return [
+            'blockName'      => $this->blockName,
             'className'      => get_class($this),
-            'templateFile'   => $this->sTemplate,
-            'metaFile'       => file_exists($sCurrentPath . 'meta.php') ? $sCurrentPath . 'meta.php' : null,
-            'meta'           => $this->aMeta,
-            'embeddedBlocks' => $this->aEmbeddedBlocks,
-            'parentPaths'    => $aParentPaths,
-            'metaSourse'     => $aMetaSourse,
+            'templateFile'   => $this->template,
+            'metaFile'       => file_exists($currentPath . 'meta.php') ? $currentPath . 'meta.php' : null,
+            'meta'           => $this->meta,
+            'embeddedBlocks' => $this->embeddedBlocks,
+            'parentPaths'    => $parentPaths,
+            'metaSourse'     => $metaSourse,
 
-            'folderMeta'     => $aMetaSourse['folder'],
-            'fileMeta'       => $aMetaSourse['block'],
-            'parentMeta'     => $aMetaSourse['parent'],
-            'containerMeta'  => $aMetaSourse['container'],
+            'folderMeta'     => $metaSourse['folder'],
+            'fileMeta'       => $metaSourse['block'],
+            'parentMeta'     => $metaSourse['parent'],
+            'containerMeta'  => $metaSourse['container'],
 
-        );
-    } // function getDebugInfo
+        ];
+    }
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Create Meta Maker
-     * @return \fan\core\base\meta\maker
-     */
-    protected function _createMetaMaker()
+    protected function _createMetaMaker(): object
     {
         return new \fan\project\base\meta\maker($this);
-    } // function _createMetaMaker
+    }
 
-    /**
-     * Create View Router
-     * @return \fan\core\view\data
-     */
-    protected function _createViewRouter()
+    protected function _createViewRouter(): object
     {
-        return call_user_func(array($this->oTab->getViewClass(), 'getRouter'), $this);
-    } // function _createViewRouter
+        return call_user_func([$this->tab->getViewClass(), 'getRouter'], $this);
+    }
 
-    /**
-     * Set View Variable
-     * @param string $sKey
-     * @param mixed $mVal
-     * @return \fan\core\block\base
-     */
-    protected function _setViewVar($sKey, $mVal)
+    protected function _setViewVar(string $key, mixed $val): static
     {
-        $this->oView->set($sKey, $mVal);
+        $this->view->set($key, $val);
         return $this;
-    } // function _setViewVar
+    }
 
-    /**
-     * Previouse parse Meta
-     * @return \fan\core\block\base
-     */
-    protected function _preparseMeta()
+    protected function _preparseMeta(): static
     {
-        $sViewFormat = $this->getViewFormat();
-        if ($sViewFormat == 'html') {
-            $oRoot = $this->_getBlock('root', false);
-            if ($oRoot) {
-                $this->_setRootBlockParameters($oRoot);
+        $viewFormat = $this->getViewFormat();
+        if ($viewFormat === 'html') {
+            $root = $this->_getBlock('root', false);
+            if ($root) {
+                $this->_setRootBlockParameters($root);
             }
         }
-        if (in_array($sViewFormat, array('html', 'loader'))) {
-            $aTplVars = $this->getMeta('tplVars');
-            if($aTplVars) {
-                $this->_setTplVarsByMeta($aTplVars);
+        if (in_array($viewFormat, ['html', 'loader'])) {
+            $tplVars = $this->getMeta('tplVars');
+            if ($tplVars) {
+                $this->_setTplVarsByMeta($tplVars);
             }
         }
         return $this;
-    } // function _preparseMeta
+    }
 
-    /**
-     * Make Dynamic Meta-data
-     * @param boolan $bForce - force to make Dynamic Meta-data
-     */
-    protected function _makeDynamicMeta($bForce)
+    protected function _makeDynamicMeta(bool $force): void
     {
-        if (!$this->bIsDynMeta && ($bForce || $this->getMeta('force_dynamic_meta', false))) {
-            $this->bIsDynMeta = true;
-            $aDynMeta = $this->getDynamicMeta($this->aMeta);
-            if (!empty($aDynMeta)) {
-                $this->aMeta->mergeData($aDynMeta);
+        if (!$this->isDynMeta && ($force || $this->getMeta('force_dynamic_meta', false))) {
+            $this->isDynMeta = true;
+            $dynMeta = $this->getDynamicMeta($this->meta);
+            if (!empty($dynMeta)) {
+                $this->meta->mergeData($dynMeta);
             }
         }
-    } // function _makeDynamicMeta
+    }
 
-    /**
-     * Redefine role and do other operations connected with roles
-     */
-    protected function _doRoleOperations()
+    protected function _doRoleOperations(): void
     {
-    } // function _doRoleOperations
+    }
 
-    /**
-     * Method for redefine in child class
-     * Method allows you to do unconditional transfer before current block has been created
-     */
-    protected function _transferor()
+    protected function _transferor(): void
     {
-    } // function _transferor
+    }
 
-    /**
-     * Method for redefine in child class
-     * Method if run after construct operation
-     */
-    protected function _postCreate()
+    protected function _postCreate(): void
     {
-    } // function _postCreate
+    }
 
-    /**
-     * Method for redefine in child class
-     * Method if run before output-view operation
-     */
-    protected function _preOutput()
+    protected function _preOutput(): void
     {
-    } // function _preOutput
+    }
 
-    /**
-     * Set root-block parameters
-     * @param \fan\core\block\root\html $oRoot
-     * @param array $aRootKeys
-     * @return \fan\core\block\base
-     */
-    protected function _setRootBlockParameters(\fan\core\block\base $oRoot = null, $aRootKeys = array())
+    protected function _setRootBlockParameters(?\fan\core\block\base $root = null, array $rootKeys = []): static
     {
-        if (empty($oRoot)) {
-            $oRoot  = $this->_getBlock('root');
+        if (empty($root)) {
+            $root  = $this->_getBlock('root');
         }
-        if (!$aRootKeys) {
-            $aRootKeys = array(
+        if (!$rootKeys) {
+            $rootKeys = [
                 'externalCss' => 'setExternalCss',
                 'embedCss'    => 'setEmbedCssByMeta',
-                'externalJS'  => 'setExternalJs',
-            );
-        }
+            'externalJS'  => 'setExternalJs',
+        ];
+    }
 
-        if(isset($this->aMeta['meta_tag'])) {
-            foreach ($this->aMeta['meta_tag'] as $v) {
-                $oRoot->setMetaTag($v);
+        if (isset($this->meta['meta_tag'])) {
+            foreach ($this->meta['meta_tag'] as $v) {
+                $root->setMetaTag($v);
             }
         }
-        foreach ($aRootKeys as $k => $m) {
-            if(isset($this->aMeta[$k])) {
-                $oRoot->$m($this->aMeta[$k]);
+        foreach ($rootKeys as $k => $m) {
+            if (isset($this->meta[$k])) {
+                $value = $this->meta[$k];
+                $root->$m(is_object($value) && method_exists($value, 'toArray') ? $value->toArray() : $value);
             }
         }
-        if(isset($this->aMeta['embedJS'])) {
-            foreach ($this->aMeta['embedJS'] as $sPos => $v1) {
+        if (isset($this->meta['embedJS'])) {
+            foreach ($this->meta['embedJS'] as $pos => $v1) {
                 if (is_array($v1) || is_object($v1) && $v1 instanceof \fan\core\base\meta\row) {
                     foreach ($v1 as $v2) {
-                        $oRoot->setEmbedJs($v2, $sPos);
+                        $root->setEmbedJs($v2, $pos);
                     }
                 } elseif (is_string($v1)) {
-                    $oRoot->setEmbedJs($v1, $sPos);
+                    $root->setEmbedJs($v1, $pos);
                 }
             }
         }
         return $this;
-    } // function _setRootBlockParameters
+    }
 
-    /**
-     * Set Template Variables By Meta-data
-     * @param array $aTplVars
-     * @return \fan\core\block\base
-     */
-    protected function _setTplVarsByMeta($aTplVars)
+    protected function _setTplVarsByMeta(array|\fan\core\base\meta\row $tplVars): static
     {
-        foreach ($aTplVars as $k => $v) {
+        foreach ($tplVars as $k => $v) {
             $this->view->set($k, is_object($v) && method_exists($v, 'toArray') ? $v->toArray() : $v);
         }
         return $this;
-    } // function _setTplVarsByMeta
+    }
 
     /**
-     * Set Template of block
-     * @param string $sTemplateName
      * @throws \fan\core\exception\block\fatal
      */
-    protected function _setTemplate($sTemplateName = '')
+    protected function _setTemplate(string $templateName = ''): static
     {
-        $aPaths    = service('reflector')->getParentPaths($this);
-        $aSuffixes = $this->_getTplSuffixes();
+        $paths    = service('reflector')->getParentPaths($this);
+        $suffixes = $this->_getTplSuffixes();
 
         // If template-name isn't defined - try to get it from the Meta
-        if (!$sTemplateName) {
-            $sTemplateName = $this->getMeta('template');
+        if (!$templateName) {
+            $templateName = $this->getMeta('template');
         }
         // If template-name is defined - check and set it
-        if ($sTemplateName) {
+        if ($templateName) {
             // If Template Name is set as full path
-            if ($this->_checkTemplate('', \bootstrap::parsePath($sTemplateName), $aSuffixes)) {
+            if ($this->_checkTemplate('', \bootstrap::parsePath($templateName), $suffixes)) {
                 return $this;
             }
 
             // If Template Name is set as base name (concat with block path)
-            reset($aPaths);
-            if ($this->_checkTemplate(current($aPaths), $sTemplateName, $aSuffixes)) {
+            reset($paths);
+            if ($this->_checkTemplate(current($paths), $templateName, $suffixes)) {
                 return $this;
             }
 
             // Throw exception if defined template-name incorrect
-            throw new fatalException($this, 'Incorrect template name "' . $sTemplateName . '"');
+            throw new fatalException($this, 'Incorrect template name "' . $templateName . '"');
         }
 
         // Try to find template by block-name
-        foreach ($aPaths as $sClass => $sPath) {
-            if ($this->_checkTemplate($sPath, get_class_name($sClass), $aSuffixes)) {
+        foreach ($paths as $class => $path) {
+            if ($this->_checkTemplate($path, get_class_name($class), $suffixes)) {
                 return $this;
             }
         }
         return $this;
-    } // function setTemplate
+    }
 
-    /**
-     * Get array of Suffixes for Template file name
-     * @param string $sSeparator
-     * @return array
-     */
-    protected function _getTplSuffixes($sSeparator = '_')
+    protected function _getTplSuffixes(string $separator = '_'): array
     {
-        $aSuffixes = array('');
+        $suffixes = [''];
         if ($this->getMeta('useMultiLanguage')) {
-            $sLng = service('locale')->getLanguage();
-            if (!empty($sLng)) {
-                array_unshift($aSuffixes, $sSeparator . $sLng);
+            $lng = $this->containerService('locale')->getLanguage();
+            if (!empty($lng)) {
+                array_unshift($suffixes, $separator . $lng);
             }
         }
-        return $aSuffixes;
-    } // function _getTplSuffixes
+        return $suffixes;
+    }
 
-    /**
-     * Check is available Template-file
-     * @param string $sBlockPath
-     * @param string $sTemplateName
-     * @param array $aSuffixes
-     * @param string $sExtension
-     * @return boolean
-     */
-    protected function _checkTemplate($sBlockPath, $sTemplateName, $aSuffixes, $sExtension = 'tpl')
+    protected function _checkTemplate(string $blockPath, string $templateName, array $suffixes, string $extension = 'tpl'): bool
     {
-        $sBlockPath = empty($sBlockPath) ? '' : dirname($sBlockPath) . '/';
-        $sExtension = '.' . $sExtension;
+        $blockPath = empty($blockPath) ? '' : dirname($blockPath) . '/';
+        $extension = '.' . $extension;
 
-        $nExtLen = -strlen($sExtension);
-        if (substr($sTemplateName, $nExtLen) == $sExtension) {
-            $sTemplateName = substr($sTemplateName, 0, $nExtLen);
+        $extLen = -strlen($extension);
+        if (substr($templateName, $extLen) === $extension) {
+            $templateName = substr($templateName, 0, $extLen);
         }
 
-        foreach ($aSuffixes as $v) {
-            $sTemplate = $sBlockPath . $sTemplateName . $v . $sExtension;
-            if ($this->setTemplate($sTemplate, false)) {
+        foreach ($suffixes as $v) {
+            $template = $blockPath . $templateName . $v . $extension;
+            if ($this->setTemplate($template, false)) {
                 return true;
             }
         }
         return false;
-    } // function _checkTemplate
+    }
 
     /**
-     * Set Embedded Blocks
-     * @return \fan\core\block\base
      * @throws \fan\core\exception\block\fatal
      */
-    protected function _setEmbeddedBlocks()
+    protected function _setEmbeddedBlocks(): static
     {
-        $aEmbeddedBlocks = $this->getMeta('embeddedBlocks');
-        if (!empty($aEmbeddedBlocks)) {
-            $aSrcMeta = $this->oMetaMaker->getMixSrcMeta();
-            foreach ($aEmbeddedBlocks as $k => $v) {
-                if(!is_null($v)) {
-                    $aContainerMeta = array(
-                        'common' => $aSrcMeta['common'],
-                        'own'    => isset($aSrcMeta[$k]) && $this->blockName != 'main' ? $aSrcMeta[$k] : array(),
-                    );
-                    if ($v == '{MAIN}') {
-                        $oMain = $this->oTab->getMainBlock();
-                        if (empty($oMain)) {
+        $embeddedBlocks = $this->getMeta('embeddedBlocks');
+        if (!empty($embeddedBlocks)) {
+            $srcMeta = $this->metaMaker->getMixSrcMeta();
+            foreach ($embeddedBlocks as $k => $v) {
+                if (!is_null($v)) {
+                    $containerMeta = [
+                        'common' => $srcMeta['common'],
+                        'own'    => isset($srcMeta[$k]) && $this->blockName !== 'main' ? $srcMeta[$k] : [],
+                    ];
+                    if ((string)$v === '{MAIN}') {
+                        $main = $this->tab->getMainBlock();
+                        if (empty($main)) {
                             throw new fatalException($this, 'Main Block isn\'t set.');
                         } else {
-                            $this->aEmbeddedBlocks[$k] = $oMain;
-                            $oMain->finishConstruct($this, $aContainerMeta);
+                            $this->embeddedBlocks[$k] = $main;
+                            $main->finishConstruct($this, $containerMeta);
                         }
                     } else{
-                        $sClass = $this->_parseClassName($v);
-                        if ($sClass) {
-                            $this->aEmbeddedBlocks[$k] = new $sClass($k, $this->oTab, $this, $aContainerMeta, true);
-                            $this->oTab->setCurrentBlock($this);
+                        $class = $this->_parseClassName($v);
+                        if ($class) {
+                            $this->embeddedBlocks[$k] = new $class($k, $this->tab, $this, $containerMeta, true);
+                            $this->tab->setCurrentBlock($this);
                         }
                     }
                 }
             }
         }
         return $this;
-    } // function _setEmbeddedBlocks
+    }
 
-    /**
-     * Get other Blocks
-     * @param sting $sBlockName - name of block
-     * @param boolean $bAllowException - Allow Exception if name of block is incorrect
-     * @return \fan\core\block\base
-     */
-    protected function _getBlock($sBlockName, $bAllowException = true)
+    protected function _getBlock(string $blockName, bool $allowException = true): ?object
     {
-        return $this->oTab->getTabBlock($sBlockName, $bAllowException);
-    } // function _getBlock
+        return $this->tab->getTabBlock($blockName, $allowException);
+    }
 
     /**
-     * Make Exception of Block
-     * @param sting $sLogErrMsg
-     * @param sting $sType
-     * @param sting $sExceptionDbOper
-     * @param numeric $nCode
-     * @param \Exception $oPrevious
      * @throws \fan\core\exception\block\local
      */
-    protected function _makeBlockException($sLogErrMsg, $sType = 'local', $sExceptionDbOper = null, $nCode = E_USER_NOTICE, $oPrevious = null)
+    protected function _makeBlockException(string $logErrMsg, string $type = 'local', ?string $exceptionDbOper = null, int $code = E_USER_NOTICE, ?\Exception $previous = null): never
     {
-        $sClass = '\fan\project\exception\block\\' . $sType;
-        if (!class_exists($sClass)) {
-            $sClass = '\fan\project\exception\block\fatal';
+        $class = '\fan\project\exception\block\\' . $type;
+        if (!class_exists($class)) {
+            $class = '\fan\project\exception\block\fatal';
         }
-        $this->sExceptionDbOper = empty($sExceptionDbOper) ? ($sClass == '\fan\project\exception\block\local' ? 'nothing' : 'rollback' ) : $sExceptionDbOper;
-        throw new $sClass($this, $sLogErrMsg, $nCode, $oPrevious);
-    } // function _makeBlockException
+        $this->exceptionDbOper = empty($exceptionDbOper) ? ($class === '\fan\project\exception\block\local' ? 'nothing' : 'rollback' ) : $exceptionDbOper;
+        throw new $class($this, $logErrMsg, $code, $previous);
+    }
 
     /**
-     * Get other Blocks
-     * @param sting $sBlockPath - name of block
-     * @param boolean $bAllowException - Allow Exception if name of block is incorrect
      * @throws \fan\core\exception\block\fatal
-     * @return string
      */
-    protected function _parseClassName($sBlockPath, $bAllowException = true)
+    protected function _parseClassName(string $blockPath, bool $allowException = true): ?string
     {
-        $sClass = $this->oTab->loadBlock($sBlockPath);
-        if (empty($sClass) && $bAllowException) {
-            throw new fatalException($this, 'Unknown block path "' . $sBlockPath . '" for Embedded Block');
+        $class = $this->tab->loadBlock($blockPath);
+        if (empty($class) && $allowException) {
+            throw new fatalException($this, 'Unknown block path "' . $blockPath . '" for Embedded Block');
         }
-        return $sClass;
-    } // function _parseClassName
+        return $class;
+    }
 
-    /**
-     * Set cache consider role
-     * @param mixed $mRole
-     */
-    protected function _setCacheRole($mRole)
+    protected function _setCacheRole(mixed $role): static
     {
-        if (is_array($mRole)) {
-            foreach ($mRole as $v) {
+        if (is_array($role)) {
+            foreach ($role as $v) {
                 $this->_setCacheRole($v);
             }
             return $this;
         }
 /*
 //ToDo: Redesign it
-        $aCacheRole = $this->getMeta(array('cache','considerRole'), array(), true);
+        $cacheRole = $this->getMeta(['cache','considerRole'], [], true);
 
-        if(!is_array($aCacheRole)) {
-            $aCacheRole = array($mRole);
-        } elseif (!in_array($mRole, $aCacheRole)) {
-            $aCacheRole[] = $mRole;
+        if(!is_array($cacheRole)) {
+            $cacheRole = [$role];
+        } elseif (!in_array($role, $cacheRole)) {
+            $cacheRole[] = $role;
         }
  */
         return $this;
-    } // function _setCacheRole
+    }
 
-    /**
-     * Call Ordinary Delegate
-     * @param type $oObject
-     * @param type $sMethod
-     * @param type $aArgs
-     * @return type
-     */
-    protected function _callOrdinaryDelegate($oObject, $sMethod, $aArgs)
+    protected function _callOrdinaryDelegate(object $object, string $method, array $args): mixed
     {
-        return call_user_func_array(array($oObject, $sMethod), empty($aArgs) ? array() : $aArgs);
-    } // function _callOrdinaryDelegate
+        return call_user_func_array([$object, $method], empty($args) ? [] : $args);
+    }
 
-    /**
-     * Call IdentIfied Delegate
-     * @param type $oObject
-     * @param type $sMethod
-     * @param array $aArgs
-     * @return type
-     */
-    protected function _callIdentifiedDelegate($oObject, $sMethod, $aArgs)
+    protected function _callIdentifiedDelegate(object $object, string $method, array $args): mixed
     {
-        if (empty($aArgs)) {
-            $aArgs = array();
+        if (empty($args)) {
+            $args = [];
         }
-        array_unshift($aArgs, $this);
-        return call_user_func_array(array($oObject, $sMethod), $aArgs);
-    } // function _callIdentifiedDelegate
+        array_unshift($args, $this);
+        return call_user_func_array([$object, $method], $args);
+    }
 
     // ======== The magic methods ======== \\
 
-    public function __get($sKey)
+    /**
+     * Handles dynamic property reads for this current component.
+     */
+    public function __get(string $key): mixed
     {
-        $sMethod = 'get' . ucfirst($sKey);
-        if (method_exists($this, $sMethod)) {
-            return $this->$sMethod();
+        $method = 'get' . ucfirst($key);
+        if (method_exists($this, $method)) {
+            return $this->$method();
         }
-        trigger_error('Get Undefined property "' . $sKey . '" in block "' . $this->sBlockName . '", class "' . get_class($this) . '".', E_USER_NOTICE);
-        return null;
+        throw new \OutOfBoundsException('Get Undefined property "' . $key . '" in block "' . $this->blockName . '", class "' . get_class($this) . '".');
     }
 
-    /**
-     * Call to unset tab method
-     * @param string $sMethod method name
-     * @param array $aArgs arguments
-     * @return mixed Value return by engine
-     */
-    public function __call($sMethod, $aArgs)
+    public function __call(string $method, array $args): mixed
     {
-        foreach ($this->aDelegateRule as $sType => $aMethods) {
-            foreach ($aMethods as $sName => $aParam) {
-                if ($sMethod == $sName) {
-                    if (substr($sName, 0, 1) == '_') {
+        foreach ($this->delegateRule as $type => $methods) {
+            foreach ($methods as $name => $param) {
+                if ($method === $name) {
+                    if (substr($name, 0, 1) === '_') {
                         // ToDo: Check caller there - must be === $this, else "break";
                     }
 
-                    $sCallMethod = array_pop($aParam);
-                    $sObjectName = array_shift($aParam);
-                    $oObject = $sObjectName == 'this' ? $this : ($sObjectName == 'tab' ? $this->getTab() : service($sObjectName));
-                    foreach ($aParam as $v) {
-                        $oObject = call_user_func(array($oObject, $v));
+                    $callMethod = array_pop($param);
+                    $objectName = array_shift($param);
+                    $object = $objectName === 'this' ? $this : ($objectName === 'tab' ? $this->getTab() : $this->containerService($objectName));
+                    foreach ($param as $v) {
+                        $object = call_user_func([$object, $v]);
                     }
 
-                    $sDelegateMethod = '_call' . ucfirst($sType) . 'Delegate';
-                    return $this->$sDelegateMethod($oObject, $sCallMethod, $aArgs);
+                    $delegateMethod = '_call' . ucfirst($type) . 'Delegate';
+                    return $this->$delegateMethod($object, $callMethod, $args);
                 }
             }
         }
-        $aTrace = debug_backtrace();
-        trigger_error(
-                'Incorrect call unknown method "<b>' . $sMethod . '</b>" ' .
-                'in block "<b>'    . $this->sBlockName  . '</b>", ' .
+        $trace = debug_backtrace();
+        throw new \BadMethodCallException(
+                'Incorrect call unknown method "<b>' . $method . '</b>" ' .
+                'in block "<b>'    . $this->blockName  . '</b>", ' .
                 'class "<nobr><b>' . get_class($this)   . '</b></nobr>",<br />' .
-                (isset($aTrace[1]['file']) ? 'file "<nobr><b>'  . $aTrace[1]['file'] . '</b></nobr>", ' : 'No file') .
-                (isset($aTrace[1]['line']) ? 'line <b>'         . $aTrace[1]['line'] . '</b>.' : ''),
-                E_USER_ERROR
+                (isset($trace[1]['file']) ? 'file "<nobr><b>'  . $trace[1]['file'] . '</b></nobr>", ' : 'No file') .
+                (isset($trace[1]['line']) ? 'line <b>'         . $trace[1]['line'] . '</b>.' : '')
         );
-    } // function __call
+    }
     // ======== Required Interface methods ======== \\
-} // class \fan\core\block\base
-?>
+}

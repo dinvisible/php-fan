@@ -1,4 +1,8 @@
-<?php namespace fan\project\block;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block;
 /**
  * Base abstract all type of block
  *
@@ -18,5 +22,4 @@
  */
 abstract class base extends \fan\core\block\base
 {
-} // class \fan\project\block\base
-?>
+}

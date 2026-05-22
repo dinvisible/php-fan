@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 use \fan\core\service\config\row as row;
 use fan\project\exception\service\fatal as fatalException;
 /**
@@ -18,385 +21,281 @@ use fan\project\exception\service\fatal as fatalException;
  */
 final class config extends \fan\core\base\service\multi
 {
-    /**
-     * @var array Service's Instances
-     */
-    protected static $aInstances = array();
+    protected static array $instances = [];
     /**
      * Service's Egines by file types
      * @var array
      */
-    protected static $aEgines = array();
+    protected static array $egines = [];
     /**
      * Instance of Cache servise
      * @var \fan\core\service\cache
      */
-    protected static $oCache = null;
+    protected static ?object $cache = null;
 
     /**
      * Config of this Service
      * @var \fan\core\service\config\row
      */
-    private static $oThisConf = null;
+    private static ?object $thisConf = null;
     /**
      * List of Application-depended configuration files
      * @var array
      */
-    private static $aAppDepended = array();
+    private static array $appDepended = [];
 
-    /**
-     * @var string Type of configuration data
-     */
-    private $sConfigType = null;
-    /**
-     * @var string Type of Source file (ini, xml, yaml, etc)
-     */
-    private $sSourceType = null;
+    private ?string $configType = null;
+    private ?string $sourceType = null;
 
     /**
      * @var \fan\core\service\config\row Row of configuration data
      */
-    private $oConfData;
+    private ?object $confData = null;
 
     /**
-     * Constructor of Service config
-     * @param string $sConfigType
-     * @param string $sSourceType
      * @throws \fan\project\exception\service\fatal
      */
-    protected function __construct($sConfigType, $sSourceType)
+    protected function __construct(string $configType, string $sourceType)
     {
-        $this->sConfigType = $sConfigType;
-        $this->sSourceType = $sSourceType;
+        $this->configType = $configType;
+        $this->sourceType = $sourceType;
 
-        self::$aInstances[$sConfigType] = $this;
+        self::$instances[$configType] = $this;
 
-        $sMethod = $sConfigType == 'service' ? '_initServiceConfig' : '_initOtherConfig';
-        $this->$sMethod();
+        $method = $configType === 'service' ? '_initServiceConfig' : '_initOtherConfig';
+        $this->$method();
 
         parent::__construct();
-    } // function __construct
+    }
 
     // ======== Static methods ======== \\
-    /**
-     * Get Service's instance of current service by $sConfigType
-     * @param string $sConfigType Config Type - by default = 'service'
-     * @param string $sSourceType Type of Source - by default = 'ini'
-     * @return config
-     */
-    public static function instance($sConfigType = 'service', $sSourceType = 'ini') {
-        if (!isset(self::$aInstances[$sConfigType])) {
-            new self($sConfigType, $sSourceType);
+    public static function instance(string $configType = 'service', string $sourceType = 'ini'): static {
+        if (!isset(self::$instances[$configType])) {
+            new self($configType, $sourceType);
         }
 
-        return self::$aInstances[$sConfigType];
-    } // function instance
+        return self::$instances[$configType];
+    }
 
-    /**
-     * Merge all configuration file by application
-     * @param string $sAppName
-     */
-    public static function mergeByApp($sAppName)
+    public static function mergeByApp(string $appName): void
     {
-        foreach (self::$aAppDepended as $k => $v) {
-            $sConfFile = str_replace('{APP_NAME}', $sAppName, $v);
-            self::instance($k)->_mergeConfig($sConfFile, true, false);
+        foreach (self::$appDepended as $k => $v) {
+            $confFile = str_replace('{APP_NAME}', $appName, $v);
+            self::instance($k)->_mergeConfig($confFile, true, false);
         }
-    } // function mergeByApp
+    }
 
     // ======== Main Interface methods ======== \\
-    /**
-     * Get configuration data for $sName
-     * @param string $sName - name of section of config-file
-     * @param string|array $mKey - key of variable
-     * @return array
-     */
-    public function get($sName, $mKey = null)
+    public function get(string $name, string|array|null $key = null): mixed
     {
-        $oConf = $this->oConfData[$sName];
-        return empty($oConf) ? null : (is_null($mKey) ? $oConf : $oConf->get($mKey));
-    } // function get
+        $conf = $this->confData[$name];
+        return empty($conf) ? null : (is_null($key) ? $conf : $conf->get($key));
+    }
 
-    /**
-     * Get source configuration data for $sName
-     * @param string $sName
-     * @param mixed $mKey - key of variable
-     * @return array
-     */
-    public function getSrc($sName, $mKey = null)
+    public function getSrc(string $name, mixed $key = null): mixed
     {
-        $oConf = $this->oConfData[$sName];
-        if (empty($oConf)) {
+        $conf = $this->confData[$name];
+        if (empty($conf)) {
             return null;
         }
-        if (is_null($mKey)) {
-            return $oConf->getSources();
+        if (is_null($key)) {
+            return $conf->getSources();
         }
-        $oSubConf = $oConf->get($mKey);
-        return empty($oSubConf) ? null : $oSubConf->getSources();
-    } // function getSrc
+        $subConf = $conf->get($key);
+        return empty($subConf) ? null : $subConf->getSources();
+    }
 
     /**
-     * Set configuration data for $sName
-     * @param string $sName
-     * @param string $mKey Key of variable
-     * @param string $mValue Value of variable
-     * @param boolean $bRewriteExisting
-     * @return \fan\core\service\config
+     * @param string $value Value that should be applied or transformed.
      */
-    public function set($sName, $mKey, $mValue, $bRewriteExisting = true)
+    public function set(string $name, string $key, string $value, bool $rewriteExisting = true): static
     {
-        $oConf = $this->oConfData[$sName];
-        if (empty($oConf)) {
-            $oConf = $this->oConfData->set($sName, array());
+        $conf = $this->confData[$name];
+        if (empty($conf)) {
+            $conf = $this->confData->set($name, []);
         }
-        $oConf->set($mKey, $mValue, $bRewriteExisting, true);
+        $conf->set($key, $value, $rewriteExisting, true);
         return $this;
-    } // function set
+    }
 
-    /**
-     * Merge new config data with previous values
-     * @param array|\fan\core\service\config\row $aData
-     * @param booulean $bPriority
-     * @return \fan\core\service\config
-     */
-    public function merge($aData, $bPriority = true)
+    public function merge(array|\fan\core\service\config\row $data, bool $priority = true): static
     {
-        if (!is_array($aData) && !$this->_isRow($aData)) {
+        if (!is_array($data) && !$this->_isRow($data)) {
             throw new fatalException($this, 'Incorrect data for merge configs');
         }
-        if (!empty($aData)) {
-            $this->oConfData->mergeData($aData, $bPriority);
+        if (!empty($data)) {
+            $this->confData->mergeData($data, $priority);
         }
         return $this;
-    } // function merge
+    }
 
-    /**
-     * Reset Data applicaiton's config
-     * @param string $sName Service's name
-     * @param mixed $mKey Key of parameter
-     * @return \fan\core\service\config
-     */
-    public function reset($sName = null, $mKey = null)
+    public function reset(mixed $name = null, mixed $key = null): static
     {
-        if (is_null($sName)) {
-            $this->oConfData->reset(null);
+        if (is_null($name)) {
+            $this->confData->reset(null);
         } else {
-            $oConf = $this->oConfData[$sName];
-            if ($this->_isRow($oConf)) {
-                if (is_array($mKey)) {
-                    $sKey = array_pop($mKey);
-                    if (!empty($mKey)) {
-                        $oConf = $oConf->get($mKey);
+            $conf = $this->confData[$name];
+            if ($this->_isRow($conf)) {
+                if (is_array($key)) {
+                    $key = array_pop($key);
+                    if (!empty($key)) {
+                        $conf = $conf->get($key);
                     }
-                    if ($this->_isRow($oConf)) {
-                        $oConf->reset($sKey);
+                    if ($this->_isRow($conf)) {
+                        $conf->reset($key);
                     }
                 } else {
-                    $oConf->reset($mKey);
+                    $conf->reset($key);
                 }
             }
         }
         return $this;
-    } // function reset
+    }
 
-    /**
-     * Get Type of current Config
-     * @return string
-     */
-    public function getConfigType()
+    public function getConfigType(): ?string
     {
-        return $this->sConfigType;
-    } // function getConfigType
+        return $this->configType;
+    }
 
-    /**
-     * Get Service Config by Instance of Service
-     * @param \fan\core\base\service $oService
-     * @return \fan\core\service\config\row
-     */
-    public function getServiceConfig(\fan\core\base\service $oService)
+    public function getServiceConfig(\fan\core\base\service $service): row
     {
-        $sName = get_class_name($oService);
-        if (empty($this->oConfData)) {
-            throw new fatalException($this, 'Data row isn\'t set for config "' . $this->sConfigType . '"');
+        $name = get_class_name($service);
+        if (empty($this->confData)) {
+            throw new fatalException($this, 'Data row isn\'t set for config "' . $this->configType . '"');
         }
-        if (!$this->oConfData[$sName]) {
-            $this->oConfData->set($sName, array());
+        if (!$this->confData[$name]) {
+            $this->confData->set($name, []);
             /*
             // ToDo: Check code above
-            $this->oConfData[$sName] = new \fan\project\service\config\row(array(), $sName, $this->oConfData);
-            $this->oConfData[$sName]->setFacade($this);
+            $this->confData[$name] = new \fan\project\service\config\row([], $name, $this->confData);
+            $this->confData[$name]->setFacade($this);
              */
         }
-        $this->oConfData[$sName]->setServiceOwner($oService);
-        return $this->oConfData[$sName];
-    } // function getServiceConfig
+        $this->confData[$name]->setServiceOwner($service);
+        return $this->confData[$name];
+    }
     /**
-     * Get configs of plain/cli controllers
-     * @param object $oCtrl
-     * @param string $sName
-     * @return \fan\core\service\config\row
      * @throws \fan\core\exception\error500
      */
-    public function getControllerConfig($oCtrl, $sName)
+    public function getControllerConfig(mixed $ctrl, string $name): row
     {
-        if (empty($this->oConfData)) {
-            throw new fatalException($this, 'Data row isn\'t set for config "' . $sName . '"');
+        if (empty($this->confData)) {
+            throw new fatalException($this, 'Data row isn\'t set for config "' . $name . '"');
         }
-        if (!$this->oConfData[$sName]) {
-            $this->oConfData->set($sName, array());
+        if (!$this->confData[$name]) {
+            $this->confData->set($name, []);
         }
-        if (is_object($oCtrl)) {
-            $this->oConfData[$sName]->setPlainOwner($oCtrl, $sName);
+        if (is_object($ctrl)) {
+            $this->confData[$name]->setPlainOwner($ctrl, $name);
         }
-        return $this->oConfData[$sName];
-    } // function getControllerConfig
-    /**
-     * Get Entity Config by Instance of Entity
-     * @param \fan\core\base\model\entity $oEntity
-     * @return \fan\core\service\config\row
-     */
-    public function getEntityConfig(\fan\core\base\model\entity $oEntity, $sName = null)
+        return $this->confData[$name];
+    }
+    public function getEntityConfig(\fan\core\base\model\entity $entity, ?string $name = null): row
     {
-        if (is_null($sName)) {
-            $sName = $oEntity->getTableName();
+        if (is_null($name)) {
+            $name = $entity->getTableName();
         }
 
-        $oEttConf    = $this->oConfData['entity'];
-        $oCommonConf = $this->oConfData['common'];
+        $ettConf    = $this->confData['entity'];
+        $commonConf = $this->confData['common'];
 
-        if (is_null($oEttConf->get($sName))) {
-            $oEttConf->set($sName, array());
+        if (is_null($ettConf->get($name))) {
+            $ettConf->set($name, []);
         }
-        $oEttConf[$sName]->setEntityOwner($oEntity, $sName);
-        if (!empty($oCommonConf)) {
-            $oEttConf[$sName]->mergeData($oCommonConf, false);
+        $ettConf[$name]->setEntityOwner($entity, $name);
+        if (!empty($commonConf)) {
+            $ettConf[$name]->mergeData($commonConf, false);
         }
-        return $oEttConf[$sName];
-    } // function getEntityConfig
+        return $ettConf[$name];
+    }
 
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Init Service Config
-     * @return config
-     */
-    protected function _initServiceConfig()
+    protected function _initServiceConfig(): static
     {
-        self::$oCache    = \fan\project\service\cache::configInstance();
+        self::$cache    = \fan\project\service\cache::configInstance();
 
-        $this->oConfData = new row($this->_getData('service'));
-        $this->oConfData->setFacade($this);
+        $this->confData = new row($this->_getData('service'));
+        $this->confData->setFacade($this);
 
-        self::$oThisConf = $this->getServiceConfig($this);
-        $this->oConfig   = self::$oThisConf;
+        self::$thisConf = $this->getServiceConfig($this);
+        $this->config   = self::$thisConf;
 
-        if ($this->oConfig['app_file']) {
-            self::$aAppDepended = $this->oConfig['app_file']->toArray();
+        if ($this->config['app_file']) {
+            self::$appDepended = $this->config['app_file']->toArray();
         }
-        $this->_subscribeForService('application', 'setAppName', array(get_class($this), 'mergeByApp'));
+        $this->_subscribeForService('application', 'setAppName', [get_class($this), 'mergeByApp']);
 
         return $this;
-    } // function _initServiceConfig
+    }
 
-    /**
-     * Init Config Other type
-     * @return config
-     */
-    protected function _initOtherConfig()
+    protected function _initOtherConfig(): static
     {
-        if (empty(self::$oThisConf)) {
+        if (empty(self::$thisConf)) {
             config::instance('service');
         }
-        $this->oConfig   = clone self::$oThisConf;
+        $this->config   = clone self::$thisConf;
 
-        $sFileName       = $this->getConfig(array('file', $this->sConfigType), $this->sConfigType);
-        $this->oConfData = new row($this->_getData($sFileName));
-        $this->oConfData->setFacade($this);
+        $fileName       = $this->getConfig(['file', $this->configType], $this->configType);
+        $this->confData = new row($this->_getData($fileName));
+        $this->confData->setFacade($this);
 
         return $this;
-    } // function _initOtherConfig
+    }
 
-    /**
-     * Get Data from cache or source file
-     * @param string $sFileName
-     * @param boolean $bCheckExist
-     * @return array
-     */
-    protected function _getData($sFileName, $bCheckExist = true)
+    protected function _getData(string $fileName, bool $checkExist = true): mixed
     {
-        $oEngine   = $this->_getConfigEngine();
-        $sFilePath = $oEngine->getFilePath($sFileName, $bCheckExist);
-        if (!empty(self::$oCache)) {
-            $aData = self::$oCache->get($sFileName);
-            if (!empty($aData) && self::$oCache->checkSourceFile($sFileName, $sFilePath)) {
-                return $aData;
+        $engine   = $this->_getConfigEngine();
+        $filePath = $engine->getFilePath($fileName, $checkExist);
+        if (!empty(self::$cache)) {
+            $data = self::$cache->get($fileName);
+            if (!empty($data) && self::$cache->checkSourceFile($fileName, $filePath)) {
+                return $data;
             }
         }
 
-        $aData = $oEngine->loadFile($sFilePath, $this->sConfigType);
-        if (!empty($aData) && !empty(self::$oCache)) {
-            self::$oCache->set($sFileName, $aData);
-            self::$oCache->setExtraMeta($sFileName, 'file_size', filesize($sFilePath));
+        $data = $engine->loadFile($filePath, $this->configType);
+        if (!empty($data) && !empty(self::$cache)) {
+            self::$cache->set($fileName, $data);
+            self::$cache->setExtraMeta($fileName, 'file_size', filesize($filePath));
         }
 
-        return $aData;
-    } // function _getData
+        return $data;
+    }
 
-    /**
-     * Set service's Config
-     * @return \fan\core\service\config
-     */
-    protected function _setConfig()
+    protected function _setConfig(): static
     {
         return $this;
-    } // function _setConfig
+    }
 
-    /**
-     * Get Config Engine
-     * @return \fan\core\service\config\ini
-     */
-    protected function _getConfigEngine()
+    protected function _getConfigEngine(): \fan\core\service\config\base
     {
-        $sType = $this->sSourceType;
-        if (!isset(self::$aEgines[$sType])) {
-            $oEngine = parent::_getEngine($sType, true);
-            if (empty($oEngine)) {
+        $type = $this->sourceType;
+        if (!isset(self::$egines[$type])) {
+            $engine = parent::_getEngine($type, true);
+            if (empty($engine)) {
                 throw new \fan\project\exception\service\fatal($this, 'Unknown engine type!');
             }
-            self::$aEgines[$sType] = $oEngine;
-            $oEngine->setDirPath(
+            self::$egines[$type] = $engine;
+            $engine->setDirPath(
                 \bootstrap::getGlobalPath('config_source', '{PROJECT_DIR}/conf')
             );
         }
-        return self::$aEgines[$sType];
-    } // function _getConfigEngine
+        return self::$egines[$type];
+    }
 
-    /**
-     * Load Applicaiton's config and merge it with global configuration
-     * @param string $sFileName Configuration file name
-     * @param string $bResetConf Allow to reset configuration file before marging
-     * @param string $bCheckExist Check - is file name
-     * @return \fan\core\service\config
-     */
-    protected function _mergeConfig($sFileName, $bResetConf, $bCheckExist)
+    protected function _mergeConfig(string $fileName, bool $resetConf, bool $checkExist): static
     {
-        if ($bResetConf) {
+        if ($resetConf) {
             $this->reset();
         }
-        $this->oConfData->mergeData($this->_getData($sFileName, $bCheckExist), $bResetConf);
+        $this->confData->mergeData($this->_getData($fileName, $checkExist), $resetConf);
         return $this;
-    } // function _mergeConfig
+    }
 
-    /**
-     * Check is instance of row
-     * @param \fan\core\service\config\row $oObj
-     * @return boolean
-     */
-    protected function _isRow($oObj)
+    protected function _isRow(mixed $obj): bool
     {
-        return is_object($oObj) && $oObj instanceof row;
-    } // function _isRow
+        return is_object($obj) && $obj instanceof row;
+    }
 
-} // class \fan\core\service\config
-?>
+}

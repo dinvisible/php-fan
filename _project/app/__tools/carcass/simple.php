@@ -1,4 +1,8 @@
-<?php namespace fan\app\__tools\carcass;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__tools\carcass;
 /**
  * empty_viewer_carcass block
  *
@@ -16,5 +20,4 @@
  */
 class simple extends \fan\project\block\carcass\common
 {
-} // class \fan\app\__tools\carcass\simple
-?>
+}

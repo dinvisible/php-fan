@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Description of header
@@ -34,62 +37,58 @@ class header extends \fan\core\base\service\single
      * Mapping of methods for send headers
      * @var array
      */
-    protected $aSendMethodMap = array(
-        'response'    => array('sendResponseType', 0),
-        'protocol'    => array('sendResponseType', 1),
+    protected array $sendMethodMap = [
+        'response'    => ['sendResponseType', 0],
+        'protocol'    => ['sendResponseType', 1],
 
-        'contentType' => array('sendContentType', 0),
-        'encoding'    => array('sendContentType', 1),
+        'contentType' => ['sendContentType', 0],
+        'encoding'    => ['sendContentType', 1],
 
-        'filename'    => array('sendFilename', 0),
-        'disposition' => array('sendFilename', 1),
+        'filename'    => ['sendFilename', 0],
+        'disposition' => ['sendFilename', 1],
 
-        'length'      => array('sendLength', 0),
-        'legthRange'  => array('sendLength', 1),
+        'length'      => ['sendLength', 0],
+        'legthRange'  => ['sendLength', 1],
 
-        'modified'    => array('sendTime', 0),
-        'expired'     => array('sendTime', 1),
+        'modified'    => ['sendTime', 0],
+        'expired'     => ['sendTime', 1],
 
-        'cacheLimit'  => array('sendCache', 0),
+        'cacheLimit'  => ['sendCache', 0],
 
-        //'' => array('', 0),
-    );
+        //'' => ['', 0],
+    ];
 
     /**
      * Mapping of special methods for set headers
      * @var array
      */
-    protected $aSetMethodMap = array(
+    protected array $setMethodMap = [
         'response' => 'setResponseType',
-    );
+    ];
 
     /**
      * If requested code isn't present there, they will be loaded automatically
      * @var array Frequently Response Codes
      */
-    protected $aResponseCodes = array(
+    protected array $responseCodes = [
         200 => 'OK',
         403 => 'Forbidden',
         404 => 'Not Found',
         500 => 'Internal Server Error',
-    );
+    ];
 
     /**
      * Stack of Headers ordered by MethodMap
      * @var array
      */
-    protected $aHeaderData = array();
+    protected array $headerData = [];
 
-    /**
-     * service's constructor
-     * @param boolean $bAllowIni
-     */
-    protected function __construct($bAllowIni = true)
+    protected function __construct(bool $allowIni = true)
     {
-        parent::__construct($bAllowIni);
+        parent::__construct($allowIni);
 
         $this->clearHeaders();
-    } // function __construct
+    }
 
     // ======== Static methods ======== \\
 
@@ -97,433 +96,316 @@ class header extends \fan\core\base\service\single
 
     // ------ Prepare of headers setting ------ \\
     /**
-     * Add header to stack
-     * @param string $sParam Parameter of Header
-     * @param string $sValue Value of Parameter
-     * @return \fan\core\service\header
+     * @param string $value Value that should be applied or transformed.
      */
-    public function addHeader($sParam, $sValue)
+    public function addHeader(string $param, mixed $value): static
     {
-        if (in_array($sParam, $this->aSetMethodMap)) {
-            $sMethod = $this->aSetMethodMap[$sParam];
-            $this->$sMethod($sValue);
+        if (in_array($param, $this->setMethodMap)) {
+            $method = $this->setMethodMap[$param];
+            $this->$method($value);
         } else {
-            $this->_setHeadStack($sParam, $sValue);
+            $this->_setHeadStack($param, $value);
         }
         return $this;
-    } // function addHeader
+    }
 
-    /**
-     * Set headers to stack
-     * @param array $aHeaders Name=>Parameters for call
-     * @return \fan\core\service\header
-     */
-    public function setHeaders(array $aHeaders)
+    public function setHeaders(array $headers): static
     {
         $this->clearHeaders();
-        foreach ($aHeaders as $k => $v) {
+        foreach ($headers as $k => $v) {
             $this->addHeader($k, $v);
         }
         return $this;
-    } // function setHeaders
+    }
 
-    /**
-     * Remove Parameter of Header from stack
-     * @param string $sParam
-     * @return \fan\core\service\header
-     */
-    public function removeHeader($sParam)
+    public function removeHeader(string $param): static
     {
-        unset($this->aHeaderData[$sParam]);
+        unset($this->headerData[$param]);
         return $this;
-    } // function removeHeader
+    }
 
-    /**
-     * Get header(s) from stack
-     * @param string $sParam
-     * @return array of stack data
-     */
-    public function getHeader($sParam = null)
+    public function getHeader(?string $param = null): mixed
     {
-        return empty($sParam) ? $this->aHeaderData : $this->aHeaderData[$sParam];
-    } // function getHeader
+        return empty($param) ? $this->headerData : $this->headerData[$param];
+    }
 
-    /**
-     * Output headers
-     * @return array - old stack data
-     */
-    public function sendHeaders()
+    public function sendHeaders(): array
     {
-        $sFileName = $nLineNum = null;
-        if (headers_sent($sFileName, $nLineNum)) {
-            trigger_error('Headers have been sent in "' . $sFileName . '" at the line ' . $nLineNum, E_USER_WARNING);
-            return null;
+        $fileName = $lineNum = null;
+        if (headers_sent($fileName, $lineNum)) {
+            throw new \RuntimeException('Headers have been sent in "' . $fileName . '" at the line ' . $lineNum);
         }
 
-        if (empty($this->aHeaderData['response'])) {
+        if (empty($this->headerData['response'])) {
             $this->setResponseType();
         }
 
         foreach ($this->_prepareFunctions() as $k => $v) {
-            $aArg = $this->_orderArguments($v);
-            call_user_func_array(array($this, $k), $aArg);
+            $arg = $this->_orderArguments($v);
+            call_user_func_array([$this, $k], $arg);
         }
 
         return $this->clearHeaders();
-    } // function sendHeaders
+    }
 
-    /**
-     * Clear headers stack
-     * @return array - old stack data
-     */
-    public function clearHeaders()
+    public function clearHeaders(): array
     {
-        $aRet = $this->aHeaderData;
-        $this->aHeaderData = array(
+        $ret = $this->headerData;
+        $this->headerData = [
             'protocol' => empty($_SERVER['SERVER_PROTOCOL']) ? 'HTTP/1.1' : $_SERVER['SERVER_PROTOCOL'],
-        );
+        ];
         $this->setResponseType();
-        return $aRet;
-    } // function clearHeaders
+        return $ret;
+    }
 
     // ------ Sepecial header setter/getter ------ \\
-    /**
-     * Set response type
-     * @param integer $iCode
-     * @return \fan\core\service\header
-     */
-    public function setResponseType($iCode = null)
+    public function setResponseType(mixed $code = null): static
     {
-        if (is_null($iCode)) {
-            $iCode = 200;
+        if (is_null($code)) {
+            $code = 200;
         } else {
-            $this->_checkResponseCode($iCode);
+            $this->_checkResponseCode((int)$code);
         }
 
-        $this->_setHeadStack('response', $iCode);
+        $this->_setHeadStack('response', $code);
 
         return $this;
-    } // function setResponseType
-    /**
-     * Get response code
-     * @return integer
-     */
-    public function getResponseCode()
+    }
+    public function getResponseCode(): mixed
     {
-        return $this->aHeaderData['response'];
-    } // function getResponseCode
+        return $this->headerData['response'];
+    }
 
-    /**
-     * Get protocol
-     * @return string
-     */
-    public function getProtocol()
+    public function getProtocol(): string
     {
-        return isset($this->aHeaderData['protocol']) ? $this->aHeaderData['protocol'] : 'HTTP/1.1';
-    } // function getProtocol
+        return isset($this->headerData['protocol']) ? $this->headerData['protocol'] : 'HTTP/1.1';
+    }
 
     // ------ Senders of header ------ \\
-    /**
-     * Send response type
-     * @param integer $iCode
-     * @return string - full text of response header
-     */
-    public function sendResponseType($iCode = null, $sProtocol = null)
+    public function sendResponseType(?int $code = null, ?string $protocol = null): void
     {
-        header($this->_getResponseText($iCode, $sProtocol));
-    } // function sendResponseType
+        header($this->_getResponseText($code ?? (int)$this->getResponseCode(), $protocol ?? $this->getProtocol()));
+    }
 
     /**
-     * Set Content-Type
-     * @param string $sValue
-     * @param string $sEncoding
-     * @return \fan\core\service\header
+     * @param ?string $value Value that should be applied or transformed.
      */
-    public function sendContentType($sValue = null, $sEncoding = null)
+    public function sendContentType(?string $value = null, ?string $encoding = null): static
     {
-        if (!empty($sValue) || !empty($sEncoding)) {
-            if (empty($sValue)) {
-                $sValue = 'text/html';
+        if (!empty($value) || !empty($encoding)) {
+            if (empty($value)) {
+                $value = 'text/html';
             }
-            header('Content-Type: ' . $sValue . (empty($sEncoding) ? '' : '; ' . $sEncoding));
+            header('Content-Type: ' . $value . (empty($encoding) ? '' : '; ' . $encoding));
         }
         return $this;
-    } // function sendContentType
+    }
 
-    /**
-     * Get Request parameter
-     * @param string $nLen Set file legth
-     * @param string $sRanges Set ranges of legth
-     * @return \fan\core\service\header
-     */
-    public function sendLength($nLen, $sRanges = null)
+    public function sendLength(string $len, ?string $ranges = null): static
     {
-        if (!empty($nLen)) {
-            if (empty($sRanges)) {
-                $sRanges = 'bytes';
+        if (!empty($len)) {
+            if (empty($ranges)) {
+                $ranges = 'bytes';
             }
-            header('Accept-Ranges: ' . $sRanges);
-            header('Content-Length: ' . $nLen);
+            header('Accept-Ranges: ' . $ranges);
+            header('Content-Length: ' . $len);
         }
         return $this;
-    } // function sendLength
+    }
 
-    /**
-     * Set time parameters
-     * @param number $nModified Set modified timestamp
-     * @param number $nExpired Set expired timestamp
-     * @return \fan\core\service\header
-     */
-    public function sendTime($nModified = NULL, $nExpired = NULL)
+    public function sendTime(int|float|null $modified = NULL, int|float|null $expired = NULL): static
     {
-        if (!is_null($nModified)) {
-            header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $nModified) . ' GMT');
+        if (!is_null($modified)) {
+            header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $modified) . ' GMT');
         }
-        if (!is_null($nExpired)) {
-            header('Expires: ' . gmdate('D, d M Y H:i:s', $nExpired) . ' GMT');
+        if (!is_null($expired)) {
+            header('Expires: ' . gmdate('D, d M Y H:i:s', $expired) . ' GMT');
             header('Cache-Control: post-check=1,pre-check=1');
         }
         return $this;
-    } // function sendTime
+    }
 
-    /**
-     * Get Request parameter
-     * @param string $sFileName Set file name
-     * @param boolean $bIsInline if TRUE - inline, ELSE - attachment
-     * @return \fan\core\service\header
-     */
-    public function sendFilename($sFileName, $bIsInline = true)
+    public function sendFilename(string $fileName, bool $isInline = true): static
     {
-        header('Content-Disposition: ' . ($bIsInline ? 'inline' : 'attachment') . '; filename="' . ($sFileName ? $sFileName : 'no_name') . '"');
+        header('Content-Disposition: ' . ($isInline ? 'inline' : 'attachment') . '; filename="' . ($fileName ? $fileName : 'no_name') . '"');
         return $this;
-    } // function sendFilename
+    }
 
-    /**
-     * Sends headers for enabling/disabling of caching file by browser/proxy
-     * @param number $nTimeExpires Time period of expires (if "0" - disable cache)
-     * @return \fan\core\service\header
-     */
-    public function sendCache($nTimeExpires = 0)
+    public function sendCache(int|float $timeExpires = 0): static
     {
-        $nTime = time();
-        if ($nTimeExpires > 0) {
+        $time = time();
+        if ($timeExpires > 0) {
             // Enable cache
-            $this->sendTime(isset($this->aHeaderData['modified']) ? null : $nTime, $nTime + $nTimeExpires);
+            $this->sendTime(isset($this->headerData['modified']) ? null : $time, $time + $timeExpires);
         } else {
             // Disable cache
-            $this->sendTime($nTime);
+            $this->sendTime($time);
             header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
 
-            if ($this->getProtocol() == 'HTTP/1.0') {
+            if ($this->getProtocol() === 'HTTP/1.0') {
                 header('Pragma: no-cache');
             } else {
                 header('Cache-Control: no-cache, must-revalidate, post-check=0, pre-check=0'); //  max-age=0
             }
         }
         return $this;
-    } // function sendCache
+    }
 
     /**
-     * Send header location
-     * @param string $sUrl new location
-     * @return \fan\core\service\header
+     * @param string $url URL used as the external request target.
      */
-    public function sendLocation($sUrl, $bContinueExec = false)
+    public function sendLocation(string $url, bool $continueExec = false): static
     {
-        header('Location: ' . str_replace('&amp;', '&', $sUrl));
-        if (!$bContinueExec) {
+        header('Location: ' . str_replace('&amp;', '&', $url));
+        if (!$continueExec) {
             exit;
         }
         return $this;
-    } // function sendLocation
+    }
 
     /**
-     * Send header location 301
-     * @param string $sUrl new location
-     * @return \fan\core\service\header
+     * @param string $url URL used as the external request target.
      */
-    public function sendLocation301($sUrl, $bContinueExec = false)
+    public function sendLocation301(string $url, bool $continueExec = false): static
     {
-        header('Location: ' . str_replace('&amp;', '&', $sUrl), true, 301);
-        if (!$bContinueExec) {
+        header('Location: ' . str_replace('&amp;', '&', $url), true, 301);
+        if (!$continueExec) {
             exit;
         }
         return $this;
-    } // function sendLocation301
+    }
 
     /**
-     * Send Arbitrary header
-     * @param string $sType
-     * @param string $sValue
-     * @param string $sExtraData Extra Data after ";"
-     * @return \fan\core\service\header
+     * @param string $value Value that should be applied or transformed.
      */
-    public function sendArbitrary($sType, $sValue, $sExtraData = '')
+    public function sendArbitrary(string $type, string $value, string $extraData = ''): static
     {
-        header($sType . ': ' . $sValue . (empty($sExtraData) ? '' : '; ' . $sExtraData));
+        header($type . ': ' . $value . (empty($extraData) ? '' : '; ' . $extraData));
         return $this;
-    } // function sendArbitrary
+    }
 
     // ------ Frequently response headers set ------ \\
-    /**
-     * Set header of ok 200
-     * @return \fan\core\service\header
-     */
-    public function ok200($bSend = false)
+    public function ok200(bool $send = false): static
     {
-        return $this->_setSpecialType(200, $bSend);
-    } // function ok200
+        return $this->_setSpecialType(200, $send);
+    }
 
-    /**
-     * Set header of error 403
-     * @return \fan\core\service\header
-     */
-    public function error403($bSend = false)
+    public function error403(bool $send = false): static
     {
-        return $this->_setSpecialType(403, $bSend);
-    } // function error403
+        return $this->_setSpecialType(403, $send);
+    }
 
-    /**
-     * Set header of error 404
-     * @return \fan\core\service\header
-     */
-    public function error404($bSend = false)
+    public function error404(bool $send = false): static
     {
-        return $this->_setSpecialType(404, $bSend);
-    } // function error404
+        return $this->_setSpecialType(404, $send);
+    }
 
-    /**
-     * Set header of error 500
-     * @return \fan\core\service\header
-     */
-    public function error500($bSend = false)
+    public function error500(bool $send = false): static
     {
-        return $this->_setSpecialType(500, $bSend);
-    } // function error500
+        return $this->_setSpecialType(500, $send);
+    }
 
     // ======== Protected methods ======== \\
-    /**
-     * Get Map of Methods used for Stack
-     * @return array
-     */
-    protected function _getSendMethodMap()
+    protected function _getSendMethodMap(): array
     {
-        return $this->aSendMethodMap;
-    } // function _getMethodMap
+        return $this->sendMethodMap;
+    }
 
     /**
-     * Set value to Head-Stack
-     * @param string $sParam Parameter of Header
-     * @param strng $sValue
-     * @return \fan\core\service\header
+     * @param string $value Value that should be applied or transformed.
      */
-    protected function _setHeadStack($sParam, $sValue)
+    protected function _setHeadStack(string $param, mixed $value): static
     {
-        $aParameters = $this->_getSendMethodMap();
-        if (!isset($aParameters[$sParam])) {
-            throw new fatalException($this, 'Incorrect header parameter "' . $sParam . '" for stack');
+        $parameters = $this->_getSendMethodMap();
+        if (!isset($parameters[$param])) {
+            throw new fatalException($this, 'Incorrect header parameter "' . $param . '" for stack');
         }
-        $this->aHeaderData[$sParam] = $sValue;
+        $this->headerData[$param] = $value;
         return $this;
-    } // function _setHeadStack
+    }
 
-    /**
-     * Prepare Functions fro send headers
-     * @return array
-     */
-    protected function _prepareFunctions()
+    protected function _prepareFunctions(): array
     {
-        $aResult = array();
+        $result = [];
         foreach ($this->_getSendMethodMap() as $k => $v) {
-            if (isset($this->aHeaderData[$k])) {
-                $aResult[$v[0]][$v[1]] = $this->aHeaderData[$k];
+            if (isset($this->headerData[$k])) {
+                $result[$v[0]][$v[1]] = $this->headerData[$k];
             }
         }
-        return $aResult;
-    } // function _prepareFunctions
+        return $result;
+    }
 
-    /**
-     * Order Arguments of method
-     * @param array $aArg
-     * @return null
-     */
-    protected function _orderArguments(array $aArg)
+    protected function _orderArguments(array $arg): array
     {
-        for ($i = 0; $i < max(array_keys($aArg)); $i++) {
-            if (!isset($aArg[$i])) {
-                $aArg[$i] = null;
+        for ($i = 0; $i < max(array_keys($arg)); $i++) {
+            if (!isset($arg[$i])) {
+                $arg[$i] = null;
             }
         }
-        ksort($aArg);
-        return $aArg;
-    } // function _ModifyArguments
+        ksort($arg);
+        return $arg;
+    }
 
     /**
-     * Get Text of Response-header
-     * @param integer $iCode
-     * @param string $sProtocol
-     * @return string
      * @throws \fan\project\exception\service\fatal
      */
-    protected function _getResponseText($iCode, $sProtocol)
+    protected function _getResponseText(int $code, string $protocol): string
     {
-        $this->_checkResponseCode($iCode);
-        if (empty($sProtocol)) {
-            $sProtocol = $this->getProtocol();
+        $this->_checkResponseCode($code);
+        if (empty($protocol)) {
+            $protocol = $this->getProtocol();
         }
-        return $sProtocol . ' ' . $iCode . ' ' . $this->aResponseCodes[$iCode];
-    } // function _getResponseText
+        return $protocol . ' ' . $code . ' ' . $this->responseCodes[$code];
+    }
 
     /**
-     * Check Response Code and autoload not finded code
-     * @param integer $iCode
-     * @return \fan\core\service\header
      * @throws \fan\project\exception\service\fatal
      */
-    protected function _checkResponseCode($iCode)
+    protected function _checkResponseCode(int $code): static
     {
-        if (!isset($this->aResponseCodes[$iCode])) {
-            if ($iCode >= 100 && $iCode <= 599) {
-                $sClass = $this->_getEngine('code', false);
-                $this->aResponseCodes = array_merge_recursive_alt(
-                        $this->aResponseCodes,
-                        call_user_func(array($sClass, 'getCodes' . substr($iCode, 0, 1)))
+        if (!isset($this->responseCodes[$code])) {
+            if ($code >= 100 && $code <= 599) {
+                $class = $this->_getEngine('code', false);
+                $this->responseCodes = array_merge_recursive_alt(
+                        $this->responseCodes,
+                        call_user_func([$class, 'getCodes' . substr($code, 0, 1)])
                 );
             }
-            if (!isset($this->aResponseCodes[$iCode])) {
-                throw new fatalException($this, 'Unknown response code "' . $iCode . '"');
+            if (!isset($this->responseCodes[$code])) {
+                throw new fatalException($this, 'Unknown response code "' . $code . '"');
             }
         }
         return $this;
-    } // function _checkResponseText
+    }
 
-    /**
-     * Set special response type
-     * @param integer $iCode
-     * @param boolean $bSend
-     * @return \fan\core\service\header
-     */
-    protected function _setSpecialType($iCode, $bSend)
+    protected function _setSpecialType(int $code, bool $send): static
     {
-        $this->setResponseType($iCode);
-        if ($bSend) {
-            $this->sendResponseType($iCode, null);
+        $this->setResponseType($code);
+        if ($send) {
+            $this->sendResponseType($code, null);
         }
         return $this;
-    } // function _setSpecialType
+    }
 
     // ======== The magic methods ======== \\
 
-    public function __set($sKey, $mValue)
+    /**
+     * Handles dynamic property writes for this current component.
+     *
+     * @param mixed $value Value that should be applied or transformed.
+     */
+    public function __set(string $key, mixed $value): void
     {
-        return $this->addHeader($sKey, $mValue);
+        $this->addHeader($key, $value);
     }
 
-    public function __get($sKey)
+    /**
+     * Handles dynamic property reads for this current component.
+     */
+    public function __get(string $key): mixed
     {
-        return $this->getHeader($sKey);
+        return $this->getHeader($key);
     }
 
     // ======== Required Interface methods ======== \\
-} // class \fan\core\service\header
-?>
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\app\__log_viewer\carcass;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__log_viewer\carcass;
 /**
  * main_viewer_carcass block
  *
@@ -16,5 +20,4 @@
  */
 class main extends \fan\project\block\carcass\common
 {
-} // class \fan\app\__log_viewer\carcass\main
-?>
+}

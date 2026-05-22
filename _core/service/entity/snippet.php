@@ -1,4 +1,9 @@
-<?php namespace fan\core\service\entity;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\entity;
+use fan\core\base\expression_evaluator;
 use fan\project\exception\model\entity\fatal as fatalException;
 /**
  * Description of SQL-snippet
@@ -21,279 +26,263 @@ class snippet
      * Condition Regular Expressions
      * @var string
      */
-    protected $sConditionRe = '/([\+\-\*\/%\(\)=.!&|\^~<>\s]*)(?:(exist|filled|val)\{\$(\w+)\}|const\[\s*([\-\.\d]+|\'.*?(?<!\\\\)\')\s*\])([\+\-\*\/%\(\)=.!&|\^~<>\s]*)/';
+    protected string $conditionRe = '/([\+\-\*\/%\(\)=.!&|\^~<>\s]*)(?:(exist|filled|val)\{\$(\w+)\}|const\[\s*([\-\.\d]+|\'.*?(?<!\\\\)\')\s*\])([\+\-\*\/%\(\)=.!&|\^~<>\s]*)/';
     /**
      * Place-Holders Regular Expressions
      * @var string
      */
-    protected $sPlaceHoldersRe = '/\{\$(\w+)\}/';
+    protected string $placeHoldersRe = '/\{\$(\w+)\}/';
     /**
      * Instance of Snippety-designer
      * @var \fan\core\service\entity\designer\snippety
      */
-    protected $oSnippety = null;
+    protected ?object $snippety = null;
     /**
      * Entity - table data
      * @var \fan\core\base\model\entity
      */
-    protected $oEntity = null;
+    protected ?object $entity = null;
 
     /**
      * Snippet of SQL-request (sourse SQL-snippet)
      * @var string
      */
-    protected $sQuery = null;
+    protected ?string $query = null;
 
     /**
      * Source Condition-string
      * @var string
      */
-    protected $sSrcCondition = null;
+    protected ?string $srcCondition = null;
 
     /**
-     * Parsed Condition-string (for eval)
+     * Parsed condition expression.
      * @var string
      */
-    protected $sCondition = null;
+    protected ?string $condition = null;
 
     /**
      * List of Data-Keys used for this SQL-snippet
      * @var array
      */
-    protected $aUsedKeys = array();
+    protected array $usedKeys = [];
 
     /**
      * Callback function/method
      * @var string|array
      */
-    protected $mCallback = null;
+    protected mixed $callback = null;
 
 
-    public function __construct(\fan\core\service\entity\designer\snippety $oSnippety, $sQuery, $sSrcCondition, $sCallback)
+    /**
+     * @param mixed $callback Callable invoked to complete the delegated operation.
+     */
+    public function __construct(\fan\core\service\entity\designer\snippety $snippety, mixed $query, mixed $srcCondition, mixed $callback)
     {
-        $this->oSnippety     = $oSnippety;
-        $this->oEntity       = $oSnippety->getEntity();
-        $this->sSrcCondition = $sSrcCondition;
+        $this->snippety     = $snippety;
+        $this->entity       = $snippety->getEntity();
+        $this->srcCondition = (string)$srcCondition;
 
-        $this->sCondition = $this->_parseCondition($sSrcCondition);
-        $this->aUsedKeys  = $this->_parsePlaceHolders($sQuery);
-        $this->mCallback  = $this->_parseCallback($sCallback);
-    } // function __construct
+        $this->condition = $this->_parseCondition((string)$srcCondition);
+        $this->usedKeys  = $this->_parsePlaceHolders((string)$query);
+        $this->callback  = $this->_parseCallback($callback);
+    }
 
     // ======== Static methods ======== \\
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Main for parse SQL-snippet and prepare Data
-     * @param array $aData
-     * @return array
-     */
-    public function getSnippetQuery($aData)
+    public function getSnippetQuery(array $data): array
     {
-        $bIsValid  = $this->_checkCondition($aData);
-        if ($this->mCallback) {
-            list($sQuery, $aUsedData) = call_user_func($this->mCallback, $this, $aData, $bIsValid);
+        $isValid  = $this->_checkCondition($data);
+        if ($this->callback) {
+            list($query, $usedData) = call_user_func($this->callback, $this, $data, $isValid);
         } else {
-            $sQuery = $bIsValid ? $this->sQuery : '';
-            $aUsedData = $bIsValid ? $this->prepareData($sQuery, $aData) : array();
+            $query = $isValid ? $this->query : '';
+            $usedData = $isValid ? $this->prepareData($query, $data) : [];
         }
-        return array($sQuery, empty($aUsedData) ? array() : $aUsedData);
-    } // function getSnippetQuery
+        return [$query, empty($usedData) ? [] : $usedData];
+    }
 
     /**
-     * Prepare Data
-     * @param array $aData
-     * @param array $aUsedKeys
-     * @return array
      * @throws fatalException
      */
-    public function prepareData(&$sQuery, $aData, $aUsedKeys = null)
+    public function prepareData(string &$query, array $data, ?array $usedKeys = null): array
     {
-        if (is_null($aUsedKeys)) {
-            $aUsedKeys = $this->aUsedKeys;
+        $query = (string)$query;
+        if (is_null($usedKeys)) {
+            $usedKeys = $this->usedKeys;
         }
 
-        $nQttQuery = substr_count($sQuery, '?');
-        if ($nQttQuery > count($aUsedKeys)) {
+        $qttQuery = substr_count($query, '?');
+        if ($qttQuery > count($usedKeys)) {
             throw new fatalException($this->getEntity(), 'Quantity of "question mark" more than UsedKeys.');
         }
 
-        $aAdjustedParam = array();
-        for ($i = 0; $i < $nQttQuery; $i++) {
-            $key = $aUsedKeys[$i];
-            if (!isset($aData[$key])) {
-                array_push($aAdjustedParam, null);
-            } elseif (!is_array($aData[$key])) {
-                array_push($aAdjustedParam, $aData[$key]);
-            } elseif (preg_match('/^((?:[^?]*\?){' . ($i + 1) . '})(.*)$/', $sQuery, $aMatches)) {
-                $sQuery = substr($aMatches[1], 0, -1) . implode(',', array_fill(0, count($aData[$key]), ' ?')) . $aMatches[2];
-                $aAdjustedParam = array_merge($aAdjustedParam, array_values($aData[$key]));
+        $adjustedParam = [];
+        for ($i = 0; $i < $qttQuery; $i++) {
+            $key = $usedKeys[$i];
+            if (!isset($data[$key])) {
+                array_push($adjustedParam, null);
+            } elseif (!is_array($data[$key])) {
+                array_push($adjustedParam, $data[$key]);
+            } elseif (preg_match('/^((?:[^?]*\?){' . ($i + 1) . '})(.*)$/', $query, $matches)) {
+                $query = substr($matches[1], 0, -1) . implode(',', array_fill(0, count($data[$key]), ' ?')) . $matches[2];
+                $adjustedParam = array_merge($adjustedParam, array_values($data[$key]));
             } else {
-                trigger_error('Can\'t parse SQL-snippet', E_USER_ERROR);
+                throw new fatalException($this->getEntity(), 'Can\'t parse SQL-snippet');
             }
         }
-        return $aAdjustedParam;
-    } // function prepareData
-    /**
-     * Get Soure snippet of Sql-request
-     * @return string
-     */
-    public function getSql()
+        return $adjustedParam;
+    }
+    public function getSql(): ?string
     {
-        return $this->sQuery;
-    } // function getSql
-    /**
-     * Get Soure string of Condition
-     * @return string
-     */
-    public function getSrcCondition()
+        return $this->query;
+    }
+    public function getSrcCondition(): ?string
     {
-        return $this->sSrcCondition;
-    } // function getSrcCondition
-    /**
-     * Get Final string (for eval) of Condition
-     * @return string
-     */
-    public function getCondition()
+        return $this->srcCondition;
+    }
+    public function getCondition(): ?string
     {
-        return $this->sCondition;
-    } // function getCondition
-    /**
-     * Get lest of Used Key
-     * @return array
-     */
-    public function getUsedKeys()
+        return $this->condition;
+    }
+    public function getUsedKeys(): array
     {
-        return $this->aUsedKeys;
-    } // function getUsedKeys
-    /**
-     * Get Callback function/method
-     * @return string|array
-     */
-    public function getCallback()
+        return $this->usedKeys;
+    }
+    public function getCallback(): mixed
     {
-        return $this->mCallback;
-    } // function getCallback
+        return $this->callback;
+    }
 
-    /**
-     * Get Instance of Snippety-designer
-     * @return \fan\core\service\entity\designer\snippety
-     */
-    public function getSnippety()
+    public function getSnippety(): ?\fan\core\service\entity\designer\snippety
     {
-        return $this->oSnippety;
-    } // function getSnippety
-    /**
-     * Get link to Entity
-     * @return \fan\core\base\model\entity
-     */
-    public function getEntity()
+        return $this->snippety;
+    }
+    public function getEntity(): ?\fan\core\base\model\entity
     {
-        return $this->oEntity;
-    } // function getEntity
+        return $this->entity;
+    }
 
     // ======== Private/Protected methods ======== \\
     /**
-     * Parse Condition
-     * @param string $sCondition
-     * @return array
      * @throws fatalException
      */
-    protected function _parseCondition($sCondition)
+    protected function _parseCondition(string $condition): string
     {
-        $sResult  = '';
-        $aMatches = array();
-        if (preg_match_all($this->sConditionRe, $sCondition, $aMatches)) {
-            foreach ($aMatches[0] as $k => $v) {
-                $sResult .= $aMatches[1][$k];
-                if (empty($aMatches[2][$k])) {
-                    $sResult .= $aMatches[4][$k];
-                } else {
-                    if ($aMatches[2][$k] == 'filled') {
-                        $sResult .= '!empty($aData[\'' . $aMatches[3][$k] . '\'])';
-                    } elseif ($aMatches[2][$k] == 'exist') {
-                        $sResult .= 'array_key_exists(\'' . $aMatches[3][$k] . '\', $aData)';
-                    } else {
-                        $sResult .= 'array_val($aData, \'' . $aMatches[3][$k] . '\')';
-                    }
+        if (trim($condition) === '') {
+            return 'true';
+        }
+
+        $result = '';
+        $offset = 0;
+        $matches = [];
+        if (preg_match_all($this->conditionRe, $condition, $matches, PREG_OFFSET_CAPTURE)) {
+            foreach ($matches[0] as $k => $v) {
+                [$match, $matchOffset] = $v;
+                if ($matchOffset !== $offset) {
+                    throw new fatalException($this->getEntity(), 'Incorrect SQL-Condition: "' . $condition . '".');
                 }
-                $sResult .= $aMatches[5][$k];
-            }
-            $sResult = '$bResult=' . $sResult . '; return true;';
 
-            $aData = array();
-            if (!@eval($sResult)) {// Just check syntax of $sResult with empty data
-                throw new fatalException($this->getEntity(), 'Incorrect SQL-Condition: "' . $sCondition . '".');
+                $result .= $matches[1][$k][0];
+                if (empty($matches[2][$k][0])) {
+                    $result .= $matches[4][$k][0];
+                } else {
+                    $result .= '__' . $matches[2][$k][0] . '_' . $matches[3][$k][0];
+                }
+                $result .= $matches[5][$k][0];
+                $offset = $matchOffset + strlen($match);
             }
+
+            if ($offset !== strlen($condition)) {
+                throw new fatalException($this->getEntity(), 'Incorrect SQL-Condition: "' . $condition . '".');
+            }
+        } else {
+            throw new fatalException($this->getEntity(), 'Incorrect SQL-Condition: "' . $condition . '".');
         }
-        return $sResult;
-    } // function _parseCondition
 
-    /**
-     * Parse Place-Holders
-     * @param string $sQuery
-     * @return string|array
-     */
-    protected function _parsePlaceHolders($sQuery)
+        try {
+            expression_evaluator::evaluate($result, fn() => null);
+        } catch (\Throwable $e) {
+            throw new fatalException($this->getEntity(), 'Incorrect SQL-Condition: "' . $condition . '".');
+        }
+        return $result;
+    }
+
+    protected function _parsePlaceHolders(string $query): array
     {
-        $aResult  = array();
-        $aMatches = array();
-        if (preg_match_all($this->sPlaceHoldersRe, $sQuery, $aMatches)) {
-            foreach ($aMatches[0] as $k => $v) {
-                $aResult[] = $aMatches[1][$k];
-                $sQuery = str_replace($v, '?', $sQuery);
+        $result  = [];
+        $matches = [];
+        if (preg_match_all($this->placeHoldersRe, $query, $matches)) {
+            foreach ($matches[0] as $k => $v) {
+                $result[] = $matches[1][$k];
+                $query = str_replace($v, '?', $query);
             }
         }
 
-        $this->sQuery = $sQuery;
-        return $aResult;
-    } // function _parsePlaceHolders
+        $this->query = $query;
+        return $result;
+    }
 
     /**
-     * Parse Callback
-     * @param string $sCallback
-     * @return string|array
+     * @param string $callback Callable invoked to complete the delegated operation.
+     *
      * @throws fatalException
      */
-    protected function _parseCallback($sCallback)
+    protected function _parseCallback(mixed $callback): mixed
     {
-        if (empty($sCallback)) {
+        if (empty($callback)) {
             return null;
         }
+        if (is_callable($callback)) {
+            return $callback;
+        }
+        if (!is_scalar($callback)) {
+            throw new fatalException($this->getEntity(), 'Incorrect Callback function.');
+        }
 
-        $oEntity = $this->getEntity();
-        if (strpos($sCallback, ':')) {
-            $mCallback = explode(':', $sCallback);
+        $callback = (string)$callback;
+
+        $entity = $this->getEntity();
+        if (strpos($callback, ':')) {
+            $callback = explode(':', $callback);
         } else {
-            $mCallback = array($oEntity->getRequestLoader(), $sCallback);
-            if (is_callable($mCallback)) {
-                return $mCallback;
+            $callback = [$entity->getRequestLoader(), $callback];
+            if (is_callable($callback)) {
+                return $callback;
             }
-            $mCallback = array($oEntity, $sCallback);
-            if (is_callable($mCallback)) {
-                return $mCallback;
+            $callback = [$entity, $callback];
+            if (is_callable($callback)) {
+                return $callback;
             }
-            $mCallback = $sCallback;
+            $callback = $callback;
         }
 
-        if (!is_callable($mCallback)) {
-            throw new fatalException($oEntity, 'Incorrect Callback function: "' . $sCallback . '".');
+        if (!is_callable($callback)) {
+            throw new fatalException($entity, 'Incorrect Callback function: "' . $callback . '".');
         }
-        return $mCallback;
-    } // function _parseCallback
+        return $callback;
+    }
 
-    /**
-     * Check is data correspond to condition
-     * @param array $aData
-     * @return boolean
-     */
-    protected function _checkCondition($aData)
+    protected function _checkCondition(array $data): bool
     {
-        $bResult = false;
-        eval($this->sCondition);
-        return $bResult;
-    } // function _checkCondition
-} // class \fan\core\service\entity\snippet
-?>
+        try {
+            return (bool)expression_evaluator::evaluate((string)$this->condition, function ($name) use ($data) {
+                if (!preg_match('/^__(exist|filled|val)_(\w+)$/', $name, $matches)) {
+                    throw new \InvalidArgumentException('Unknown SQL-condition token "' . $name . '".');
+                }
+
+                $key = $matches[2];
+                return match ($matches[1]) {
+                    'exist' => array_key_exists($key, $data),
+                    'filled' => !empty($data[$key]),
+                    'val' => $data[$key] ?? null,
+                };
+            });
+        } catch (\Throwable $e) {
+            throw new fatalException($this->getEntity(), 'Incorrect SQL-Condition: "' . $this->srcCondition . '".');
+        }
+    }
+}

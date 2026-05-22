@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\form\validator;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\form\validator;
 /**
  * Upload file class of validators
  *
@@ -16,52 +20,36 @@
  */
 class upload extends base
 {
-    /**
-     * Form rule - check uploaded file
-     * @return boolean
-     */
-    public function uploadError($mValue, $aData)
+    public function uploadError(array $value, array $data): bool
     {
-        return $mValue['error'] == UPLOAD_ERR_OK || $mValue['error'] == UPLOAD_ERR_NO_FILE;
-    } // function uploadError
+        $error = (int)$value['error'];
+        return $error === UPLOAD_ERR_OK || $error === UPLOAD_ERR_NO_FILE;
+    }
 
-    /**
-     * Check name of uploaded file
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function uploadName($mValue, $aData)
+    public function uploadName(mixed $value, mixed $data): bool
     {
-        $aParts = explode('.', $mValue['name']);
-        if ((!isset($aData['double_ext']) || !empty($aData['double_ext'])) && count($aParts) > 3) {
+        $parts = explode('.', $value['name']);
+        if ((!isset($data['double_ext']) || !empty($data['double_ext'])) && count($parts) > 3) {
             return false;
         }
-        if ((!isset($aData['empty_name']) || !empty($aData['empty_name'])) && empty($aParts[0])) {
+        if ((!isset($data['empty_name']) || !empty($data['empty_name'])) && empty($parts[0])) {
             return false;
         }
-        if (isset($aData['allowed_ext']) && is_array($aData['allowed_ext']) && (!isset($aParts[1]) || !in_array($aParts[1], $aData['allowed_ext']))) {
+        if (isset($data['allowed_ext']) && is_array($data['allowed_ext']) && (!isset($parts[1]) || !in_array($parts[1], $data['allowed_ext']))) {
             return false;
         }
         return true;
-    } // function uploadName
+    }
 
-    /**
-     * Check mime-type of uploaded file
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function uploadMime($mValue, $aData)
+    public function uploadMime(mixed $value, array $data): bool
     {
-        $bResult = true;
-        if (isset($aData['allowed_mime'])) {
+        $result = true;
+        if (isset($data['allowed_mime'])) {
             $lFinfo = finfo_open(FILEINFO_MIME_TYPE);
-            $sMime  = finfo_file($lFinfo, $mValue['tmp_name']);
+            $mime  = finfo_file($lFinfo, $value['tmp_name']);
             finfo_close($lFinfo);
-            $bResult = in_array($sMime, $aData['allowed_mime']);
+            $result = in_array($mime, $data['allowed_mime']);
         }
-        return $bResult;
-    } // function uploadMime
-} // class \fan\core\service\form\validator\upload
-?>
+        return $result;
+    }
+}

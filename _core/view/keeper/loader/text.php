@@ -1,4 +1,7 @@
-<?php namespace fan\core\view\keeper\loader;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view\keeper\loader;
 /**
  * View-data keeper of Block data for loader JSON-data
  *
@@ -16,88 +19,63 @@
  */
 class text extends \fan\core\view\keeper
 {
-    /**
-     * View meta constructor
-     * @param fan\core\block\base $oRouter
-     */
-    public function __construct(\fan\core\view\router $oRouter)
+    public function __construct(\fan\core\view\router $router)
     {
-        parent::__construct($oRouter);
-        $this->bFullRewrite = true;
-    } // function __construct
+        parent::__construct($router);
+        $this->fullRewrite = true;
+    }
 
     // ======== Static methods ======== \\
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Get value of data
-     * @param string|array $mKey
-     * @param mixed $mDefault
-     * @param boolean $bLogError
-     * @return mixed
-     */
-    public function get($mKey = null, $mDefault = null, $bLogError = true)
+    public function get(mixed $key = null, mixed $default = null, bool $logError = true): mixed
     {
-        $sResult = $this->__toString();
-        return empty($sResult) ? $mDefault : $sResult;
-    } // function get
+        $result = $this->__toString();
+        return empty($result) ? $default : $result;
+    }
 
-    /**
-     * Set value of data
-     * @param string|number $mKey
-     * @param mixed $mValue
-     * @param boolean $bRewriteExisting - rewrite exists value
-     * @param boolean $bConvArray - convert array to object of this class (null is true for Multi-Level data)
-     * @return \fan\core\view\keeper
-     */
-    public function set($mKey, $mValue, $bRewriteExisting = true, $bConvArray = null)
+    public function set(mixed $key, mixed $value, bool $rewriteExisting = true, ?bool $convArray = null): static
     {
-        if (!is_numeric($mKey)) {
-            $mKey = empty($mKey) ? 0 : 1;
+        if (!is_numeric($key)) {
+            $key = empty($key) ? 0 : 1;
         }
 
-        if (empty($mKey) && $this->isFullRewrite()) {
-            $this->aData = array($mValue);
-        } elseif ($mKey < 0) {
-            array_unshift($this->aData, $mValue);
+        if (empty($key) && $this->isFullRewrite()) {
+            $this->data = [$value];
+        } elseif ($key < 0) {
+            array_unshift($this->data, $value);
         } else {
-            array_push($this->aData, $mValue);
+            array_push($this->data, $value);
         }
         return $this;
     }
 
-    /**
-     * Add Router
-     * @param \fan\core\view\router\loader $oRouter
-     * @return \fan\core\view\keeper\loader\text
-     */
-    public function addRouter(\fan\core\view\router\loader $oRouter)
+    public function addRouter(\fan\core\view\router\loader $router): static
     {
-        $this->_setSetter($oRouter);
-        $this->_setSetter($oRouter->getBlock());
+        $this->_setSetter($router);
+        $this->_setSetter($router->getBlock());
         return $this;
-    } // function addRouter
+    }
 
     // ======== Private/Protected methods ======== \\
 
     // ======== The magic methods ======== \\
 
-    public function __set($iKey, $mValue)
+    public function __set(string $key, mixed $value): void
     {
-        $this->set($mValue, (int)$iKey);
+        $this->set($value, (int)$key);
     }
 
-    public function __get($sKey)
+    public function __get(string $key): mixed
     {
         return $this->get(null);
     }
 
-    public function __toString() {
-        return implode('', $this->aData);
+    public function __toString(): string {
+        return implode('', (array)$this->data);
     }
 
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\view\keeper\loader\text
-?>
+}

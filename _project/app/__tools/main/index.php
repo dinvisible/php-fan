@@ -1,4 +1,8 @@
-<?php namespace fan\app\__tools\main;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__tools\main;
 /**
  * Index block
  *
@@ -16,22 +20,18 @@
  */
 class index extends \fan\project\block\common\simple
 {
-    /**
-     * Init block
-     */
-    public function init()
+    public function init(): void
     {
         if (!role('tools_access')) {
-            //$oUser = service('user', array('anonymous', 'tools_by_config'));
-            $oUser = getUser('anonymous', 'tools_by_config');
-            $oUser->setCurrent();
+            //$user = service('user', ['anonymous', 'tools_by_config']);
+            $user = getUser('anonymous', 'tools_by_config');
+            $user->setCurrent();
             if (!role('tools_access')) {
                 transfer_int('~/request_password.html');
             } else {
-                transfer_sham($this->oTab->getCurrentURI(false, true, true, true));
+                transfer_sham($this->tab->getCurrentURI(false, true, true, true));
             }
         }
     } // init
 
-} // class \fan\app\__tools\main\index
-?>
+}

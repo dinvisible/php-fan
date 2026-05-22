@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\config;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\config;
 /**
  * Description of ini
  *
@@ -20,56 +24,40 @@ class ini extends base
      * File extention
      * @var string
      */
-    protected $sFileExtention = 'ini';
+    protected string $fileExtention = 'ini';
 
-    /**
-     * Load Source Data
-     * @param string $sSrcFilePath
-     * @return array
-     */
-    protected function _loadSourceData($sSrcFilePath)
+    protected function _loadSourceData(string $srcFilePath): array
     {
-        $aArrData = parse_ini_file($sSrcFilePath, true);
-        $this->_separateByDot($aArrData);
-        return $aArrData;
-    } // function _loadSourceData
+        $arrData = parse_ini_file($srcFilePath, true) ?: [];
+        $this->_separateByDot($arrData);
+        return $arrData;
+    }
 
-    /**
-     * Separate "dot-key" to sub-Branch
-     * @param array $aBranch
-     */
-    protected function _separateByDot(&$aBranch)
+    protected function _separateByDot(array &$branch): void
     {
-        if(is_array($aBranch)) {
-              foreach ($aBranch as $k => $v) {
-                $r =& $this->_checkDotSeparatedElm($aBranch, $k, $v);
-                if (is_string($r) && substr($r, 0, 1) == '[' && substr($r, -1) == ']') {
-                    $aTmp = explode(';', substr($r, 1, -1));
-                    $r = array_map('trim', $aTmp);
+        if (is_array($branch)) {
+              foreach ($branch as $k => $v) {
+                $r =& $this->_checkDotSeparatedElm($branch, $k, $v);
+                if (is_string($r) && substr($r, 0, 1) === '[' && substr($r, -1) === ']') {
+                    $tmp = explode(';', substr($r, 1, -1));
+                    $r = array_map('trim', $tmp);
                 } else if (is_array($r)) {
                     $this->_separateByDot($r);
                 }
             }
         }
-    } // function _separateByDot
+    }
 
-    /**
-     * Check "dot-key" to sub-Branch
-     * @param array $aBranch
-     * @param mixed $key
-     * @param mixed $val
-     */
-    protected function &_checkDotSeparatedElm(&$aBranch, $key, $val)
+    protected function &_checkDotSeparatedElm(array &$branch, string $key, mixed $val): mixed
     {
-        $nDp = strpos($key, '.');
-        if($nDp) {
-            $key1 = substr($key, 0, $nDp);
-            $key2 = substr($key, $nDp + 1);
-            $aBranch[$key1][$key2] = $aBranch[$key];
-            unset($aBranch[$key]);
-            return $this->_checkDotSeparatedElm($aBranch[$key1], $key2, $val);
+        $dp = strpos($key, '.');
+        if ($dp) {
+            $key1 = substr($key, 0, $dp);
+            $key2 = substr($key, $dp + 1);
+            $branch[$key1][$key2] = $branch[$key];
+            unset($branch[$key]);
+            return $this->_checkDotSeparatedElm($branch[$key1], $key2, $val);
         }
-        return $aBranch[$key];
-    } // function _checkDotSeparatedElm
-} // class \fan\core\service\config\ini
-?>
+        return $branch[$key];
+    }
+}

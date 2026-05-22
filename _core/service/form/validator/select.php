@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\form\validator;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\form\validator;
 /**
  * Common class of validators
  *
@@ -17,50 +21,36 @@
 class select extends base
 {
 
-    /**
-     * Check up a value from select and radio
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function checkSelect($mValue, $aData)
+    public function checkSelect(mixed $value, array $data): bool
     {
-        $aFieldData = $this->oFacade->getFieldData($aData['prop_name']);
-        if (is_array($aFieldData)) {
-            foreach ($aFieldData as $v) {
-                if ($v['value'] == $mValue) {
+        $fieldData = $this->facade->getFieldData($data['prop_name']);
+        if (is_array($fieldData)) {
+            foreach ($fieldData as $v) {
+                if ((string)$v['value'] === (string)$value) {
                     return true;
                 }
             }
         }
         return false;
-    } // function checkSelect
+    }
 
-    /**
-     * Checks occurrence of the variable in an array
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function inArray($mValue, $aData)
+    public function inArray(mixed $value, array $data): bool
     {
-        if (!empty($aData['value'])) {
-            return in_array($mValue, $aData['value']);
+        if (!empty($data['value'])) {
+            return in_array($value, $data['value']);
         }
-        if (!empty($aData['link_meta'])) {
-            $aArr = $this->getMeta($aData['link_meta']); //ToDo: getMeta
-            return is_array($aArr) && in_array($mValue, $aArr);
+        if (!empty($data['link_meta'])) {
+            $arr = $this->getMeta($data['link_meta']); //ToDo: getMeta
+            return is_array($arr) && in_array($value, $arr);
         }
-        if (!empty($aData['method'])) {
-            $aCallBack = empty($aData['class']) ? array($aData['class'], $aData['method']) : array($this->oBlock, $aData['method']);//ToDo: $this->oBlock
-            if (is_callable($aCallBack)) {
-                $aArr = call_user_func($aCallBack);
-                return is_array($aArr) && in_array($mValue, $aArr);
+        if (!empty($data['method'])) {
+            $callBack = empty($data['class']) ? [$data['class'], $data['method']] : [$this->block, $data['method']];//ToDo: $this->block
+            if (is_callable($callBack)) {
+                $arr = call_user_func($callBack);
+                return is_array($arr) && in_array($value, $arr);
             }
         }
         return false;
-    } // function inArray
+    }
 
-} // class \fan\core\service\form\validator\common
-?>
+}

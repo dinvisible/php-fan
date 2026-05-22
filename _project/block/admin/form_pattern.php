@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\admin;
 /**
  * Block admin form pattern
  *
@@ -16,5 +20,4 @@
  */
 class form_pattern extends \fan\core\block\admin\form_pattern
 {
-} // class \fan\project\block\admin\form_pattern
-?>
+}

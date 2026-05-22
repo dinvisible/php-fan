@@ -1,47 +1,49 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Create entity tools meta
  * @version 05.02.005 (12.02.2015)
  */
-return array(
-    'own' => array(
+return [
+    'own' => [
         'title' => 'Create entity',
 
-        'externalCss' => array( // css files
-            'style' => array('~/entity.css'),
-        ),
+        'externalCss' => [ // css files
+            'style' => ['~/entity.css'],
+        ],
 
-        'embeddedBlocks' => array(
+        'embeddedBlocks' => [
             'entity_filter' => 'form/entity_filter',
-        ),
+        ],
 
-        'form' => array(
+        'form' => [
             'action_method'  => 'POST',
             'request_type'   => 'P',
 
             'form_key_name'  => 'create_entity',
             'form_id'        => 'create_entity',
 
-            'fields' => array(
-                'tbl' => array(
+            'fields' => [
+                'tbl' => [
                     'label'      => 'Table',
                     'input_type' => 'checkbox',
                     'depth'      => 1
-                ),
-            ),
-        ), //form
+                ],
+            ],
+        ], //form
 
         'dontCrawl' => true,
 
-        'cache' => array(
+        'cache' => [
             'mode' => 1,
-        ),
-        'roles' => array (
-            array (
+        ],
+        'roles' => [
+            [
                 'condition'     => 'tools_access',
                 'transfer_sham' => '~/',
-            ),
-        ),
-    ),
-);
-?>
+            ],
+        ],
+    ],
+];

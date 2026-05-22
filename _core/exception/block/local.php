@@ -1,4 +1,8 @@
-<?php namespace fan\core\exception\block;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\exception\block;
 /**
  * Exception a block local error. Usually catch immediate in the block
  *
@@ -20,41 +24,24 @@ class local extends \fan\core\exception\base
      * Block's object
      * @var \fan\core\block\base
      */
-    protected $oBlock = null;
+    protected ?object $block = null;
 
-    /**
-     * Exception's constructor
-     * @param \fan\core\block\base $oBlock Object - instance of block
-     * @param string $sLogErrMsg Log error message
-     * @param numeric $nCode Error Code
-     * @param \Exception $oPrevious Previous Exception
-     */
-    public function __construct(\fan\core\block\base $oBlock, $sLogErrMsg, $nCode = E_USER_NOTICE, $oPrevious = null)
+    public function __construct(\fan\core\block\base $block, string $logErrMsg, int $code = E_USER_NOTICE, ?\Throwable $previous = null)
     {
-        $this->oBlock = $oBlock;
-        parent::__construct($sLogErrMsg, $nCode, $oPrevious = null);
-    } // function __construct
+        $this->block = $block;
+        parent::__construct($logErrMsg, $code, $previous = null);
+    }
 
-    /**
-     * Get object of block
-     * @return \fan\core\block\base
-     */
-    public function getBlock()
+    public function getBlock(): \fan\core\block\base
     {
-        return $this->oBlock;
-    } // function getBlock
+        return $this->block;
+    }
 
-    /**
-     * Get operation for Db (rollback, commit or nothing) when exception occured
-     * @param string $sDbOper
-     * @return null|string
-     */
-    protected function _defineDbOper($sDbOper = null)
+    protected function _defineDbOper(?string $dbOper = null): ?string
     {
-        if (empty($sDbOper) && method_exists($this->oBlock, 'getExceptionDbOper')) {
-            $sDbOper = $this->oBlock->getExceptionDbOper();
+        if (empty($dbOper) && method_exists($this->block, 'getExceptionDbOper')) {
+            $dbOper = $this->block->getExceptionDbOper();
         }
-        return parent::_defineDbOper($sDbOper);
-    } // function _defineDbOper
-} // class \fan\core\exception\block\local
-?>
+        return parent::_defineDbOper($dbOper);
+    }
+}

@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Meta data of Get log block
  *
@@ -14,16 +17,15 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.01.002 (01.05.2013)
  */
-return array(
-    'own' => array (
+return [
+    'own' => [
         'elmPerPage' => 24,
 
-        'roles' => array (
-            array (
+        'roles' => [
+            [
                 'condition'     => 'log_access',
                 'transfer_sham' => '~/error403',
-            ),
-        ),
-    ),
-);
-?>
+            ],
+        ],
+    ],
+];

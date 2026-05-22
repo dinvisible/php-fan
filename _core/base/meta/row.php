@@ -1,4 +1,8 @@
-<?php namespace fan\core\base\meta;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\base\meta;
 /**
  * Meta Data Row
  *
@@ -19,85 +23,59 @@ class row extends \fan\core\base\data
     /**
      * @var \fan\core\block\all Linked block
      */
-    protected $oBlock;
+    protected ?object $block = null;
 
     /**
      * @var \fan\core\base\meta\maker
      */
-    protected $oMaker;
+    protected ?object $maker = null;
 
     /**
      * @var \fan\core\base\meta\row
      */
-    protected $oParent;
+    protected ?object $parent = null;
 
 
-    /**
-     * @var string
-     */
-    protected $sKeyName;
+    protected int|string|null $keyName = null;
 
 
-    /**
-     * Constructor of meta row
-     * @param fan\core\block\all $oBlock
-     */
-    public function __construct(maker $oMaker,array $aData, row $oParent = null, $sKeyName = null)
+    public function __construct(maker $maker, array $data, ?row $parent = null, int|string|null $keyName = null)
     {
-        $this->oMaker   = $oMaker;
-        $this->oBlock   = $oMaker->getBlock();
-        $this->aData    = $this->makeData($aData);
-        $this->oParent  = $oParent;
-        $this->sKeyName = $sKeyName;
+        $this->maker   = $maker;
+        $this->block   = $maker->getBlock();
+        $this->data    = $this->makeData($data);
+        $this->parent  = $parent;
+        $this->keyName = $keyName;
 
-        $this->_setSetter($oMaker);
-        $this->_setSetter($this->oBlock);
-    } // function __construct
+        $this->_setSetter($maker);
+        $this->_setSetter($this->block);
+    }
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Make new row of Meta-data
-     * @param array $aData
-     * @return array
-     */
-    public function makeData(array $aData)
+    public function makeData(array $data): array
     {
-        $aRet = array();
-        foreach ($aData as $k => $v) {
-            $aRet[$k] = is_array($v) ? new \fan\project\base\meta\row($this->oMaker, $v, $this, $k) : $v;
+        $ret = [];
+        foreach ($data as $k => $v) {
+            $ret[$k] = is_array($v) ? new \fan\project\base\meta\row($this->maker, $v, $this, $k) : $v;
         }
-        return $aRet;
+        return $ret;
     }
 
-    /**
-     * Merge Meta-data with current
-     * @param array $aData
-     * @param type $bRewriteExisting
-     * @return \fan\core\base\meta\row
-     */
-    public function mergeData(array $aData, $bRewriteExisting = true)
+    public function mergeData(array $data, bool $rewriteExisting = true): static
     {
-        foreach ($aData as $k => $v) {
-            $this->set($k, $v, $bRewriteExisting);
+        foreach ($data as $k => $v) {
+            $this->set($k, $v, $rewriteExisting);
         }
         return $this;
     }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Convert Array to another structure (usually instance of this class)
-     * Methd need to redefine in children classes if it use another parameter of constructor
-     * @param string $sKey
-     * @param array $aValue
-     * @return mixed
-     */
-    protected function _makeSubData($sKey, $aValue)
+    protected function _makeSubData(mixed $key, mixed $value): \fan\core\base\meta\row
     {
-        $sClass = get_class($this);
-        return new $sClass($this->oMaker, $aValue, $this, $sKey);
-    } // function _makeSubData
+        $class = get_class($this);
+        return new $class($this->maker, $value, $this, $key);
+    }
 
-} // class \fan\core\base\meta\row
-?>
+}

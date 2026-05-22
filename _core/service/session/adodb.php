@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\session;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\session;
 /**
  * Session engine adodb
  *
@@ -14,38 +18,30 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-include_once __DIR__ . '/session_engine_php.php';
-
 /**
  * ADOdb session engine
  * @version 1.0
  */
 class adodb extends inbuilt
 {
-    /**
-     * Constructor
-     * @param \fan\core\service\config\row $oConfig Configuration data
-     */
-    public function __construct($oConfig)
+    public function __construct(mixed $config)
     {
-        global $ADODB_SESSION_DRIVER, $ADODB_SESSION_CONNECT, $ADODB_SESSION_USER, $ADODB_SESSION_PWD, $ADODB_SESSION_DB, $ADODB_SESSION_TBL;
-        require_once \bootstrap::get_dir('LIBS') . '/ADOdb/adodb.inc.php';
+        $config = is_array($config) ? $config : [];
+        if ($config['IS_DATABASE']) {
+            global $ADODB_SESSION_DRIVER, $ADODB_SESSION_CONNECT, $ADODB_SESSION_USER, $ADODB_SESSION_PWD, $ADODB_SESSION_DB, $ADODB_SESSION_TBL;
+            $dbConfig = $this->containerService('config')->get('database');
+            $db = $dbConfig['DATABASES'][$config['CONNECTION']];
 
-        if ($oConfig['IS_DATABASE']) {
-            $aDbConfig = \fan\project\service\config::instance()->get('database');
-            $aDb = $aDbConfig['DATABASES'][$oConfig['CONNECTION']];
+            $ADODB_SESSION_DRIVER  = (string)$db['DRIVER'];
+            $ADODB_SESSION_CONNECT = (string)$db['HOST'];
+            $ADODB_SESSION_USER    = (string)$db['USER'];
+            $ADODB_SESSION_PWD     = (string)$db['PASSWORD'];
+            $ADODB_SESSION_DB      = (string)$db['DATABASE'];
+            $ADODB_SESSION_TBL     = (string)$config['TABLE'];
 
-            $ADODB_SESSION_DRIVER  = $aDb['DRIVER'];
-            $ADODB_SESSION_CONNECT = $aDb['HOST'];
-            $ADODB_SESSION_USER    = $aDb['USER'];
-            $ADODB_SESSION_PWD     = $aDb['PASSWORD'];
-            $ADODB_SESSION_DB      = $aDb['DATABASE'];
-            $ADODB_SESSION_TBL     = $oConfig['TABLE'];
-
-            require_once \bootstrap::get_dir('LIBS') . '/ADOdb/session/adodb-session.php';
+            \fan\project\adapter\adodb::ensureSessionSupport();
         } // check database
 
-        parent::__construct($oConfig);
-    } // function __construct
-} // class \fan\core\service\session\adodb
-?>
+        parent::__construct($config);
+    }
+}

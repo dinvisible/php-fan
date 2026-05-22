@@ -1,4 +1,7 @@
-<?php namespace fan\core\base\model\spec_file\image;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\base\model\spec_file\image;
 /**
  * Entity of image file
  *
@@ -17,167 +20,118 @@
  */
 abstract class entity extends \fan\core\base\model\spec_file\entity
 {
-    /**
-     * @var string RegExp for IMG placeholder
-     */
-    protected $sImgRegExp = '/\{IMG(?:_(\d+)|-(\d+))\s*(.*?)\}/is';
+    protected string $imgRegExp = '/\{IMG(?:_(\d+)|-(\d+))\s*(.*?)\}/is';
 
-    /**
-     * @var string RegExp for NAIL placeholder
-     */
-    protected $sAdvImgRegExp = '/\{(IMG|NAIL|LINK|BLOWUP1|BLOWUP2)(?:_(\d+)|-(\d+))(?:\[(\d+)*(\d+)\])\s*(.*?)\}/is';
+    protected string $advImgRegExp = '/\{(IMG|NAIL|LINK|BLOWUP1|BLOWUP2)(?:_(\d+)|-(\d+))(?:\[(\d+)*(\d+)\])\s*(.*?)\}/is';
 
-    /**
-     * Rotate Image
-     * @param numeric $nId id of image
-     * @param numeric $nAngle Angle of rotate in degrees
-     */
-    public function rotateImageById($nId, $nAngle)
+    public function rotateImageById(int|float $id, int|float $angle): void
     {
-        $oRow = $this->getRowById($nId);
-        $oRow->rotateImage($nAngle);
-    }// function rotateImageById
+        $row = $this->getRowById($id);
+        $row->rotateImage($angle);
+    }
 
-    /**
-     * Get Img-tag by id
-     * @param numeric $nId
-     * @param string $sCssClass
-     * @param array $aParam
-     * @return string
-     */
-    public function getImgTagById($nId, $sCssClass = '', $aParam = null)
+    public function getImgTagById(int|float $id, string $cssClass = '', ?array $param = null): ?string
     {
-        $oRow = $this->getRowById($nId);
-        return $oRow->getImgTag($sCssClass, $aParam);
-    }// function getImgTagById
+        $row = $this->getRowById($id);
+        return $row->getImgTag($cssClass, $param);
+    }
 
-    /**
-     * Get Img-tag by Place-holder code
-     * @param string $sCode
-     * @param array $aParam
-     * @return string
-     */
-    public function getImgTagByCode($sCode, $aParam = null)
+    public function getImgTagByCode(string $code, ?array $param = null): ?string
     {
-        $aMatches = null;
-        preg_match($this->sImgRegExp, $sCode, $aMatches);
-        $oRow = $this->getRowById($aMatches[1]);
-        return $oRow->getImgTag($aMatches[2], $aParam);
-    }// function getImgTagByCode
+        $matches = null;
+        preg_match($this->imgRegExp, $code, $matches);
+        $row = $this->getRowById($matches[1]);
+        return $row->getImgTag($matches[2], $param);
+    }
 
-    /**
-     * Replace Place-holder code to Img-tag
-     * @param string $sCode
-     * @param array $aLinkTbl
-     * @param string $sKeyField
-     * @return string
-     */
-    public function replaceCodeToImgTag($sCode, $aLinkTbl = NULL, $sKeyField = 'id_file_data')
+    public function replaceCodeToImgTag(string $code, ?array $linkTbl = NULL, string $keyField = 'id_file_data'): string
     {
-        $aMatches = null;
-        if (preg_match_all($this->sImgRegExp, $sCode, $aMatches)) {
-            $aRepl = array();
-            $aPos  = array(
+        $matches = null;
+        if (preg_match_all($this->imgRegExp, $code, $matches)) {
+            $repl = [];
+            $pos  = [
                 'id'    => 1,
                 'num'   => 2,
                 'class' => 3,
-            );
-            $aEtt = $this->_prepareImgEtt($aRepl, $aMatches, $aPos, $aLinkTbl, $sKeyField, false);
+            ];
+            $ett = $this->prepareImgEtt($repl, $matches, $pos, $linkTbl, $keyField, false);
 
             // Replace image code
-            foreach ($aEtt as $e) {
-                foreach ($aRepl[$e->getId()] as $v) {
-                    $sCode = str_replace($v[0], $e->getImgTag($v[1]), $sCode);
+            foreach ($ett as $e) {
+                foreach ($repl[$e->getId()] as $v) {
+                    $code = str_replace($v[0], $e->getImgTag($v[1]), $code);
                 }
             }
         }
-        return $sCode;
-    }// function replaceCodeToImgTag
+        return $code;
+    }
 
 
-    /**
-     * Replace Place-holder code to Img-tag
-     * @param string $sCode
-     * @param array $aParam
-     * @param array $aLinkTbl
-     * @param string $sKeyField
-     * @return string
-     */
-    public function advReplaceCodeToImgTag($sCode, $aParam, $aLinkTbl = NULL, $sKeyField = 'id_file_data')
+    public function advReplaceCodeToImgTag(string $code, array $param, ?array $linkTbl = NULL, string $keyField = 'id_file_data'): string
     {
-        $aMatches = null;
-        if (preg_match_all($this->sAdvImgRegExp, $sCode, $aMatches)) {
-            $aRepl = array();
-            $aPos  = array(
+        $matches = null;
+        if (preg_match_all($this->advImgRegExp, $code, $matches)) {
+            $repl = [];
+            $pos  = [
                 'type'   => 1,
                 'id'     => 2,
                 'num'    => 3,
                 'width'  => 4,
                 'height' => 5,
                 'class'  => 6,
-            );
-            $aEtt = $this->_prepareImgEtt($aRepl, $aMatches, $aPos, $aLinkTbl, $sKeyField, true);
+            ];
+            $ett = $this->prepareImgEtt($repl, $matches, $pos, $linkTbl, $keyField, true);
 
             // Replace image code
-            foreach ($aEtt as $e) {
-                foreach ($aRepl[$e->getId()] as $v) {
+            foreach ($ett as $e) {
+                foreach ($repl[$e->getId()] as $v) {
                     $v[2] = strtolower($v[2]);
-                    $aParamTmp = $aParam;
+                    $paramTmp = $param;
                     if (!empty($v[1])) {
-                        $k = $v[2] == 'img' || $v[2] == 'nail' ? $v[2] : 'div';
-                        $aParamTmp[$k]['class'] = empty($aParamTmp[$k]['class']) ? $v[3] : $aParamTmp[$k]['class'] . ' ' . $v[3];
+                        $k = (string)$v[2] === 'img' || (string)$v[2] === 'nail' ? $v[2] : 'div';
+                        $paramTmp[$k]['class'] = empty($paramTmp[$k]['class']) ? $v[3] : $paramTmp[$k]['class'] . ' ' . $v[3];
                     }
                     if (!empty($v[3])) {
-                        $aParamTmp['nail']['width'] = $v[3];
+                        $paramTmp['nail']['width'] = $v[3];
                     }
                     if (!empty($v[4])) {
-                        $aParamTmp['nail']['height'] = $v[4];
+                        $paramTmp['nail']['height'] = $v[4];
                     }
-                    $sCode = str_replace($v[0], $e->advGetImgTag($v[2], $aParamTmp), $sCode);
+                    $code = str_replace($v[0], $e->advGetImgTag($v[2], $paramTmp), $code);
                 }
             }
         }
-        return $sCode;
-    }// function advReplaceCodeToImgTag
+        return $code;
+    }
 
-    /**
-     * Prepare Entity of image
-     * @param array $aRepl
-     * @param array $aMatches
-     * @param array $aPos
-     * @param array $aLinkTbl
-     * @param string $sKeyField
-     * @param boolean $bAdv
-     * @return \fan\core\base\model\rowset
-     */
-    private function _prepareImgEtt(&$aRepl, $aMatches, $aPos, $aLinkTbl, $sKeyField, $bAdv)
+    private function prepareImgEtt(&$repl, array $matches, array $pos, ?array $linkTbl, string $keyField, bool $adv): \fan\core\base\model\rowset
     {
         // Define by ID
-        foreach ($aMatches[$aPos['id']] as $k => $id) {
+        foreach ($matches[$pos['id']] as $k => $id) {
             if ($id) {
-                $aRepl[$id][0] = array($aMatches[0][$k], $aMatches[$aPos['class']][$k]);
-                if ($bAdv){
-                    $aRepl[$id][0][2] = $aMatches[$aPos['type']];
-                    $aRepl[$id][0][3] = @$aMatches[$aPos['width']];
-                    $aRepl[$id][0][4] = @$aMatches[$aPos['height']];
+                $repl[$id][0] = [$matches[0][$k], $matches[$pos['class']][$k]];
+                if ($adv){
+                    $repl[$id][0][2] = $matches[$pos['type']];
+                    $repl[$id][0][3] = $matches[$pos['width']] ?? null;
+                    $repl[$id][0][4] = $matches[$pos['height']] ?? null;
                 }
             }
         }
 
         // Define by NUM
-        if ($aLinkTbl) {
-            foreach ($aMatches[$aPos['num']] as $k => $n) {
+        if ($linkTbl) {
+            foreach ($matches[$pos['num']] as $k => $n) {
                 if ($n) {
-                    $oRow = gr($aLinkTbl[0])->loadByParam(array(
-                        $aLinkTbl[1] => $aLinkTbl[2],
+                    $row = gr($linkTbl[0])->loadByParam([
+                        $linkTbl[1] => $linkTbl[2],
                         'order_num'  => $n,
-                    ));
-                    if ($oRow->checkIsLoad()) {
-                        $aRepl[$oRow->id_file_data][1] = array($aMatches[0][$k], $aMatches[$aPos['class']][$k]);
-                        if ($bAdv){
-                            $aRepl[$id][0][2] = $aMatches[$aPos['type']];
-                            $aRepl[$id][0][3] = @$aMatches[$aPos['width']];
-                            $aRepl[$id][0][4] = @$aMatches[$aPos['height']];
+                    ]);
+                    if ($row->checkIsLoad()) {
+                        $repl[$row->id_file_data][1] = [$matches[0][$k], $matches[$pos['class']][$k]];
+                        if ($adv){
+                            $repl[$id][0][2] = $matches[$pos['type']];
+                            $repl[$id][0][3] = $matches[$pos['width']] ?? null;
+                            $repl[$id][0][4] = $matches[$pos['height']] ?? null;
                         }
                     }
                 }
@@ -185,8 +139,7 @@ abstract class entity extends \fan\core\base\model\spec_file\entity
         }
 
         // Get entity image list
-        return $this->getRowsetByParam($sKeyField . ' IN(' . implode(',', array_keys($aRepl)) . ')');
-    }// function _prepareImgEtt
+        return $this->getRowsetByParam($keyField . ' IN(' . implode(',', array_keys($repl)) . ')');
+    }
 
-} // class \fan\core\base\model\spec_file\image\entity
-?>
+}

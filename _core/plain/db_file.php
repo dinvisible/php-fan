@@ -1,4 +1,8 @@
-<?php namespace fan\core\plain;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\plain;
 //use fan\project\exception\plain\fatal as fatalException;
 /**
  * Base access for plain files (uploaded to the server) class
@@ -18,176 +22,137 @@
 
 class db_file
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * Handler object
      * @var \fan\core\service\plain
      */
-    protected $oHandler;
+    protected ?object $handler = null;
 
     /**
      * Plain config object
      * @var \fan\core\service\config\row
      */
-    protected $oConfig;
+    protected ?object $config = null;
 
     /**
      * Key of plain controller
      * @var string
      */
-    protected $sKey;
+    protected ?string $key = null;
 
     /**
      * @var numeric - Id of Streams
      */
-    protected $nStreamId;
+    protected mixed $streamId = null;
 
-    /**
-     * @var string - File Path
-     */
-    protected $sFilePath;
+    protected ?string $filePath = null;
     /**
      * Content for show nail without saving
      * @var string
      */
-    protected $sPlainContent = null;
-    /**
-     * @var string - File type (possible values: 'image', 'flash', 'video', 'other')
-     */
-    protected $sFileType = null;
+    protected ?string $plainContent = null;
+    protected ?string $fileType = null;
 
-    /**
-     * @var integer - ID
-     */
-    protected $mId;
+    protected mixed $id = null;
 
     /**
      * ContentDisposition: true - inline; false - attachment
      * @var
      */
-    protected $bPosition = true;
+    protected bool $position = true;
 
     /**
      * @var
      */
-    protected $sApp = null;
+    protected ?string $app = null;
 
     /**
      * Database row
      * @var \fan\core\base\model\row
      */
-    protected $oRow = null;
+    protected ?object $row = null;
 
-    /**
-     * Constructor of Plain controller db_file
-     * @param boolean $bAllowIni
-     */
-    public function __construct(\fan\core\service\plain $oHandler, $sKey)
+    public function __construct(\fan\core\service\plain $handler, $key)
     {
-        $this->oHandler = $oHandler;
-        $this->sKey     = $sKey;
-    } // function __construct
+        $this->handler = $handler;
+        $this->key     = (string)$key;
+    }
 
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Output file content
-     */
-    public function outputContent()
+    public function outputContent(): void
     {
-        if (!empty($this->nStreamId)) {
-            if(rewind($this->nStreamId) === false) {
+        if (!empty($this->streamId)) {
+            if (rewind($this->streamId) === false) {
                 //ToDo: Save Error Message there
-            } elseif(fpassthru($this->nStreamId) === false) {
+            } elseif (fpassthru($this->streamId) === false) {
                 //ToDo: Save Error Message there
             }
-        } elseif (!empty($this->sFilePath)) {
-            readfile($this->sFilePath);
+        } elseif (!empty($this->filePath)) {
+            readfile($this->filePath);
         } else {
             //ToDo: Save Error Message there
             echo 'Error file source';
         }
     } // outputFile
 
-    /**
-     * Get File
-     * @return array|string
-     */
-    public function getFile()
+    public function getFile(): array|string
     {
         return $this->_prepare()->_init()->_getContent();
     } // getFile
 
-    /**
-     * Set Config
-     * @param \fan\core\service\config\row $oConfig
-     * @return \fan\core\plain\db_file
-     */
-    public function setConfig(\fan\core\service\config\row $oConfig)
+    public function setConfig(\fan\core\service\config\row $config): static
     {
-        if (empty($this->oConfig)) {
-            $this->oConfig = $oConfig;
+        if (empty($this->config)) {
+            $this->config = $config;
         }
         return $this;
     } // setConfig
 
-    /**
-     * Get Key
-     * @return string
-     */
-    public function getKey()
+    public function getKey(): ?string
     {
-        return $this->sKey;
+        return $this->key;
     } // getKey
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Get content OR content outputer
-     * @return array|string
-     */
-    protected function _getContent()
+    protected function _getContent(): array|string
     {
-        return empty($this->sPlainContent) ? array($this, 'outputContent') : $this->sPlainContent;
-    } // function _getContent
+        return empty($this->plainContent) ? [$this, 'outputContent'] : $this->plainContent;
+    }
 
-    /**
-     * Set properties file output: mId, mPos, sApp, sErrMsg
-     * @return \fan\core\plain\db_file
-     */
-    protected function _prepare()
+    protected function _prepare(): static
     {
-        $oSR  = service('request');
-        $this->mId = $oSR->get('id', 'AGP');
-        if (empty($this->mId)) {
-            $this->mId = $oSR->get(0, 'A');
+        $sr  = $this->containerService('request');
+        $this->id = $sr->get('id', 'AGP');
+        if (empty($this->id)) {
+            $this->id = $sr->get(0, 'A');
         }
-        if (!empty($this->mId)) {
-            $this->sApp      = $oSR->get('app',  'GPA');
-            $this->sFileType = $oSR->get('type', 'GPA');
+        if (!empty($this->id)) {
+            $this->app      = (string)$sr->get('app',  'GPA');
+            $this->fileType = (string)$sr->get('type', 'GPA');
 
-            $this->oHandler->addHeader('disposition', $oSR->get('pos', 'GPA', true));
-            $this->oHandler->addHeader('response', 200);
+            $this->handler->addHeader('disposition', $sr->get('pos', 'GPA', true));
+            $this->handler->addHeader('response', 200);
         }
         return $this;
-    } // function _prepare
+    }
 
-    /**
-     * Init data
-     * @return \fan\core\plain\db_file
-     */
-    protected function _init()
+    protected function _init(): static
     {
-        if (!empty($this->sApp)) {
-            \fan\project\service\application::instance()->setAppName($this->sApp);
+        if (!empty($this->app)) {
+            $this->containerService('application')->setAppName($this->app);
         }
 
-        $aData = $this->_getFileData();
-        if (!empty($aData)) {
-            $this->sFilePath = $aData['filePath'];
-            foreach (array('contentType', 'filename', 'modified', 'length', 'legthRange', 'cacheLimit') as $k) {
-                if (!empty($aData['headers'][$k])) {
-                    $this->oHandler->addHeader($k, $aData['headers'][$k]);
+        $data = $this->_getFileData();
+        if (!empty($data)) {
+            $this->filePath = $data['filePath'];
+            foreach (['contentType', 'filename', 'modified', 'length', 'legthRange', 'cacheLimit'] as $k) {
+                if (!empty($data['headers'][$k])) {
+                    $this->handler->addHeader($k, $data['headers'][$k]);
                 }
             }
         }
@@ -195,91 +160,80 @@ class db_file
         if (class_exists('\fan\core\service\database', false)) {
             \fan\project\service\database::close();
         }
-        if (!empty($this->sFilePath) || !empty($this->sPlainContent)) {
+        if (!empty($this->filePath) || !empty($this->plainContent)) {
             return $this;
         }
 
-        if (!$this->oHandler->isError()) {
-            $this->oHandler->setErrorMessage(msg('ERROR_REQUESTED_FILE_IS_NOT_FOUND'));
+        if (!$this->handler->isError()) {
+            $this->handler->setErrorMessage(msg('ERROR_REQUESTED_FILE_IS_NOT_FOUND'));
         }
         return $this;
-    } // function _init
+    }
 
-    /**
-     * Get file data
-     * file data or null - if the file is not valid
-     * @param boolean $bIdIsEncrypt
-     * @return array|null
-     */
-    protected function _getFileData($bIdIsEncrypt = null)
+    protected function _getFileData($idIsEncrypt = null): ?array
     {
-        if (empty($this->mId)) {
+        if (empty($this->id)) {
             return null;
         }
-        $oCache = \fan\project\service\cache::instance('file_store');
-        $aData  = $oCache->get($this->mId);
-        if (!empty($aData)) {
-            if (!is_readable($aData['filePath'])) {
-                $oCache->delete($this->mId);
-            } elseif (!empty($aData) && $aData['fileDate'] == filemtime($aData['filePath']) && $aData['headers']['length'] == filesize($aData['filePath'])) {
-                return $aData;
+        $cache = $this->containerService('cache', 'file_store');
+        $cacheKey = (string)$this->id;
+        $data  = $cache->get($cacheKey);
+        if (!empty($data)) {
+            if (!is_readable($data['filePath'])) {
+                $cache->delete($cacheKey);
+            } elseif (!empty($data) && (int)$data['fileDate'] === (int)filemtime($data['filePath']) && (int)$data['headers']['length'] === (int)filesize($data['filePath'])) {
+                return $data;
             }
         }
 
-        /* @var $oRow \fan\core\base\model\file_data\row */
-        $oRow = $this->_getRow($bIdIsEncrypt);
+        /* @var $row \fan\core\base\model\file_data\row */
+        $row = $this->_getRow($idIsEncrypt);
 
-        if ($oRow) {
-            if (!$oRow->checkAccess()) {
-                $this->oHandler->setErrorMessage(msg('ERROR_YOU_DO_NOT_HAVE_PERMISSION'), 403);
+        if ($row) {
+            if (!$row->checkAccess()) {
+                $this->handler->setErrorMessage(msg('ERROR_YOU_DO_NOT_HAVE_PERMISSION'), 403);
                 return null;
             } else {
-                $sFilePath = \bootstrap::parsePath($oRow->getFilePath());
-                if (!is_readable($sFilePath)) {
+                $filePath = \bootstrap::parsePath((string)$row->getFilePath());
+                if (!is_readable($filePath)) {
                     return null;
                 }
-                $aData = array(
-                    'filePath' => $sFilePath,
-                    'fileDate' => filemtime($sFilePath),
-                    'headers' => array(
-                        'contentType' => $oRow->get_mime_type(),
-                        'filename'    => $oRow->get_src_name(),
-                        'length'      => filesize($sFilePath),
+                $data = [
+                    'filePath' => $filePath,
+                    'fileDate' => filemtime($filePath),
+                    'headers' => [
+                        'contentType' => $row->get_mime_type(),
+                        'filename'    => $row->get_src_name(),
+                        'length'      => filesize($filePath),
                         'legthRange'  => 'bytes',
-                        'modified'    => strtotime($oRow->get_update_date()),
-                    ),
-                );
+                        'modified'    => strtotime($row->get_update_date()),
+                    ],
+                ];
                 // ToDo: Save cache only if file do not need to check access
-                $oCache->set($this->mId, $aData, true);
-                return $aData;
+                $cache->set($cacheKey, $data, true);
+                return $data;
             }
         }
         return null;
-    } // function _getFileData
+    }
 
-    /**
-     * Get Entity entity_file_data
-     * Return NULL if the file is not valid
-     * @return \fan\core\base\model\file_data\row|null
-     */
-    protected function _getRow($bIdIsEncrypt = null)
+    protected function _getRow($idIsEncrypt = null): ?\fan\core\base\model\file_data\row
     {
-        if (is_null($this->oRow)) {
-            $this->oRow = gr(service('entity')->getFileNsSuffix() . 'file_data');
-            if (is_null($bIdIsEncrypt)) {
-                $this->oRow->loadById($this->mId, false); // !is_numeric($this->mId)
-                if (!$this->oRow->checkIsLoad()) {
-                    $this->oRow->loadById($this->mId, true);
+        if (is_null($this->row)) {
+            $this->row = gr($this->containerService('entity')->getFileNsSuffix() . 'file_data');
+            if (is_null($idIsEncrypt)) {
+                $this->row->loadById($this->id, false); // !is_numeric($this->id)
+                if (!$this->row->checkIsLoad()) {
+                    $this->row->loadById($this->id, true);
                 }
             } else {
-                $this->oRow->loadById($this->mId, $bIdIsEncrypt);
+                $this->row->loadById($this->id, $idIsEncrypt);
             }
         }
-        return $this->oRow->checkIsLoad() && (is_null($this->sFileType) || $this->oRow->get_file_type() == $this->sFileType) ? $this->oRow : null;
-    } // function _getRow
+        return $this->row->checkIsLoad() && (is_null($this->fileType) || (string)$this->row->get_file_type() === (string)$this->fileType) ? $this->row : null;
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\plain\db_file
-?>
+}

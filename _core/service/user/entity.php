@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\user;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\user;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * User-data engine by data from entity
@@ -21,170 +25,141 @@ class entity extends base
      * DB row data
      * @var \fan\core\base\model\row
      */
-    protected $oRow;
+    protected ?object $row = null;
 
     /**
      * Allowed Get/Set Entity-Methods
      * @var array
      */
-    protected $aMapping = array();
+    protected array $mapping = [];
 
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Convert text of password to text of hash
-     * @param string $sPassword
-     * @return string
-     */
-    public function makePasswordHash($sPassword)
+    public function makePasswordHash(string $password): string
     {
-        $sLogin = array_val($this->aData, 'login', $this->mIdentifyer);
-        return $sLogin ? md5($sLogin . $sPassword . $this->oConfig->get('ENGINE_KEY')) : '';
-    } // function makePasswordHash
+        $login = array_val($this->data, 'login', $this->identifyer);
+        return $login ? md5((string)$login . $password . (string)$this->config->get('ENGINE_KEY')) : '';
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Save User Data and return TRUE if success
-     * @return boolean
-     */
-    protected function _loadData()
+    protected function _loadData(): bool
     {
-        $oConf = $this->oConfig;
-        $this->oRow = null;
-        foreach ($oConf->get('IDENTIFYERS') as $v) {
-            $oRow = ge($oConf->get('ENGINE_KEY'))->getRowByParam(array($v => $this->mIdentifyer));
-            if ($oRow->checkIsLoad()) {
-                $this->oRow  = $oRow;
-                $this->aData = $this->_getEntityData();
+        $conf = $this->config;
+        $this->row = null;
+        foreach ($conf->get('IDENTIFYERS') as $v) {
+            $row = ge((string)$conf->get('ENGINE_KEY'))->getRowByParam([$v => $this->identifyer]);
+            if ($row->checkIsLoad()) {
+                $this->row  = $row;
+                $this->data = $this->_getEntityData();
                 return true;
             }
         }
         return false;
-    } // function _loadData
+    }
 
-    /**
-     * Save User Data and return TRUE if success
-     * @return boolean
-     */
-    protected function _saveData()
+    protected function _saveData(): bool
     {
-        $oRow = $this->_getRow();
-        if (!empty($oRow) && $this->isChanged()) {
-            $aMethods = $this->_getMethodList('Setting');
-            if (!empty($aMethods)) {
-                foreach ($this->aChanged as $k => $v) {
-                    if (!empty($aMethods[$k])) {
-                        $sMethod = $aMethods[$k];
-                        $oRow->$sMethod($v);
+        $row = $this->_getRow();
+        if (!empty($row) && $this->isChanged()) {
+            $methods = $this->_getMethodList('Setting');
+            if (!empty($methods)) {
+                foreach ($this->changed as $k => $v) {
+                    if (!empty($methods[$k])) {
+                        $method = $methods[$k];
+                        $row->$method($v);
                     }
                 }
-                $oRow->save();
+                $row->save();
             }
             return true;
         }
         return false;
-    } // function _saveData
+    }
 
-    /**
-     * Validate User Data before saving
-     * @return boolean
-     */
-    protected function _validateForSave()
+    protected function _validateForSave(): bool
     {
-        $oRow  = $this->_getRow();
-        return !empty($oRow);
-    } // function _validateForSave
+        $row  = $this->_getRow();
+        return !empty($row);
+    }
 
-    /**
-     * Get Data by Entity
-     * @return array
-     */
-    protected function _getEntityData()
+    protected function _getEntityData(): array
     {
-        $aMethods = $this->_getMethodList('Getting');
-        if (!empty($aMethods)) {
-            $aRequired = array('id' => 0, 'password' => 0, 'login' => 0, 'roles' => 0);
-            if (count(array_intersect_key($aMethods, $aRequired)) < 4) {
-                throw new fatalException($this->oFacade, 'Required keys "' . implode('", "', aray_keys($aRequired)) . '" are not get by method "getGettingMap".');
+        $methods = $this->_getMethodList('Getting');
+        if (!empty($methods)) {
+            $required = ['id' => 0, 'password' => 0, 'login' => 0, 'roles' => 0];
+            if (count(array_intersect_key($methods, $required)) < 4) {
+                throw new fatalException($this->facade, 'Required keys "' . implode('", "', array_keys($required)) . '" are not get by method "getGettingMap".');
             }
         }
 
-        $aData = array();
-        $oRow  = $this->_getRow();
-        if (empty($aMethods)) {
+        $data = [];
+        $row  = $this->_getRow();
+        if (empty($methods)) {
             foreach ($this->_getKeyList() as $k) {
                 $v = 'get_' . $k;
-                $aData[$k] = $oRow->$v(null, false);
+                $data[$k] = $row->$v(null, false);
             }
         } else {
-            foreach ($aMethods as $k => $v) {
-                $aData[$k] = $oRow->$v();
+            foreach ($methods as $k => $v) {
+                $data[$k] = $row->$v();
             }
         }
 
-        return $aData;
-    } // function _getEntityData
+        return $data;
+    }
 
     /**
-     * Get List of Method
-     * @param string $sType
-     * @return array|null
      * @throws fatalException
      */
-    protected function _getMethodList($sType)
+    protected function _getMethodList(string $type): ?array
     {
-        if (!in_array($sType, array('Getting', 'Setting'))) {
-            throw new fatalException($this->oFacade, 'Incorrect type of mapping "' . $sType . '".');
+        if (!in_array($type, ['Getting', 'Setting'])) {
+            throw new fatalException($this->facade, 'Incorrect type of mapping "' . $type . '".');
         }
 
-        while (!isset($this->aMapping[$sType])) {
-            $oRow = $this->_getRow();
-            if (empty($oRow)) {
+        while (!isset($this->mapping[$type])) {
+            $row = $this->_getRow();
+            if (empty($row)) {
                 return null;
             }
 
-            $sMethod = 'get' . $sType . 'Map';
-            $aKeys   = array_flip($this->_getKeyList());
-            if (method_exists($oRow, $sMethod)) {
-                $aMap = $oRow->$sMethod($sType);
-            } elseif ($sType == 'Getting') {
-                $aMap = null;
+            $method = 'get' . $type . 'Map';
+            $keys   = array_flip($this->_getKeyList());
+            if (method_exists($row, $method)) {
+                $map = $row->$method($type);
+            } elseif ($type === 'Getting') {
+                $map = null;
             } else {
-                $sErr  = 'Method for mapping User-data "' . get_class_alt($oRow) . '::' . $sMethod . '()" isn\'t set.' . "\n";
-                $sErr .= 'Keys: ("' . implode('", "', array_keys($aKeys)) . '").';
-                throw new fatalException($this->oFacade, $sErr);
+                $err  = 'Method for mapping User-data "' . get_class_alt($row) . '::' . $method . '()" isn\'t set.' . "\n";
+                $err .= 'Keys: ("' . implode('", "', array_keys($keys)) . '").';
+                throw new fatalException($this->facade, $err);
             }
 
-            $this->aMapping[$sType] = empty($aMap) ? array() : array_intersect_key($aMap, $aKeys);
+            $this->mapping[$type] = empty($map) ? [] : array_intersect_key(adduceToArray($map), $keys);
         }
 
-        return $this->aMapping[$sType];
-    } // function _getMethodList
+        return $this->mapping[$type];
+    }
 
-    /**
-     * Get Row
-     * @return \fan\core\base\model\row|null
-     */
-    protected function _getRow()
+    protected function _getRow(): ?\fan\core\base\model\row
     {
-        if (empty($this->oRow)) {
-            $sEttKey = $this->oConfig->get('ENGINE_KEY');
-            if ($this->bIsNew) {
-                $this->oRow = gr($sEttKey);
-            } elseif (!empty($this->aData['id'])) {
-                $this->oRow = gr($sEttKey, $this->aData['id']);
+        if (empty($this->row)) {
+            $ettKey = $this->config->get('ENGINE_KEY');
+            if ($this->isNew) {
+                $this->row = gr((string)$ettKey);
+            } elseif (!empty($this->data['id'])) {
+                $this->row = gr((string)$ettKey, $this->data['id']);
             } else {
                 return null;
             }
-        } elseif (!$this->oRow->checkIsLoad() && !$this->bIsNew) {
+        } elseif (!$this->row->checkIsLoad() && !$this->isNew) {
             return null;
         }
-        return $this->oRow;
-    } // function _getRow
+        return $this->row;
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\service\user\entity
-?>
+}

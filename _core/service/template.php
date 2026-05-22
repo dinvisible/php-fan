@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Template manager service
@@ -20,255 +23,221 @@ class template extends \fan\core\base\service\single
     /**
      * Constant of PCRE for plain code
      */
-    const plainPcre   = '/(.*?)(?:\{(?:(\@?)(\$)|(\-\>)|\=)([^\}]+)\s*\}|$)/s';
+    public const plainPcre   = '/(.*?)(?:\{(?:(\@?)(\$)|(\-\>)|\=)([^\}]+)\s*\}|$)/s';
 
     /**
      * Constant of PCRE for control structure
      */
-    const controlPcre = '/(.*?)(?:\{(?:({TAG_LIST})(?:\s+([^\}]*))?|(else)|\/(if|for|foreach))\s*\}|$)/s';
+    public const controlPcre = '/(.*?)(?:\{(?:({TAG_LIST})(?:\s+([^\}]*))?|(else)|\/(if|for|foreach))\s*\}|$)/s';
 
     /**
      * Constant of PCRE for simple parameters
      */
-    const paramSimplePcre   = '/\s*(([\'\"])?(?(2).+?(?<!\\\\)\2|\$?\w+(?:\[[^\]]+\])*))(?:\s+|$)/si';
+    public const paramSimplePcre   = '/\s*(([\'\"])?(?(2).+?(?<!\\\\)\2|\$?\w+(?:\[[^\]]+\])*))(?:\s+|$)/si';
 
     /**
      * Constant of PCRE for standard parameters (as hash)
      */
-    const paramStandardPcre = '/([a-z_0-9]+)\s*\=\s*(([\'\"])?(?(3).+?(?<!\\\\)\3|\$?\w+(?:\[[^\]]+\])*))(?:\s+|$)/si';
+    public const paramStandardPcre = '/([a-z_0-9]+)\s*\=\s*(([\'\"])?(?(3).+?(?<!\\\\)\3|\$?\w+(?:\[[^\]]+\])*))(?:\s+|$)/si';
 
     /**
      * List of corresspond tags to Engines
      * @var array
      */
-    protected $aTags = array();
+    protected array $tags = [];
 
     /**
      * List of literals
      * @var array
      */
-    protected $aLiterals = array();
+    protected array $literals = [];
 
     /**
      * Parse data
      * @var array
      */
-    protected $aParseData = array();
+    protected array $parseData = [];
 
-    /**
-     * @var boolean Auto strip
-     */
-    private $sTemplateClass = '<?php namespace {NAMESPACE};
+    private string $templateClass = '<?php namespace {NAMESPACE};
 //SRC: {SOURCE_PATH}
 class {CLASS_NAME} extends {PARENT_CLASS}{
-protected function parseHtml(){
-foreach($this->aTplVar as $sAssignTplKey=>&$mAssignTplVal){$$sAssignTplKey=&$mAssignTplVal;}
-$sReturnHtmlVal = \'\';
-{COMPILE_CODE}
-return $sReturnHtmlVal;}
+	protected function parseHtml(): mixed{
+	foreach($this->tplVar as $assignTplKey=>&$assignTplVal){$$assignTplKey=&$assignTplVal;}
+	$returnHtmlVal = \'\';
+	{COMPILE_CODE}
+return $returnHtmlVal;}
 {ADD_METHODS}
 }
 ?>';
 
     /**
-     * Get object of block template
-     * @param string $sTemplatePath
-     * @param string $sParent
-     * @param \fan\core\block\base $mBlock
-     * @return \fan\core\service\template\type\base
      * @throws fatalException
      */
-    public function get($sTemplatePath, $sParent = null, $mBlock = null)
+    public function get(string $templatePath, ?string $parent = null, ?\fan\core\block\base $block = null): \fan\core\service\template\type\base
     {
-        if (!is_readable($sTemplatePath)) {
-            throw new fatalException($this, 'Template file "' . $sTemplatePath . '".');
+        if (!is_readable($templatePath)) {
+            throw new fatalException($this, 'Template file "' . $templatePath . '".');
         }
-        list ($sNameSpace, $sClassName, $sFileName) = $this->_getClassAttributes($sTemplatePath, $mBlock);
+        list ($nameSpace, $className, $fileName) = $this->_getClassAttributes($templatePath, $block);
 
-        $sCompilePath = \bootstrap::parsePath($this->getConfig('CACHE_DIR')) . $sFileName . '.php';
-        if (!file_exists($sCompilePath) || filemtime($sCompilePath) <  filemtime($sTemplatePath)) {
-            $this->_makeClass($sTemplatePath, $sCompilePath, $sNameSpace, $sClassName, ($sParent ? $sParent : $this->getConfig('PARENT_CLASS')));
+        $compilePath = \bootstrap::parsePath((string)$this->getConfig('CACHE_DIR')) . $fileName . '.php';
+        if (
+            !file_exists($compilePath) ||
+            filemtime($compilePath) < filemtime($templatePath) ||
+            !$this->isCompiledTemplateCurrent($compilePath)
+        ) {
+            $this->_makeClass($templatePath, $compilePath, $nameSpace, $className, (string)($parent ? $parent : $this->getConfig('PARENT_CLASS')));
         }
-        require_once $sCompilePath;
-        $sClassName = '\\' . $sNameSpace . '\\' . $sClassName;
-        return new $sClassName($mBlock);
-    } // function get
+        $className = '\\' . $nameSpace . '\\' . $className;
+        \fan\project\adapter\compiled_template_loader::load($className, $compilePath);
+        return new $className($block);
+    }
 
-    /**
-     * Get object of block template
-     * @return array
-     */
-    public function getParseData()
+    public function getParseData(): array
     {
-        return $this->aParseData;
-    } // function getParseData
+        return $this->parseData;
+    }
 
-    /**
-     * Disable Strip-operation for template
-     * @param boolean $bAllowStrip
-     */
-    public function disableStrip($bAllowStrip = false)
+    public function disableStrip(bool $allowStrip = false): void
     {
-        $this->oConfig['USE_STRIP'] = !empty($bAllowStrip);
-    } // function disableStrip
+        $this->config['USE_STRIP'] = !empty($allowStrip);
+    }
 
     // ------------------------- \\
 
-    /**
-     * Parse "literal" code
-     * @param string $sData
-     * @return string
-     */
-    protected function parse_literal($sData)
+    protected function parse_literal(string $data): string
     {
-        return @$this->aLiterals[$sData] ? '$sReturnHtmlVal.=' . $this->_addSlashes($this->aLiterals[$sData]) . ";\n" : '';
-    } // function parse_literal
+        return !empty($this->literals[$data]) ? '$returnHtmlVal.=' . $this->_addSlashes($this->literals[$data]) . ";\n" : '';
+    }
 
-    /**
-     * Parse plain code
-     * @param string $sData
-     * @return string
-     */
-    protected function parse_plain($sData)
+    protected function parse_plain(string $data): string
     {
-        $sRet = '';
-        if (preg_match_all(self::plainPcre, $sData, $aMatches)) {
-            foreach ($aMatches[0] as $i => $val) {
-                if (!empty($aMatches[1][$i])) {
-                    $sRet .=  $this->_addSlashes($aMatches[1][$i]) . '.';
+        $ret = '';
+        if (preg_match_all(self::plainPcre, $data, $matches)) {
+            foreach ($matches[0] as $i => $val) {
+                if (!empty($matches[1][$i])) {
+                    $ret .=  $this->_addSlashes($matches[1][$i]) . '.';
                 }
-                if (!empty($aMatches[5][$i])) {
-                    $sRet .= '(';
-                    if (!empty($aMatches[3][$i])) {
-                        $sRet .= @$aMatches[2][$i] . '$';
-                    } elseif (!empty($aMatches[4][$i])) {
-                        $sRet .= '$this->';
+                if (!empty($matches[5][$i])) {
+                    $ret .= '(';
+                    if (!empty($matches[3][$i])) {
+                        $ret .= ($matches[2][$i] ?? '') . '$';
+                    } elseif (!empty($matches[4][$i])) {
+                        $ret .= '$this->';
                     }
-                    $sRet .= $aMatches[5][$i] . ').';
+                    $ret .= $matches[5][$i] . ').';
                 }
             }
         }
-        return $sRet ? '$sReturnHtmlVal.=' . substr($sRet, 0, -1) . ";\n" : '';
-    } // function parse_plain
+        return $ret ? '$returnHtmlVal.=' . substr($ret, 0, -1) . ";\n" : '';
+    }
 
     // ------------------------- \\
 
-    /**
-     * Get Attributes of Class
-     * @param string $sTemplatePath
-     * @param \fan\core\block\base $mBlock
-     * @return array
-     */
-    protected function _getClassAttributes($sTemplatePath, $mBlock)
+    protected function _getClassAttributes(string $templatePath, mixed $block): array
     {
-        if (is_object($mBlock) || is_string($mBlock)) {
-            $sMainName = get_class_name($mBlock);
+        if (is_object($block) || is_string($block)) {
+            $mainName = get_class_name($block);
         } else {
-            $sMainName = basename($sTemplatePath, '.tpl');
-            $sMainName = preg_replace('/\W/', '_', $sMainName);
+            $mainName = basename($templatePath, '.tpl');
+            $mainName = preg_replace('/\W/', '_', $mainName);
         }
-        $sClassName = $sMainName . '__' . substr(md5($sTemplatePath), 0, $this->getConfig('UNIQUE_KEY_LENGH'));
-        $sFileName  = $sClassName;
+        $mainName = (string)$mainName;
+        $className = $mainName . '__' . substr(md5($templatePath), 0, (int)$this->getConfig('UNIQUE_KEY_LENGH'));
+        $fileName  = $className;
 
-        $sNameSpace = $this->getConfig('NameSpace');
+        $nameSpace = (string)$this->getConfig('NameSpace');
 
-        return array($sNameSpace, $sClassName, $sFileName);
-    } // function _getClassAttribute
+        return [$nameSpace, $className, $fileName];
+    }
 
-    /**
-     * Make of compiled template class
-     * @param string $sTemplatePath
-     * @param string $sCompilePath
-     * @param string $sNameSpace
-     * @param string $sClassName
-     * @param string $sType
-     */
-    protected function _makeClass($sTemplatePath, $sCompilePath, $sNameSpace, $sClassName, $sType)
+    protected function _makeClass(string $templatePath, string $compilePath, string $nameSpace, string $className, string $type): void
     {
-        $this->aParseData['template'] = $sTemplatePath;
+        $this->parseData['template'] = $templatePath;
         // Prepare engines
-        foreach (call_user_func(array($sType, 'getEngineList')) as $sEngineName) {
-            $oEngine = $this->_getEngine('parser\\' . $sEngineName);
-            foreach ($oEngine->getTagList() as $sTagName) {
-                $this->aTags[$sTagName] = $oEngine;
+        foreach (call_user_func([$type, 'getEngineList']) as $engineName) {
+            $engine = $this->_getEngine('parser\\' . $engineName);
+            foreach ($engine->getTagList() as $tagName) {
+                $this->tags[$tagName] = $engine;
             }
         }
-        foreach (call_user_func(array($sType, 'getAutoParseTag')) as $sTagName => $aAutoData) {
-            if (!isset($this->aTags[$sTagName]) && isset($oEngine) && $oEngine->setAutoTag($sTagName, $aAutoData)) { // ToDo: Explore "setAutoTag" there
-                $this->aTags[$sTagName] = $oEngine;
+        foreach (call_user_func([$type, 'getAutoParseTag']) as $tagName => $autoData) {
+            if (!isset($this->tags[$tagName]) && isset($engine) && $engine->setAutoTag($tagName, $autoData)) { // ToDo: Explore "setAutoTag" there
+                $this->tags[$tagName] = $engine;
             }
         }
-        $this->aTags['literal'] = $this;
+        $this->tags['literal'] = $this;
 
-        $sSrcCode = file_get_contents($sTemplatePath);
+        $srcCode = (string)file_get_contents($templatePath);
         // Get methods
-        $sAddMethods = '';
-        if (preg_match_all('/\{method:\s*(.*?)[\n\r\s]+endmethod\}/s', $sSrcCode, $aMatches)) {
-            foreach ($aMatches[0] as $i => $v) {
-                $sAddMethods .= $aMatches[1][$i];
-                $sSrcCode = str_replace($aMatches[0][$i], '', $sSrcCode);
+        $addMethods = '';
+        if (preg_match_all('/\{method:\s*(.*?)[\n\r\s]+endmethod\}/s', $srcCode, $matches)) {
+            foreach ($matches[0] as $i => $v) {
+                $addMethods .= $matches[1][$i];
+                $srcCode = str_replace($matches[0][$i], '', $srcCode);
             }
         }
 
         // Remove comments
-        $sSrcCode = preg_replace('/\{\*.*?\*\}/s', '', $sSrcCode);
+            $srcCode = preg_replace('/\{\*.*?\*\}/s', '', $srcCode) ?? $srcCode;
 
         // Save literals
-        if (preg_match_all('/\{literal\}(.*?)\{\/literal\}/s', $sSrcCode, $aMatches)) {
-            foreach ($aMatches[0] as $i => $v) {
-                $this->aLiterals[$i] = $aMatches[1][$i];
-                $sSrcCode = str_replace($aMatches[0][$i], '{literal ' . $i . '}', $sSrcCode);
+        if (preg_match_all('/\{literal\}(.*?)\{\/literal\}/s', $srcCode, $matches)) {
+            foreach ($matches[0] as $i => $v) {
+                $this->literals[$i] = $matches[1][$i];
+                $srcCode = str_replace($matches[0][$i], '{literal ' . $i . '}', $srcCode);
             }
         }
         // Strip code, except "nostrip"
         if ($this->getConfig('USE_STRIP')) {
-            $aNoStrip = array();
-            if (preg_match_all('/\{nostrip\}(.*?)\{\/nostrip\}/s', $sSrcCode, $aMatches)) {
-                foreach ($aMatches[0] as $i => $v) {
+            $noStrip = [];
+            if (preg_match_all('/\{nostrip\}(.*?)\{\/nostrip\}/s', $srcCode, $matches)) {
+                foreach ($matches[0] as $i => $v) {
                     $k = '{nostrip ' . $i . '}';
-                    $aNoStrip[$k] = $aMatches[1][$i];
-                    $sSrcCode = str_replace($aMatches[0][$i], $k, $sSrcCode);
+                    $noStrip[$k] = $matches[1][$i];
+                    $srcCode = str_replace($matches[0][$i], $k, $srcCode);
                 }
             }
-            $sSrcCode = preg_replace('/\s{2,}/', ' ', str_replace(array("\r", "\n"), array('', ' '), $sSrcCode));
-            foreach ($aNoStrip as $k => $v) {
-                $sSrcCode = str_replace($k, $v, $sSrcCode);
+            $srcCode = preg_replace('/\s{2,}/', ' ', str_replace(["\r", "\n"], ['', ' '], $srcCode)) ?? $srcCode;
+            foreach ($noStrip as $k => $v) {
+                $srcCode = str_replace($k, $v, $srcCode);
             }
         }
         // get Compile Code by other tags
-        $sCode = '';
-        if (preg_match_all(str_replace('{TAG_LIST}', implode('|', array_keys($this->aTags)), self::controlPcre), $sSrcCode, $aMatches)) {
-            foreach ($aMatches[0] as $i => $val) {
-                $this->aParseData['part'] = $val;
-                if (!empty($aMatches[1][$i])) {
-                    $sCode .= $this->parse_plain($aMatches[1][$i]);
+        $code = '';
+        if (preg_match_all(str_replace('{TAG_LIST}', implode('|', array_keys($this->tags)), self::controlPcre), $srcCode, $matches)) {
+            foreach ($matches[0] as $i => $val) {
+                $this->parseData['part'] = $val;
+                if (!empty($matches[1][$i])) {
+                    $code .= $this->parse_plain($matches[1][$i]);
                 }
-                if (!empty($aMatches[2][$i])) {
-                    $sCode .= call_user_func(array($this->aTags[$aMatches[2][$i]], 'parse_' . $aMatches[2][$i]), @$aMatches[3][$i]);
+                if (!empty($matches[2][$i])) {
+                    $code .= call_user_func([$this->tags[$matches[2][$i]], 'parse_' . $matches[2][$i]], (string)($matches[3][$i] ?? ''));
                 }
-                if (!empty($aMatches[4][$i])) {
-                    $sCode .= $aMatches[4][$i] . ":\n";
+                if (!empty($matches[4][$i])) {
+                    $code .= $matches[4][$i] . ":\n";
                 }
-                if (!empty($aMatches[5][$i])) {
-                    $sCode .= 'end' . $aMatches[5][$i] . ";\n";
+                if (!empty($matches[5][$i])) {
+                    $code .= 'end' . $matches[5][$i] . ";\n";
                 }
             }
         }
-        $sCode = str_replace(array('{ldelim}', '{rdelim}'), array('{', '}'), $sCode);
+        $code = str_replace(['{ldelim}', '{rdelim}'], ['{', '}'], $code);
 
         // Save file
-        file_put_contents($sCompilePath, str_replace(array('{SOURCE_PATH}', '{NAMESPACE}', '{CLASS_NAME}', '{PARENT_CLASS}', '{COMPILE_CODE}', '{ADD_METHODS}'), array($sTemplatePath, $sNameSpace, $sClassName, $sType, $sCode, $sAddMethods), $this->sTemplateClass));
-        $this->aTags = $this->aLiterals = array();
-    } // function _makeClass
+        file_put_contents($compilePath, str_replace(['{SOURCE_PATH}', '{NAMESPACE}', '{CLASS_NAME}', '{PARENT_CLASS}', '{COMPILE_CODE}', '{ADD_METHODS}'], [$templatePath, $nameSpace, $className, $type, $code, $addMethods], $this->templateClass));
+        $this->tags = $this->literals = [];
+    }
 
-    /**
-     * Add Slashes
-     * @param string $sData
-     * @return string
-     */
-    protected function _addSlashes($sData)
+    protected function _addSlashes(string $data): string
     {
-        return '\'' . str_replace(array('\\', '\''), array('\\\\', '\\\''), $sData) . '\'';
-    } // function addSlashes
-} // class \fan\core\service\template
-?>
+        return '\'' . str_replace(['\\', '\''], ['\\\\', '\\\''], $data) . '\'';
+    }
+
+    protected function isCompiledTemplateCurrent(string $compilePath): bool
+    {
+        $source = file_get_contents($compilePath);
+
+        return is_string($source) && str_contains($source, 'function parseHtml(): mixed');
+    }
+}

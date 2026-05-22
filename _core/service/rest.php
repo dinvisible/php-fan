@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * REST-client service
@@ -20,203 +23,146 @@ class rest extends \fan\core\base\service\multi
     /**
      * @var \fan\core\service\rest[] Service's Instances
      */
-    private static $aInstances;
+    private static ?array $instances = null;
 
-    /**
-     * @var string Default Connection Name
-     */
-    private static $sDefaultName;
+    private static ?string $defaultName = null;
 
-    /**
-     * @var string Connection Name
-     */
-    private $sConnectionName;
+    private ?string $connectionName = null;
 
-    /**
-     * Service's constructor
-     */
-    protected function __construct($sConnectionName)
+    protected function __construct(?string $connectionName)
     {
         parent::__construct(false);
 
-        if (empty(self::$sDefaultName)) {
-            self::$sDefaultName = $this->oConfig['DEFAULT_CONNECTION'];
+        if (empty(self::$defaultName)) {
+            self::$defaultName = (string)$this->config['DEFAULT_CONNECTION'];
         }
-        if (empty($sConnectionName)) {
-            $sConnectionName = self::$sDefaultName;
+        if (empty($connectionName)) {
+            $connectionName = self::$defaultName;
         }
-        if(!isset($this->oConfig['CONNECTION'][$sConnectionName])) {
-            $this->sErrorMessage = 'Undefind connection name: ' . $sConnectionName;
-            throw new fatalException($this, 'Undefined connection name <b>' . $sConnectionName . '</b>');
+        if (!isset($this->config['CONNECTION'][$connectionName])) {
+            $this->errorMessage = 'Undefind connection name: ' . $connectionName;
+            throw new fatalException($this, 'Undefined connection name <b>' . $connectionName . '</b>');
         }
 
-        $this->sConnectionName = $sConnectionName;
+        $this->connectionName = (string)$connectionName;
 
-        self::$aInstances[$sConnectionName] = $this;
-    } // function __construct
+        self::$instances[$this->connectionName] = $this;
+    }
 
-    /**
-     * Service's destructor
-     */
     public function __destruct() {
-    } // function __destruct
+    }
 
-    /**
-     * Get Service's instance of current service by $sConnectionName
-     * If $sConnectionName isn't set - Get defaul instance
-     * @param string $sConnectionName Connection name
-     * @return \fan\core\service\rest
-     */
-    public static function instance($sConnectionName = NULL)
+    public static function instance(?string $connectionName = NULL): self
     {
-        if (empty($sConnectionName)) {
-            $sConnectionName = self::$sDefaultName;
+        if (empty($connectionName)) {
+            $connectionName = self::$defaultName;
         }
-        if (!isset(self::$aInstances[$sConnectionName])) {
-            $sClassName = __CLASS__;
-            new $sClassName($sConnectionName);
+        if (!isset(self::$instances[$connectionName])) {
+            $className = __CLASS__;
+            new $className($connectionName);
         }
-        if (empty($sConnectionName)) {
-            $sConnectionName = self::$sDefaultName;
+        if (empty($connectionName)) {
+            $connectionName = self::$defaultName;
         }
 
-        return self::$aInstances[$sConnectionName];
-    } // function instance
+        return self::$instances[$connectionName];
+    }
 
-    /**
-     * РЎall Get Request
-     * @param string $sUrlSuffix
-     * @param string $mData
-     * @return mixed
-     */
-    public function get($sUrlSuffix, $mData = null)
+    public function get(string $urlSuffix, mixed $data = null): mixed
     {
-        if (!empty($mData)) {
-            if (is_array($mData)) {
-                $sUrlSuffix .= '?' . http_build_query($mData, '', '&');
+        if (!empty($data)) {
+            if (is_array($data)) {
+                $urlSuffix .= '?' . http_build_query($data, '', '&');
             } else {
-                $sUrlSuffix .= '/' . urlencode($mData);
+                $urlSuffix .= '/' . urlencode((string)$data);
             }
         }
-        $oCurl = $this->_getCurl($sUrlSuffix);
+        $curl = $this->_getCurl($urlSuffix);
 
-        $oCurl->setOption(CURLOPT_SSL_VERIFYPEER, false);
+        $curl->setOption(CURLOPT_SSL_VERIFYPEER, false);
 
-        return $this->_getResponse($oCurl);
-    } // function _callGetRequest
+        return $this->_getResponse($curl);
+    }
 
-    /**
-     * РЎall Post Request
-     * @param string $sUrlSuffix
-     * @param mixed $mData
-     * @param boolean $bFormat
-     * @return mixed
-     */
-    public function post($sUrlSuffix, $mData, $bFormat = 'json')
+    public function post(string $urlSuffix, mixed $data, mixed $format = 'json'): mixed
     {
-        $oCurl = $this->_getCurl($sUrlSuffix);
+        $curl = $this->_getCurl($urlSuffix);
 
-        if($bFormat == 'json'){
-            $oCurl->setHeaders(array('Content-Type: application/json', 'charset=utf-8'));
-            $sPost = service('json')->encode($mData);
+        if ($format === 'json'){
+            $curl->setHeaders(['Content-Type: application/json', 'charset=utf-8']);
+            $post = $this->containerService('json')->encode($data);
         } else {
-            $sPost = $mData;
+            $post = $data;
         }
-        $oCurl->setOption(CURLOPT_SSL_VERIFYPEER, false);
-        return $this->_getResponse($oCurl, $sPost);
-    } // function _callPostRequest
+        $curl->setOption(CURLOPT_SSL_VERIFYPEER, false);
+        return $this->_getResponse($curl, $post);
+    }
 
-    /**
-     * РЎall Delete Request
-     * @param string $sUrlSuffix
-     * @param string $sData
-     * @return mixed
-     */
-    public function delete($sUrlSuffix, $sData)
+    public function delete(string $urlSuffix, string $data): mixed
     {
-        $oCurl = $this->_getCurl($sUrlSuffix . '/' . $sData );
+        $curl = $this->_getCurl($urlSuffix . '/' . $data );
 
-        $oCurl->setOption(CURLOPT_SSL_VERIFYPEER, false);
-        $oCurl->setOption(CURLOPT_CUSTOMREQUEST, 'DELETE');
+        $curl->setOption(CURLOPT_SSL_VERIFYPEER, false);
+        $curl->setOption(CURLOPT_CUSTOMREQUEST, 'DELETE');
 
-        return $this->_getResponse($oCurl);
-    } // function _callDeleteRequest
+        return $this->_getResponse($curl);
+    }
 
-    /**
-     * РЎall Put Request
-     * @param string $sUrlSuffix
-     * @param string $sData
-     * @return mixed
-     */
-    public function _callPutRequest($sUrlSuffix, $sData)
+    public function _callPutRequest(string $urlSuffix, string $data): mixed
     {
-        $oCurl = $this->_getCurl($sUrlSuffix . '/' . $sData );
+        $curl = $this->_getCurl($urlSuffix . '/' . $data );
 
-        $oCurl->setOption(CURLOPT_SSL_VERIFYPEER, false);
-        $oCurl->setOption(CURLOPT_CUSTOMREQUEST, 'PUT');
-        $aPayCode = array('pay_code' => $sData);
-        $oCurl->setOption(CURLOPT_POSTFIELDS, http_build_query($aPayCode));
+        $curl->setOption(CURLOPT_SSL_VERIFYPEER, false);
+        $curl->setOption(CURLOPT_CUSTOMREQUEST, 'PUT');
+        $payCode = ['pay_code' => $data];
+        $curl->setOption(CURLOPT_POSTFIELDS, http_build_query($payCode));
 
-        return $this->_getResponse($oCurl);
-    } // function _callPutRequest
+        return $this->_getResponse($curl);
+    }
 
 
-    /**
-     * Get Connection name
-     * @return string Connection name
-     */
-    public function getConnectionName() {
-        return $this->sConnectionName;
-    } // function getConnectionName
+    public function getConnectionName(): ?string {
+        return $this->connectionName;
+    }
 
-    /**
-     * Get CURL-service
-     * @param string $sUrlSuffix
-     * @return \fan\core\service\curl
-     */
-    protected function _getCurl($sUrlSuffix)
+    protected function _getCurl(string $urlSuffix): \fan\core\service\curl
     {
-        $aConf = $this->getConfig(array('CONNECTION', $this->sConnectionName, 'url'));
-        $sUrl  = $aConf['server'] . '/' . $aConf['request'];
-        if (!empty($aConf['user'])) {
-            $sUrl = $aConf['user'] . ':' . $aConf['pass'] . '@' . $sUrl;
+        $conf = $this->getConfig(['CONNECTION', $this->connectionName, 'url']);
+        $url  = $conf['server'] . '/' . $conf['request'];
+        if (!empty($conf['user'])) {
+            $url = $conf['user'] . ':' . $conf['pass'] . '@' . $url;
         }
-        $sUrl = (empty($aConf['proyocol']) ? 'http' : $aConf['proyocol']) . '://' . $sUrl;
-        if (!empty($sUrlSuffix)) {
-            $sUrl .= '/' . $sUrlSuffix;
+        $url = (empty($conf['proyocol']) ? 'http' : $conf['proyocol']) . '://' . $url;
+        if (!empty($urlSuffix)) {
+            $url .= '/' . $urlSuffix;
         }
-        return service('curl', $sUrl);
-    } // function _getCurl
+        return service('curl', $url);
+    }
 
     /**
-     * Get Response from CURL
-     * @param \fan\core\service\curl $oCurl
-     * @param mixed $mPost
-     * @return mixed
      * @throws fatalException
      */
-    protected function _getResponse(\fan\core\service\curl $oCurl, $mPost = null)
+    protected function _getResponse(\fan\core\service\curl $curl, mixed $post = null): mixed
     {
-        $sURL      = $oCurl->getInfo(CURLINFO_EFFECTIVE_URL);
-        $sResponse = $oCurl->exec($mPost);
-        $oCurl->close();
+        $url      = $curl->getInfo(CURLINFO_EFFECTIVE_URL);
+        $response = $curl->exec($post);
+        $curl->close();
 
-        $oJson = service('json');
-        /* @var $oJson \fan\core\service\json */
-        $mDecoded  = $oJson->decode($sResponse, true);
-        if ($oJson->getError() > 0) {
-            if (is_string($mPost)) {
-                $mPost = preg_replace('/\"Password\"\:\"[^"]+?\"/', '"Password":"*******"', $mPost);
-            } elseif (isset($mPost['Password'])) {
-                $mPost['Password'] = '*******';
+        $json = $this->containerService('json');
+        /* @var $json \fan\core\service\json */
+        $decoded  = $json->decode((string)$response, true);
+        if ($json->getError() > 0) {
+            if (is_string($post)) {
+                $post = preg_replace('/\"Password\"\:\"[^"]+?\"/', '"Password":"*******"', $post);
+            } elseif (isset($post['Password'])) {
+                $post['Password'] = '*******';
             }
-            $sErrMsg  = $oJson->getErrorText();
-            $sErrMsg .= '<br /><br />URL: ' . $sURL .'<br />Request:<br /><pre>' . (is_string($mPost) ? $mPost : var_export($mPost, true)) . '</pre>';
-            service('error')->logErrorMessage($sErrMsg, 'REST response error', htmlentities($sResponse));
-            throw new fatalException($this, 'Illegal response for REST "' . $sURL . '".');
+            $errMsg  = $json->getErrorText();
+            $errMsg .= '<br /><br />URL: ' . $url .'<br />Request:<br /><pre>' . (is_string($post) ? $post : var_export($post, true)) . '</pre>';
+            $this->containerService('error')->logErrorMessage($errMsg, 'REST response error', htmlentities((string)$response));
+            throw new fatalException($this, 'Illegal response for REST "' . $url . '".');
         }
-        return $mDecoded;
-    } // function _getResponse
+        return $decoded;
+    }
 
-} // class \fan\core\service\rest
-?>
+}

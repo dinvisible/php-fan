@@ -1,4 +1,8 @@
-<?php namespace fan\app\__tools\main;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__tools\main;
 /**
  * Upgrade blocks
  * @version 05.02.007 (31.08.2015)
@@ -9,460 +13,401 @@ class upgrade_blocks extends \fan\project\block\common\simple
      * Base Path to upgraded directory
      * @var string
      */
-    protected $sBasePath = '';
+    protected string $basePath = '';
 
-    /**
-     * @var array
-     */
-    protected $aFileStruct = array(
-        'php'  => array(),
-        'meta' => array(),
-        'tpl'  => array(),
-    );
+    protected array $fileStruct = [
+        'php'  => [],
+        'meta' => [],
+        'tpl'  => [],
+    ];
 
-    /**
-     * @var array
-     */
-    protected $aContent = array(
-        'php'  => array(),
-        'meta' => array(),
-        'tpl'  => array(),
-    );
+    protected array $content = [
+        'php'  => [],
+        'meta' => [],
+        'tpl'  => [],
+    ];
 
-    /**
-     * @var array
-     */
-    protected $aChanged = array();
+    protected array $changed = [];
 
     /**
      * Quantity of Not writeble files
      * @var array
      */
-    protected $aNotWr = array(
+    protected array $notWr = [
         'php'  => 0,
         'meta' => 0,
         'tpl'  => 0,
-    );
+    ];
 
     /**
      * Quantity of Added namespaces
      * @var array
      */
-    protected $aNsAdded = array(0, 0, 0);
+    protected array $nsAdded = [0, 0, 0];
 
     /**
      * Quantity of Added namespaces
      * @var array
      */
-    protected $aExtSet = array(0, 0, 0);
+    protected array $extSet = [0, 0, 0];
 
     /**
      * Service Calls
      * @var array
      */
-    protected $aServiceCalls = array(0, 0, 0);
+    protected array $serviceCalls = [0, 0, 0];
 
     /**
      * Entity Set
      * @var array
      */
-    protected $aEntitySet = array(0, 0, 0);
+    protected array $entitySet = [0, 0, 0];
 
     /**
      * Direct replacement
      * @var array
      */
-    protected $aDirReplace = array(
+    protected array $dirReplace = [
         'php'  => 0,
         'meta' => 0,
         'tpl'  => 0,
-    );
+    ];
 
     /**
      * Quantity of Set Final Coment
      * @var array
      */
-    protected $aFinalComent = array(0, 0, 0);
+    protected array $finalComent = [0, 0, 0];
 
 
 
-    /**
-     * Init block
-     */
-    public function init()
+    public function init(): void
     {
-        $this->sBasePath = \bootstrap::parsePath($this->aMeta['src']['path']);
+        $this->basePath = \bootstrap::parsePath($this->meta['src']['path']);
 
 
         // Add namespace
-        $this->_addNamespase($this->_getFileList('php'), $this->aMeta['src']['ns']);
-        $this->view->aNsAdded = $this->aNsAdded;
+        $this->_addNamespase($this->_getFileList('php'), $this->meta['src']['ns']);
+        $this->view->nsAdded = $this->nsAdded;
 
         // Set Extends
         $this->_setExtends();
-        $this->view->aExtSet = $this->aExtSet;
+        $this->view->extSet = $this->extSet;
 
         // Set Service calls
         $this->_setServiceCalls();
-        $this->view->aServiceCalls = $this->aServiceCalls;
+        $this->view->serviceCalls = $this->serviceCalls;
 
         // Set Entity
         $this->_setEntityOperations();
-        $this->view->aEntitySet = $this->aEntitySet;
+        $this->view->entitySet = $this->entitySet;
 
         // Set Direct Replacement
         $this->_directReplacement();
-        $this->view->aDirReplace = $this->aDirReplace;
+        $this->view->dirReplace = $this->dirReplace;
 
         // Set Final Coment
-        $this->_setFinalComent($this->_getFileList('php'), '\\' . $this->aMeta['src']['ns'] . '\\');
-        $this->view->aFinalComent = $this->aFinalComent;
+        $this->_setFinalComent($this->_getFileList('php'), '\\' . $this->meta['src']['ns'] . '\\');
+        $this->view->finalComent = $this->finalComent;
 
 
 
         // Save changed files
-        $aChanged = $this->_saveFiles();
+        $changed = $this->_saveFiles();
 
         // Summary info
-        $this->view->aChanged = $aChanged;
-        $this->view->aNotWr   = $this->aNotWr;
+        $this->view->changed = $changed;
+        $this->view->notWr   = $this->notWr;
     }
 
     // ======= Main convert methods ======= \\
-    /**
-     * Add Namespase
-     * @param array $aData
-     * @param string $sNsPref
-     */
-    protected function _addNamespase($aData, $sNsPref)
+    protected function _addNamespase(array $data, string $nsPref): void
     {
-        $aMatches = null;
-        if (preg_match('/^(fan\\\\app(?:\\\\[^\\\\]+){2})\\\\/', $sNsPref, $aMatches)) {
-            $sNsPref = $aMatches[1];
+        $matches = null;
+        if (preg_match('/^(fan\\\\app(?:\\\\[^\\\\]+){2})\\\\/', $nsPref, $matches)) {
+            $nsPref = $matches[1];
         }
-        $sNS = '<?php namespace ' . $sNsPref;
-        foreach ($aData as $k => $v) {
+        $ns = '<?php namespace ' . $nsPref;
+        foreach ($data as $k => $v) {
             if (is_array($v)) {
-                $this->_addNamespase($v, $sNsPref . '\\' . $k);
+                $this->_addNamespase($v, $nsPref . '\\' . $k);
             } else {
-                $sContent = $this->aContent['php'][$v];
-                if (strstr($sContent, 'class ')) {
-                    if (preg_match('/^\<\?php\s+namespace\s+\w+/', $sContent)) {
-                        $this->aNsAdded[1]++;
+                $content = $this->content['php'][$v];
+                if (strstr($content, 'class ')) {
+                    if (preg_match('/^\<\?php\s+namespace\s+\w+/', $content)) {
+                        $this->nsAdded[1]++;
                     } else {
-                        $nCount = 0;
-                        $sContent = preg_replace('/^\<\?php\s*\r?\n/', $sNS . ";\n", $sContent, 1, $nCount);
-                        if ($nCount > 0) {
-                            $this->aContent['php'][$v] = $sContent;
-                            $this->aChanged[$v] = 'php';
-                            $this->aNsAdded[0]++;
+                        $count = 0;
+                        $content = preg_replace('/^\<\?php\s*\r?\n/', $ns . ";\n", $content, 1, $count);
+                        if ($count > 0) {
+                            $this->content['php'][$v] = $content;
+                            $this->changed[$v] = 'php';
+                            $this->nsAdded[0]++;
                         } else {
-                            $this->aNsAdded[2]++;
-                            trigger_error('Can\'t find first tag in file "' . $v . '".', E_USER_WARNING);
+                            $this->nsAdded[2]++;
+                            throw new \RuntimeException('Can\'t find first tag in file "' . $v . '".');
                         }
                     }
                 }
             }
         }
-    } // function _addNamespase
+    }
 
-    /**
-     * Set Extends for classes
-     */
-    protected function _setExtends()
+    protected function _setExtends(): void
     {
-        $aCorr = $this->aMeta['src']['extends'];
+        $corr = $this->meta['src']['extends'];
         foreach ($this->_getContent('php') as $k => $v) {
-            $aMatches = null;
-            if (preg_match('/class\s+(\w+)(\s+extends\s+([\w\\\\]+))?\s*\{[\r\n]*/', $v, $aMatches)) {
-                if (!empty($aMatches[2])) {
-                    if (strstr($aMatches[3], '\\')) {
-                        $this->aExtSet[1]++;
+            $matches = null;
+            if (preg_match('/class\s+(\w+)(\s+extends\s+([\w\\\\]+))?\s*\{[\r\n]*/', $v, $matches)) {
+                if (!empty($matches[2])) {
+                    if (strstr($matches[3], '\\')) {
+                        $this->extSet[1]++;
                     } else {
-                        if (isset($aCorr[$aMatches[3]])) {
-                            $this->aContent['php'][$k] = str_replace($aMatches[0], 'class ' . $aMatches[1] . ' extends ' . $aCorr[$aMatches[3]] . "\n{\n", $v);
-                            $this->aChanged[$k] = 'php';
-                            $this->aExtSet[0]++;
+                        if (isset($corr[$matches[3]])) {
+                            $this->content['php'][$k] = str_replace($matches[0], 'class ' . $matches[1] . ' extends ' . $corr[$matches[3]] . "\n{\n", $v);
+                            $this->changed[$k] = 'php';
+                            $this->extSet[0]++;
                         } else {
-                            $this->aExtSet[2]++;
-                            trigger_error('Don\'t know extends "' . $aMatches[3] . '" in file "' . $k . '".', E_USER_WARNING);
+                            $this->extSet[2]++;
+                            throw new \UnexpectedValueException('Don\'t know extends "' . $matches[3] . '" in file "' . $k . '".');
                         }
                     }
                 }
-            } elseif (!empty($aMatches[2])) {
-                $this->aExtSet[2]++;
-                trigger_error('Can\'t recognize "extends" in file "' . $k . '".', E_USER_WARNING);
+            } elseif (!empty($matches[2])) {
+                $this->extSet[2]++;
+                throw new \UnexpectedValueException('Can\'t recognize "extends" in file "' . $k . '".');
             }
         }
-    } // function _setExtends
+    }
 
-    /**
-     * Replace Service Calls
-     */
-    protected function _setServiceCalls()
+    protected function _setServiceCalls(): void
     {
-        foreach (array('php', 'meta') as $sType) {
-            foreach ($this->_getContent($sType) as $k => $v) {
-                $aMatches = null;
-                if (preg_match_all('/(?<=[\s\n=])service_(\w+)\:\:(instance\(([^\)]*)\))?/', $v, $aMatches, PREG_SET_ORDER)) {
-                    $bChanged = false;
-                    $bError   = false;
-                    foreach ($aMatches as $p) {
+        foreach (['php', 'meta'] as $type) {
+            foreach ($this->_getContent($type) as $k => $v) {
+                $matches = null;
+                if (preg_match_all('/(?<=[\s\n=])service_(\w+)\:\:(instance\(([^\)]*)\))?/', $v, $matches, PREG_SET_ORDER)) {
+                    $changed = false;
+                    $error   = false;
+                    foreach ($matches as $p) {
                         if (empty($p[2])) {
-                            trigger_error('Can\'t convert Service-call "' . $p[0] . '" in file "' . $k . '".', E_USER_WARNING);
-                            $bError = true;
+                            throw new \UnexpectedValueException('Can\'t convert Service-call "' . $p[0] . '" in file "' . $k . '".');
                         } else {
-                            $sReplacement = 'service(\'' . $p[1] . '\'' . (empty($p[3]) ? '' : ', ' . $p[3]) . ')';
-                            $this->aContent[$sType][$k] = $v = str_replace($p[0], $sReplacement, $v);
-                            $this->aChanged[$k] = $sType;
-                            l(htmlspecialchars($p[0]) . '<br /><br />' . htmlspecialchars($sReplacement), 'Replace service ' . $p[1], $k);
-                            $bChanged = true;
+                            $replacement = 'service(\'' . $p[1] . '\'' . (empty($p[3]) ? '' : ', ' . $p[3]) . ')';
+                            $this->content[$type][$k] = $v = str_replace($p[0], $replacement, $v);
+                            $this->changed[$k] = $type;
+                            l(htmlspecialchars($p[0]) . '<br /><br />' . htmlspecialchars($replacement), 'Replace service ' . $p[1], $k);
+                            $changed = true;
                         }
                     }
 
-                    $this->aServiceCalls[$bChanged ? ($bError ? 2 : 0) : 1]++;
+                    $this->serviceCalls[$changed ? ($error ? 2 : 0) : 1]++;
                 }
             }
         }
-    } // function _setServiceCalls
+    }
 
-    /**
-     * Replace "se" and "le" functions
-     */
-    protected function _setEntityOperations()
+    protected function _setEntityOperations(): void
     {
-        foreach (array('php', 'meta') as $sType) {
-            foreach ($this->_getContent($sType) as $k => $v) {
-                $aMatches = null;
-                if (preg_match_all('/(?<=[\s\n=])(se|le)\s*\(\s*(?:(\\\'|\")(\w+)\2|[^,\)])\s*(?:\,\s*([^\)]+))?\)([^;]+)?\;/', $v, $aMatches, PREG_SET_ORDER)) {
-                    $bChanged = false;
-                    $bError   = false;
-                    foreach ($aMatches as $p) {
-                        $sReplacement = '';
-                        if (!empty($p[3]) && substr($p[3], 0, 7) == 'entity_') {
-                            $sName = substr($p[3], 7);
-                            if ($p[1] == 'le') {
-                                $sReplacement = 'gr(\'' . $sName . '\'' . (empty($p[4]) ? '' : ', ' . $p[4]) . ')' . (empty($p[5]) ? '' : $p[5]) . ';';
+        foreach (['php', 'meta'] as $type) {
+            foreach ($this->_getContent($type) as $k => $v) {
+                $matches = null;
+                if (preg_match_all('/(?<=[\s\n=])(se|le)\s*\(\s*(?:(\\\'|\")(\w+)\2|[^,\)])\s*(?:\,\s*([^\)]+))?\)([^;]+)?\;/', $v, $matches, PREG_SET_ORDER)) {
+                    $changed = false;
+                    $error   = false;
+                    foreach ($matches as $p) {
+                        $replacement = '';
+                        if (!empty($p[3]) && substr($p[3], 0, 7) === 'entity_') {
+                            $name = substr($p[3], 7);
+                            if ((string)$p[1] === 'le') {
+                                $replacement = 'gr(\'' . $name . '\'' . (empty($p[4]) ? '' : ', ' . $p[4]) . ')' . (empty($p[5]) ? '' : $p[5]) . ';';
                             } else {
-                                $aMethods = null;
-                                if (preg_match('/^\-\>getAggr\(\)\-\>(getEntitiesSimple|getOneEntityByKey|getArrayHash|getArrayHashByKey|getArrayColumn|getCountByParam)\s*\(\s*(.*)\s*\)[\r\n\s]*$/s', $p[5], $aMethods)) {
-                                    $sArg = empty($aMethods[2]) ? '' : $aMethods[2];
-                                    switch ($aMethods[1]) {
+                                $methods = null;
+                                if (preg_match('/^\-\>getAggr\(\)\-\>(getEntitiesSimple|getOneEntityByKey|getArrayHash|getArrayHashByKey|getArrayColumn|getCountByParam)\s*\(\s*(.*)\s*\)[\r\n\s]*$/s', $p[5], $methods)) {
+                                    $arg = empty($methods[2]) ? '' : $methods[2];
+                                    switch ($methods[1]) {
                                     case 'getEntitiesSimple':
-                                        $sReplacement = 'ge(\'' . $sName . '\')->getRowsetByParam(' . $sArg . ');';
+                                        $replacement = 'ge(\'' . $name . '\')->getRowsetByParam(' . $arg . ');';
                                         break;
                                     case 'getOneEntityByKey':
-                                        $aTmp = explode_alt(',', $sArg, 3);
-                                        $sReplacement = 'ge(\'' . $sName . '\')->getRowByKey(' . trim($aTmp[0]) . ', ' . $aTmp[1] . ', ' . ltrim($aTmp[2]) . ');';
+                                        $tmp = explode_alt(',', $arg, 3);
+                                        $replacement = 'ge(\'' . $name . '\')->getRowByKey(' . trim($tmp[0]) . ', ' . $tmp[1] . ', ' . ltrim($tmp[2]) . ');';
                                         break;
                                     case 'getArrayHash':
-                                        $aTmp = explode(',', $sArg, 3);
-                                        $sReplacement = 'ge(\'' . $sName . '\')->getRowsetByParam(' . ltrim($aTmp[2]) . ')->getArrayHash(' . trim($aTmp[0]) . ', ' . trim($aTmp[1]) . ');';
+                                        $tmp = explode(',', $arg, 3);
+                                        $replacement = 'ge(\'' . $name . '\')->getRowsetByParam(' . ltrim($tmp[2]) . ')->getArrayHash(' . trim($tmp[0]) . ', ' . trim($tmp[1]) . ');';
                                         break;
                                     case 'getArrayHashByKey':
-                                        $aTmp = explode(',', $sArg, 4);
-                                        $sReplacement = 'ge(\'' . $sName . '\')->getRowsetByKey(' . trim($aTmp[0]) . ', ' . ltrim($aTmp[3]) . ')->getArrayHash(' . trim($aTmp[1]) . ', ' . trim($aTmp[2]) . ');';
+                                        $tmp = explode(',', $arg, 4);
+                                        $replacement = 'ge(\'' . $name . '\')->getRowsetByKey(' . trim($tmp[0]) . ', ' . ltrim($tmp[3]) . ')->getArrayHash(' . trim($tmp[1]) . ', ' . trim($tmp[2]) . ');';
                                         break;
                                     case 'getArrayColumn':
-                                        $aTmp = explode(',', $sArg, 2);
-                                        $sReplacement = 'ge(\'' . $sName . '\')->getRowsetByParam(' . (empty($aTmp[1]) ? '' : $aTmp[1]) . ')->getColumn(' . trim($aTmp[0]) . ');';
+                                        $tmp = explode(',', $arg, 2);
+                                        $replacement = 'ge(\'' . $name . '\')->getRowsetByParam(' . (empty($tmp[1]) ? '' : $tmp[1]) . ')->getColumn(' . trim($tmp[0]) . ');';
                                         break;
                                     case 'getCountByParam':
-                                        $sReplacement = 'ge(\'' . $sName . '\')->getRowsetByParam(' . $sArg . ')->count();';
+                                        $replacement = 'ge(\'' . $name . '\')->getRowsetByParam(' . $arg . ')->count();';
                                         break;
                                     }
-                                } else if (preg_match('/^\-\>(loadById|loadByParam|loadOrCreate)\s*\(\s*(.*)\s*\)[\r\n\s]*$/s', $p[5], $aMethods)) {
-                                    $sArg = empty($aMethods[2]) ? '' : $aMethods[2];
-                                    switch ($aMethods[1]) {
+                                } else if (preg_match('/^\-\>(loadById|loadByParam|loadOrCreate)\s*\(\s*(.*)\s*\)[\r\n\s]*$/s', $p[5], $methods)) {
+                                    $arg = empty($methods[2]) ? '' : $methods[2];
+                                    switch ($methods[1]) {
                                     case 'loadById':
-                                        $sReplacement = 'ge(\'' . $sName . '\')->getRowById(' . $sArg . ');';
+                                        $replacement = 'ge(\'' . $name . '\')->getRowById(' . $arg . ');';
                                         break;
                                     case 'loadByParam':
-                                        $sReplacement = 'ge(\'' . $sName . '\')->getRowByParam(' . $sArg . ');';
+                                        $replacement = 'ge(\'' . $name . '\')->getRowByParam(' . $arg . ');';
                                         break;
                                     case 'loadOrCreate':
-                                        $sReplacement = 'ge(\'' . $sName . '\')->getRowOrCreate(' . $sArg . ');';
+                                        $replacement = 'ge(\'' . $name . '\')->getRowOrCreate(' . $arg . ');';
                                         break;
                                     }
-                                    //$t = ge($sName)->getRowByParam();
+                                    //$t = ge($name)->getRowByParam();
                                 } else {
-                                    trigger_error('Unrecognized value: ' . $p[5], E_USER_WARNING);
+                                    throw new \UnexpectedValueException('Unrecognized value: ' . $p[5]);
                                 }
                             }
                         }
 
-                        if (empty($sReplacement)) {
-                            trigger_error('Can\'t convert entity-call "' . $p[0] . '" in file "' . $k . '".', E_USER_WARNING);
-                            $bError = true;
+                        if (empty($replacement)) {
+                            throw new \UnexpectedValueException('Can\'t convert entity-call "' . $p[0] . '" in file "' . $k . '".');
                         } else {
-                            $this->aContent[$sType][$k] = $v = str_replace($p[0], $sReplacement, $v);
-                            $this->aChanged[$k] = $sType;
-                            l(htmlspecialchars($p[0]) . '<br /><br />' . htmlspecialchars($sReplacement), 'Replace ' . $p[1], $k);
-                            $bChanged = true;
+                            $this->content[$type][$k] = $v = str_replace($p[0], $replacement, $v);
+                            $this->changed[$k] = $type;
+                            l(htmlspecialchars($p[0]) . '<br /><br />' . htmlspecialchars($replacement), 'Replace ' . $p[1], $k);
+                            $changed = true;
                         }
                     }
 
-                    $this->aEntitySet[$bChanged ? ($bError ? 2 : 0) : 1]++;
+                    $this->entitySet[$changed ? ($error ? 2 : 0) : 1]++;
                 }
             }
         }
-    } // function _setEntityOperations
+    }
 
-    /**
-     * Direct Replacement
-     */
-    protected function _directReplacement()
+    protected function _directReplacement(): void
     {
-        foreach ($this->aMeta['src']['direct_replace'] as $k => $v) {
+        foreach ($this->meta['src']['direct_replace'] as $k => $v) {
             if (count($v) > 0) {
-                foreach ($this->_getContent($k) as $sPath => $sContent) {
-                    $bIsChange = false;
-                    foreach ($v as $sPattern => $sReplacement) {
-                        $nCount   = 0;
-                        $sContent = preg_replace($sPattern, $sReplacement, $sContent, -1, $nCount);
-                        if ($nCount > 0) {
-                            l(htmlspecialchars($sPattern) . '<br /><br />' . htmlspecialchars($sReplacement), 'Direct replace', $k);
-                            $this->aContent[$k][$sPath] = $sContent;
-                            $bIsChange = true;
+                foreach ($this->_getContent($k) as $path => $content) {
+                    $isChange = false;
+                    foreach ($v as $pattern => $replacement) {
+                        $count   = 0;
+                        $content = preg_replace($pattern, $replacement, $content, -1, $count);
+                        if ($count > 0) {
+                            l(htmlspecialchars($pattern) . '<br /><br />' . htmlspecialchars($replacement), 'Direct replace', $k);
+                            $this->content[$k][$path] = $content;
+                            $isChange = true;
                         }
                     }
-                    if ($bIsChange) {
-                        $this->aChanged[$sPath] = $k;
-                        $this->aDirReplace[$k]++;
+                    if ($isChange) {
+                        $this->changed[$path] = $k;
+                        $this->dirReplace[$k]++;
                     }
                 }
             }
         }
-    } // function _directReplacement
+    }
 
-    protected function _setFinalComent($aData, $sNsPref)
+    protected function _setFinalComent($data, $nsPref): void
     {
-        $sRegexp = '/\}\s*(\/\/[\w\s\\\\]+)?\s*\r?\n\s*\?\>[\r\n\s]*$/';
-        foreach ($aData as $k => $v) {
+        $regexp = '/\}\s*(\/\/[\w\s\\\\]+)?\s*\r?\n\s*\?\>[\r\n\s]*$/';
+        foreach ($data as $k => $v) {
             if (is_array($v)) {
-                $this->_setFinalComent($v, $sNsPref . $k . '\\');
+                $this->_setFinalComent($v, $nsPref . $k . '\\');
             } else {
-                $sContent = $this->aContent['php'][$v];
-                if (strstr($sContent, 'class ')) {
-                    $aMatches = null;
-                    if (preg_match($sRegexp, $sContent, $aMatches)) {
-                        if (!empty($aMatches[1]) && strstr($aMatches[1], '\\')) {
-                            $this->aFinalComent[1]++;
+                $content = $this->content['php'][$v];
+                if (strstr($content, 'class ')) {
+                    $matches = null;
+                    if (preg_match($regexp, $content, $matches)) {
+                        if (!empty($matches[1]) && strstr($matches[1], '\\')) {
+                            $this->finalComent[1]++;
                         } else {
-                            $aMatches2 = null;
-                            if (preg_match('/^(\\\\fan\\\\app\\\\(?:[^\\\\]+\\\\){2}).+/', $sNsPref, $aMatches2)) {
-                                $sNsPref = $aMatches2[1];
+                            $matches2 = null;
+                            if (preg_match('/^(\\\\fan\\\\app\\\\(?:[^\\\\]+\\\\){2}).+/', $nsPref, $matches2)) {
+                                $nsPref = $matches2[1];
                             }
-                            $sContent = str_replace($aMatches[0], '} // class ' . $sNsPref . substr($k, 0, -4) . "\n?>", $sContent);
-                            $this->aContent['php'][$v] = $sContent;
-                            $this->aChanged[$v] = 'php';
-                            $this->aFinalComent[0]++;
+                            $content = str_replace($matches[0], "}\n?>", $content);
+                            $this->content['php'][$v] = $content;
+                            $this->changed[$v] = 'php';
+                            $this->finalComent[0]++;
                         }
                     } else {
-                        $this->aFinalComent[2]++;
-                        trigger_error('Can\'t find final tag in file "' . $v . '".', E_USER_WARNING);
+                        $this->finalComent[2]++;
+                        throw new \RuntimeException('Can\'t find final tag in file "' . $v . '".');
                     }
                 }
             }
         }
-    } // function _setFinalComent
+    }
 
 
     // --------- Auxiliary methods --------- \\
-    /**
-     * Get Structured List of Files by type
-     * @param type $sType
-     * @return type
-     */
-    protected function _getFileList($sType)
+    protected function _getFileList($type): array
     {
-        if (empty($this->aFileStruct[$sType])) {
-            $this->_makeFileList($this->aFileStruct[$sType], $sType, $this->sBasePath);
+        if (empty($this->fileStruct[$type])) {
+            $this->_makeFileList($this->fileStruct[$type], $type, $this->basePath);
         }
-        return $this->aFileStruct[$sType];
-    } // function _getFileList
+        return $this->fileStruct[$type];
+    }
 
-    /**
-     * Get Content of Files by type
-     * @param type $sType
-     * @return type
-     */
-    protected function _getContent($sType)
+    protected function _getContent($type): array
     {
-        if (empty($this->aContent[$sType])) {
-            $this->_makeFileList($this->aFileStruct[$sType], $sType, $this->sBasePath);
+        if (empty($this->content[$type])) {
+            $this->_makeFileList($this->fileStruct[$type], $type, $this->basePath);
         }
-        return $this->aContent[$sType];
-    } // function _getFileList
+        return $this->content[$type];
+    }
 
-    /**
-     * Make List File
-     * @param array $aDest
-     * @param string $sType
-     * @param string $sBasePath
-     * @return \app\__tools\main\upgrade_blocks
-     */
-    protected function _makeFileList(&$aDest, $sType, $sBasePath)
+    protected function _makeFileList(&$dest, string $type, string $basePath): static
     {
-        if (is_dir($sBasePath)) {
-            foreach (scandir($sBasePath) as $v) {
-                if ($v == '.' || $v == '..') {
+        if (is_dir($basePath)) {
+            foreach (scandir($basePath) as $v) {
+                if ($v === '.' || $v === '..') {
                     continue;
                 }
 
-                $sFullPath = $sBasePath . '/' . $v;
-                if (is_dir($sFullPath)) {
-                    $aDest[$v] = array();
-                    $this->_makeFileList($aDest[$v], $sType, $sFullPath);
-                } elseif ($this->_checkType($v, $sType)) {
-                    if (!is_writable($sFullPath)) {
-                        $this->aNotWr[$sType]++;
-                        trigger_error('File "' . $sFullPath . '" is not writable.', E_USER_WARNING);
+                $fullPath = $basePath . '/' . $v;
+                if (is_dir($fullPath)) {
+                    $dest[$v] = [];
+                    $this->_makeFileList($dest[$v], $type, $fullPath);
+                } elseif ($this->_checkType($v, $type)) {
+                    if (!is_writable($fullPath)) {
+                        $this->notWr[$type]++;
+                        throw new \RuntimeException('File "' . $fullPath . '" is not writable.');
                     } else {
-                        $aDest[$v] = $sFullPath;
-                        $this->aContent[$sType][$sFullPath] = file_get_contents($sFullPath);
+                        $dest[$v] = $fullPath;
+                        $this->content[$type][$fullPath] = file_get_contents($fullPath);
                     }
                 }
             }
         } else {
-            trigger_error('Incorrect Base Path: "' . $sBasePath . '".', E_USER_WARNING);
+            throw new \RuntimeException('Incorrect Base Path: "' . $basePath . '".');
         }
         return $this;
-    } // function _makeFileList
+    }
 
-    /**
-     * Save changed files
-     * @return \app\__tools\main\upgrade_blocks
-     */
-    protected function _saveFiles()
+    protected function _saveFiles(): array
     {
-        $aResult = array(
+        $result = [
             'php'  => 0,
             'meta' => 0,
             'tpl'  => 0,
-        );
-        foreach ($this->aChanged as $sPath => $sType) {
-            file_put_contents($sPath, $this->aContent[$sType][$sPath]);
-            $aResult[$sType]++;
+        ];
+        foreach ($this->changed as $path => $type) {
+            file_put_contents($path, $this->content[$type][$path]);
+            $result[$type]++;
         }
-        return $aResult;
-    } // function _saveFiles
+        return $result;
+    }
 
-    /**
-     * Check Type of filename
-     * @param string $sName
-     * @param string $sType
-     * @return boolean
-     */
-    protected function _checkType($sName, $sType)
+    protected function _checkType(string $name, string $type): bool
     {
-        if ($sType == 'meta') {
-            return substr($sName, -9) == '.meta.php';
-        } elseif (substr($sName, -9) != '.meta.php') {
-            return substr($sName, -strlen($sType) - 1) == '.' . $sType;
+        if ($type === 'meta') {
+            return substr($name, -9) === '.meta.php';
+        } elseif (substr($name, -9) !== '.meta.php') {
+            return substr($name, -strlen($type) - 1) === '.' . $type;
         }
         return false;
-    } // function _checkType
+    }
 
-} // class \fan\app\__tools\main\upgrade_blocks
-?>
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\project\cli\timer;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\cli\timer;
 /**
  * Timer manager service
  * @version 05.02.007 (31.08.2015)
@@ -6,22 +10,18 @@
 class send_email extends \fan\core\base\timer_program
 {
 
-    /**
-     * send Email
-     */
-    public function sendEmail($sSubject, $sMessage, $sMailTo, $sNameTo, $aMailCC)
+    public function sendEmail($subject, $message, $mailTo, $nameTo, $mailCC): void
     {
-        $oServEmail = service('email', "timer_email");
-        $oServEmail->clear_all_recipients();
-        if ($aMailCC) {
-            foreach ($aMailCC as $v) {
-                list($sEmail, $sName) = explode("/", $v, 2);
-                $oServEmail->add_cc($sEmail, $sName);
+        $servEmail = service('email', "timer_email");
+        $servEmail->clear_all_recipients();
+        if ($mailCC) {
+            foreach ($mailCC as $v) {
+                list($email, $name) = explode("/", $v, 2);
+                $servEmail->add_cc($email, $name);
             }
         }
-        $oServEmail->send($sSubject, $sMessage, $sMailTo, $sNameTo);
+        $servEmail->send($subject, $message, $mailTo, $nameTo);
 
-    } // function sendEmail
+    }
 
-} // class \fan\project\cli\timer\send_email
-?>
+}

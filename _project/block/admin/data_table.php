@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\admin;
 /**
  * Admin table data class for loader block
  *
@@ -16,5 +20,4 @@
  */
 class data_table extends \fan\core\block\admin\data_table
 {
-} // class \fan\project\block\admin\data_table
-?>
+}

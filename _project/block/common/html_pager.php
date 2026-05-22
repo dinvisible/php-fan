@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\common;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\common;
 /**
  * Pager class
  *
@@ -16,5 +20,4 @@
  */
 class html_pager extends \fan\core\block\common\html_pager
 {
-} // class \fan\project\block\common\html_pager
-?>
+}

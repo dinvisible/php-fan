@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Example of meta file for block
  * Note:
@@ -17,25 +20,25 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.005 (12.02.2015)
  */
-return array(
+return [
     /**
      * Meta data for embedded blocks
      */
-    'common' => array(
+    'common' => [
         //<-- There is possible to set some parameters which need set in all embedded blocks
-    ),
+    ],
     /**
      * Meta data for current carcass block
      */
-    'own' => array(
+    'own' => [
         /**
          * "embeddedBlocks","carcass","root" can be set in "own"-part only!!!
          */
-        'embeddedBlocks' => array( // Key - template var; Value - path to block
+        'embeddedBlocks' => [ // Key - template var; Value - path to block
             'menuTop'     => 'menu/main',
             'menuLeft'    => 'menu/left',
             'main'     => '{MAIN}',
-        ),
+        ],
         /**
          * It is recommend to set "carcass" and "root" blocks in tab.ini as default value and in main-content block for other value
          */
@@ -51,24 +54,24 @@ return array(
 
         'title'       => 'Title of page',
 
-        'meta_tag' => array( // Meta tags
-            array('name' => 'name(NR)', 'content' => 'value', 'http_equiv' => 'value(NR)', 'id' => 'id(NR)'),
-            array('name' => 'name(NR)', 'content' => 'value', 'http_equiv' => 'value(NR)', 'id' => 'id(NR)'),
+        'meta_tag' => [ // Meta tags
+            ['name' => 'name(NR)', 'content' => 'value', 'http_equiv' => 'value(NR)', 'id' => 'id(NR)'],
+            ['name' => 'name(NR)', 'content' => 'value', 'http_equiv' => 'value(NR)', 'id' => 'id(NR)'],
 
-            array('name' => 'Keywords',    'content' => 'Keywords'),
-            array('name' => 'Description', 'content' => 'Description'),
-        ),
+            ['name' => 'Keywords',    'content' => 'Keywords'],
+            ['name' => 'Description', 'content' => 'Description'],
+        ],
 
-        'externalCss' => array( // css files
-            'link'        => array('file1.css', 'file2.css', 'etc'), // files are attached by <link media="all">-tag
-            'style'       => array('file1.css', 'file2.css', 'etc'), // files are attached by @import-directive
-            'link-print'  => array('file1.css', 'file2.css', 'etc'), // files are attached by <link media="print">-tag
-            'style-print' => array('file1.css', 'file2.css', 'etc'), // files are attached by @import-directive for media-print
-            'ie'          => array('file1.css', 'file2.css', 'etc'), // files for IE-browser
+        'externalCss' => [ // css files
+            'link'        => ['file1.css', 'file2.css', 'etc'], // files are attached by <link media="all">-tag
+            'style'       => ['file1.css', 'file2.css', 'etc'], // files are attached by @import-directive
+            'link-print'  => ['file1.css', 'file2.css', 'etc'], // files are attached by <link media="print">-tag
+            'style-print' => ['file1.css', 'file2.css', 'etc'], // files are attached by @import-directive for media-print
+            'ie'          => ['file1.css', 'file2.css', 'etc'], // files for IE-browser
             // Allow combine. For example:
-            'style-print,projection' => array('file1.css', 'file2.css', 'etc'), // files are attached by @import-directive for media-print,projection
-        ),
-        'embedCss' => array(
+            'style-print,projection' => ['file1.css', 'file2.css', 'etc'], // files are attached by @import-directive for media-print,projection
+        ],
+        'embedCss' => [
             'all'        => 'css-text for all media',
             'aural'      => 'css-text for aural-synthesizer',
             'braille'    => 'css-text for braille-device',
@@ -82,16 +85,16 @@ return array(
             'tv'         => 'css-text for TV',
             // Allow combine. For example:
             'print,projection' => 'css-text for print and projection',
-        ),
+        ],
 
-        'externalJS' => array( // JavaScript files
-            'head' => array('file1.js', 'file2.js', 'etc'), // files are attached into head of html-code
-            'body' => array('file1.js', 'file2.js', 'etc'), // files are attached into end of body of html-code (deprecated!!!)
-        ),
-        'embedJS' => array( // embed JavaScript text
+        'externalJS' => [ // JavaScript files
+            'head' => ['file1.js', 'file2.js', 'etc'], // files are attached into head of html-code
+            'body' => ['file1.js', 'file2.js', 'etc'], // files are attached into end of body of html-code (deprecated!!!)
+        ],
+        'embedJS' => [ // embed JavaScript text
             'head' => 'JavaScript-text which inserts into head of html-code',
             'body' => 'JavaScript-text which inserts into end of body of html-code',
-        ),
+        ],
 
         'template' => 'used_template_name(NR - it is need to set when template_name not equal to class_name)',
         'tpl_parent_class' => 'base template class_name', // by default is used 'template_base'
@@ -100,17 +103,17 @@ return array(
         /**
          * All parameters below it is possible to set as 'own'-part, and in 'common'-part
          */
-        'tplVars' => array( // variable, which sets in template automatically
+        'tplVars' => [ // variable, which sets in template automatically
             'tplVar1' => 'Value of variable 1',
             'tplVar2' => 'Value of variable 2',
-        ),
-        'staticContent' => array( // Static content which is edited by admin-system
+        ],
+        'staticContent' => [ // Static content which is edited by admin-system
             'tplVar_1' => 'db_tpl_key1',
             'tplVar_2' => 'db_tpl_key2',
-        ),
+        ],
         'parseImage' => true | false, // parse Image (in the output html-code)
 
-        'cache' => array( // cache-control parameters
+        'cache' => [ // cache-control parameters
             // Cache mode:
                 // 0 - don't use cache there and for container,
                 // 1 - don't use cache,
@@ -120,7 +123,7 @@ return array(
             'expire'     => 600,           // Expired cache time
             'alwaysInit' => true OR false, // NR. Always run init. By default: alwaysInit = false
 
-            'considerRequest' => array( // 1 - consider in cache-key, 0 - don't consider, -1 - disable cache if present
+            'considerRequest' => [ // 1 - consider in cache-key, 0 - don't consider, -1 - disable cache if present
                 'main'       => 0,
                 'add'        => 0,
                 'get'        => 0,
@@ -128,45 +131,44 @@ return array(
                 'get:var'    => 0,
                 'post:var'   => 0,
                 'cookie:var' => 0,
-            ),
-            'considerRole' => array( // 1 - consider in cache-key, 0 - don't consider, -1 - disable cache if present
+            ],
+            'considerRole' => [ // 1 - consider in cache-key, 0 - don't consider, -1 - disable cache if present
                 'role_name1' => 0,
                 'role_name2' => 0,
                 //...
-            ),
+            ],
 
             'clear' => 'namespace', // Clear cache of other block
             // <-OR->
-            'clear' => array(       // Clear cache of other blocks
+            'clear' => [       // Clear cache of other blocks
                 'namespace',
                 'namespace',
                 //...
-            ),
+            ],
 
-            'entityClear' => array( // Clear cache by entity update
+            'entityClear' => [ // Clear cache by entity update
                 'entityName-1',
                 'entityName-2',
                 //...
-            ),
-        ),
+            ],
+        ],
 
         'initOrder' => 1000, // Order to run init method for each data block
         'useMultiLanguage' => true OR false, // NR. Use multi-language operation for some procedure. By default: useMultiLanguage = false
 
-        'roles' => array (
-            array (
+        'roles' => [
+            [
                 'condition'    => '(role_A&!role_B)|role_C',
                 'transfer_out' => 'transferURL',
-            ),
-            array (
+            ],
+            [
                 'condition'    => '(role_A|role_B)&!role_C',
                 'transfer_int' => 'transferURL',
-            ),
-            array (
+            ],
+            [
                 'condition'     => '(role_A&!role_B)|role_C',
                 'transfer_sham' => 'transferURL',
-            ),
-        ),
-    ),
-);
-?>
+            ],
+        ],
+    ],
+];

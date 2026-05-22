@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\core\exception\service\fatal as fatalException;
 /**
  * Paiment-maker service
@@ -17,196 +20,146 @@ use fan\core\exception\service\fatal as fatalException;
  */
 class obfuscator extends \fan\core\base\service\multi
 {
-    /**
-     * @var array Service's Instances
-     */
-    private static $aInstances = array();
+    private static array $instances = [];
     /**
      * List of Engines by TA Types
      * @var array
      */
-    private $aFileType = array(
+    private array $fileType = [
         'css',
         'js',
-    );
+    ];
     /**
      * Current Type of File (css or js)
      * @var numeric
      */
-    protected $sType = null;
+    protected ?string $type = null;
     /**
      * Path to directory with content files
      * @var string
      */
-    protected $sContentDir = null;
+    protected ?string $contentDir = null;
     /**
      * Path to directory with META-files
      * @var string
      */
-    protected $sMetaDir = null;
+    protected ?string $metaDir = null;
     /**
      * Keys for check/make directories
      * @var array
      */
-    protected $aDirKeys = array(
-        'CONTENT' => 'sContentDir',
-        'META'    => 'sMetaDir',
-    );
+    protected array $dirKeys = [
+        'CONTENT' => 'contentDir',
+        'META'    => 'metaDir',
+    ];
 
     /**
-     * Service's constructor
-     * @param string $sType
      * @throws \fan\core\exception\service\fatal
      */
-    protected function __construct($sType)
+    protected function __construct(string $type)
     {
-        if (in_array($sType, $this->aFileType)) {
-            $this->sType = $sType;
+        $type = strtolower((string)$type);
+        if (in_array($type, $this->fileType, true)) {
+            $this->type = $type;
         } else {
-            throw new fatalException(0, 'Incorrect file type for obfuscator "' . $sType . '"', 3008);
+            throw new fatalException(0, 'Incorrect file type for obfuscator "' . $type . '"', 3008);
         }
 
         parent::__construct(true);
 
         $this->_defineDir();
-    } // function __construct
+    }
 
     // ======== Static methods ======== \\
 
-    /**
-     * Get Service's instance for obfuscate JS or CSS
-     * @param string $sType css|js
-     * @return \fan\core\service\obfuscator
-     */
-    public static function instance($sType)
+    public static function instance(string $type): static
     {
-        $sType = strtolower($sType);
-        if (!isset(self::$aInstances[$sType])) {
-            new self($sType);
+        $type = strtolower($type);
+        if (!isset(self::$instances[$type])) {
+            new self($type);
         }
-        return self::$aInstances[$sType];
-    } // function instance
+        return self::$instances[$type];
+    }
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Get New List of file (css or js)
-     * @param array $aFileList
-     * @return array
-     */
-    public function getNewList($aFileList)
+    public function getNewList(array $fileList): array
     {
         if (!$this->isEnabled()) {
-            return $aFileList;
+            return $fileList;
         }
 
-        $sMethod = '_makeNew' . ucfirst($this->sType) . 'List';
-        return $this->$sMethod($aFileList);
-    } // function getNewList
+        $method = '_makeNew' . ucfirst($this->type) . 'List';
+        return $this->$method($fileList);
+    }
 
-    /**
-     * Obfuscate string of Content
-     * @param string $sText
-     * @return string
-     */
-    public function obfuscate($sText)
+    public function obfuscate(string $text): string
     {
-        $sEngine = $this->getConfig('ENGINE');
-        return empty($sEngine) ? $sText : $this->_getEngine($sEngine)->obfuscate($sText);
-    } // function obfuscate
+        $engine = $this->getConfig('ENGINE');
+        return empty($engine) ? $text : $this->_getEngine($engine)->obfuscate($text);
+    }
 
-    /**
-     * Return content of Obfuscated data
-     * @param string $sName File name
-     * @return string
-     */
-    public function getFileData($sName)
+    public function getFileData(string $name): string|false
     {
-        $sContentFile = $this->sContentDir . '/' . $sName;
-        return is_file($sContentFile) ? file_get_contents($sContentFile) : 'Error 404! File not found.';
-    } // function getFileData
+        $contentFile = $this->contentDir . '/' . $name;
+        return is_file($contentFile) ? file_get_contents($contentFile) : 'Error 404! File not found.';
+    }
 
-    /**
-     * Return content of Obfuscated data
-     * @param string $sName File name
-     * @param integer $iLength Content length
-     * @return string
-     */
-    public function getHeaders($sName, $iLength = null)
+    public function getHeaders(string $name, ?int $length = null): array
     {
-        $sContentFile = $this->sContentDir . '/' . $sName;
-        if (is_file($sContentFile)) {
-            return array(
-                'contentType' => $this->sType == 'css' ? 'text/css' : 'application/javascript',
-                'filename'    => $this->sType . '_' . $sName,
-                'length'      => empty($iLength) ? filesize($sContentFile) : $iLength,
-                'modified'    => filemtime($sContentFile),
+        $contentFile = $this->contentDir . '/' . $name;
+        if (is_file($contentFile)) {
+            return [
+                'contentType' => $this->type === 'css' ? 'text/css' : 'application/javascript',
+                'filename'    => $this->type . '_' . $name,
+                'length'      => empty($length) ? filesize($contentFile) : $length,
+                'modified'    => filemtime($contentFile),
                 //'cacheLimit'  => 0,
-            );
+            ];
         }
-        return array(
+        return [
             'response'    => 404,
             'contentType' => 'text/plain',
             'filename'    => 'error_404',
-            'length'      => empty($iLength) ? null : $iLength,
-        );
-    } // function getHeaders
+            'length'      => empty($length) ? null : $length,
+        ];
+    }
 
-    /**
-     * Get service's Config
-     * @param string $mKey Config key
-     * @param mixed $mDefault Default value
-     * @return mixed
-     */
-    public function getConfig($mKey = null, $mDefault = null)
+    public function getConfig(mixed $key = null, mixed $default = null): mixed
     {
-        return parent::getConfig(is_array($mKey) ? $mKey : array($this->sType, $mKey), $mDefault);
-    } // function getConfig
+        return parent::getConfig(is_array($key) ? $key : [$this->type, $key], $default);
+    }
 
-    /**
-     * Check is service enabled
-     * @return boolean
-     */
-    public function isEnabled()
+    public function isEnabled(): bool
     {
-        return (boolean)$this->getConfig('ENABLED', false);
-    } // function isEnabled
+        return (bool)$this->getConfig('ENABLED', false);
+    }
 
-    /**
-     * Reset flag of enabled
-     * @return \fan\core\service\obfuscator
-     */
-    public function resetEnabled()
+    public function resetEnabled(): static
     {
-        $this->_getConfigurator()->reset('obfuscator', array($this->sType, 'ENABLED'));
+        $this->_getConfigurator()->reset('obfuscator', [$this->type, 'ENABLED']);
         return $this;
-    } // function resetEnabled
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Save service's Instance
-     * @return \fan\core\base\service
-     */
-    protected function _saveInstance()
+    protected function _saveInstance(): static
     {
-        self::$aInstances[$this->sType] = $this;
+        self::$instances[$this->type] = $this;
         return $this;
-    } // function _saveInstance
+    }
 
     /**
-     * Check/create Directories for save obfuscate files
-     * @return $this
      * @throws fatalException
      */
-    protected function _defineDir()
+    protected function _defineDir(): static
     {
         if (!$this->isEnabled()) {
             return $this;
         }
-        foreach ($this->aDirKeys as  $k => $v) {
-            $sTmp = $this->getConfig('PATH_' . $k, '{TEMP}/obfuscator/' . $this->sType . '/' . strtolower($k));
-            $this->$v = \bootstrap::parsePath($sTmp);
+        foreach ($this->dirKeys as  $k => $v) {
+            $tmp = (string)$this->getConfig('PATH_' . $k, '{TEMP}/obfuscator/' . $this->type . '/' . strtolower($k));
+            $this->$v = \bootstrap::parsePath($tmp);
             if (!is_dir($this->$v)) {
                 if (!mkdir ($this->$v, 0750, true)) {
                     throw new fatalException('Can\'t create directory "' . $this->$v . '" for obfuscator.');
@@ -214,161 +167,142 @@ class obfuscator extends \fan\core\base\service\multi
             }
         }
         return $this;
-    } // function _defineDir
+    }
 
-    /**
-     * Make New List of CSS-files
-     * @param array $aFileList
-     * @return array
-     */
-    protected function _makeNewCssList($aFileList)
+    protected function _makeNewCssList(array $fileList): array
     {
-        $aNewList = array();
-        foreach ($aFileList as $sType => $aTmp) {
-            foreach ($aTmp as $sMedia => $aList) {
-                $aNewList[$sType][$sMedia] = $this->_makeNewList($aList);
+        $newList = [];
+        foreach ($fileList as $type => $tmp) {
+            foreach ($tmp as $media => $list) {
+                $newList[$type][$media] = $this->_makeNewList($list);
             }
         }
-        return $aNewList;
-    } // function _makeNewCssList
-    /**
-     * Make New List of JS-files
-     * @param array $aFileList
-     * @return array
-     */
-    protected function _makeNewJsList($aFileList)
+        return $newList;
+    }
+    protected function _makeNewJsList(array $fileList): array
     {
-        $aNewList = array();
-        foreach ($aFileList as $sType => $aList) {
-            $aNewList[$sType] = $this->_makeNewList($aList);
+        $newList = [];
+        foreach ($fileList as $type => $list) {
+            $newList[$type] = $this->_makeNewList($list);
         }
-        return $aNewList;
-    } // function _makeNewJsList
-    /**
-     * Make New List of JS-files
-     * @param array $aFileList
-     * @return array
-     */
-    protected function _makeNewList($aList)
+        return $newList;
+    }
+    protected function _makeNewList(array $list): array
     {
-        if (empty($aList)) {
-            return array();
+        if (empty($list)) {
+            return [];
         }
 
-        $bGlue   = (boolean)$this->getConfig('GLUE', true);
-        $sPrefix = ''; // Url prefix,
-        $aNames  = array();
-        $sKey    = 0;
-        foreach ($aList as $k => $v) {
+        $glue   = (bool)$this->getConfig('GLUE', true);
+        $prefix = ''; // Url prefix,
+        $names  = [];
+        $key    = 0;
+        foreach ($list as $k => $v) {
+            $v = (string)$v;
             if (preg_match('/^https?\:\/\/\w+\.\w+/', $v)) {
-                if (!empty($aNames[$sKey])) {
-                    $sKey++;
+                if (!empty($names[$key])) {
+                    $key++;
                 }
-                $aNames[$sKey] = $v;
-                $sKey++;
+                $names[$key] = $v;
+                $key++;
             } else{
-                $aNames[$sKey][] =  substr($v, 0, 1) == '/' ? $v : $sPrefix . $v;
-                if (!$bGlue) {
-                    $sKey++;
+                $names[$key][] =  substr($v, 0, 1) === '/' ? $v : $prefix . $v;
+                if (!$glue) {
+                    $key++;
                 }
             }
         }
 
-        $aNewList = array();
-        $sHandler = $this->getConfig('HANDLER', '/get_' . $this->sType . '/');
-        foreach ($aNames as $v1) {
+        $newList = [];
+        $handler = (string)$this->getConfig('HANDLER', '/get_' . $this->type . '/');
+        foreach ($names as $v1) {
             if (is_string($v1)) {
-                $aNewList[] = $v1;
+                $newList[] = $v1;
             } else {
-                $sName = md5(implode('-', $v1));
-                $aNewList[] = $sHandler . $sName;
-                $this->_makeFile($v1, $sName);
+                $name = md5(implode('-', $v1));
+                $newList[] = $handler . $name;
+                $this->_makeFile($v1, $name);
             }
         }
 
-        return $aNewList;
-    } // function _makeNewList
+        return $newList;
+    }
 
-    protected function _makeFile($aList, $sName)
+    protected function _makeFile(array $list, string $name): static
     {
-        $bCheckObsolete = $this->getConfig('CHECK_OBSOLETE', true);
-        $sContentFile   = $this->sContentDir . '/' . $sName;
-        $sMetaFile      = $this->sMetaDir . '/' . $sName;
+        $checkObsolete = $this->getConfig('CHECK_OBSOLETE', true);
+        $contentFile   = $this->contentDir . '/' . $name;
+        $metaFile      = $this->metaDir . '/' . $name;
 
         // Check - is content exists and isn't obsolete
-        if (is_file($sContentFile)) {
-            if (!$bCheckObsolete) {
+        if (is_file($contentFile)) {
+            if (!$checkObsolete) {
                 return $this;
             }
-            if (is_file($sMetaFile)) {
-                $bObsolete = false;
-                $aData = include $sMetaFile;
-                foreach ($aList as $v) {
-                    $sSrcPath = BASE_DIR . '/' . $v;
-                    if (!is_file($sSrcPath)) {
+            if (is_file($metaFile)) {
+                $obsolete = false;
+                $data = \fan\project\adapter\php_array_file::load($metaFile, []);
+                foreach ($list as $v) {
+                    $srcPath = BASE_DIR . '/' . $v;
+                    if (!is_file($srcPath)) {
                         continue;
                     }
-                    if (!isset($aData[$v]['time']) || !isset($aData[$v]['size'])) {
-                        $bObsolete = true;
+                    if (!isset($data[$v]['time']) || !isset($data[$v]['size'])) {
+                        $obsolete = true;
                         break;
                     }
-                    if ($aData[$v]['time'] != filemtime($sSrcPath) || $aData[$v]['size'] != filesize($sSrcPath)) {
-                        $bObsolete = true;
+                    if ((int)$data[$v]['time'] !== (int)filemtime($srcPath) || (int)$data[$v]['size'] !== (int)filesize($srcPath)) {
+                        $obsolete = true;
                         break;
                     }
                 }
-                if (!$bObsolete) {
+                if (!$obsolete) {
                     return $this;
                 }
             }
         }
 
         // Make content of files
-        $sContent = '';
-        $aData    = array();
-        foreach ($aList as $v) {
-            $sSrcPath = BASE_DIR . '/' . $v;
-            if (!is_readable($sSrcPath)) {
-                trigger_error('File "' . $v . '" isn\'t readable. Can\'t obfuscate it.', E_USER_WARNING);
-                continue;
+        $content = '';
+        $data    = [];
+        foreach ($list as $v) {
+            $srcPath = BASE_DIR . '/' . $v;
+            if (!is_readable($srcPath)) {
+                throw new \RuntimeException('File "' . $v . '" isn\'t readable. Can\'t obfuscate it.');
             }
 
-            $sTmp      = file_get_contents($sSrcPath);
-            $sContent .= $this->obfuscate($sTmp);
-            if ($bCheckObsolete) {
-                $aData[$v] = array(
-                    'time' => filemtime($sSrcPath),
-                    'size' => filesize($sSrcPath),
-                );
+            $tmp      = file_get_contents($srcPath);
+            $content .= $this->obfuscate((string)$tmp);
+            if ($checkObsolete) {
+                $data[$v] = [
+                    'time' => filemtime($srcPath),
+                    'size' => filesize($srcPath),
+                ];
             }
         }
 
-        if (file_put_contents($sContentFile, $sContent) === false) {
-            trigger_error('Obfuscator error. Can\'t save file "' . $sContentFile . '".', E_USER_WARNING);
+        if (file_put_contents($contentFile, $content) === false) {
+            throw new \RuntimeException('Obfuscator error. Can\'t save file "' . $contentFile . '".');
         }
-        if ($bCheckObsolete) {
-            if (file_put_contents($sMetaFile, '<?php
-return ' . var_export($aData, true) .';
+        if ($checkObsolete) {
+            if (file_put_contents($metaFile, '<?php
+return ' . var_export($data, true) .';
 ?>') === false) {
-                trigger_error('Obfuscator error. Can\'t save file "' . $sMetaFile . '".', E_USER_WARNING);
+                throw new \RuntimeException('Obfuscator error. Can\'t save file "' . $metaFile . '".');
             }
         }
 
         return $this;
-    } // function _makeFile
+    }
 
     /**
-     * Get delegate class
-     * @param string $sClass
-     * @return object
      * @throws \fan\core\exception\service\fatal
      */
-    protected function _getDelegate($sClass)
+    protected function _getDelegate(mixed $class): mixed
     {
-        if (empty($this->oEngine)) {
-            $this->oEngine = $this->_getEngine($this->sType);
+        if (empty($this->engine)) {
+            $this->engine = $this->_getEngine($this->type);
         }
-        return $this->oEngine;
-    } // function _getDelegate
-} // class \fan\core\service\obfuscator
-?>
+        return $this->engine;
+    }
+}

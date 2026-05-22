@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\obfuscator;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\obfuscator;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Simple obfuscator by regexp
@@ -22,32 +25,27 @@ class simple extends base
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Obfuscate string of Content
-     * @param string $sText
-     * @return string
-     */
-    public function obfuscate($sText)
+    public function obfuscate(string $text): string
     {
-        if ($this->bDropComments) {
-            $sText = preg_replace('/\/\*.+?\*\//s', '', $sText);
+        if ($this->dropComments) {
+            $text = preg_replace('/\/\*.+?\*\//s', '', $text) ?? $text;
         }
-        if ($this->bDropComments || $this->bDropEndRow) {
-            $sText = preg_replace('/^\s*\/\/.*$/m', '', $sText);
+        if ($this->dropComments || $this->dropEndRow) {
+            $text = preg_replace('/^\s*\/\/.*$/m', '', $text) ?? $text;
         }
-        if ($this->bDropEndRow) {
-            $sText = preg_replace('/\v+/', ' ', $sText);
+        if ($this->dropEndRow) {
+            $text = preg_replace('/\v+/', ' ', $text) ?? $text;
         }
-        if ($this->bSpacesToOne) {
-            $sText = preg_replace('/^\h+/m', '', $sText);
-            $sText = preg_replace('/\h+$/m', '', $sText);
-            if (!$this->bDropEndRow) {
-                $sText = preg_replace('/\v{2,}/', "\n", $sText);
+        if ($this->spacesToOne) {
+            $text = preg_replace('/^\h+/m', '', $text) ?? $text;
+            $text = preg_replace('/\h+$/m', '', $text) ?? $text;
+            if (!$this->dropEndRow) {
+                $text = preg_replace('/\v{2,}/', "\n", $text) ?? $text;
             }
-            $sText = preg_replace('/\h{2,}/', ' ', $sText);
+            $text = preg_replace('/\h{2,}/', ' ', $text) ?? $text;
         }
-        return $sText;
-    } // function obfuscate
+        return $text;
+    }
 
     // ======== Private/Protected methods ======== \\
 
@@ -56,5 +54,4 @@ class simple extends base
     // ======== Required Interface methods ======== \\
 
 
-} // class \fan\core\service\obfuscator\simple
-?>
+}

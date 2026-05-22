@@ -1,4 +1,8 @@
-<?php namespace fan\core\view;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view;
+use fan\core\base\expression_evaluator;
 /**
  * Definer type of View
  *
@@ -16,216 +20,181 @@
  */
 class definer
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * Regexp for parse key string of rule
      */
-    const RULE_REG_EXP = '/([ACEFGHMPRS]+)\.(.+?)\.([binsr])\.(\d{1,2})/';
+    public const RULE_REG_EXP = '/([ACEFGHMPRS]+)\.(.+?)\.([binsr])\.(\d{1,2})/';
     /**
      * Regexp for check value of numeric type
      */
-    const NUM_REG_EXP = '/^(\=\=|\!\=|\>\=?|\<\=?)?(\-?[0-9]+(\.[0-9]+)?)$/';
+    public const NUM_REG_EXP = '/^(\=\=|\!\=|\>\=?|\<\=?)?(\-?[0-9]+(\.[0-9]+)?)$/';
 
-    /**
-     * @var array
-     */
-    protected $aExprMaker = array(
+    protected array $exprMaker = [
         's' => '_getStringExpr',
         'i' => '_getIntegerExpr',
         'n' => '_getNumericExpr',
         'b' => '_getBooleanExpr',
         'r' => '_getRegexpExpr',
-    );
+    ];
 
-    /**
-     * @var array
-     */
-    protected $aConfig = array();
-    /**
-     * @var array
-     */
-    protected $aConditions = null;
+    protected array $config = [];
+    protected ?array $conditions = null;
     /**
      * @var \fan\core\service\request
      */
-    protected $oRequest = null;
+    protected ?object $request = null;
 
-    /**
-     * View-definer constructor
-     */
-    public function __construct(array $aConfig)
+    public function __construct(array $config)
     {
-        $this->aConfig = $aConfig;
-        if (empty($this->aConfig['default_format'])) {
-            $this->aConfig['default_format'] = 'html';
+        $this->config = $config;
+        if (empty($this->config['default_format'])) {
+            $this->config['default_format'] = 'html';
         }
-    } // function __construct
+    }
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Get suffix of class-name of View-parcer
-     * @return string
-     */
-    public function getViewParserName()
+    public function getViewParserName(): string
     {
-        $aConditions = $this->_getConditions();
-        foreach ($aConditions as $k1 => $v1) {
+        $conditions = $this->_getConditions();
+        foreach ($conditions as $k1 => $v1) {
             foreach ($v1 as $v2) {
-                if (eval($v2)) {
+                if ($v2()) {
                     return $k1;
                 }
             }
         }
-        $oTab = service('tab');
-        /* @var $oTab \fan\core\service\tab */
-        return $oTab->getTabMeta('default_view_format', $this->aConfig['default_format']);
-    } // function getViewParserName
+        $tab = $this->containerService('tab');
+        /* @var $tab \fan\core\service\tab */
+        return $tab->getTabMeta('default_view_format', $this->config['default_format']);
+    }
     // ======== Private/Protected methods ======== \\
-    /**
-     * Get Conditions
-     * @return array
-     */
-    public function _getConditions()
+    public function _getConditions(): array
     {
-        if (is_null($this->aConditions)) {
-            $this->oRequest    = \fan\project\service\request::instance();
-            $this->aConditions = array();
-            $aMatches    = null;
-            foreach ($this->aConfig['rule'] as $k1 => $v1) { // $k1 - view format
+        if (is_null($this->conditions)) {
+            if (is_null($this->request)) {
+                $this->request = $this->containerService('request');
+            }
+            $this->conditions = [];
+            $matches    = null;
+            foreach ($this->config['rule'] ?? [] as $k1 => $v1) { // $k1 - view format
                 foreach ($v1 as $k2 => $v2) { // $k2 - index of rule // $v2 - string of rule
-                    if (preg_match_all(self::RULE_REG_EXP, $v2, $aMatches)) {
-                        $aSearch = $aReplace = array(); // Array Search/Replace for convert check rule to execute
-                        foreach ($aMatches[3] as $k3 => $v3) { // $k3 - index of rule-string // $v3 - element of rule-string
+                    $v2 = (string)$v2;
+                    if (preg_match_all(self::RULE_REG_EXP, $v2, $matches)) {
+                        $search = $replace = $resolver = []; // Array Search/Replace for convert check rule to execute
+                        foreach ($matches[3] as $k3 => $v3) { // $k3 - index of rule-string // $v3 - element of rule-string
                             // Data sources
-                            $sSrc = '\'' . $aMatches[1][$k3] . '\'';
+                            $src = $matches[1][$k3];
                             // Data key
-                            $sKey = '\'' . addcslashes($aMatches[2][$k3], '\\\'') . '\'';
+                            $key = $matches[2][$k3];
 
                             // Validate Value for rule
-                            $mVal = $this->_getConditionValue(array_val($aMatches, array(4, $k3)), $v3, $v2);
-                            if (is_null($mVal)) {
+                            $val = $this->_getConditionValue($matches[4][$k3] ?? null, $v3, $v2);
+                            if (is_null($val)) {
                                 continue 2;
                             }
 
                             // Expression for Validate
-                            $sMethod = array_val($this->aExprMaker, $v3);
-                            if (empty($sMethod) || !method_exists($this, $sMethod)) {
-                                trigger_error('Unknown metod key <b>' . $v3 . '</b><br /> for VIEW-rule:<br /><b>' . $v2 . '</b>.', E_USER_WARNING);
-                                continue 2;
+                            $method = $this->exprMaker[$v3] ?? null;
+                            if (empty($method) || !method_exists($this, $method)) {
+                                throw new \UnexpectedValueException('Unknown metod key <b>' . $v3 . '</b><br /> for VIEW-rule:<br /><b>' . $v2 . '</b>.');
                             }
-                            $sExpr = $this->$sMethod($sKey, $sSrc, $mVal);
+                            $ruleKey = '__rule_' . $k3;
 
-                            $aSearch[$k3]  = $aMatches[0][$k3];
-                            $aReplace[$k3] = $sExpr;
+                            $search[$k3]  = $matches[0][$k3];
+                            $replace[$k3] = $ruleKey;
+                            $resolver[$ruleKey] = $this->$method($key, $src, $val);
                         }
-                        $sFinalExpr = str_replace($aSearch, $aReplace, $v2) . ';';
-                        if (@eval('$_xxx = ' . $sFinalExpr . ' return true;')) {
-                            $this->aConditions[$k1][$k2] = 'return ' . $sFinalExpr;
-                        } else {
-                            trigger_error('Incorrect PHP-expression:<br /><b>' . $sFinalExpr . '</b><br /> in VIEW-rule:<br /><b>' . $v2 . '</b>.', E_USER_WARNING);
+                        $finalExpr = str_replace($search, $replace, $v2);
+                        try {
+                            expression_evaluator::evaluate($finalExpr, function ($name) use ($resolver) {
+                                if (!array_key_exists($name, $resolver)) {
+                                    throw new \InvalidArgumentException('Unknown VIEW-rule token "' . $name . '".');
+                                }
+                                return false;
+                            });
+                            $this->conditions[$k1][$k2] = function () use ($finalExpr, $resolver) {
+                                return (bool)expression_evaluator::evaluate($finalExpr, function ($name) use ($resolver) {
+                                    if (!array_key_exists($name, $resolver)) {
+                                        throw new \InvalidArgumentException('Unknown VIEW-rule token "' . $name . '".');
+                                    }
+                                    return $resolver[$name]();
+                                });
+                            };
+                        } catch (\Throwable $e) {
+                            throw new \UnexpectedValueException('Incorrect PHP-expression:<br /><b>' . $finalExpr . '</b><br /> in VIEW-rule:<br /><b>' . $v2 . '</b>.', 0, $e);
                         }
                     } else {
-                        trigger_error('Can\'t parse VIEW-rule:<br /><b>' . $v2 . '</b>.', E_USER_WARNING);
+                        throw new \UnexpectedValueException('Can\'t parse VIEW-rule:<br /><b>' . $v2 . '</b>.');
                     }
                 }
             }
         }
-        return $this->aConditions;
-    } // function _getConditions
+        return $this->conditions;
+    }
 
-    /**
-     * Get Condition Value for validation
-     * @param mixed $mVal
-     * @param string $v3
-     * @param string $v2
-     * @return null
-     */
-    protected function _getConditionValue($mVal, $v3, $v2)
+    protected function _getConditionValue(mixed $val, $v3, $v2): mixed
     {
-        if (is_null($mVal)) {
+        if (is_null($val)) {
 
         }
-        if ($v3 == 'b') {
-            return (boolean)$mVal;
+        if ((string)$v3 === 'b') {
+            return (bool)$val;
         }
-        if ($v3 == 'i') {
-            return (integer)$mVal;
+        if ((string)$v3 === 'i') {
+            return (int)$val;
         }
         // Need data value
-        if (!isset($this->aConfig['value'][$mVal])) {
-            trigger_error('Value doesn\'t set for VIEW-rule:<br /><b>' . $v2 . '</b>.', E_USER_WARNING);
-            return null;
+        if (!isset($this->config['value'][$val])) {
+            throw new \UnexpectedValueException('Value doesn\'t set for VIEW-rule:<br /><b>' . $v2 . '</b>.');
         }
-        $mVal = addcslashes($this->aConfig['value'][$mVal], '\\\'');
-        if ($v3 == 'n' && !preg_match(self::NUM_REG_EXP, $mVal)) {
-            trigger_error('Incorrect value:<br /><b>' . $mVal . '</b><br /> for VIEW-rule:<br /><b>' . $v2 . '</b>.', E_USER_WARNING);
-            return null;
+        $val = $this->config['value'][$val];
+        if ((string)$v3 === 'n' && !preg_match(self::NUM_REG_EXP, (string)$val)) {
+            throw new \UnexpectedValueException('Incorrect value:<br /><b>' . $val . '</b><br /> for VIEW-rule:<br /><b>' . $v2 . '</b>.');
         }
-        return $mVal;
-    } // function _getConditionValue
+        return $val;
+    }
 
-    /**
-     * Get Validation Expression by String
-     * @param string $sKey
-     * @param string $sSrc
-     * @param mixed $mVal
-     * @return type
-     */
-    protected function _getStringExpr($sKey, $sSrc, $mVal)
+    protected function _getStringExpr(string $key, string $src, mixed $val): \Closure
     {
-        return '$this->oRequest->get(' . $sKey . ', ' . $sSrc . ')==\'' . $mVal . '\'';
-    } // function _getStringExpr
+        return fn() => (string)$this->request->get($key, $src) === (string)$val;
+    }
 
-    /**
-     * Get Validation Expression by Integer value
-     * @param string $sKey
-     * @param string $sSrc
-     * @param mixed $mVal
-     * @return type
-     */
-    protected function _getIntegerExpr($sKey, $sSrc, $mVal)
+    protected function _getIntegerExpr(string $key, string $src, mixed $val): \Closure
     {
-        return '(integer)$this->oRequest->get(' . $sKey . ', ' . $sSrc . ')==' . $mVal;
-    } // function _getIntegerExpr
+        return fn() => (int)$this->request->get($key, $src) === (int)$val;
+    }
 
-    /**
-     * Get Validation Expression by Numeric condition
-     * @param string $sKey
-     * @param string $sSrc
-     * @param mixed $mVal
-     * @return type
-     */
-    protected function _getNumericExpr($sKey, $sSrc, $mVal)
+    protected function _getNumericExpr(string $key, string $src, mixed $val): \Closure
     {
-        $aMatches = array();
-        preg_match(self::NUM_REG_EXP, $mVal, $aMatches);
-        return '$this->oRequest->get(' . $sKey . ', ' . $sSrc . ')' . (empty($aMatches[1]) ? '==' : $aMatches[1]) . $aMatches[2];
-    } // function _getNumericExpr
+        $matches = [];
+        preg_match(self::NUM_REG_EXP, (string)$val, $matches);
+        $operator = empty($matches[1]) ? '==' : $matches[1];
+        $expected = str_contains($matches[2], '.') ? (float)$matches[2] : (int)$matches[2];
+        return function () use ($key, $src, $operator, $expected) {
+            $actual = is_float($expected) ? (float)$this->request->get($key, $src) : (int)$this->request->get($key, $src);
+            return match ($operator) {
+                '!=' => $actual !== $expected,
+                '>=' => $actual >= $expected,
+                '<=' => $actual <= $expected,
+                '>'  => $actual > $expected,
+                '<'  => $actual < $expected,
+                default => $actual === $expected,
+            };
+        };
+    }
 
-    /**
-     * Get Validation Expression by Boolean value
-     * @param string $sKey
-     * @param string $sSrc
-     * @param mixed $mVal
-     * @return type
-     */
-    protected function _getBooleanExpr($sKey, $sSrc, $mVal)
+    protected function _getBooleanExpr(string $key, string $src, mixed $val): \Closure
     {
-        return ($mVal ? '' : '!') . '(bool)$this->oRequest->get(' . $sKey . ', ' . $sSrc . ')';
-    } // function _getBooleanExpr
+        return fn() => (bool)$this->request->get($key, $src) === (bool)$val;
+    }
 
-    /**
-     * Get Validation Expression by Regexp
-     * @param string $sKey
-     * @param string $sSrc
-     * @param mixed $mVal
-     * @return type
-     */
-    protected function _getRegexpExpr($sKey, $sSrc, $mVal)
+    protected function _getRegexpExpr(string $key, string $src, mixed $val): \Closure
     {
-        return 'preg_match(\'' . $mVal . '\', $this->oRequest->get(' . $sKey . ', ' . $sSrc . '))';
-    } // function _getRegexpExpr
+        return fn() => (bool)preg_match((string)$val, (string)$this->request->get($key, $src));
+    }
 
-} // class \fan\core\view\definer
-?>
+}

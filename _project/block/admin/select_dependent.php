@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\admin;
 /**
  * Block admin select dependent
  *
@@ -16,5 +20,4 @@
  */
 class select_dependent extends \fan\core\block\admin\select_dependent
 {
-} // class \fan\project\block\admin\select_dependent
-?>
+}

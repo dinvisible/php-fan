@@ -1,0 +1,32 @@
+{
+  "name": "php-fan/php-fan-5",
+  "description": "PHP-FAN framework",
+  "license": "LGPL-3.0-or-later",
+  "type": "project",
+  "require": {
+    "php": ">=8.0",
+    "phpmailer/phpmailer": "^6.10",
+    "adodb/adodb-php": "^5.22"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^12.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "fan\\core\\": "_core/",
+      "fan\\project\\": "_project/",
+      "fan\\app\\": "_project/app/"
+    },
+    "files": [
+      "tools/composer_autoload.php"
+    ]
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "FanTest\\": "unit/mock/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit --configuration phpunit.xml"
+  }
+}

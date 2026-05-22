@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Request service
@@ -17,10 +20,7 @@ use fan\project\exception\service\fatal as fatalException;
  */
 class request extends \fan\core\base\service\single
 {
-    /**
-     * @var array Requested data
-     */
-    private $aData = array(
+    private array $data = [
         'A0' => null, // Add(itional) request (See \fan\core\service\matcher\item\parsed)
         'A1' => null, // Extra Add(itional) request by delimiter: $key => $val
         'B'  => null, // Both = Main request + Add request (See \fan\core\service\matcher\item\parsed)
@@ -34,450 +34,340 @@ class request extends \fan\core\base\service\single
         'P'  => null, // Post parameters:       $_POST
         'R'  => null, // Request parameters:    $_REQUEST
         'S'  => null, // Server data:           $_SERVER
-    );
+    ];
 
     /**
      * Data set by correspondence to global variables (static)
      * @var array
      */
-    protected $aCorrespondence = array(
+    protected array $correspondence = [
         'E' => '_ENV',
         'F' => '_FILES',
         'P' => '_POST',
         'R' => '_REQUEST',
         'S' => '_SERVER',
-    );
+    ];
 
     /**
      * Data set by special methods (dynamic)
      * @var array
      */
-    protected $aMaker = array(
+    protected array $maker = [
         'A' => '_makeAddRequest',
         'B' => '_makeBothRequest',
         'G' => '_makeGet',
         'M' => '_makeMainRequest',
-    );
+    ];
     /**
      * Data maker indexes (for internal/sham trnsfer)
      * @var array
      */
-    protected $aMakerIndex = array(
+    protected array $makerIndex = [
         'A' => -2,
         'B' => -2,
         'G' => -2,
         'M' => -2,
-    );
+    ];
 
     /**
      * @var \fan\core\service\matcher
      */
-    private $oMatcher = '';
+    private mixed $matcher = '';
 
-    /**
-     * @var string Default check order
-     */
-    private $sOrder;
+    private ?string $order = null;
 
     /**
      * Raw POST data
      * @var string
      */
-    private $sRawPost = null;
+    private ?string $rawPost = null;
 
 
-    /**
-     * Service's constructor
-     */
     protected function __construct()
     {
         parent::__construct();
-        $this->sOrder = strtoupper($this->getConfig('DEFAULT_ORDER', 'PAG'));
+        $this->order = strtoupper((string)$this->getConfig('DEFAULT_ORDER', 'PAG'));
 
-        // Ses all basic data
-        $bIsMQ = get_magic_quotes_gpc();
-        foreach ($this->aCorrespondence as $k => $v) {
+        // Set all basic data
+        foreach ($this->correspondence as $k => $v) {
             if (empty($GLOBALS[$v])) {
-                $this->aData[$k] = array();
-            } elseif ($bIsMQ && in_array($k, array('P', 'R'))) {
-                $this->aData[$k] = $this->_stripSlashesDeep($GLOBALS[$v]);
+                $this->data[$k] = [];
             } else {
-                $this->aData[$k] = $GLOBALS[$v];
+                $this->data[$k] = $GLOBALS[$v];
             }
         }
         if (\bootstrap::isCli()) {
-            $this->aData['O'] = $this->_makeOptions();
+            $this->data['O'] = $this->_makeOptions();
         } else {
-            $this->aData['H'] = $this->_makeHeaders();
-            $this->aData['C'] = $this->_makeCookies();
+            $this->data['H'] = $this->_makeHeaders();
+            $this->data['C'] = $this->_makeCookies();
         }
-    } // function __construct
+    }
 
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
-    public function __get($sKey)
+    /**
+     * Handles dynamic property reads for this current component.
+     */
+    public function __get(string $key): mixed
     {
-        return $this->get($sKey);
+        return $this->get((string)$key);
     }
-    public function __invoke($sKey, $sOrder = null, $mDefault = null)
+    /**
+     * Implements PHP magic behavior for this current component.
+     *
+     * @param mixed $default Fallback value returned when no explicit value is available.
+     */
+    public function __invoke(string $key, ?string $order = null, mixed $default = null): mixed
     {
-        return $this->get($sKey, $sOrder, $mDefault);
+        return $this->get($key, $order, $default);
     }
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
 
     /**
-     * Get Request parameter
-     *  Order keys:
-     *   - A - Add(itional) request
-     *   - B - Both = Main + Add(itional) request
-     *   - C - Cookie
-     *   - E - Environment
-     *   - F - Files
-     *   - G - Get data
-     *   - H - Headers
-     *   - M - Main request
-     *   - O - Option list in CLI-mode
-     *   - P - Post data
-     *   - R - Request data
-     *   - S - Server data
-     * @param string $sKey The Request key
-     * @param string $sOrder Order of get values (For example: PGC - $_POST, $_GET, $_COOKIE). Possible letter "ACEFGHMPRS"
-     * @param mixed $mDefault The Default value
-     * @return mixed Request parameter's value
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    public function get($sKey, $sOrder = null, $mDefault = null, $bExtraAdd = true)
+    public function get(string $key, ?string $order = null, mixed $default = null, bool $extraAdd = true): mixed
     {
-        foreach ($this->_separateData($sOrder, $bExtraAdd) as $v) {
-            if (isset($v[$sKey])) {
-                return $v[$sKey];
+        foreach ($this->_separateData($order, $extraAdd) as $v) {
+            if (isset($v[$key])) {
+                return $v[$key];
             }
         }
-        return $mDefault;
-    } // function get
+        return $default;
+    }
 
     /**
-     * Get All Request parameter
-     * @param string $sOrder Order keys see get
-     * @param mixed $mDefault The Default value
-     * @return mixed Request parameter's value
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    public function getAll($sOrder = null, $mDefault = array(), $bExtraAdd = true)
+    public function getAll(?string $order = null, mixed $default = [], bool $extraAdd = true): mixed
     {
-        $aResult = array();
-        foreach ($this->_separateData($sOrder, $bExtraAdd) as $v) {
+        $result = [];
+        foreach ($this->_separateData($order, $extraAdd) as $v) {
             if (!empty($v)) {
-                $aResult = array_merge_recursive_alt($v, $aResult);
+                $result = array_merge_recursive_alt($v, $result);
             }
         }
-        return empty($aResult) ? $mDefault : $aResult;
-    } // function get_all
+        return empty($result) ? $default : $result;
+    }
 
-    /**
-     * Get Raw Post-data and automatically convert them to array
-     * @param string $sConvFormat
-     * @return mixed
-     */
-    public function getRawPost($sConvFormat = 'json', $bUseBase64 = false)
+    public function getRawPost(string $convFormat = 'json', bool $useBase64 = false): mixed
     {
-        if (is_null($this->sRawPost)) {
-            $this->sRawPost = file_get_contents('php://input'); // ToDo: Define different source there
+        if (is_null($this->rawPost)) {
+            $this->rawPost = (string)file_get_contents('php://input'); // ToDo: Define different source there
         }
-        switch (strtolower($sConvFormat)) {
+        switch (strtolower($convFormat)) {
         case 'json':
-            return service('json', $bUseBase64)->decode($this->sRawPost);
+            return $this->containerService('json', (bool)$useBase64)->decode($this->rawPost);
         case 'xml':
-            function conv($mItem)
+            function conv(mixed $item): mixed
             {
-                if (is_object($mItem) || is_array($mItem)) {
-                    return array_map('conv', (array)$mItem);
+                if (is_object($item) || is_array($item)) {
+                    return array_map('conv', (array)$item);
                 }
-                return $mItem;
+                return $item;
             }
-            return array_map('conv', (array)simplexml_load_string($this->sRawPost));
+            return array_map('conv', (array)simplexml_load_string($this->rawPost));
         }
-        return $this->sRawPost;
-    } // function getRawPost
+        return $this->rawPost;
+    }
 
     /**
-     * Set Request (fake) parameter.
-     * Recommended for debug only
-     * @param string $sKey The Request key
-     * @param mixed $mValue The Request parameter's value
-     * @param string $sType Type of data (like $sOrder in get, but one symbol only)
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function set($sKey, $mValue, $sType = 'P')
+    public function set(string $key, mixed $value, string $type = 'P'): void
     {
-        if ($this->_isAllowToSet($sType)) {
-            $this->aData[$sType][$sKey] = $mValue;
+        if ($this->_isAllowToSet($type)) {
+            $this->data[$type][$key] = $value;
         }
-    } // function set
+    }
 
-    /**
-     * Remove Request parameter.
-     * @param string $sKey The Request key
-     * @param string $sType Type of data (like $sOrder in get, but one symbol only)
-     */
-    public function remove($sKey, $sType = 'G', $bFullUnset = false)
+    public function remove(string $key, string $type = 'G', bool $fullUnset = false): void
     {
-        $aGlob = adduceToArray($this->getConfig('ALLOW_SET', array('G' => '_GET', 'P' => '_POST', 'R' => '_REQUEST')));
-        for ($i = 0; $i < strlen($sType); $i++) {
-            $k = $sType{$i};
+        $glob = adduceToArray($this->getConfig('ALLOW_SET', ['G' => '_GET', 'P' => '_POST', 'R' => '_REQUEST']));
+        for ($i = 0; $i < strlen($type); $i++) {
+            $k = $type[$i];
             if ($this->_isAllowToSet($k)) {
-                unset($this->aData[$k][$sKey]);
-                if ($bFullUnset && isset($GLOBALS[$aGlob[$k]][$sKey])) {
-                    unset($GLOBALS[$aGlob[$k]][$sKey]);
+                unset($this->data[$k][$key]);
+                if ($fullUnset && isset($GLOBALS[$glob[$k]][$key])) {
+                    unset($GLOBALS[$glob[$k]][$key]);
                 }
             }
         }
-    } // function remove
+    }
 
-    /**
-     * Get query string
-     * @return string Query string
-     */
-    public function getQueryString($bByGetData = true, $bCurrent =  true, $sSprtr = null)
+    public function getQueryString(bool $byGetData = true, bool $current = true, ?string $sprtr = null): string
     {
-        $oMatcher = $this->_getMatcher();
-        if ($bByGetData || empty($oMatcher)) {
-            $aGet = $bCurrent && !empty($oMatcher) ? $this->getAll('G') : $_GET;
-            return http_build_query($aGet, '', ($sSprtr ? : '&'));
+        $matcher = $this->_getMatcher();
+        if ($byGetData || empty($matcher)) {
+            $get = $current && !empty($matcher) ? $this->getAll('G') : $_GET;
+            return http_build_query($get, '', ($sprtr ? : '&'));
         }
-        $oItem = $bCurrent ? $oMatcher->getCurrentItem() : $oMatcher->getItem(0);
-        return ltrim($oItem->parsed->query, '?');
-    } // function getQueryString
+        $item = $current ? $matcher->getCurrentItem() : $matcher->getItem(0);
+        return ltrim((string)$item->parsed->query, '?');
+    }
 
-    /**
-     * Get short information about the request
-     * @return string Request information
-     */
-    public function getInfoString()
+    public function getInfoString(): string
     {
-        $aInfo = array('HTTP_HOST', 'HTTP_REFERER', 'HTTP_USER_AGENT', 'REMOTE_ADDR', 'REMOTE_PORT', 'REQUEST_METHOD', 'QUERY_STRING', 'REQUEST_URI');
-        $sInfo = '';
-        foreach ($aInfo as $sKey) {
-            if (isset($_SERVER[$sKey])) {
-                $sInfo .= $sKey . ' = ' . $_SERVER[$sKey] . ";\n";
+        $keys = ['HTTP_HOST', 'HTTP_REFERER', 'HTTP_USER_AGENT', 'REMOTE_ADDR', 'REMOTE_PORT', 'REQUEST_METHOD', 'QUERY_STRING', 'REQUEST_URI'];
+        $info = '';
+        foreach ($keys as $key) {
+            if (isset($_SERVER[$key])) {
+                $info .= $key . ' = ' . $_SERVER[$key] . ";\n";
             }
         }
-        return trim($sInfo);
-    } // function getInfoString
+        return trim($info);
+    }
 
-    /**
-     * Check: is there outer data
-     * @param string $sOrder
-     * @return boolean
-     */
-    public function checkIsData($sOrder = null, $bExtraAdd = true)
+    public function checkIsData(?string $order = null, bool $extraAdd = true): bool
     {
-        foreach ($this->_separateData($sOrder, $bExtraAdd) as $v) {
+        foreach ($this->_separateData($order, $extraAdd) as $v) {
             if (!empty($v)) {
                 return true;
             }
         }
         return false;
-    } // function checkIsData
+    }
 
-    /**
-     * Get Delimiter for Add request
-     * @return string
-     */
-    public function getAddDelimiter()
+    public function getAddDelimiter(): mixed
     {
-        return $this->oConfig->get('ADD_REQUEST_DELIMITER', '-');
-    } // function getAddDelimiter
+        return $this->config->get('ADD_REQUEST_DELIMITER', '-');
+    }
 
     // ======== Private/Protected methods ======== \\
 
     /**
-     * Separate Data into array By $sOrder
-     * @param string $sOrder
-     * @return array
      * @throws \fan\project\exception\service\fatal
      */
-    protected function _separateData($sOrder, $bExtraAdd)
+    protected function _separateData(?string $order, bool $extraAdd): array
     {
-        $aData    = array();
-        $sOrder   = empty($sOrder) ? $this->sOrder : strtoupper($sOrder);
-        $oMatcher = $this->_getMatcher();
-        $nIndex   = empty($oMatcher) ? -1 : $oMatcher->getCurrentIndex();
+        $data    = [];
+        $order   = empty($order) ? (string)$this->order : strtoupper($order);
+        $matcher = $this->_getMatcher();
+        $index   = empty($matcher) ? -1 : $matcher->getCurrentIndex();
 
-        for ($i = 0; $i < strlen($sOrder); $i++) {
-            $k0 = $k1 = $sOrder{$i};
-            if ($k1 == 'A') {
-                $k1 .= $bExtraAdd ? '0' : '1';
+        for ($i = 0; $i < strlen($order); $i++) {
+            $k0 = $k1 = $order[$i];
+            if ($k1 === 'A') {
+                $k1 .= $extraAdd ? '0' : '1';
             }
-            if (array_key_exists($k1, $this->aData)) {
-                if (isset($this->aMaker[$k0]) && array_val($this->aMakerIndex, $k1) !== $nIndex) {
-                    $this->aData[$k1] = call_user_func(array($this, $this->aMaker[$k0]), $bExtraAdd);
-                    $this->aMakerIndex[$k1] = $nIndex;
+            if (array_key_exists($k1, $this->data)) {
+                if (isset($this->maker[$k0]) && array_val($this->makerIndex, $k1) !== $index) {
+                    $this->data[$k1] = call_user_func([$this, $this->maker[$k0]], $extraAdd);
+                    $this->makerIndex[$k1] = $index;
                 }
-                $aData[$k0] = $this->aData[$k1];
+                $data[$k0] = $this->data[$k1];
             } else {
-                throw new fatalException($this, 'Incorrect symbols in order "' . $sOrder . '". Possible symbols "' . implode('', array_keys($this->aData)) . '".');
+                throw new fatalException($this, 'Incorrect symbols in order "' . $order . '". Possible symbols "' . implode('', array_keys($this->data)) . '".');
             }
         }
-        return $aData;
-    } // function _separateData
+        return $data;
+    }
 
-    /**
-     * Do stripslashes for each array elements
-     * @param mixed $mValue Checked data
-     * @return mixed Converted data
-     */
-    protected function _stripSlashesDeep($mValue)
-    {
-        if (is_array($mValue)) {
-            return array_map(array($this, '_stripSlashesDeep'), $mValue);
-        } else {
-            return stripslashes($mValue);
-        }
-    } // function _stripSlashesDeep
-
-    /**
-     * Make Request Headers
-     * @return array
-     */
-    protected function _makeHeaders()
+    protected function _makeHeaders(): array
     {
         if (function_exists('apache_request_headers')) {
             return apache_request_headers();
         }
 
-        $aHeaders = array();
+        $headers = [];
         foreach ($_SERVER as $k => $v) {
-            if (substr($k, 0, 5) == 'HTTP_') {
+            if (substr($k, 0, 5) === 'HTTP_') {
                 $k = substr($k, 5);
-                $aKeys = explode('_', $k);
+                $keys = explode('_', $k);
                 if (true) { // ToDo: Disable for some $k
-                    foreach ($aKeys as &$sKey) {
-                        $sKey = ucfirst(strtolower($sKey));
+                    foreach ($keys as &$key) {
+                        $key = ucfirst(strtolower($key));
                     }
                 }
-                $aHeaders[implode('-', $aKeys)] = $v;
+                $headers[implode('-', $keys)] = $v;
             }
         }
-        return $aHeaders;
-    } // function _makeHeaders
+        return $headers;
+    }
 
-    /**
-     * Make Add Request
-     * @return array
-     */
-    protected function _makeAddRequest($bExtraAdd)
+    protected function _makeAddRequest(bool $extraAdd): array
     {
-        $aAddRequest = $this->_getRequestData('add_request');
-        if (empty($aAddRequest)) {
-            return array();
+        $addRequest = $this->_getRequestData('add_request');
+        if (empty($addRequest)) {
+            return [];
         }
 
-        $sDelimiter = $this->getAddDelimiter();
-        if ($bExtraAdd && $sDelimiter != '') {
-            foreach ($aAddRequest as $v) {
-                $aTmp = explode($sDelimiter, $v, 2);
-                if (count($aTmp) == 2 && !isset($aAddRequest[$aTmp[0]])) {
-                    $aAddRequest[$aTmp[0]] = $aTmp[1];
+        $delimiter = (string)$this->getAddDelimiter();
+        if ($extraAdd && $delimiter !== '') {
+            foreach ($addRequest as $v) {
+                $tmp = explode($delimiter, (string)$v, 2);
+                if (count($tmp) === 2 && !isset($addRequest[$tmp[0]])) {
+                    $addRequest[$tmp[0]] = $tmp[1];
                 }
             }
         }
-        return $aAddRequest;
-    } // function _makeAddRequest
+        return $addRequest;
+    }
 
-    /**
-     * Make Main Request
-     * @return array
-     */
-    protected function _makeMainRequest()
+    protected function _makeMainRequest(): array
     {
-        $aMainRequest = $this->_getRequestData('main_request');
-        return empty($aMainRequest) ? array() : $aMainRequest;
-    } // function _makeMainRequest
+        $mainRequest = $this->_getRequestData('main_request');
+        return empty($mainRequest) ? [] : $mainRequest;
+    }
 
-    /**
-     * Make Both Request
-     * @return array
-     */
-    protected function _makeBothRequest()
+    protected function _makeBothRequest(): array
     {
-        $aMain = $this->_makeMainRequest();
-        $aAdd  = $this->_makeAddRequest(false);
-        return array_merge($aMain, $aAdd);
-    } // function _makeBothRequest
+        $main = $this->_makeMainRequest();
+        $add  = $this->_makeAddRequest(false);
+        return array_merge($main, $add);
+    }
 
-    /**
-     * Make Get-data
-     * @return array
-     */
-    protected function _makeGet()
+    protected function _makeGet(): array
     {
-        $aData = array();
-        $sQueryStr = $this->getQueryString(false);
-        if (!empty($sQueryStr)) {
-            parse_str($sQueryStr, $aData);
+        $data = [];
+        $queryStr = $this->getQueryString(false);
+        if (!empty($queryStr)) {
+            parse_str($queryStr, $data);
         }
-        return $aData;
-    } // function _makeGet
+        return $data;
+    }
 
-    /**
-     * Make Cookies
-     * @return array
-     */
-    protected function _makeCookies()
+    protected function _makeCookies(): array
     {
         return \fan\project\service\cookie::instance()->getAll();
-    } // function _makeCookies
+    }
 
-    /**
-     * Make makeOptions
-     * @return array
-     */
-    protected function _makeOptions()
+    protected function _makeOptions(): array
     {
         global $argv;
-        $aOptions = $argv;
-        array_shift($aOptions);
-        return $aOptions;
-    } // function _makeOptions
+        $options = $argv;
+        array_shift($options);
+        return $options;
+    }
 
-    /**
-     * Get Parsed Request Data
-     * @param string $sProp
-     * @return array
-     */
-    protected function _getRequestData($sProp)
+    protected function _getRequestData(string $prop): mixed
     {
-        $oMatcher = $this->_getMatcher();
-        return $oMatcher ? $oMatcher->getCurrentItem()->parsed->$sProp : array();
-    } // function _getRequestData
+        $matcher = $this->_getMatcher();
+        return $matcher ? $matcher->getCurrentItem()->parsed->$prop : [];
+    }
 
     /**
-     * Check - is allowed setting this Type
-     * @param string $sType
-     * @return boolean
      * @throws fatalException
      */
-    protected function _isAllowToSet($sType)
+    protected function _isAllowToSet(string $type): bool
     {
-        if (in_array($sType, array('A', 'B', 'M'))) {
+        if (in_array($type, ['A', 'B', 'M'])) {
             return false;
         }
-        if (strlen($sType) != 1 || !array_key_exists($sType, $this->aData)) {
-            throw new fatalException($this, 'Incorrect type for set "' . $sType . '". Possible one of symbols "' . implode('', array_keys($this->aData)) . '".');
+        if (strlen($type) !== 1 || !array_key_exists($type, $this->data)) {
+            throw new fatalException($this, 'Incorrect type for set "' . $type . '". Possible one of symbols "' . implode('', array_keys($this->data)) . '".');
         }
-        $aAllowSet = adduceToArray($this->getConfig('ALLOW_SET', array('G' => '_GET', 'P' => '_POST', 'R' => '_REQUEST')));
-        return !empty($aAllowSet[$sType]);
-    } // function _isAllowToSet
+        $allowSet = adduceToArray($this->getConfig('ALLOW_SET', ['G' => '_GET', 'P' => '_POST', 'R' => '_REQUEST']));
+        return !empty($allowSet[$type]);
+    }
 
-    /**
-     * Get object of Matcher
-     * @return \fan\core\service\matcher
-     */
-    protected function _getMatcher()
+    protected function _getMatcher(): mixed
     {
-        if (empty($this->oMatcher) && class_exists('\fan\core\service\matcher', false)) {
-            $this->oMatcher = \fan\project\service\matcher::instance();
+        if (empty($this->matcher) && class_exists('\fan\core\service\matcher', false)) {
+            $this->matcher = \fan\project\service\matcher::instance();
         }
-        return $this->oMatcher;
-    } // function _getMatcher
-} // class \fan\core\service\request
-?>
+        return $this->matcher;
+    }
+}

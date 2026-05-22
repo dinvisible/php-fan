@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\loader;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\loader;
 use fan\core\exception\block\fatal as exception_block_fatal;
 /**
  * Base class for loader form validation block
@@ -18,22 +22,18 @@ use fan\core\exception\block\fatal as exception_block_fatal;
  */
 abstract class loader_form_validation extends base
 {
-    /**
-     * Init output block data
-     */
-    public function init()
+    public function init(): void
     {
-        $aData = $this->getData();
-        $this->setJson($aData);
-        if (empty($aData['field'])) {
+        $data = $this->getData();
+        $this->setJson($data);
+        if (empty($data['field'])) {
             throw new exception_block_fatal($this, 'Method name for check field isn\'t set.');
-        } elseif (method_exists($this, 'check_' . $aData['field'])) {
-            $sRet = $this->{'check_' . $aData['field']}($aData['value'], $this->getMeta(array('err_message', $aData['field']), ''));
-            $this->setText(is_null($sRet) ? 'ok' : $sRet);
+        } elseif (method_exists($this, 'check_' . $data['field'])) {
+            $ret = $this->{'check_' . $data['field']}($data['value'] ?? null, $this->getMeta(['err_message', $data['field']], ''));
+            $this->setText(is_null($ret) ? 'ok' : $ret);
         } else {
-            throw new exception_block_fatal($this, 'Method "check_' .  $aData['field'] . '" isn\'t found.');
+            throw new exception_block_fatal($this, 'Method "check_' .  $data['field'] . '" isn\'t found.');
         }
-    } // function init
+    }
 
-} // class \fan\core\block\loader\loader_form_validation
-?>
+}

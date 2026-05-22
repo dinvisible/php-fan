@@ -145,7 +145,7 @@ class winWrapperDataLoader {
     {
         if (isset($_REQUEST[$this->aParamKeys['dataKey']])) {
             $aRet = $_REQUEST[$this->aParamKeys['dataKey']];
-            if (is_array($aRet) && get_magic_quotes_gpc()) {
+            if (is_array($aRet) && function_exists('get_magic_quotes_gpc') && get_magic_quotes_gpc()) {
                 array_walk_recursive($aRet, array($this, 'stripslashes'));
             }
             return $aRet;

@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Block admin meta-data
  *
@@ -14,23 +17,23 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.005 (12.02.2015)
  */
-return array(
-    'own' => array(
-        'externalCss' => array(
-            'style' => array(
+return [
+    'own' => [
+        'externalCss' => [
+            'style' => [
                 'c00' => '~/main.css',
                 'c01' => '~/layout.css',
                 'c02' => '~/data.css',
                 'c03' => '~/elm.css',
                 'c04' => '/css/extra/calendar.css'
-            ), // files are attached by @import-directive
-            'ie'  => array(
+            ], // files are attached by @import-directive
+            'ie'  => [
                 'c00' => '~/ie.css'
-            ), // files are used for IE5-IE7
-            //'ie6' => array('~/ie6.css'), // files are used for IE5-IE6
-        ),
-        'externalJS' => array( // JavaScript files
-            'head' => array(
+            ], // files are used for IE5-IE7
+            //'ie6' => ['~/ie6.css'], // files are used for IE5-IE6
+        ],
+        'externalJS' => [ // JavaScript files
+            'head' => [
                 //'m00' => '/js/debug.js',
                 'm01' => '/js/js-wrapper.js',
                 'm02' => '/js/load-wrapper.js',
@@ -58,15 +61,14 @@ return array(
                 'm19' => '~/item/adm_flash_item.js',
                 'm20' => '~/item/adm_file_item.js',
                 'a01' => '/js/extra/calendar.js',
-            ),
-        ),
-        'embedJS' => array( // embed JavaScript text
+            ],
+        ],
+        'embedJS' => [ // embed JavaScript text
             'head' => 'mainCtrl.init(' . (role('admin') ? 1 : 0) . ', \'/admin\', _wrapper);',
-        ),
+        ],
 
         'title' => 'Admin System',
 
         'template' => dirname(__FILE__) . '/index.tpl',
-    ),
-);
-?>
+    ],
+];

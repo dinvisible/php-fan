@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\admin;
 /**
  * Admin upload image file class for loader block
  *
@@ -16,5 +20,4 @@
  */
 class upload_image extends \fan\core\block\admin\upload_image
 {
-} // class \fan\project\block\admin\upload_image
-?>
+}

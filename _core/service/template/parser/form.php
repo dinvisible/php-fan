@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\template\parser;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\template\parser;
 /**
  * Template parser engine form
  *
@@ -16,28 +19,16 @@
  */
 class form extends base
 {
-    /**
-     * @var array Defined tpl-tag list
-     */
-    protected $aTagList = array('form_key_field', 'form_sid');
+    protected array $tagList = ['form_key_field', 'form_sid'];
 
-    /**
-     * Parse form key field
-     * @return string
-     */
-    public function parse_form_key_field()
+    public function parse_form_key_field(): string
     {
-        return '$sReturnHtmlVal.=$this->getKeyField();' . "\n";
-    } // function parse_form_key_field
+        return '$returnHtmlVal.=$this->getKeyField();' . "\n";
+    }
 
-    /**
-     * Parse form SID
-     * @return string
-     */
-    public function parse_form_sid()
+    public function parse_form_sid(): string
     {
-        return '$sReturnHtmlVal.=$this->getSidField();' . "\n";
-    } // function parse_form_sid
+        return '$returnHtmlVal.=$this->getSidField();' . "\n";
+    }
 
-} // class \fan\core\service\template\parser\form
-?>
+}

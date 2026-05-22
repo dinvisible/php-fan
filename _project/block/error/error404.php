@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\error;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\error;
 /**
  * Block for show error 404
  *
@@ -16,12 +20,8 @@
  */
 class error404 extends \fan\core\block\error\error404
 {
-    /**
-     * Init block
-     */
-    public function init()
+    public function init(): void
     {
-        $this->view->sHomeUri = $this->oTab->getURI('~/');
-    } // function init
-} // class \fan\project\block\error\error404
-?>
+        $this->view->homeUri = $this->tab->getURI('~/');
+    }
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\app\__tools\main;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__tools\main;
 /**
  * Request password block
  *
@@ -20,34 +24,27 @@ class request_password extends \fan\project\block\form\injector
      * Current User
      * @var \fan\core\service\user
      */
-    protected $oUser;
+    protected ?object $user = null;
 
-    /**
-     * Init block
-     */
-    public function init ()
+    public function init (): void
     {
         $this->_parseForm();
     }
 
     /**
-     * Check password and login
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function checkPassword($mValue, $aData)
+    public function checkPassword(mixed $value, array $data): bool
     {
-        $this->oUser = getUser($this->getForm()->getFieldValue($aData['login']));
-        return empty($this->oUser) ? false : $this->oUser->checkPassword($mValue);
+        $this->user = getUser($this->getForm()->getFieldValue($data['login']));
+        return empty($this->user) ? false : $this->user->checkPassword($value);
     }
 
-    protected function onSubmit()
+    protected function onSubmit(): void
     {
-        if (!empty($this->oUser)) {
-            $this->oUser->setCurrent();
+        if (!empty($this->user)) {
+            $this->user->setCurrent();
         }
     }
 
-} // class \fan\app\__tools\main\request_password
-?>
+}

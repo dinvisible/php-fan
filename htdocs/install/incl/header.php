@@ -1,4 +1,4 @@
-<!DOCTYPE html> <html lang="en">
+<?php declare(strict_types=1); ?><!DOCTYPE html> <html lang="en">
 <head>
     <title>PHP-FAN. Installation</title>
 <style type="text/css">

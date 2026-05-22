@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\admin;
 /**
  * Admin root block
  *
@@ -17,5 +21,4 @@
 class root extends \fan\core\block\root\html
 {
 
-} // class \fan\core\block\admin\root
-?>
+}

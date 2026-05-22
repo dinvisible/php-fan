@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\form;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\form;
 /**
  * Part of form block abstract
  *
@@ -18,31 +22,17 @@
 abstract class part extends usual
 {
     // ------------ Functions for other parts ------------ \\
-    /**
-     * Init Current Form Part - usually set data and default value there
-     * Method for redefine
-     * @param \fan\core\block\form\parser $oMainFormBlock Main form part block
-     */
-    protected function partInit($oMainFormBlock = NULL)
+    protected function partInit(?\fan\core\block\form\parser $mainFormBlock = null): void
     {
-    } // function partInit
+    }
 
-    /**
-     * Parse Current Form Part
-     * @param boolean $bParceEmpty allow parse if form is empty
-     * @param boolean $bParsingCondition (null - parse by Meta-condition, true - always parse, false - don't parse )
-     * @param boolean $bAllowTransfer allow Transfer after submit
-     * @param boolean $bShowWarning allow warning about parse part of form
-     * @return array
-     */
-    protected function _parseForm($bParceEmpty = true, $bParsingCondition = false, $bAllowTransfer = false, $bShowWarning = true)
+    protected function _parseForm(mixed $parceEmpty = true, mixed $parsingCondition = false, mixed $allowTransfer = false, bool $showWarning = true): bool
     {
-        if ($bShowWarning) {
-            trigger_error('Do not run method "_parseForm" in part of form. It was runned in block "' . $this->blockName . '".', E_USER_WARNING);
+        if ($showWarning) {
+            throw new \LogicException('Do not run method "_parseForm" in part of form. It was runned in block "' . $this->blockName . '".');
         } else {
-            parent::_parseForm($bParceEmpty, $bParsingCondition, $bAllowTransfer);
+            parent::_parseForm((bool)$parceEmpty, (bool)$parsingCondition, (bool)$allowTransfer);
         }
         return $this->getForm()->isError();
-    } // function _parseForm
-} // class \fan\core\block\form\part
-?>
+    }
+}

@@ -1,4 +1,7 @@
-<?php namespace fan\core\view\keeper\loader;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view\keeper\loader;
 /**
  * View-data keeper of Block data for loader JSON-data
  *
@@ -16,29 +19,20 @@
  */
 class json extends \fan\core\view\keeper
 {
-    /**
-     * View meta constructor
-     * @param fan\core\block\base $oRouter
-     */
-    public function __construct(\fan\core\view\router $oRouter)
+    public function __construct(\fan\core\view\router $router)
     {
-        parent::__construct($oRouter);
-        $this->bFullRewrite = true;
-    } // function __construct
+        parent::__construct($router);
+        $this->fullRewrite = true;
+    }
 
     // ======== Static methods ======== \\
 
     // ======== Main Interface methods ======== \\
-    /**
-     * Add Router
-     * @param \fan\core\view\router\loader $oRouter
-     * @return \fan\core\view\keeper\loader\text
-     */
-    public function addRouter(\fan\core\view\router\loader $oRouter)
+    public function addRouter(\fan\core\view\router\loader $router): void
     {
-        $this->_setSetter($oRouter);
-        $this->_setSetter($oRouter->getBlock());
-    } // function addRouter
+        $this->_setSetter($router);
+        $this->_setSetter($router->getBlock());
+    }
 
     // ======== Private/Protected methods ======== \\
 
@@ -46,5 +40,4 @@ class json extends \fan\core\view\keeper
 
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\view\keeper\loader\json
-?>
+}

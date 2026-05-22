@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Check configuration of PHP
  *
@@ -19,72 +22,63 @@ class check_configuration extends base
     // ======== Static methods ======== \\
 
     // ======== Main Interface methods ======== \\
-    public function runCheck()
+    public function runCheck(): bool
     {
         if (!$this->_checkPhpVersion()) {
             return false;
         }
 
         return $this->_checkPhpModules();
-    } // function runCheck
+    }
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Check PHP version
-     * @return boolean
-     */
-    protected function _checkPhpVersion()
+    protected function _checkPhpVersion(): bool
     {
-        $nVerValue = phpversion();
-        //$nVerType  = version_compare($nVerValue, '5.4') > 0 ? 1 : (version_compare($nVerValue, '5.3') < 0 ? -1 : 0);
-        $nVerType  = version_compare($nVerValue, '5.3') >= 0 ? 1 : -1;
-        $this->aView['nVerType']  = $nVerType;
-        $this->aView['nVerValue'] = $nVerValue;
+        $verValue = phpversion();
+        //$verType  = version_compare($verValue, '5.4') > 0 ? 1 : (version_compare($verValue, '5.3') < 0 ? -1 : 0);
+        $verType  = version_compare($verValue, '5.3') >= 0 ? 1 : -1;
+        $this->view['verType']  = $verType;
+        $this->view['verValue'] = $verValue;
         $this->_parseTemplate('php_version');
-        return $nVerType >= 0;
-    } // function _checkPhpVersion
-    /**
-     * Check PHP version
-     * @return boolean
-     */
-    protected function _checkPhpModules()
+        return $verType >= 0;
+    }
+    protected function _checkPhpModules(): bool
     {
-        $aRequired    = array('SPL', 'Reflection', 'pcre', 'standard', 'json', 'session', 'iconv', 'filter', 'date');
-        $aRecommended = array('memcache', 'mbstring', 'mysql', 'mysqli', 'libxml', 'dom', 'SimpleXML', 'xml', 'xmlreader', 'xmlwriter', 'gd', 'exif', 'curl', 'soap');
+        $required    = ['SPL', 'Reflection', 'pcre', 'standard', 'json', 'session', 'iconv', 'filter', 'date'];
+        $recommended = ['memcache', 'mbstring', 'mysql', 'mysqli', 'libxml', 'dom', 'SimpleXML', 'xml', 'xmlreader', 'xmlwriter', 'gd', 'exif', 'curl', 'soap'];
 
-        $aModules = get_loaded_extensions();
+        $modules = get_loaded_extensions();
 
-        $aUseRequired    = array();
-        $bAllRequired    = true;
-        $aUseRecommended = array();
-        $bAllRecommended = true;
+        $useRequired    = [];
+        $allRequired    = true;
+        $useRecommended = [];
+        $allRecommended = true;
 
-        foreach ($aRequired as $v) {
-            if (in_array($v, $aModules)) {
-                $aUseRequired[$v] = 'correct';
+        foreach ($required as $v) {
+            if (in_array($v, $modules)) {
+                $useRequired[$v] = 'correct';
             } else {
-                $aUseRequired[$v] = 'incorrect';
-                $bAllRequired = false;
+                $useRequired[$v] = 'incorrect';
+                $allRequired = false;
             }
         }
-        foreach ($aRecommended as $v) {
-            if (in_array($v, $aModules)) {
-                $aUseRecommended[$v] = 'correct';
+        foreach ($recommended as $v) {
+            if (in_array($v, $modules)) {
+                $useRecommended[$v] = 'correct';
             } else {
-                $aUseRecommended[$v] = 'need';
-                $bAllRecommended = false;
+                $useRecommended[$v] = 'need';
+                $allRecommended = false;
             }
         }
 
-        $this->aView['aUseRequired']    = $aUseRequired;
-        $this->aView['bAllRequired']    = $bAllRequired;
-        $this->aView['aUseRecommended'] = $aUseRecommended;
-        $this->aView['bAllRecommended'] = $bAllRecommended;
+        $this->view['useRequired']    = $useRequired;
+        $this->view['allRequired']    = $allRequired;
+        $this->view['useRecommended'] = $useRecommended;
+        $this->view['allRecommended'] = $allRecommended;
         $this->_parseTemplate('php_modules');
 
-        return $bAllRequired;
-    } // function _checkPhpModules
+        return $allRequired;
+    }
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
-} // class check_configuration
-?>
+}

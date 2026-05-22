@@ -1,4 +1,8 @@
-<?php namespace fan\core\base\model;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\base\model;
 use fan\project\exception\model\entity\fatal as fatalException;
 /**
  * Entity - table data
@@ -19,796 +23,571 @@ use fan\project\exception\model\entity\fatal as fatalException;
  */
 abstract class entity
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * Entity Name (suffix of NS with class-name)
      *
      * @var string
      */
-    protected $sName = null;
+    protected ?string $name = null;
     /**
      * Table Name
      * @var string
      */
-    protected $sTableName = null;
+    protected ?string $tableName = null;
 
     /**
      * Service of entity
      * @var \fan\core\service\config\row
      */
-    protected $oConfig = null;
+    protected ?object $config = null;
     /**
      * Service of entity
      * @var \fan\core\service\entity
      */
-    protected $oService = null;
+    protected ?object $service = null;
     /**
      * Service of entity
      * @var \fan\core\service\database
      */
-    protected $oConnection = null;
+    protected ?object $connection = null;
     /**
      * Connection Name for \fan\core\service\database
      * @var string
      */
-    protected $sConnectionName = null;
+    protected ?string $connectionName = null;
     /**
      * Connection Key for \fan\core\service\database
      * @var string
      */
-    protected $nConnectionKey = null;
+    protected string|int|float|null $connectionKey = null;
 
-    /**
-     * @var array SQL-requests
-     */
-    protected $aSQL = array();
+    protected array $sql = [];
 
     /**
      * Description of table of current Entity
      * @var \fan\core\service\entity\description
      */
-    protected $oDescription = null;
+    protected ?object $description = null;
     /**
      * Loader of SQL-request
      * @var \fan\core\base\model\request
      */
-    protected $oRequest = null;
+    protected ?object $request = null;
 
     /**
      * Backup of Call-Parameters
      * @var array
      */
-    protected $aBakParam = array();
+    protected array $bakParam = [];
 
     /**
      * Name of Class for Row-object
      * @var string
      */
-    protected $sRowClassName = null;
+    protected ?string $rowClassName = null;
     /**
      * Name of Class for Rowset-object
      * @var string
      */
-    protected $sRowsetClassName = null;
+    protected ?string $rowsetClassName = null;
     /**
      * Name of Class for Request-object
      * @var string
      */
-    protected $sRequestClassName = null;
+    protected ?string $requestClassName = null;
 
-    /**
-     * Constructor of Table entity
-     * Param keys:
-     *   'connectionName', 'connectionKey', 'cacheEnabled',
-     *   'tableName', 'primeryKey', 'fields', 'keys', 'relations',
-     *   ''
-     * @param \fan\core\service\entity $oService
-     * @param type $aParam
-     */
-    public function __construct(\fan\core\service\entity $oService, $sName, $aParam = array())
+    public function __construct(\fan\core\service\entity $service, mixed $name, mixed $param = [])
     {
-        $this->oService  = $oService;
-        $this->sName     = $sName;
+        $param = (array)$param;
+        $this->service  = $service;
+        $this->name     = is_null($name) ? null : (string)$name;
 
-        $this->aBakParam = $aParam;
-        $this->oConfig   = \fan\project\service\config::instance('entity')->getEntityConfig($this, $sName);
+        $this->bakParam = $param;
+        $this->config   = $this->containerService('config', 'entity')->getEntityConfig($this, $name);
 
-        $this->_setConnectionParam($aParam);
+        $this->_setConnectionParam($param);
 
-        $this->_init($aParam);
+        $this->_init($param);
 
-        if (empty($this->sTableName)) {
-            $this->sTableName = $this->_defineTableName($aParam);
+        if (empty($this->tableName)) {
+            $this->tableName = $this->_defineTableName($param);
         }
 
-    } // function __construct
+    }
 
     // ======== The magic methods ======== \\
 
     /**
-     * Magic method __set
-     * @param string $sKey
-     * @param mied $mValue
+     * Handles dynamic property writes for this current component.
+     *
+     * @param mixed $value Value that should be applied or transformed.
+     *
      * @throws fatalException
      */
-    public function __set($sKey, $mValue)
+    public function __set(string $key, mixed $value): void
     {
-        throw new fatalException($this, 'There is impossible to set property "' . $sKey . '".');
+        throw new fatalException($this, 'There is impossible to set property "' . $key . '".');
     }
 
     /**
-     * Magic method __get
-     * @param string $sKey
+     * Handles dynamic property reads for this current component.
+     *
      * @throws fatalException
      */
-    public function __get($sKey)
+    public function __get(string $key): mixed
     {
-        $aProp = $this->_getPropertyList();
-        if (!isset($aProp[$sKey])) {
-            throw new fatalException($this, 'There is impossible to get property "' . $sKey . '".');
+        $prop = $this->_getPropertyList();
+        if (!isset($prop[$key])) {
+            throw new fatalException($this, 'There is impossible to get property "' . $key . '".');
         }
-        return $this->{$aProp[$sKey]}();
+        return $this->{$prop[$key]}();
     }
 
     // ======== Main Interface methods ======== \\
     // --===-- Get Row --===-- \\
-    /**
-     * Get new row-object
-     * @return \fan\core\base\model\row
-     */
-    public function getNewRow()
+    public function getNewRow(): \fan\core\base\model\row
     {
         return $this->_getRowByData();
-    } // function getNewRow
+    }
 
-    /**
-     * Get Row By Id (array, scalar value OR object with convert to string)
-     * @param mixed $mRowId
-     * @param boolean $bIdIsEncrypt
-     * @return \fan\core\base\model\row
-     */
-    public function getRowById($mRowId, $bIdIsEncrypt = false)
+    public function getRowById(mixed $rowId, bool $idIsEncrypt = false): \fan\core\base\model\row
     {
-        if (is_null($mRowId)) {
+        if (is_null($rowId)) {
             return $this->_getRowByData();
         }
-        $mParam = $this->getParamById($mRowId, $bIdIsEncrypt);
-        return $this->getRowByParam($mParam, 0, null);
-    } // function getRowById
+        $param = $this->getParamById($rowId, $idIsEncrypt);
+        return $this->getRowByParam($param, 0, null);
+    }
 
-    /**
-     * Get Row By Parameters
-     * @param mixed $mParam
-     * @param number $nOffset
-     * @param string $sOrderBy
-     * @return \fan\core\base\model\row
-     */
-    public function getRowByParam($mParam = null, $nOffset = 0, $sOrderBy = null)
+    public function getRowByParam(mixed $param = null, int|float $offset = 0, ?string $orderBy = null): \fan\core\base\model\row
     {
-        $aData =& $this->getDataByParam($mParam, 1, $nOffset, $sOrderBy, true);
-        return $this->_getRowByData($aData);
-    } // function getRowByParam
+        $data =& $this->getDataByParam($param, 1, $offset, $orderBy, true);
+        return $this->_getRowByData($data);
+    }
 
-    /**
-     * Get Row By Parameters or Create new One
-     * @param array $aLoadParam
-     * @param array $aSaveParam
-     * @param boolean $bSaveNew
-     * @return \fan\core\base\model\row
-     */
-    public function getRowOrCreate($aLoadParam = null, $aSaveParam = array(), $bSaveNew = true)
+    public function getRowOrCreate(?array $loadParam = null, array $saveParam = [], bool $saveNew = true): \fan\core\base\model\row
     {
-        $oRow = $this->getRowByParam($aLoadParam);
-        if (!$oRow->checkIsLoad()) {
-            $oRow->setFields(array_merge($aLoadParam, $aSaveParam), $bSaveNew);
+        $row = $this->getRowByParam($loadParam);
+        if (!$row->checkIsLoad()) {
+            $row->setFields(array_merge((array)$loadParam, $saveParam), $saveNew);
         }
-        return $oRow;
-    } // function getRowOrCreate
+        return $row;
+    }
 
-    /**
-     * Search record and return Row
-     * @param string $sQueryKey key of SQL-request
-     * @param mixed $mParam Assotiative array of field names and values
-     * @param number $nOffset line
-     * @param string $sOrderBy Select order
-     * @return \fan\core\base\model\row
-     */
-    public function getRowByKey($sQueryKey, $mParam = null, $nOffset = 0, $sOrderBy = null)
+    public function getRowByKey(string $queryKey, mixed $param = null, int|float $offset = 0, ?string $orderBy = null): \fan\core\base\model\row
     {
-        $oDesigner = $this->getSnippetyDesigner($sQueryKey)->setOrderPart($sOrderBy);
-        return $this->getRowByQuery($oDesigner, $mParam, $nOffset);
-    } // function getRowByKey
+        $designer = $this->getSnippetyDesigner($queryKey)->setOrderPart($orderBy);
+        return $this->getRowByQuery($designer, $param, $offset);
+    }
 
-    /**
-     * Get Row By the SQL-request (string OR \fan\core\service\entity\designer) and Parameters
-     * @param string|\fan\core\service\entity\designer $mQuery
-     * @param mixed $mParam Assotiative array of field names and values
-     * @param number $nOffset line
-     * @return \fan\core\base\model\row
-     */
-    public function getRowByQuery($mQuery, $mParam = null, $nOffset = 0)
+    public function getRowByQuery(string|\fan\core\service\entity\designer $query, mixed $param = null, int|float $offset = 0): \fan\core\base\model\row
     {
-        $aData  =& $this->getDataByQuery($mQuery, $mParam, 1, $nOffset, true);
-        return $this->_getRowByData($aData);
-    } // function getRowByQuery
+        $data  =& $this->getDataByQuery($query, $param, 1, $offset, true);
+        return $this->_getRowByData($data);
+    }
 
     // --===-- Get Rowset --===-- \\
-    /**
-     * Search records and return array of entities
-     * @param mixed $mParam Assotiative array of field names and values
-     * @param number $nQtt Quantity of rows (-1 - no limit)
-     * @param number $nOffset line
-     * @param string $sOrderBy Select order
-     * @return \fan\core\base\model\rowset
-     */
-    public function getRowsetByParam($mParam = null, $nQtt = -1, $nOffset = -1, $sOrderBy = '')
+    public function getRowsetByParam(mixed $param = null, int|float $qtt = -1, int|float $offset = -1, string $orderBy = ''): \fan\core\base\model\rowset
     {
-        $sClass =  $this->getRowsetClassName();
-        $aData  =& $this->getDataByParam($mParam, $nQtt, $nOffset, $sOrderBy);
-        return new $sClass($this, $aData);
-    } // function getRowsetByParam
+        $class =  $this->getRowsetClassName();
+        $data  =& $this->getDataByParam($param, $qtt, $offset, $orderBy);
+        return new $class($this, $data);
+    }
 
-    /**
-     * Search records and return array of entities
-     * @param string $sQueryKey key of SQL-request
-     * @param mixed $mParam Assotiative array of field names and values
-     * @param number $nQtt Quantity of rows (-1 - no limit)
-     * @param number $nOffset line
-     * @param string $sOrderBy Select order
-     * @return \fan\core\base\model\rowset
-     */
-    public function getRowsetByKey($sQueryKey, $mParam = null, $nQtt = -1, $nOffset = -1, $sOrderBy = '')
+    public function getRowsetByKey(string $queryKey, mixed $param = null, int|float $qtt = -1, int|float $offset = -1, string $orderBy = ''): \fan\core\base\model\rowset
     {
-        $oDesigner = $this->getSnippetyDesigner($sQueryKey)->setOrderPart($sOrderBy);
-        return $this->getRowsetByQuery($oDesigner, $mParam, $nQtt, $nOffset);
-    } // function getRowsetByKey
+        $designer = $this->getSnippetyDesigner($queryKey)->setOrderPart($orderBy);
+        return $this->getRowsetByQuery($designer, $param, $qtt, $offset);
+    }
 
-    /**
-     * Get Rowset By the SQL-request (string OR \fan\core\service\entity\designer) and Parameters
-     * @param string|\fan\core\service\entity\designer $mQuery
-     * @param mixed $mParam Assotiative array of field names and values
-     * @param number $nQtt Quantity of rows (-1 - no limit)
-     * @param number $nOffset line
-     * @return \fan\core\base\model\rowset
-     */
-    public function getRowsetByQuery($mQuery, $mParam = null, $nQtt = -1, $nOffset = -1)
+    public function getRowsetByQuery(string|\fan\core\service\entity\designer $query, mixed $param = null, int|float $qtt = -1, int|float $offset = -1): \fan\core\base\model\rowset
     {
-        $sClass =  $this->getRowsetClassName();
-        $aData  =& $this->getDataByQuery($mQuery, $mParam, $nQtt, $nOffset);
-        return new $sClass($this, $aData);
-    } // function getRowsetByQuery
+        $class =  $this->getRowsetClassName();
+        $data  =& $this->getDataByQuery($query, $param, $qtt, $offset);
+        return new $class($this, $data);
+    }
 
     // --===-- Get Count --===-- \\
-    /**
-     * Get count records by parameters
-     * @param mixed $mParam Assotiative array of field names and values
-     * @return integer
-     */
-    public function getCountByParam($mParam = null)
+    public function getCountByParam(mixed $param = null): mixed
     {
-        $oQuery = $this->getDesigner('select')->setSelectByParam($mParam);
-        return $this->getCountByQuery($oQuery, $mParam);
-    } // function getCountByParam
+        $query = $this->getDesigner('select')->setSelectByParam($param);
+        return $this->getCountByQuery($query, $param);
+    }
 
-    /**
-     * Get count records by SQL-key and parameters
-     * @param string $sQueryKey key of SQL-request
-     * @param mixed $mParam Assotiative array of field names and values
-     * @return integer
-     */
-    public function getCountByKey($sQueryKey, $mParam = null)
+    public function getCountByKey(string $queryKey, mixed $param = null): mixed
     {
-        $oQuery = $this->getSnippetyDesigner($sQueryKey);
-        return $this->getCountByQuery($oQuery, $mParam);
-    } // function getCountByKey
+        $query = $this->getSnippetyDesigner($queryKey);
+        return $this->getCountByQuery($query, $param);
+    }
 
-    /**
-     * Get count records by parameters
-     * @param string|\fan\core\service\entity\designer $mQuery
-     * @param mixed $mParam Assotiative array of field names and values
-     * @return integer
-     */
-    public function getCountByQuery($mQuery, $mParam = null)
+    public function getCountByQuery(string|\fan\core\service\entity\designer $query, mixed $param = null): mixed
     {
-        list($sQuery, $aNewParam) = $this->_getSqlAsString($mQuery, $mParam);
+        list($query, $newParam) = $this->_getSqlAsString($query, $param);
         // ToDo: Take account of Union
-        $aMatches = array();
-        if (preg_match_all('/\s+ORDER\s+BY\s+[^)]*$/', $sQuery, $aMatches)) {
-            $sQuery = str_replace(end($aMatches[0]), '', $sQuery);
+        $matches = [];
+        if (preg_match_all('/\s+ORDER\s+BY\s+[^)]*$/', $query, $matches)) {
+            $query = str_replace(end($matches[0]), '', $query);
         }
 
-        $sMethod = $this->oConfig['COUNT_METHOD'];
-        if (empty($sMethod)) {
-            /* @var $oGlobalConf \fan\core\service\config\row */
-            $oGlobalConf = \fan\project\service\config::instance('entity')->get('common');
-            $sMethod = $oGlobalConf->get('DEFAULT_COUNT_METHOD', 'SUBQUERY');
+        $method = $this->config['COUNT_METHOD'];
+        if (empty($method)) {
+            /* @var $globalConf \fan\core\service\config\row */
+            $globalConf = $this->containerService('config', 'entity')->get('common');
+            $method = $globalConf->get('DEFAULT_COUNT_METHOD', 'SUBQUERY');
         }
 
-        $oServDb = $this->getConnection();
-        switch (strtoupper($sMethod)) {
+        $servDb = $this->getConnection();
+        switch (strtoupper((string)$method)) {
         case 'CALC_FOUND_ROWS':
-            $sQueryTmp = preg_replace('/(?<=^|\W)SELECT\s/i', 'SELECT SQL_CALC_FOUND_ROWS ', $sQuery, 1);
-            $oServDb->getAllLimit($sQueryTmp, $aNewParam, 1);
-            $sQuery = 'SELECT FOUND_ROWS() as cnt';
-            return $oServDb->getOne($sQuery, 'cnt');
+            $queryTmp = preg_replace('/(?<=^|\W)SELECT\s/i', 'SELECT SQL_CALC_FOUND_ROWS ', $query, 1);
+            $servDb->getAllLimit($queryTmp, $newParam, 1);
+            $query = 'SELECT FOUND_ROWS() as cnt';
+            return $servDb->getOne($query, 'cnt');
         }
-        $sQuery = 'SELECT count(*) as cnt FROM (' . $sQuery . ') as src';
-        return $oServDb->getOne($sQuery, 'cnt', $aNewParam);
-    } // function getCountByQuery
+        $query = 'SELECT count(*) as cnt FROM (' . $query . ') as src';
+        return $servDb->getOne($query, 'cnt', $newParam);
+    }
 
-    /**
-     * Get Table Name
-     * @return string
-     */
-    public function getTableName()
+    public function getTableName(): ?string
     {
-        return $this->sTableName;
-    } // function getTableName
+        return $this->tableName;
+    }
     // ---- Additional interface methods ---- \\
     /**
-     * Get Array of parameters By Id (Id as array, scalar value OR object with converting to string)
-     * @param mixed $mRowId
-     * @param boolean $bIdIsEncrypt
-     * @return \fan\core\base\model\row
      * @throws fatalException
      */
-    public function getParamById($mRowId, $bIdIsEncrypt = false)
+    public function getParamById(mixed $rowId, bool $idIsEncrypt = false): array
     {
-        $mIdName = $this->description->getPrimeryKey();
-        if (is_scalar($mIdName)) {
-            if (is_scalar($mRowId)) {
-                $mParam[$mIdName] = $bIdIsEncrypt ? $this->getService()->getEncapsulant()->decryptId($mRowId) : $mRowId;
-            } elseif (is_object($mRowId) && method_exists($mRowId, '__toString')) {
-                $mParam[$mIdName] = $mRowId->__toString();
+        $idName = $this->description->getPrimeryKey();
+        if (is_scalar($idName)) {
+            if (is_scalar($rowId)) {
+                $param[$idName] = $idIsEncrypt ? $this->getService()->getEncapsulant()->decryptId((string)$rowId) : $rowId;
+            } elseif (is_object($rowId) && method_exists($rowId, '__toString')) {
+                $param[$idName] = $rowId->__toString();
             } else {
                 throw new fatalException($this, 'Value of ID for select data from "' . $this->getTableName() . '" must have scalar value.');
             }
-        } elseif (is_array($mRowId) && count($mIdName) == count($mRowId)) {
-            sort($mIdName);
-            ksort($mRowId);
-            if (array_diff($mIdName, array_keys($mRowId))) {
-                foreach (array_values($mRowId) as $k => $v) {
-                    $mParam[$mIdName[$k]] = $mRowId;
+        } elseif (is_array($rowId) && count($idName) === count($rowId)) {
+            sort($idName);
+            ksort($rowId);
+            if (array_diff($idName, array_keys($rowId))) {
+                foreach (array_values($rowId) as $k => $v) {
+                    $param[$idName[$k]] = $rowId;
                 }
             } else {
-                $mParam = $mRowId;
+                $param = $rowId;
             }
         } else {
             throw new fatalException($this, 'Value of ID for select data from "' . $this->getTableName() . '" must be as array.');
         }
-        return $mParam;
-    } // function getParamById
+        return $param;
+    }
 
-    /**
-     * Get link to DATA (result of SQL-request) as Array by the Parameters
-     * @param mixed $mParam
-     * @param numeric $nQtt
-     * @param numeric $nOffset
-     * @param string $sOrderBy
-     * @param boolean $bOnlyOne
-     * @return array
-     */
-    public function &getDataByParam($mParam = null, $nQtt = -1, $nOffset = -1, $sOrderBy = null, $bOnlyOne = false)
+    public function &getDataByParam(mixed $param = null, int|float $qtt = -1, int|float $offset = -1, ?string $orderBy = null, bool $onlyOne = false): array
     {
-        $oQuery =  $this->getDesigner('select')->setSelectByParam($mParam, $sOrderBy);
-        $aData  =& $this->getDataByQuery($oQuery, $mParam, $nQtt, $nOffset, $bOnlyOne);
-        return $aData;
-    } // function getDataByParam
+        $query =  $this->getDesigner('select')->setSelectByParam($param, $orderBy);
+        $data  =& $this->getDataByQuery($query, $param, $qtt, $offset, $onlyOne);
+        return $data;
+    }
 
     /**
-     * Get link to DATA as Array by the SQL-request and Parameters
-     * @param string|\fan\core\service\entity\designer $mQuery
-     * @param mixed $mParam
-     * @param numeric $nQtt
-     * @param numeric $nOffset
-     * @param boolean $bOnlyOne
-     * @return array
      * @throws fatalException
      */
-    public function &getDataByQuery($mQuery, $mParam = null, $nQtt = -1, $nOffset = -1, $bOnlyOne = false)
+    public function &getDataByQuery(string|\fan\core\service\entity\designer $query, mixed $param = null, int|float $qtt = -1, int|float $offset = -1, bool $onlyOne = false): array
     {
-        list($sQuery, $aNewParam) = $this->_getSqlAsString($mQuery, $mParam, false);
-        $aData = $this->getConnection()->getAllLimit($sQuery, $aNewParam, $nQtt, $nOffset);
+        list($query, $newParam) = $this->_getSqlAsString($query, $param, false);
+        $data = $this->getConnection()->getAllLimit($query, $newParam, $qtt, $offset);
         // ToDo: link Result to array as the property of this object
-        if(!empty($aData) && $bOnlyOne) {
-            $aData =& $aData[0];
+        if (!empty($data) && $onlyOne) {
+            $data =& $data[0];
         }
-        return $aData;
-    } // function getDataByQuery
+        return $data;
+    }
 
     /**
-     * Set the SQL-query by key
-     * @param string $sQueryKey SQL-key
-     * @param string $sValue
-     * @return \fan\core\base\model\entity
+     * @param string $value Value that should be applied or transformed.
      */
-    public function setSQL($sQueryKey, $sValue)
+    public function setSQL(string $queryKey, string $value): static
     {
-        $this->getRequestLoader()->set($sQueryKey, $sValue);
+        $this->getRequestLoader()->set($queryKey, $value);
         return $this;
-    } // function setSQL
-    /**
-     * Get the SQL-query by key
-     * @param string $sQueryKey SQL-key
-     * @return string
-     */
-    public function getSQL($sQueryKey)
+    }
+    public function getSQL(string $queryKey): string
     {
-        return $this->getRequestLoader()->get($sQueryKey);
-    } // function getSQL
-    /**
-     * Get Snippety SQL-designer
-     * @param string $sQueryKey SQL-key
-     * @return \fan\core\service\entity\designer\snippety
-     */
-    public function getSnippetyDesigner($sQueryKey)
+        return $this->getRequestLoader()->get($queryKey);
+    }
+    public function getSnippetyDesigner(string $queryKey): \fan\core\service\entity\designer\snippety
     {
-        $oDesigner = $this->getDesigner('snippety');
-        /* @var $oDesigner \fan\core\service\entity\designer\snippety */
-        $oDesigner->setSqlRequest($sQueryKey);
-        return $oDesigner;
-    } // function getSnippetyDesigner
+        $designer = $this->getDesigner('snippety');
+        /* @var $designer \fan\core\service\entity\designer\snippety */
+        $designer->setSqlRequest($queryKey);
+        return $designer;
+    }
 
-    /**
-     * Set Connection of entity
-     * @param type $mConnection
-     * @param type $nExtraKey
-     * @return \fan\core\base\model\entity
-     */
-    public function setConnection($mConnection = null, $nExtraKey = 0)
+    public function setConnection(mixed $connection = null, mixed $extraKey = 0): static
     {
-        if (empty($mConnection)) {
-            $mConnection = $this->sConnectionName;
+        if (empty($connection)) {
+            $connection = $this->connectionName;
         }
 
-        if (is_scalar($mConnection) || is_null($mConnection)) {
-            if (empty($nExtraKey)) {
-                $nExtraKey = $this->nConnectionKey;
+        if (is_scalar($connection) || is_null($connection)) {
+            if (empty($extraKey)) {
+                $extraKey = $this->connectionKey;
             }
-            $oConnection = \fan\project\service\database::instance($mConnection, $nExtraKey);
-        } elseif (is_object($mConnection) && $mConnection instanceof \fan\core\service\database) {
-            $oConnection = $mConnection;
+            $connection = $this->containerService('database', is_null($connection) ? null : (string)$connection, $extraKey);
+        } elseif (is_object($connection) && $connection instanceof \fan\core\service\database) {
+            $connection = $connection;
         } else {
             throw new fatalException($this, 'Incorrect connection.');
         }
 
-        $this->oConnection  = $oConnection;
-        $this->oDescription = null;
+        $this->connection  = $connection;
+        $this->description = null;
         return $this;
-    } // function setConnection
-    /**
-     * Get Connection of entity
-     * @return \fan\core\service\database
-     */
-    public function getConnection()
+    }
+    public function getConnection(): \fan\core\service\database
     {
-        if (!$this->oConnection) {
+        if (!$this->connection) {
             $this->setConnection();
         }
-        return $this->oConnection;
-    } // function getConnection
+        return $this->connection;
+    }
 
-    /**
-     * Set Name of Connection
-     * @param string $sConnectionName
-     * @return \fan\core\base\model\entity
-     */
-    public function setConnectionName($sConnectionName)
+    public function setConnectionName(string $connectionName): static
     {
-        $this->sConnectionName = $sConnectionName;
+        $this->connectionName = $connectionName;
         return $this;
-    } // function setConnectionName
-    /**
-     * Get Name of Connection
-     * @return string
-     */
-    public function getConnectionName()
+    }
+    public function getConnectionName(): ?string
     {
-        return $this->sConnectionName;
-    } // function getConnectionName
+        return $this->connectionName;
+    }
 
-    /**
-     * Set Extra key of Connection
-     * @param mixed $nConnectionKey
-     * @return \fan\core\base\model\entity
-     */
-    public function setConnectionKey($nConnectionKey)
+    public function setConnectionKey(mixed $connectionKey): static
     {
-        $this->nConnectionKey = $nConnectionKey;
+        $this->connectionKey = $connectionKey;
         return $this;
-    } // function setConnectionKey
-    /**
-     * Get Extra key of Connection
-     * @return numeric
-     */
-    public function getConnectionKey()
+    }
+    public function getConnectionKey(): string|int|float|null
     {
-        return $this->nConnectionKey;
-    } // function getConnectionKey
-    /**
-     * Get Main Parameters
-     * @return array
-     */
-    public function getMainParam()
+        return $this->connectionKey;
+    }
+    public function getMainParam(): array
     {
-        return array(
+        return [
             'collection' => $this->getService()->getCollectionKey(),
             'name'       => $this->getName(),
             'class'      => get_class($this),
-            'param'      => $this->aBakParam,
-            'connection' => array(
+            'param'      => $this->bakParam,
+            'connection' => [
                 'name' => $this->getConnectionName(),
                 'key'  => $this->getConnectionKey(),
-            ),
+            ],
+        ];
+    }
+
+    public function getName(bool $showAlter = false): ?string
+    {
+        return empty($this->name) && $showAlter ? '(Anonymous)' . $this->getTableName() : $this->name;
+    }
+
+    public function getService(): \fan\core\service\entity
+    {
+        return $this->service;
+    }
+    /**
+     * @param mixed $default Fallback value returned when no explicit value is available.
+     */
+    public function getConfig(mixed $key = null, mixed $default = null): mixed
+    {
+        return is_null($key) ? $this->config : $this->config->get($key, $default);
+    }
+
+    public function getDesigner(string $type = 'select'): \fan\core\service\entity\designer
+    {
+        return $this->getService()->getDesigner($this, $type);
+    }
+
+    public function getDescription(array $param = []): \fan\core\service\entity\description
+    {
+        if (is_null($this->description)) {
+            $this->description = $this->getService()->getDescription($this, array_merge((array)$param, $this->bakParam));
+        }
+        return $this->description;
+    }
+    public function getRequestLoader(array $sql = []): \fan\core\base\model\request
+    {
+        if (is_null($this->request)) {
+            $className = $this->getRequestClassName();
+            $this->request = new $className($this);
+        }
+        if (!empty($sql)) {
+            $this->request->setRequests($sql);
+        }
+        return $this->request;
+    }
+
+    public function getRowClassName(): string
+    {
+        if (empty($this->rowClassName)) {
+            $this->rowClassName = $this->_getClassName('row');
+        }
+        return $this->rowClassName;
+    }
+    public function getRowsetClassName(): string
+    {
+        if (empty($this->rowsetClassName)) {
+            $this->rowsetClassName = $this->_getClassName('rowset');
+        }
+        return $this->rowsetClassName;
+    }
+    public function getRequestClassName(): string
+    {
+        if (empty($this->requestClassName)) {
+            $this->requestClassName = $this->_getClassName('request');
+        }
+        return $this->requestClassName;
+    }
+
+    public function getTableStatus(): mixed
+    {
+        return $this->getConnection()->getTableStatus((string)$this->tableName);
+    }
+
+    public function getCheckKey(int $reduce = 0): string
+    {
+        $tmp = $this->getTableStatus();
+        $key = md5(
+            ($tmp['Rows'] ?? '') .
+            ($tmp['Avg_row_length'] ?? '') .
+            ($tmp['Data_length'] ?? '') .
+            ($tmp['Index_length'] ?? '') .
+            ($tmp['Auto_increment'] ?? '') .
+            ($tmp['Update_time'] ?? '') .
+            ($tmp['Checksum'] ?? '')
         );
-    } // function getMainParam
-
-    /**
-     * Get Entity Name
-     * @return string
-     */
-    public function getName($bShowAlter = false)
-    {
-        return empty($this->sName) && $bShowAlter ? '(Anonymous)' . $this->getTableName() : $this->sName;
-    } // function getName
-
-    /**
-     * Get Service of Entity
-     * @return \fan\core\service\config\row
-     */
-    public function getService()
-    {
-        return $this->oService;
-    } // function getService
-    /**
-     * Get Config of Entity
-     * @param string $sKey
-     * @param null $mDefault
-     * @return \fan\core\service\config\row
-     */
-    public function getConfig($sKey = null, $mDefault = null)
-    {
-        return is_null($sKey) ? $this->oConfig : $this->oConfig->get($sKey, $mDefault);
-    } // function getConfig
-
-    /**
-     * Get SQL-designer
-     * @param string $sType
-     * @return \fan\core\service\entity\designer
-     */
-    public function getDesigner($sType = 'select')
-    {
-        return $this->getService()->getDesigner($this, $sType);
-    } // function getDesigner
-
-    /**
-     * Get Entity table Description
-     * @return \fan\core\service\entity\description
-     */
-    public function getDescription($aParam = array())
-    {
-        if (is_null($this->oDescription)) {
-            $this->oDescription = $this->getService()->getDescription($this, array_merge($aParam, $this->aBakParam));
-        }
-        return $this->oDescription;
-    } // function getDescription
-    /**
-     * Get Request Loader
-     * @param array $aSQL
-     * @return \fan\core\base\model\request
-     */
-    public function getRequestLoader($aSQL = array())
-    {
-        if (is_null($this->oRequest)) {
-            $sClassName = $this->getRequestClassName();
-            $this->oRequest = new $sClassName($this);
-        }
-        if (!empty($aSQL)) {
-            $this->oRequest->setRequests($aSQL);
-        }
-        return $this->oRequest;
-    } // function getRequestLoader
-
-    /**
-     * Get ClassName of Row
-     * @return srting
-     */
-    public function getRowClassName()
-    {
-        if (empty($this->sRowClassName)) {
-            $this->sRowClassName = $this->_getClassName('row');
-        }
-        return $this->sRowClassName;
-    } // function getRowClassName
-    /**
-     * Get ClassName of Rowset
-     * @return srting
-     */
-    public function getRowsetClassName()
-    {
-        if (empty($this->sRowsetClassName)) {
-            $this->sRowsetClassName = $this->_getClassName('rowset');
-        }
-        return $this->sRowsetClassName;
-    } // function getRowsetClassName
-    /**
-     * Get ClassName of Request
-     * @return srting
-     */
-    public function getRequestClassName()
-    {
-        if (empty($this->sRequestClassName)) {
-            $this->sRequestClassName = $this->_getClassName('request');
-        }
-        return $this->sRequestClassName;
-    } // function getRequestClassName
-
-    /**
-     * Get Status of table
-     * Result array has next fields:
-     *   Name, Engine, Version, Row_format, Rows, Avg_row_length, Data_length,
-     *   Max_data_length, Index_length, Index_length, Data_free, Auto_increment,
-     *   Create_time, Update_time,Check_time, Collation, Checksum, Create_options, Comment
-     * @return array
-     */
-    public function getTableStatus()
-    {
-        return $this->getConnection()->getTableStatus($this->sTableName);
-    } // function getTableStatus
-
-    /**
-     * Get Key for check Is data changed
-     * @param integer $iReduce Reduce length key
-     * @return string key
-     */
-    public function getCheckKey($iReduce = 0)
-    {
-        $aTmp = $this->getTableStatus();
-        $sKey = md5(@$aTmp['Rows'] . @$aTmp['Avg_row_length'] . @$aTmp['Data_length'] . @$aTmp['Index_length'] . @$aTmp['Auto_increment'] . @$aTmp['Update_time'] . @$aTmp['Checksum']);
-        if($iReduce > 0) {
-            return substr($sKey, 0, $iReduce);
-        } elseif($iReduce < 0) {
-            return substr($sKey, $iReduce);
+        if ($reduce > 0) {
+            return substr($key, 0, $reduce);
+        } elseif ($reduce < 0) {
+            return substr($key, $reduce);
         } else {
-            return $sKey;
+            return $key;
         }
-    } // function getCheckKey
+    }
 
     // ======== Private/Protected methods ======== \\
-    protected function _init($aParam)
+    protected function _init(array $param): static
     {
         return $this;
-    } // function _init
+    }
 
     /**
-     * Define Table Name
-     * @param array $aParam
-     * @return string
      * @throws fatalException
      */
-    protected function _defineTableName($aParam = array())
+    protected function _defineTableName(array $param = []): string
     {
-        if (isset($aParam['tableName'])) {
-            return $aParam['tableName'];
+        if (isset($param['tableName'])) {
+            return $param['tableName'];
         }
-        $sName = $this->getName();
-        $aMatches = array();
-        if (preg_match('/^(?:.+\\\\)?(\w+)$/', $sName, $aMatches)) {
-            return $aMatches[1];
+        $name = $this->getName();
+        $matches = [];
+        if (preg_match('/^(?:.+\\\\)?(\w+)$/', (string)$name, $matches)) {
+            return $matches[1];
         }
         throw new fatalException($this, 'Can\'t define the Table name for "' . get_class($this) . '".');
-    } // function _defineTableName
+    }
 
-    /**
-     * Get List of available Property for public access
-     * @return array
-     */
-    protected function _getPropertyList()
+    protected function _getPropertyList(): array
     {
-        return array(
+        return [
             'description' => 'getDescription',
             'request'     => 'getRequestLoader',
-        );
-    } // function _getPropertyList
-    /**
-     * Set Connection Parameters
-     * @param array $aParam
-     * @return \fan\core\base\model\entity
-     */
-    protected function _setConnectionParam($aParam)
+        ];
+    }
+    protected function _setConnectionParam(array $param): static
     {
-        if (isset($aParam['connectionName'])) {
-            $this->sConnectionName = $aParam['connectionName'];
+        if (isset($param['connectionName'])) {
+            $this->connectionName = (string)$param['connectionName'];
         } else {
-            $sConnectionName = $this->oConfig['CONNECTION'];
-            while (empty($sConnectionName)) {
-                $aGlobalConf = \fan\project\service\config::instance('entity')->get('common');
-                if (isset($aGlobalConf['CONNECTIONS'])) {
-                    $sPrefix = trim($this->getService()->getNsPrefix(), '\\');
-                    $nLen    = strlen($sPrefix);
-                    $sNS     = get_ns_name($this, 2);
+            $connectionName = $this->config['CONNECTION'];
+            while (empty($connectionName)) {
+                $globalConf = $this->containerService('config', 'entity')->get('common');
+                if (isset($globalConf['CONNECTIONS'])) {
+                    $prefix = trim($this->getService()->getNsPrefix(), '\\');
+                    $len    = strlen($prefix);
+                    $ns     = get_ns_name($this, 2);
                     for ($i = 0; $i < 2; $i++) {
-                        if (isset($aGlobalConf['CONNECTIONS'][$sNS])) {
-                            $sConnectionName = $aGlobalConf['CONNECTIONS'][$sNS];
+                        if (isset($globalConf['CONNECTIONS'][$ns])) {
+                            $connectionName = $globalConf['CONNECTIONS'][$ns];
                             break 2;
                         }
-                        if (strncmp($sNS, $sPrefix, $nLen) != 0) {
+                        if (strncmp($ns, $prefix, $len) !== 0) {
                             break;
                         }
-                        $sNS = trim(substr($sNS, $nLen), '\\');
-                        if (empty($sNS)) {
+                        $ns = trim(substr($ns, $len), '\\');
+                        if (empty($ns)) {
                             break;
                         }
                     }
                 }
-                $sConnectionName = $aGlobalConf['DEFAULT_CONNECTION'];
+                $connectionName = $globalConf['DEFAULT_CONNECTION'];
                 break;
             }
-            $this->sConnectionName = $sConnectionName;
+            $this->connectionName = (string)$connectionName;
         }
-        $this->nConnectionKey = isset($aParam['connectionKey']) ? (int)$aParam['connectionKey'] : 0;
+        $this->connectionKey = isset($param['connectionKey']) ? (int)$param['connectionKey'] : 0;
         return $this;
-    } // function _setConnectionParam
+    }
 
     /**
-     * Get Class Name for: "rowset", "row", "request"
-     * @param string $sKey
-     * @return string
      * @throws fatalException
      */
-    protected function _getClassName($sKey)
+    protected function _getClassName(string $key): string
     {
-        $sName = $this->getName();
-        if (empty($sName)) {
-            $sClassName = '';
+        $name = $this->getName();
+        if (empty($name)) {
+            $className = '';
         } else {
-            $sPrefix = $this->getService()->getNsPrefix();
-            if (empty($sPrefix)) {
-                throw new fatalException($this, 'In config prefix doesn\'t set for "' . $sKey . '".');
+            $prefix = $this->getService()->getNsPrefix();
+            if (empty($prefix)) {
+                throw new fatalException($this, 'In config prefix doesn\'t set for "' . $key . '".');
             }
 
-            $sClassName = $sPrefix . $sName . '\\' . $sKey;
+            $className = $prefix . $name . '\\' . $key;
         }
-        if (empty($sClassName) || !class_exists($sClassName)) {
-            $sClassName = '\fan\project\base\model\\' . $sKey;
+        if (empty($className) || !class_exists($className)) {
+            $className = '\fan\project\base\model\\' . $key;
         }
 
-        $oReflection = new \ReflectionClass($sClassName);
+        $reflection = new \ReflectionClass($className);
         do {
-            if($oReflection->getName() == 'fan\core\base\model\\' . $sKey) {
-                return $sClassName;
+            if ($reflection->getName() === 'fan\core\base\model\\' . $key) {
+                return $className;
             }
-            $oReflection = $oReflection->getParentClass();
-        } while(!empty($oReflection));
+            $reflection = $reflection->getParentClass();
+        } while (!empty($reflection));
 
-        throw new fatalException($this, 'Class "' . $sClassName . '" must be instance of "\fan\core\base\model\\' . $sKey . '".');
-    } // function _getClassName
+        throw new fatalException($this, 'Class "' . $className . '" must be instance of "\fan\core\base\model\\' . $key . '".');
+    }
 
     /**
-     * Get Sql-request as String
-     * @param string|\fan\core\service\entity\designer $mQuery
-     * @param mixed $mParam
-     * @return string
      * @throws fatalException
      */
-    protected function _getSqlAsString($mQuery, $mParam)
+    protected function _getSqlAsString(string|\fan\core\service\entity\designer $query, mixed $param): array
     {
-        if (is_object($mQuery) && $mQuery instanceof \fan\core\service\entity\designer) {
-            return array($mQuery->assemble($mParam), $mQuery->getAdjustedParam());
-        } elseif (!is_string($mQuery)) {
-            return array($mQuery, $mParam);
+        if (is_object($query) && $query instanceof \fan\core\service\entity\designer) {
+            return [$query->assemble($param), $query->getAdjustedParam()];
+        } elseif (!is_string($query)) {
+            return [$query, $param];
         }
         throw new fatalException($this, 'Incorrect format of SQL-request.');
-    } // function _getSqlAsString
+    }
 
-    /**
-     * Create new row-object
-     * @param array $aData
-     * @return \fan\core\base\model\row
-     */
-    protected function _getRowByData(&$aData = null)
+    protected function _getRowByData(?array &$data = null): \fan\core\base\model\row
     {
-        $sClass = $this->getRowClassName();
-        return empty($aData) ? new $sClass($this) : new $sClass($this, $aData);
-    } // function _getRowByData
-} // class \fan\core\base\model\entity
-?>
+        $class = $this->getRowClassName();
+        return empty($data) ? new $class($this) : new $class($this, $data);
+    }
+}

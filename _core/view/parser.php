@@ -1,4 +1,7 @@
-<?php namespace fan\core\view;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view;
 /**
  * Base abstract html type of block
  *
@@ -17,191 +20,135 @@
  */
 abstract class parser
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * @var \fan\core\block\base Root block
      */
-    protected $oRootBlock;
+    protected ?object $rootBlock = null;
     /**
      * @var \fan\core\block\base Main block
      */
-    protected $oMainBlock;
+    protected ?object $mainBlock = null;
 
     /**
      * Array - result of parsing process
      * @var array
      */
-    protected $aResult;
+    protected ?array $result = null;
 
 
-    /**
-     * View meta constructor
-     * @param fan\core\block\base $oBlock
-     */
-    public function __construct(\fan\core\block\base $oMainBlock)
+    public function __construct(\fan\core\block\base $mainBlock)
     {
-        $this->oMainBlock = $oMainBlock;
-    } // function __construct
+        $this->mainBlock = $mainBlock;
+    }
 
     // ======== Static methods ======== \\
-    /**
-     * Get View-Format
-     * @return string
-     */
-    static public function getFormat() {
+    static public function getFormat(): string {
         throw new \fan\project\exception\error500('Class "' . get_called_class() . '" can\'t be use for define View-type');
-    } // function getFormat
+    }
 
-    /**
-     * Get View-Router for block
-     * This method is called from service tab for define router of view
-     * @param \fan\core\block\base $oBlock
-     * @return \fan\core\view\router\simple
-     */
-    static public function getRouter(\fan\core\block\base $oBlock) {
-        return new \fan\project\view\router\simple($oBlock);
-    } // function getRouter
+    static public function getRouter(\fan\core\block\base $block): \fan\core\view\router {
+        return new \fan\project\view\router\simple($block);
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Start Parsing View data
-     * @param \fan\core\block\base $oRootBlock
-     * @return \fan\core\view\parser
-     */
-    public function startParsing(\fan\core\block\base $oRootBlock)
+    public function startParsing(\fan\core\block\base $rootBlock): static
     {
-        $this->oRootBlock = $oRootBlock;
-        $this->aResult = $this->getResultData($this->oRootBlock);
+        $this->rootBlock = $rootBlock;
+        $this->result = $this->getResultData($this->rootBlock);
         return $this;
-    } // function startParsing
+    }
 
-    /**
-     * Get Final Content Result
-     * @return string
-     */
-    public function getFinalContent()
+    public function getFinalContent(): mixed
     {
-        $sResult = end($this->aResult);
-        $this->_setHeaders($sResult);
-        return $sResult;
-    } // function getFinalContent
+        $result = end($this->result);
+        $this->_setHeaders($result);
+        return $result;
+    }
 
-    /**
-     * Get Final Content Code
-     * @return string
-     */
-    public function getResultData(\fan\core\block\base $oBlock)
+    public function getResultData(\fan\core\block\base $block): array
     {
-        return $this->_assembleToArray($oBlock);
-    } // function getResultData
+        return $this->_assembleToArray($block);
+    }
 
     // ======== Protected methods ======== \\
-    /**
-     * Assemble View data to Array
-     * @param \fan\core\block\base $oBlock
-     * @return array
-     */
-    protected function _assembleToArray(\fan\core\block\base $oBlock)
+    protected function _assembleToArray(\fan\core\block\base $block): array
     {
-        $aViewData = $oBlock->getViewData();
+        $viewData = $block->getViewData();
 
-        foreach ($oBlock->getEmbeddedBlocks() as $oEmbeddedBlock) {
-            $mEmbData = $this->getResultData($oEmbeddedBlock);
-            if (!empty($mEmbData)) {
-                $aViewData[$oEmbeddedBlock->getBlockName()] = $mEmbData;
+        foreach ($block->getEmbeddedBlocks() as $embeddedBlock) {
+            $embData = $this->getResultData($embeddedBlock);
+            if (!empty($embData)) {
+                $viewData[$embeddedBlock->getBlockName()] = $embData;
             }
         }
 
-        return $aViewData;
-    } // function _assembleToArray
+        return $viewData;
+    }
 
-    /**
-     * Mix View data of Block with View data of Embeded blocks
-     * @param array $aBlockData
-     * @param array $aEmbededData
-     */
-    protected function _mixEmbededData($aBlockData, $aEmbededData)
+    protected function _mixEmbededData(array $blockData, array $embededData): array
     {
-        $aMixedData = array();
-        foreach ($aEmbededData as $v) {
-            $aMixedData = array_merge($aMixedData, $v);
+        $mixedData = [];
+        foreach ($embededData as $v) {
+            $mixedData = array_merge($mixedData, $v);
         }
-        return array_merge($aMixedData, $aBlockData);
-    } // function _mixEmbededData
+        return array_merge($mixedData, $blockData);
+    }
 
-    /**
-     * Parse Template
-     * @param \fan\core\block\base $oBlock
-     * @param type $aTplVar
-     * @return string
-     */
-    protected function _parseTemplate(\fan\core\block\base $oBlock, $aTplVar)
+    protected function _parseTemplate(\fan\core\block\base $block, $tplVar): string
     {
-        $aCond = $oBlock->getRoleCondition();
-        if (!empty($aCond)) {
+        $cond = $block->getRoleCondition();
+        if (!empty($cond)) {
             return '';
         }
-        $sTemplate = $oBlock->getTemplate();
-        if ($sTemplate) {
+        $template = $block->getTemplate();
+        if ($template) {
             // If template exists - assign variables and parse template
-            $sTplParentClass = $oBlock->getMeta('tpl_parent_class');
+            $tplParentClass = $block->getMeta('tpl_parent_class');
 
-            $oTemplate = \fan\project\service\template::instance()->get($sTemplate, $sTplParentClass, $oBlock);
-            foreach ($aTplVar as $k => $v) {
-                $oTemplate->assign($k, $v);
+            $template = $this->containerService('template')->get($template, $tplParentClass, $block);
+            foreach ($tplVar as $k => $v) {
+                $template->assign($k, $v);
             }
-            $sTplResult = $oTemplate->fetch();
+            $tplResult = $template->fetch();
         } else {
             // else - concatenate variables
-            $sTplResult = '';
-            foreach ($aTplVar as $v) {
+            $tplResult = '';
+            foreach ($tplVar as $v) {
                 if (is_scalar($v) || is_object($v) && method_exists($v, '__toString')) {
-                    $sTplResult .= (string)$v;
+                    $tplResult .= (string)$v;
                 }
             }
         }
 
-        return $sTplResult;
-    } // function _parseTemplate
+        return $tplResult;
+    }
 
-    /**
-     * Parse Template
-     * @param \fan\core\block\base $oBlock
-     * @param array $aSrcData
-     * @param string $sTplResult
-     * @return mixed
-     */
-    protected function _formatResultData(\fan\core\block\base $oBlock, $aSrcData, $sTplResult)
+    protected function _formatResultData(\fan\core\block\base $block, array $srcData, string $tplResult): array
     {
-        return array($oBlock->getBlockName() => $sTplResult);
-    } // function _formatResultData
+        return [$block->getBlockName() => $tplResult];
+    }
 
-    /**
-     * Set Response Headers
-     * @param string $sResult
-     * @param string $sContentType
-     * @param boolean $sEncoding
-     * @return \fan\core\service\header
-     */
-    protected function _setHeaders($sResult, $sContentType = 'text/plain', $sEncoding = null)
+    protected function _setHeaders($result, $contentType = 'text/plain', $encoding = null): \fan\core\service\header
     {
-        $oHeader = \fan\project\service\header::instance();
-        $oHeader->addHeader('length', strlen($sResult));
+        $header = $this->containerService('header');
+        $header->addHeader('length', strlen((string)$result));
 
-        if (!empty($sContentType)) {
-            if (is_null($sEncoding)) {
-                $sEncoding = \fan\core\service\locale::instance()->getCharacterSet();
+        if (!empty($contentType)) {
+            if (is_null($encoding)) {
+                $encoding = $this->containerService('locale')->getCharacterSet();
             }
-            $oHeader->addHeader('contentType', $sContentType);
-            if (!empty($sEncoding)) {
-                $oHeader->addHeader('encoding', 'charset=' . $sEncoding);
+            $header->addHeader('contentType', (string)$contentType);
+            if (!empty($encoding)) {
+                $header->addHeader('encoding', 'charset=' . $encoding);
             }
         }
 
          // ToDo: Add another header there. For example - cache headers
-        return $oHeader;
-    } // function _setHeaders
+        return $header;
+    }
 
-} // class \fan\core\view\parser
-?>
+}

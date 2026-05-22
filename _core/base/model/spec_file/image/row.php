@@ -1,4 +1,7 @@
-<?php namespace fan\core\base\model\spec_file\image;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\base\model\spec_file\image;
 /**
  * Row of special file
  *
@@ -22,269 +25,168 @@ abstract class row extends \fan\core\base\model\spec_file\row
      * Object of Image-template
      * @var \fan\core\service\template\type\image[]
      */
-    private static $oTemplate = array();
+    private static array $template = [];
 
-    /**
-     * Get template of image
-     * @return \fan\core\service\template\type\image
-     */
-    protected function getTemplate()
+    protected function getTemplate(): object
     {
-        $sEntityName = $this->getEntity()->getName();
-        if (!isset(self::$oTemplate[$sEntityName])) {
-            $sSrcPath      = $this->getConfig('TEMPLATE_PATH', '{PROJECT}/data/special_templates/show_image.tpl');
-            $sTemplatePath = \bootstrap::parsePath($sSrcPath);
-            self::$oTemplate[$sEntityName] = service('template')->get($sTemplatePath, '\fan\core\service\template\type\image');
+        $entityName = $this->getEntity()->getName();
+        if (!isset(self::$template[$entityName])) {
+            $srcPath      = $this->getConfig('TEMPLATE_PATH', '{PROJECT}/data/special_templates/show_image.tpl');
+            $templatePath = \bootstrap::parsePath((string)$srcPath);
+            self::$template[$entityName] = $this->containerService('template')->get($templatePath, '\fan\core\service\template\type\image');
         }
-        return self::$oTemplate[$sEntityName];
-    }// function getTemplate
+        return self::$template[$entityName];
+    }
 
-    /**
-     * Set file from form
-     * @param $sFormKey string
-     * @param $aAddKeys array
-     * @param $sDecription string
-     * @param $sAlt string
-     * @return boolean true - if file is stored successful
-     */
-    public function setFormFile($sFormKey, $aAddKeys = array(), $sDecription = '', $sAlt = '')
+    public function setFormFile(string $formKey, array $addKeys = [], string $decription = '', string $alt = ''): bool
     {
-        if($this->getEntityFile()->setFormFile($sFormKey, $aAddKeys, 'image', $sDecription)) {
-            return $this->saveImage($sAlt);
+        if ($this->getEntityFile()->setFormFile($formKey, $addKeys, 'image', $decription)) {
+            return $this->saveImage($alt);
         }
         return false;
-    }// function getFormFile
+    }
 
     /**
-     * Set file from URL
-     * @param $sUrl string
-     * @param $sDecription string
-     * @param $sAlt string
-     * @return boolean true - if file is stored successful
+     * @param mixed $url URL used as the external request target.
      */
-    public function setUrlFile($sUrl, $sDecription = '', $sAlt = '')
+    public function setUrlFile(string $url, string $decription = '', string $alt = ''): bool
     {
-        if($this->getEntityFile()->setUrlFile($sUrl, 'image', $sDecription)) {
-            return $this->saveImage($sAlt);
+        if ($this->getEntityFile()->setUrlFile($url, 'image', $decription)) {
+            return $this->saveImage($alt);
         }
         return false;
-    }// function setUrlFile
+    }
 
-    /**
-     * Set file from URL
-     * @param $sSrcPath string
-     * @param $sDecription string
-     * @param $sAlt string
-     * @param $bDeleteOrigin boolean
-     * @return boolean true - if file is stored successful
-     */
-    public function setLocalFile($sSrcPath, $sDecription = '', $sAlt = '', $sName = null, $bDeleteOrigin = false)
+    public function setLocalFile(string $srcPath, string $decription = '', string $alt = '', ?string $name = null, bool $deleteOrigin = false): bool
     {
-        $aImgInf = @getimagesize($sSrcPath);
-        if($aImgInf) {
-            if($this->getEntityFile()->setLocalFile($sSrcPath, 'image', $aImgInf['mime'], $sDecription, $sName, $bDeleteOrigin)) {
-                return $this->saveImage($sAlt);
+        $imgInf = $this->getImageSize($srcPath);
+        if ($imgInf) {
+            if ($this->getEntityFile()->setLocalFile($srcPath, 'image', $imgInf['mime'], $decription, $name, $deleteOrigin)) {
+                return $this->saveImage($alt);
             }
         }
         return false;
-    } // function setLocalFile
+    }
 
-    /**
-     * Get image data
-     * @return array
-     */
-    public function getImageData()
+    public function getImageData(): array
     {
-        $aRet = $this->getFields();
-        unset($aRet[$this->getEntity()->getDescription()->getPrimeryKey()]);
-        $aRet['id']          = $this->getId();
-        $aRet['description'] = $this->getEntityFile()->get_description();
-        $aRet['src_name']    = $this->getEntityFile()->get_src_name();
-        return $aRet;
-    } // function getImageData
+        $ret = $this->getFields();
+        unset($ret[$this->getEntity()->getDescription()->getPrimeryKey()]);
+        $ret['id']          = $this->getId();
+        $ret['description'] = $this->getEntityFile()->get_description();
+        $ret['src_name']    = $this->getEntityFile()->get_src_name();
+        return $ret;
+    }
 
-    /**
-     * Rotate Image
-     * @param numeric $nAngle Angle of rotate in degrees
-     * @param number $nBgrColor Background color
-     * @param number $nFix: 0 - not change size, 1-fix width, 2-fix height, 3-fix width and height
-     */
-    public function rotateImage($nAngle, $nBgrColor = 0xFFFFFF, $nFix = 0)
+    public function rotateImage(int|float $angle, int $bgrColor = 0xFFFFFF, int|float $fix = 0): void
     {
-        $oSI = service('image_modify', $this->getEntityFile()->getFilePath());
-        $oSI->rotate($nAngle, $nBgrColor, $nFix);
-        $oSI->saveAndReplace(null);
+        $si = service('image_modify', $this->getEntityFile()->getFilePath());
+        $si->rotate($angle, $bgrColor, $fix);
+        $si->saveAndReplace(null);
         $this->saveImage();
-    }// function rotateImage
+    }
 
-    /**
-     * Get Advanced Img-tag
-     * Allowed Types: 'img', 'nail', 'link', 'blowup1', 'blowup2'
-     * $aParam = array(
-     *     'class' => 'css_class_for_main_tag',
-     *     'img' => array(
-     *         'url_prefix' => 'url_prefix_value',
-     *         'url_suffix' => 'url_suffix_value',
-     *         'full_url'   => 'full_image_url',
-     *         'width'      => 'width_value',
-     *         'height'     => 'height_value',
-     *         'alt'        => 'alternative_text',
-     *         'title'      => 'title',
-     *         'class'      => 'css_class_for_img_tag',
-     *     ),
-     *     'link' => array(
-     *         'url_prefix' => 'url_prefix_value',
-     *         'url_suffix' => 'url_suffix_value',
-     *         'full_url'   => 'full_link_url',
-     *         'target'     => 'target_value',
-     *         'class'      => 'css_class_for_link_tag',
-     *     ),
-     *     'signature' => array(
-     *         'position' => 'top|bottom|none',
-     *     ),
-     * )
-     * @param string $sType
-     * @param array $aParam
-     * @return string
-     */
-    public function advGetImgTag($sType, $aParam)
+    public function advGetImgTag(string $type, array $param): ?string
     {
-        $sType = strtolower($sType);
-        if (!$this->checkIsLoad() || !in_array($sType, array('img', 'nail', 'link', 'blowup1', 'blowup2'))) {
+        $type = strtolower($type);
+        if (!$this->checkIsLoad() || !in_array($type, ['img', 'nail', 'link', 'blowup1', 'blowup2'])) {
             return null;
         }
 
         // ----- Set img-param ----- \\
-        if ($sType == 'img') {
-            $this->setMainImgParam($aParam);
+        if ($type === 'img') {
+            $this->setMainImgParam($param);
         } else {
-            $this->setUrl($aParam['img'], 'nail', '/nail.php?id=', '&amp;w={width}&amp;h={height}');
-            $this->resizeImage($aParam['img']);
-            $this->setMainImgParam($aParam, false);
+            $this->setUrl($param['img'], 'nail', '/nail.php?id=', '&amp;w={width}&amp;h={height}');
+            $this->resizeImage($param['img']);
+            $this->setMainImgParam($param, false);
         }
 
 
         // ----- Set link-param ----- \\
-        if (substr($sType, 0, 6) == 'blowup') {
-            $this->setUrl($aParam['link'], 'blowup', '/blowup/id-', '.html');
-            if (!isset($aTmp['target'])) {
-                $aTmp['target'] = '_blank';
+        if (substr($type, 0, 6) === 'blowup') {
+            $this->setUrl($param['link'], 'blowup', '/blowup/id-', '.html');
+            if (!isset($tmp['target'])) {
+                $tmp['target'] = '_blank';
             }
         }
 
         // ----- Make signature-tag ----- \\
-        if(!isset($aParam['signature']['position'])) {
-            $aParam['signature']['position'] = $this->getConfig('signature_pos', 'none');
+        if (!isset($param['signature']['position'])) {
+            $param['signature']['position'] = $this->getConfig('signature_pos', 'none');
         }
 
-        return $this->fetchHtml($sType, $aParam);
-    } // function advGetImgTag
+        return $this->fetchHtml($type, $param);
+    }
 
-    /**
-     * Get Img-tag
-     * @return array
-     */
-    public function getImgTag($aParam = null)
+    public function getImgTag(mixed $param = null): ?string
     {
         if ($this->checkIsLoad()) {
-            $this->setMainImgParam($aParam);
-            return $this->fetchHtml('simple', $aParam);
+            $this->setMainImgParam($param);
+            return $this->fetchHtml('simple', $param);
         }
         return null;
-    } // function getImgTag
+    }
 
-    /**
-     * Set file from form
-     *
-     * @return boolean true - if file is stored successful
-     */
-    protected function saveImage($sAlt = null)
+    protected function saveImage(?string $alt = null): bool
     {
-        $aImgData = @getimagesize($this->getEntityFile()->getFilePath());
-        if($aImgData) {
+        $imgData = $this->getImageSize($this->getEntityFile()->getFilePath());
+        if ($imgData) {
             $this->setId($this->getEntityFile()->getId());
-            $this->set_width($aImgData[0]);
-            $this->set_height($aImgData[1]);
-            $this->set_img_type($aImgData[2]);
-            if (!is_null($sAlt)) {
-                $this->set_alt($sAlt);
+            $this->set_width($imgData[0]);
+            $this->set_height($imgData[1]);
+            $this->set_img_type($imgData[2]);
+            if (!is_null($alt)) {
+                $this->set_alt($alt);
             }
             $this->save();
             return true;
         }
         return false;
-    } // function getFormFile
+    }
 
-    /**
-     * Check access for read file
-     * @return boolean true - if access enable
-     */
-    public function checkAccess()
+    public function checkAccess(): bool
     {
         return $this->getEntityFile()->checkAccess();
-    } // function checkAccess
+    }
 
-    /**
-     * Chech Is current member Owner
-     * @return boolean true - if member is owner
-     */
-    public function checkIsOwner()
+    public function checkIsOwner(): bool
     {
         return $this->getEntityFile()->checkIsOwner();
-    } // function checkIsOwner
+    }
 
 
-    /**
-     * fetch HTML-code of image
-     * @return string
-     */
-    protected function fetchHtml($sType, $aParam)
+    protected function fetchHtml(string $type, mixed $param): string
     {
-        $oTemplate = $this->getTemplate();
-        $oTemplate->setBaseParam($aParam);
-        $oTemplate->assign('img_type', $sType);
-        return $oTemplate->fetch();
-    } // function fetchHtml
+        $template = $this->getTemplate();
+        $template->setBaseParam($param);
+        $template->assign('img_type', $type);
+        return $template->fetch();
+    }
 
-    /**
-     * Set parameter if it isn't set
-     * @param array $aParam
-     * @param string $sKey
-     * @param mixed $mVal
-     */
-    protected function setUrl(&$aParam, $sKey, $sDefPrefix, $sDefSuffix)
+    protected function setUrl(mixed &$param, string $key, string $defPrefix, string $defSuffix): void
     {
-        if (!@$aParam['full_url']) {
-            $aConf = $this->getConfig($sKey);
-            $this->setParam($aParam, 'url_prefix', (isset($aConf['url_prefix']) ? $aConf['url_prefix'] : $sDefPrefix));
-            $this->setParam($aParam, 'url_suffix', (isset($aConf['url_prefix']) ? $aConf['url_suffix'] : $sDefSuffix));
-            $aParam['full_url'] = $this->checkIsLoad() ? $aParam['url_prefix'] . $this->getId() . $aParam['url_suffix'] : '';
+        if (empty($param['full_url'])) {
+            $conf = $this->getConfig($key);
+            $this->setParam($param, 'url_prefix', (isset($conf['url_prefix']) ? $conf['url_prefix'] : $defPrefix));
+            $this->setParam($param, 'url_suffix', (isset($conf['url_prefix']) ? $conf['url_suffix'] : $defSuffix));
+            $param['full_url'] = $this->checkIsLoad() ? $param['url_prefix'] . $this->getId() . $param['url_suffix'] : '';
         }
-    } // function setUrl
+    }
 
-    /**
-     * Set parameter if it isn't set
-     * @param array $aParam
-     * @param string $sKey
-     * @param mixed $mVal
-     */
-    protected function setParam(&$aParam, $sKey, $mVal)
+    protected function setParam(array &$param, string $key, mixed $val): void
     {
-        if (!isset($aParam[$sKey])) {
-            $aParam[$sKey] = $mVal;
+        if (!isset($param[$key])) {
+            $param[$key] = $val;
         }
-    } // function setParam
+    }
 
 
-    /**
-     * Set Main Image Parameters
-     * @param array $aParam
-     */
-    protected function setMainImgParam(&$aParam, $bFull = true)
+    protected function setMainImgParam(mixed &$param, bool $full = true): void
     {
         if ($this->checkIsLoad()) {
-            $v = &$aParam['img'];
-            if ($bFull) {
+            $v = &$param['img'];
+            if ($full) {
                 $this->setUrl($v, 'img', '/file.php?id=', '');
                 $this->setParam($v, 'width', $this->get_width());
                 $this->setParam($v, 'height', $this->get_height());
@@ -292,49 +194,69 @@ abstract class row extends \fan\core\base\model\spec_file\row
             $this->setParam($v, 'alt', $this->get_alt());
             $this->setParam($v, 'title', $this->get_alt());
         }
-    } // function setMainImgParam
+    }
 
-    /**
-     * Set image size
-     * @link array $aImgParam
-     * @param array $aParam
-     */
-    protected function resizeImage(&$aParam)
+    protected function resizeImage(array &$param): void
     {
-        $bEnableIncrease = false; // ToDo: move it to config if need enable it
+        $enableIncrease = false; // ToDo: move it to config if need enable it
 
-        $nWidth   = $this->get_width();  // Set width  (default: source width)
-        $nHeight  = $this->get_height(); // Set height (default: source height)
-        $nWidth_  = intval(@$aParam['width']);  // Requested max width
-        $nHeight_ = intval(@$aParam['height']); // Requested max height
-        if ($nWidth_ || $nHeight_) {
-             if ($nHeight_ && $nWidth_) { // Select determinator
-                if ($nWidth_ / $nWidth <= $nHeight_ / $nHeight) {
-                    $nHeight_ = 0;
+        $width   = $this->get_width();  // Set width  (default: source width)
+        $height  = $this->get_height(); // Set height (default: source height)
+        $width_  = intval($param['width'] ?? 0);  // Requested max width
+        $height_ = intval($param['height'] ?? 0); // Requested max height
+        if ($width_ || $height_) {
+             if ($height_ && $width_) { // Select determinator
+                if ($width_ / $width <= $height_ / $height) {
+                    $height_ = 0;
                 } else {
-                    $nWidth_  = 0;
+                    $width_  = 0;
                 }
             }
-            if (!$nWidth_) {
-                if ($nHeight_ < $nHeight || $bEnableIncrease) { // Determine by Height
-                    $nWidth  = round($nHeight_ * $nWidth / $nHeight);
-                    $nHeight = $nHeight_;
+            if (!$width_) {
+                if ($height_ < $height || $enableIncrease) { // Determine by Height
+                    $width  = round($height_ * $width / $height);
+                    $height = $height_;
                 }
-            } elseif ($nWidth_ < $nWidth || $bEnableIncrease) { // Determine by Width
-                $nHeight = round($nWidth_ * $nHeight / $nWidth);
-                $nWidth  = $nWidth_;
+            } elseif ($width_ < $width || $enableIncrease) { // Determine by Width
+                $height = round($width_ * $height / $width);
+                $width  = $width_;
             }
         }
 
-        foreach (array('url_suffix', 'full_url') as $k) {
-            if (isset ($aParam[$k])) {
-                $aParam[$k] = str_replace(array('{width}', '{height}'), array($nWidth, $nHeight), $aParam[$k]);
+        foreach (['url_suffix', 'full_url'] as $k) {
+            if (isset ($param[$k])) {
+                $param[$k] = str_replace(['{width}', '{height}'], [$width, $height], $param[$k]);
             }
         }
 
-        $aParam['width']  = $nWidth;
-        $aParam['height'] = $nHeight;
-    } // function resizeImage
+        $param['width']  = $width;
+        $param['height'] = $height;
+    }
 
-} // class \fan\core\base\model\spec_file\image\row
-?>
+    private function getImageSize(string $path): array|false
+    {
+        if ($path === '') {
+            return false;
+        }
+        if (!preg_match('/^[a-z][a-z0-9+.-]*:\/\//i', $path) && (!is_file($path) || !is_readable($path))) {
+            $this->containerService('error')->logErrorMessage('Image file "' . $path . '" is not readable.', 'Image metadata error', '', true, false);
+            return false;
+        }
+
+        $errorMessage = null;
+        set_error_handler(static function (int $severity, string $message) use (&$errorMessage): bool {
+            $errorMessage = $message;
+            return true;
+        });
+        try {
+            $result = getimagesize($path);
+        } finally {
+            restore_error_handler();
+        }
+        if ($result === false && $errorMessage) {
+            $this->containerService('error')->logErrorMessage($errorMessage, 'Image metadata error', '', true, false);
+        }
+        return $result;
+    }
+
+}

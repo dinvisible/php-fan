@@ -1,19 +1,23 @@
 #!/usr/bin/php
 <?php
-$bIsError = false;
-$sRootDir = realpath(__DIR__ . '/..');
+
+
+declare(strict_types=1);
+
+$isError = false;
+$rootDir = realpath(__DIR__ . '/..');
 
 // ------- Make required directories ------- \\
-makeReqDir(array(
-    'logs'      => array(
+makeReqDir([
+    'logs'      => [
         'apache_log' => null,
         'bootstrap_log' => null,
         'data_log'      => null,
         'error_log'     => null,
         'message_log'   => null,
-    ),
-    'temp_data' => array(
-        'cache' => array(
+    ],
+    'temp_data' => [
+        'cache' => [
             'blocks'     => null,
             'common'     => null,
             'config'     => null,
@@ -21,26 +25,26 @@ makeReqDir(array(
             'file_store' => null,
             'img_nail'   => null,
             'template'   => null,
-        ),
-        'file_data' => array(
+        ],
+        'file_data' => [
             'file_info'  => null,
             'image_nail' => null,
-        ),
+        ],
         'nail'  => null,
         'other' => null,
-    ),
-), $sRootDir);
+    ],
+], $rootDir);
 
 // ------- Make Apache conf ------- \\
-$sDomain = end($argv);
-if (substr($sDomain, -11) != 'install.php') {
-    makeApacheConf($sRootDir, $sDomain);
+$domain = end($argv);
+if (substr((string)$domain, -11) !== 'install.php') {
+    makeApacheConf($rootDir, $domain);
 } else {
     echo 'If you would like to make the config-file for Virtual host of the Apache, please run this file with domain: "install.php your.test.domain"' . "\n";
 }
 
 // ------- Finish ------- \\
-if ($bIsError) {
+if ($isError) {
     echo 'Process is finished with error.';
     sleep(7);
 } else {
@@ -50,67 +54,61 @@ if ($bIsError) {
 
 // ============== Local functions ============== \\
 /**
- * Make required directories
- * @param array $aStruct
- * @param string $sParentzDir
- * @param numeric $nLevel
+ * Builds req dir for the framework helper.
  */
-function makeReqDir($aStruct, $sParentDir, $nLevel = 0)
+function makeReqDir(array $struct, $parentDir, int|float $level = 0): void
 {
-    foreach ($aStruct as $k => $v) {
-        $sDir = $sParentDir . '/' . $k;
+    foreach ($struct as $k => $v) {
+        $dir = $parentDir . '/' . $k;
 
-        if (!checkDir($sDir, $nLevel > 0 ? 0766 : 0666, $nLevel > 0)) {
+        if (!checkDir($dir, $level > 0 ? 0766 : 0666, $level > 0)) {
             continue;
         }
 
         if (!empty($v) && is_array($v)) {
-            makeReqDir($v, $sDir, $nLevel + 1);
+            makeReqDir($v, $dir, $level + 1);
         }
     }
-} // function makeReqDir
+}
 
 /**
- * Make directory structure
- * @global boolean $bIsError
- * @param string $sParentzDir
- * @param string $sDomain
+ * Builds apache conf for the framework helper.
  */
-function makeApacheConf($sRootDir, $sDomain)
+function makeApacheConf($rootDir, string $domain): void
 {
-    global $bIsError;
-    $sConfDir = $sRootDir . '/httpd_conf';
-    if (!checkDir($sConfDir, 0766)) {
+    global $isError;
+    $confDir = $rootDir . '/httpd_conf';
+    if (!checkDir($confDir, 0766)) {
         return;
     }
 
-    $sConfFile = $sConfDir . '/' . str_replace('.', '_', $sDomain) . '.conf';
+    $confFile = $confDir . '/' . str_replace('.', '_', $domain) . '.conf';
     do {
         for ($i = 0; $i < 20; $i++) {
-            if (!is_file($sConfFile)) {
+            if (!is_file($confFile)) {
                 break 2;
             }
-            $sConfFile = substr($sConfFile, 0, -5) . '[' . $i . '].conf';
+            $confFile = substr($confFile, 0, -5) . '[' . $i . '].conf';
         }
-        echo 'Error! To many file created for domain: ' . $sDomain;
-        $bIsError = true;
+        echo 'Error! To many file created for domain: ' . $domain;
+        $isError = true;
     } while (false);
 
     // Make content of config
-    if (substr($sDomain, 0, 4) == 'www.') {
-        $sDomain = substr($sDomain, 4);
+    if (substr($domain, 0, 4) === 'www.') {
+        $domain = substr($domain, 4);
     }
-    $sRootDir = str_replace('\\', '/', $sRootDir);
-    $sContent = '<VirtualHost *:80>
-    ServerAdmin admin@' . $sDomain . '
-    DocumentRoot "' . $sRootDir . '/htdocs"
-    ServerAlias www.' . $sDomain . '
-    ServerName ' . $sDomain . '
+    $rootDir = str_replace('\\', '/', $rootDir);
+    $content = '<VirtualHost *:80>
+    ServerAdmin admin@' . $domain . '
+    DocumentRoot "' . $rootDir . '/htdocs"
+    ServerAlias www.' . $domain . '
+    ServerName ' . $domain . '
 
-    ErrorLog ' . $sRootDir . '/logs/apache_log/error.log
-    CustomLog ' . $sRootDir . '/logs/apache_log/access.log common
+    ErrorLog ' . $rootDir . '/logs/apache_log/error.log
+    CustomLog ' . $rootDir . '/logs/apache_log/access.log common
 
-    <Directory ' . $sRootDir . '/htdocs>
+    <Directory ' . $rootDir . '/htdocs>
         Options Indexes FollowSymLinks
         AllowOverride All
         DirectoryIndex index.php index.html index.htm
@@ -119,38 +117,29 @@ function makeApacheConf($sRootDir, $sDomain)
     </Directory>
 </VirtualHost>';
 
-    file_put_contents($sConfFile, $sContent);
-    echo 'Config file for Apache is saved to: ' . $sConfFile . "\n";
-} // function makeApacheConf
+    file_put_contents($confFile, $content);
+    echo 'Config file for Apache is saved to: ' . $confFile . "\n";
+}
 
-/**
- * Check required Directory or Create it
- * @global boolean $bIsError
- * @param string $sDir
- * @param numeric $nMode
- * @param boolean $bWrRequired
- * @return boolean
- */
-function checkDir($sDir, $nMode, $bWrRequired = true)
+function checkDir(string $dir, int|float $mode, bool $wrRequired = true): bool
 {
-    global $bIsError;
+    global $isError;
     // ToDo: Checking of the privileges is incorrect for x-nix system. It is need to check web-server as owner directories
-    if (is_file($sDir)) {
-       echo 'Error! Can\'t create directory. Such file exists there: ' . $sDir . "\n";
-       $bIsError = true;
+    if (is_file($dir)) {
+       echo 'Error! Can\'t create directory. Such file exists there: ' . $dir . "\n";
+       $isError = true;
        return false;
-    } elseif (!is_dir($sDir)) {
-       echo 'Make directory: ' . $sDir . "\n";
-       if (!mkdir($sDir, $nMode)) {
-           echo 'Error! Can\'t create directory: ' . $sDir . "\n";
-           $bIsError = true;
+    } elseif (!is_dir($dir)) {
+       echo 'Make directory: ' . $dir . "\n";
+       if (!mkdir($dir, $mode)) {
+           echo 'Error! Can\'t create directory: ' . $dir . "\n";
+           $isError = true;
            return false;
        }
-    } elseif ($bWrRequired && !is_writable($sDir)) {
-       echo 'Error! Directory isn\'t writable: ' . $sDir . "\n";
-       $bIsError = true;
+    } elseif ($wrRequired && !is_writable($dir)) {
+       echo 'Error! Directory isn\'t writable: ' . $dir . "\n";
+       $isError = true;
        return false;
     }
     return true;
-} // function checkDir
-?>
+}

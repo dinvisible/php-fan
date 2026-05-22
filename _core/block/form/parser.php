@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\form;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\form;
 /**
  * Form block just for parse data, not for show form
  *
@@ -21,268 +25,194 @@ abstract class parser extends \fan\core\block\base
      * Is form
      * @var boolean
      */
-    protected $bIsForm = true;
+    protected bool $isForm = true;
 
     /**
      * Form service
      * @var \fan\core\service\form
      */
-    protected $oForm;
+    protected ?object $form = null;
 
     /**
      * Role name form
      * @var string
      */
-    protected $sRoleName = '';
+    protected string $roleName = '';
 
     /**
      * Init Parts of current form (usually auto - before main parsing)
      * Flag protect from double init if it was runned early
      * @var boolean
      */
-    protected $bPartsInit = false;
+    protected bool $partsInit = false;
 
-    /**
-     * Finish Construction of block
-     * @param \fan\core\block\base $oContainer
-     * @param array $aContainerMeta
-     * @param boolean $bAllowSetEmbedded
-     */
-    public function finishConstruct($oContainer = null, $aContainerMeta = array(), $bAllowSetEmbedded = true)
+    public function finishConstruct(?\fan\core\block\base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
     {
-        parent::finishConstruct($oContainer, $aContainerMeta, $bAllowSetEmbedded);
-        if ($this->bIsForm && !$this->getRoleCondition()) {
+        parent::finishConstruct($container, $containerMeta, $allowSetEmbedded);
+        if ($this->isForm && !$this->getRoleCondition()) {
             $this->_redefineFieldMeta();
             $this->_correctFieldMeta();
         }
-    } // function finishConstruct
+    }
 
-    /**
-     * Check Form Role
-     * @return boolean
-     */
-    public function checkFormRole()
+    public function checkFormRole(): bool
     {
         return $this->getForm()->checkFormRole();
-    } // function checkFormRole
+    }
 
-    /**
-     * Get service of form
-     * @return \fan\core\service\form
-     */
-    public function getForm()
+    public function getForm(): \fan\core\service\form
     {
-        if (empty($this->oForm)) {
-            $this->oForm = \fan\project\service\form::instance($this);
-            $this->oForm->addListener('onSubmit', array($this, 'onSubmitEvent'));
-            $this->oForm->addListener('onError',  array($this, 'onErrorEvent'));
+        if (empty($this->form)) {
+            $this->form = \fan\project\service\form::instance($this);
+            $this->form->addListener('onSubmit', [$this, 'onSubmitEvent']);
+            $this->form->addListener('onError',  [$this, 'onErrorEvent']);
         }
-        return $this->oForm;
-    } // function getForm
+        return $this->form;
+    }
+
+    public function getRoleName(): string
+    {
+        return $this->roleName;
+    }
 
     /**
-     * Get Role Name
-     * @return string
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    public function getRoleName()
+    public function getFormMeta(?string $key = null, mixed $default = null): mixed
     {
-        return $this->sRoleName;
-    } // function getRoleName
-
-    /**
-     * Get Form Meta
-     * @param string $mKey
-     * @param mixed $mDefault
-     * @return \fan\core\base\meta\row
-     */
-    public function getFormMeta($mKey = null, $mDefault = null)
-    {
-        $oFormMeta = $this->getMeta('form');
-        if (empty($oFormMeta)) {
+        $formMeta = $this->getMeta('form');
+        if (empty($formMeta)) {
             return null;
         }
-        return empty($mKey) ? $oFormMeta : $oFormMeta->get($mKey, $mDefault);
-    } // function getFormMeta
+        return empty($key) ? $formMeta : $formMeta->get($key, $default);
+    }
 
-    /**
-     * Get Fields Meta
-     * @return \fan\core\base\meta\row
-     */
-     public function getFieldsMeta()
+     public function getFieldsMeta(): mixed
     {
-        return $this->getMeta(array('form', 'fields'), array());
-    } // function getFieldsMeta
+        return $this->getMeta(['form', 'fields'], []);
+    }
 
-    /**
-     * Parser of Event "onSubmit"
-     * @access public
-     */
-    public function onSubmitEvent($oBlock)
+    public function onSubmitEvent(mixed $block): void
     {
-        if ($oBlock === $this) {
+        if ($block === $this) {
             $this->onSubmit();
-            $oForm = $this->getForm();
-            if ($oForm->isError()) {
-                $this->_broadcastEvent('onError',  $oForm->getErrorMsg());
+            $form = $this->getForm();
+            if ($form->isError()) {
+                $this->_broadcastEvent('onError',  $form->getErrorMsg());
             } else {
-                $this->_broadcastEvent('onSubmit', $oForm->getFieldValue());
+                $this->_broadcastEvent('onSubmit', $form->getFieldValue());
             }
         }
-    } // function onSubmitEvent
+    }
 
-    /**
-     * Parser of Event "onError"
-     * @access public
-     */
-    public function onErrorEvent($oBlock)
+    public function onErrorEvent(mixed $block): void
     {
-        if ($oBlock === $this) {
+        if ($block === $this) {
             $this->onError();
             $this->_broadcastEvent('onError', $this->getForm()->getErrorMsg());
         }
-    } // function onErrorEvent
+    }
 
 //============ Functions are usualy redefined at the children classes ================\\
 
-    /**
-     * Function return true if need to validate form data
-     * Redefine this method in child classes
-     * @return boolean
-     */
-    public function checkBeforeValidation()
+    public function checkBeforeValidation(): bool
     {
         return true;
-    } // function checkBeforeValidation
+    }
 
-    /**
-     * Function return true if to run onSubmit and onError events after validation
-     * Redefine this method in child classes
-     * @return boolean
-     */
-    public function checkAfterValidation()
+    public function checkAfterValidation(): bool
     {
         return true;
-    } // function checkAfterValidation
+    }
 
-    /**
-     * User's function for the post submit permition
-     * @access protected
-     */
-    protected function onSubmit()
+    protected function onSubmit(): void
     {
-    } // function onSubmit
+    }
 
-    /**
-     * User's function for the validation failed case
-     * @access protected
-     */
-    protected function onError()
+    protected function onError(): void
     {
-    } // function onError
+    }
 
 
 //============ Prived and Protected methods ================\\
 
-    /**
-     * Redefine role and do other operations with roles
-     */
-    protected function _doRoleOperations()
+    protected function _doRoleOperations(): void
     {
-        if ($this->bIsForm) {
-            if(!$this->getFormMeta('form_id')) {
-                $this->setMeta(array('form', 'form_id'), $this->sBlockName);
+        if ($this->isForm) {
+            if (!$this->getFormMeta('form_id')) {
+                $this->setMeta(['form', 'form_id'], $this->blockName);
             }
 
             if (!$this->getFormMeta('not_role')) {
-                $this->sRoleName = $this->getFormMeta('role_name') ? $this->getFormMeta('role_name') : 'form_submit_successful_' . $this->getFormMeta('form_id');
+                $this->roleName = $this->getFormMeta('role_name') ?
+                    (string)$this->getFormMeta('role_name') :
+                    'form_submit_successful_' . (string)$this->getFormMeta('form_id');
             }
 
-            $this->_setCacheRole($this->sRoleName);
+            $this->_setCacheRole($this->roleName);
         }
-    } // function doRoleOperations
+    }
 
-    /**
-     * Redefine Field Meta data
-     * @access protected
-     */
-    protected function _redefineFieldMeta()
+    protected function _redefineFieldMeta(): void
     {
-    } // function redefineFieldMeta
+    }
 
-    /**
-     * Correct field meta: replace emty values to default value
-     *
-     */
-    protected function _correctFieldMeta()
+    protected function _correctFieldMeta(): void
     {
-        foreach ($this->getFieldsMeta() as $sFieldName => $aParameters) {
-            if (!empty($aParameters['validate_rules']) || !empty($aParameters['is_required'])) {
-                if (!isset($aParameters['is_required'])) {
-                    $aParameters['is_required'] = false;
-                    if (isset($aParameters['validate_rules'])) {
-                        foreach ($aParameters['validate_rules'] as $aValidate) {
-                            if (empty($aValidate['not_empty']) && (!isset($aValidate['rule_name']) || $aValidate['rule_name'] != 'is_required')) {
-                                $aParameters['is_required'] = true;
+        foreach ($this->getFieldsMeta() as $fieldName => $parameters) {
+            if (!empty($parameters['validate_rules']) || !empty($parameters['is_required'])) {
+                if (!isset($parameters['is_required'])) {
+                    $parameters['is_required'] = false;
+                    if (isset($parameters['validate_rules'])) {
+                        foreach ($parameters['validate_rules'] as $validate) {
+                            if (empty($validate['not_empty']) && (!isset($validate['rule_name']) || (string)$validate['rule_name'] !== 'is_required')) {
+                                $parameters['is_required'] = true;
                                 break;
                             }
                         }
                     }
                 }
-                if (!isset($aParameters['label'])) {
-                    $aParameters['label'] = $sFieldName;
+                if (!isset($parameters['label'])) {
+                    $parameters['label'] = $fieldName;
                 }
             }
-            if (!isset($aParameters['trim_data'])) {
-                 $aParameters['trim_data'] = isset($aParameters['input_type']) && $aParameters['input_type'] != 'password' ? true : false;
+            if (!isset($parameters['trim_data'])) {
+                 $parameters['trim_data'] = isset($parameters['input_type']) && (string)$parameters['input_type'] !== 'password' ? true : false;
             }
-            if (!isset($aParameters['is_required'])) {
-                    $aParameters['is_required'] = false;
+            if (!isset($parameters['is_required'])) {
+                    $parameters['is_required'] = false;
             }
         }
-    } // function _correctFieldMeta
+    }
 
-    /**
-     * Validate form. You need run (!) this method in your init method
-     *
-     * Returned values:
-     *  - null  - validation wasn't done
-     *  - true  - validation was correct
-     *  - false - validation wasn't correct
-     * @param boolean $bParceEmpty allow parse if form is empty
-     * @param boolean $bParsingCondition (null - parse by Meta-condition, true - always parse, false - don't parse )
-     * @param boolean $bAllowTransfer allow Transfer after submit
-     * @return boolean
-     */
-    protected function _parseForm($bParceEmpty = true, $bParsingCondition = null, $bAllowTransfer = null)
+    protected function _parseForm(mixed $parceEmpty = true, mixed $parsingCondition = null, mixed $allowTransfer = null): bool
     {
-        if ($this->getMeta('auto_init_parts', true) && !$this->bPartsInit) {
+        if ($this->getMeta('auto_init_parts', true) && !$this->partsInit) {
             $this->_initFormParts($this);
         }
-        return $this->getForm()->parseForm($bParceEmpty, $bParsingCondition, $bAllowTransfer);
-    } // function _parseForm
-    /**
-     * Init Form Parts
-     * Method is called in "init" of main part block
-     * @param \fan\core\block\form\parser $oMainFormBlock Main form part block
-     */
-    protected function _initFormParts($oMainFormBlock = NULL)
+        return $this->getForm()->parseForm(
+            (bool)$parceEmpty,
+            is_null($parsingCondition) ? null : (bool)$parsingCondition,
+            is_null($allowTransfer) ? null : (bool)$allowTransfer
+        );
+    }
+    protected function _initFormParts(?\fan\core\block\form\parser $mainFormBlock = null): static
     {
-        $this->bPartsInit = true;
-        $aParts = $this->getFormMeta('form_parts', array());
-        foreach ($aParts as $v) {
-            $oBlock = $this->getTab()->getTabBlock($v, false);
-            if (empty($oBlock)) {
-                trigger_error('Block "' . $v . '" (part of form) is not found', E_USER_WARNING);
-            } elseif (method_exists($oBlock, 'partInit')) {
-                $oBlock->partInit($oMainFormBlock);
-                if (method_exists($oBlock, '_initFormParts') && is_callable(array($oBlock, '_initFormParts'))) {
-                    $oBlock->_initFormParts($oMainFormBlock);
+        $this->partsInit = true;
+        $parts = (array)$this->getFormMeta('form_parts', []);
+        foreach ($parts as $v) {
+            $block = $this->getTab()->getTabBlock($v, false);
+            if (empty($block)) {
+                throw new \RuntimeException('Block "' . (string)$v . '" (part of form) is not found');
+            } elseif (method_exists($block, 'partInit')) {
+                $block->partInit($mainFormBlock);
+                if (method_exists($block, '_initFormParts') && is_callable([$block, '_initFormParts'])) {
+                    $block->_initFormParts($mainFormBlock);
 
                 }
             }
         }
         return $this;
-    } // function _initFormParts
+    }
 
-} // class \fan\core\block\form\parser
-?>
+}

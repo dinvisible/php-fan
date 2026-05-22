@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\admin;
 /**
  * Admin data class for loader block
  *
@@ -20,570 +24,454 @@ abstract class data extends base
      * Form error
      * @var array
      */
-    protected $aErrorMsg = array();
+    protected array $errorMsg = [];
 
     /**
      * Form error
      * @var boolean
      */
-    protected $bIsError = false;
+    protected bool $isError = false;
 
     /**
      * JSON-parameters of admin data
      * @var array
      */
-    protected $aAddParam = array();
+    protected array $addParam = [];
 
     /**
      * JSON-extr data for admin
      * @var array
      */
-    protected $aExtraData = array();
+    protected array $extraData = [];
 
-    /**
-     * Init output block data
-     */
-    public function init()
+    public function init(): void
     {
-        service('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
+        $this->containerService('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
 
-        $aData = $this->getData();
+        $data = $this->getData();
 
 
         // ====== Parse gotten data ======= \\
-        service('error')->setParseDBerror(false);
+        $this->containerService('error')->setParseDBerror(false);
         do {
-            if (isset($aData['edit']) || isset($aData['ins'])) {
-                if (empty($aData['edit'])) {
-                    $aData['edit'] = array();
-                } elseif (empty($aData['ins'])) {
-                    $aData['ins'] = array();
+            if (isset($data['edit']) || isset($data['ins'])) {
+                if (empty($data['edit'])) {
+                    $data['edit'] = [];
+                } elseif (empty($data['ins'])) {
+                    $data['ins'] = [];
                 }
 
-                if (!$this->validateData($aData['edit'], $aData['ins'])) {
-                    $this->bIsError = true;
+                if (!$this->validateData($data['edit'], $data['ins'])) {
+                    $this->isError = true;
                     break;
                 }
 
-                $this->parseData($aData['edit'], $aData['ins']);
-                if ($this->bIsError) {
+                $this->parseData($data['edit'], $data['ins']);
+                if ($this->isError) {
                     break;
                 }
             }
 
-            if (isset($aData['del'])) { // Cancel edit if delete impossible?
-                $this->deleteData($aData['del']);
-                if ($this->bIsError) {
+            if (isset($data['del'])) { // Cancel edit if delete impossible?
+                $this->deleteData($data['del']);
+                if ($this->isError) {
                     break;
                 }
             }
         } while (false);
-        service('error')->setParseDBerror(true);
-        if ($this->bIsError) {
-            $this->setText(implode("\n", $this->aErrorMsg));
+        $this->containerService('error')->setParseDBerror(true);
+        if ($this->isError) {
+            $this->setText(implode("\n", $this->errorMsg));
             return;
         }
 
         // ====== Prepare output data ======= \\
-        $aJson = $this->getMainData($aData);
+        $json = $this->getMainData($data);
 
-        $aJson['data'] = $this->getContentData();
-        $this->setJson($aJson);
+        $json['data'] = $this->getContentData();
+        $this->setJson($json);
 
         $this->setText('ok');
-    } // function init
+    }
 
-    /**
-     * Parse changed/inserted Data
-     */
-    public function validateData(&$aEdit, &$aInsert)
+    public function validateData(array &$edit, array &$insert): bool
     {
         return true;
-    } // function validateData
+    }
 
     /**
-     * Parse changed/inserted Data
-     * @param array $aEdit
-     * @param array $aInsert
-     * @return \fan\core\block\admin\data
+     * Transforms data between supported representations.
      */
-    public function parseData($aEdit, $aInsert)
+    public function parseData(mixed $edit, mixed $insert): ?static
     {
         return $this;
-    } // function parseData
+    }
 
-    /**
-     * Save Entity Data
-     * @param \fan\core\base\model\row $oRow
-     * @param array $aData
-     * @param array $aFields
-     * @param array $aAddFields
-     * @return \fan\core\block\admin\data
-     */
-    public function saveRow($oRow, $aData, $aFields, $aAddFields = array())
+    public function saveRow(\fan\core\base\model\row $row, array $data, array $fields, array $addFields = []): static
     {
-        $aEdtType = $this->getMeta('editableTypes', array());
-        $aData2 = array();
-        foreach ($aFields as $v) {
+        $edtType = $this->getMeta('editableTypes', []);
+        $data2 = [];
+        foreach ($fields as $v) {
             $k = $v['field'];
-            if (@$aEdtType[$v['type']] && array_key_exists($k, $aData)) {
-                $aData2[$k] = $aData[$k];
+            if (!empty($edtType[$v['type']]) && array_key_exists($k, $data)) {
+                $data2[$k] = $data[$k];
             }
         }
-        if (!$oRow->checkIsLoad()) {
-            foreach ($aAddFields as $k) {
-                $aData2[$k] = $aData[$k];
+        if (!$row->checkIsLoad()) {
+            foreach ($addFields as $k) {
+                $data2[$k] = $data[$k];
             }
         }
-        $oRow->setFields($aData2, true);
+        $row->setFields($data2, true);
         return $this;
-    } // function saveRow
+    }
 
-    /**
-     * Parse delete Data
-     * @return \fan\core\block\admin\data
-     */
-    public function deleteData($aDel)
+    public function deleteData(mixed $del): void
     {
-        return $this;
-    } // function deleteData
+    }
 
-    /**
-     * Check DataBase Error
-     * @param \fan\core\base\model\row $oRow
-     * @return boolean
-     */
-    protected function checkDBerror(\fan\core\base\model\row $oRow, $sErrPref = '')
+    protected function checkDBerror(\fan\core\base\model\row $row, string $errPref = ''): bool
     {
-        $oCon = $oRow->getEntity()->getConnection();
-        if ($oCon->isError()) {
-            $sErrMsg = $oCon->getErrorMessage();
-            if (preg_match('/^(?:.+\:)?([^(]+)/', $sErrMsg, $aMatches)) {
-                $sErrMsg = trim($aMatches[1]);
+        $con = $row->getEntity()->getConnection();
+        if ($con->isError()) {
+            $errMsg = (string)$con->getErrorMessage();
+            if (preg_match('/^(?:.+\:)?([^(]+)/', $errMsg, $matches)) {
+                $errMsg = trim($matches[1]);
             }
-            $this->aErrorMsg[] = $sErrPref . $sErrMsg;
-            $this->bIsError = true;
+            $this->errorMsg[] = $errPref . $errMsg;
+            $this->isError = true;
             return false;
         }
         return true;
-    } // function checkDBerror
+    }
 
-    /**
-     * Get Main Data
-     * @param array $aData
-     * @param array $aForce
-     * @return boolean
-     */
-    protected function getMainData($aData, $aForce = array())
+    protected function getMainData(array $data, array $force = []): array
     {
-        $aJson      = array();
-        $aForceMeta = $this->getMeta('force', array());
-        $bIsFirst   = !empty($aData['first']);
+        $json      = [];
+        $forceMeta = $this->getMeta('force', []);
+        $isFirst   = !empty($data['first']);
 
         // Prepare template
-        $bForceTpl = isset($aForce['template']) ? !empty($aForce['template']) : !empty($aForceMeta['template']);
-        if ($bIsFirst || $bForceTpl) {
+        $forceTpl = isset($force['template']) ? !empty($force['template']) : !empty($forceMeta['template']);
+        if ($isFirst || $forceTpl) {
             $this->initTplVar();
             if (!$this->getTemplate()) {
-                $this->setTemplate($this->getMeta('default_tpl'));
+                $this->setTemplate((string)$this->getMeta('default_tpl'));
             }
-            $sHtml = $this->getTemplateCode(array());
-            if ($sHtml) {
-                $aJson['code'] = $sHtml;
+            $html = $this->getTemplateCode([]);
+            if ($html) {
+                $json['code'] = $html;
             }
         }
 
         // Prepare param
-        $bForceAddParam = isset($aForce['add_param']) ? !empty($aForce['add_param']) : !empty($aForceMeta['add_param']);
-        if ($bIsFirst || $bForceAddParam) {
-            $aAddParam = $this->getAddParam();
-            if ($aAddParam) {
-                $aJson['param'] = $aAddParam;
+        $forceAddParam = isset($force['add_param']) ? !empty($force['add_param']) : !empty($forceMeta['add_param']);
+        if ($isFirst || $forceAddParam) {
+            $addParam = $this->getAddParam();
+            if ($addParam) {
+                $json['param'] = $addParam;
             }
         }
 
         // Prepare Extra data
-        $bForceExtraData = isset($aForce['extra_data']) ? !empty($aForce['extra_data']) : !empty($aForceMeta['extra_data']);
-        if ($bIsFirst || $bForceExtraData) {
-            $aExtra = $this->getExtraData();
-            if ($aExtra) {
-                $aJson['extra'] = $aExtra;
+        $forceExtraData = isset($force['extra_data']) ? !empty($force['extra_data']) : !empty($forceMeta['extra_data']);
+        if ($isFirst || $forceExtraData) {
+            $extra = $this->getExtraData();
+            if ($extra) {
+                $json['extra'] = $extra;
             }
         }
 
         // Flag for use Main Page
-        if ($bIsFirst || $this->getMeta('useMainPage')) {
-            $aJson['useMainPage'] = 1;
+        if ($isFirst || $this->getMeta('useMainPage')) {
+            $json['useMainPage'] = 1;
         }
 
-        return $aJson;
-    } // function getMainData
+        return $json;
+    }
 
-    /**
-     * Init Template Vars
-     * @return \fan\core\block\admin\data
-     */
-    public function initTplVar()
+    public function initTplVar(): void
     {
-        return $this;
-    } // function initTplVar
+    }
 
-    /**
-     * Get Additional Parameters
-     * @return array
-     */
-    public function getAddParam()
+    public function getAddParam(): array
     {
-        $aRet    = adduceToArray($this->getMeta('addParam', array()));
-        $sEntity = $this->getMeta('entity', array());
-        if ($sEntity) {
-            $aRet['id_name'] = ge($sEntity)->getDescription()->getPrimeryKey();
+        $ret    = adduceToArray($this->getMeta('addParam', []));
+        $entity = $this->getMeta('entity', []);
+        if ($entity) {
+            $ret['id_name'] = ge((string)$entity)->getDescription()->getPrimeryKey();
         }
-        return array_merge_recursive_alt($aRet, $this->aAddParam);
-    } // function getAddParam
+        return array_merge_recursive_alt($ret, $this->addParam);
+    }
 
-    /**
-     * Get Content ExtraData
-     */
-    public function getExtraData()
+    public function getExtraData(): array
     {
-        $aRet = array();
-        $sTagId = $this->getMeta('tagId');
-        if ($sTagId) {
-            $aRet['tagId'] = 'cont_' . $sTagId;
+        $ret = [];
+        $tagId = $this->getMeta('tagId');
+        if ($tagId) {
+            $ret['tagId'] = 'cont_' . $tagId;
         }
-        return array_merge_recursive_alt($aRet, $this->aExtraData);
-    } // function getExtraData
+        return array_merge_recursive_alt($ret, $this->extraData);
+    }
 
-    /**
-     * Get Condition
-     * @return array
-     */
-    public function getCondition()
+    public function getCondition(): array
     {
-        $aCond = $this->getMeta('condition', array(), true);
-        $aData = $this->getData();
-        if (@$aData['cond']) {
-            $aCond = array_merge_recursive_alt($aCond, $aData['cond']);
+        $cond = $this->getMeta('condition', [], true);
+        $data = $this->getData();
+        if (!empty($data['cond'])) {
+            $cond = array_merge_recursive_alt($cond, $data['cond']);
         }
-        return $aCond;
-    } // function getCondition
+        return $cond;
+    }
 
-    /**
-     * Get Content Data
-     */
-    public function getContentData()
+    public function getContentData(): array
     {
-        return array();
-    } // function getContentData
+        return [];
+    }
 
 
-    /**
-     * Get field label
-     * @param string $sName
-     * @return string
-     */
-    public function getFieldLabel($sName)
+    public function getFieldLabel(mixed $name): mixed
     {
-        return $sName;
-    } // function getFieldLabel
+        return $name;
+    }
 
     // ================================ Validate data ================================ \\
     /**
-     * Do validate data
-     * @param array $aData
-     * @param string $sType
-     * @param number $nId - id
-     * @return aray of error messages for each field
+     * @param int|float|string|null $id Unique identifier used to locate the target item.
      */
-    public function doValidate(&$aData, $sType, $nId = null)
+    public function doValidate(array &$data, string $type, int|float|string|null $id = null): array
     {
-        $sReq = $this->getMeta('validateRequiredMsg');
-        $aErr = array();
-        foreach ($this->getMeta('validation', array()) as $fld => $vld) {
-            if (isset($aData[$fld]) && (!isset($vld['trim_data']) || $vld['trim_data'])) {
-                $aData[$fld] = trim($aData[$fld]);
+        $req = $this->getMeta('validateRequiredMsg');
+        $err = [];
+        foreach ($this->getMeta('validation', []) as $fld => $vld) {
+            if (isset($data[$fld]) && (!isset($vld['trim_data']) || $vld['trim_data'])) {
+                $data[$fld] = trim((string)$data[$fld]);
             }
-            if (@$vld['is_required'] && ($sType == 'ins' ? !@$aData[$fld] : isset($aData[$fld]) && !$aData[$fld])) {
-                $aErr[$fld] = str_replace('{FIELD_LABEL}', $this->getFieldLabel($fld), $sReq);
+            if (!empty($vld['is_required']) && ($type === 'ins' ? empty($data[$fld]) : isset($data[$fld]) && !$data[$fld])) {
+                $err[$fld] = str_replace('{FIELD_LABEL}', $this->getFieldLabel($fld), $req);
                 continue;
             }
-            if(@$vld['validate_rules']) {
+            if (!empty($vld['validate_rules'])) {
                 foreach ($vld['validate_rules'] as $rule) {
-                    $sMethod = 'rule_' . $rule['rule_name'];
-                    if ((isset($aData[$fld]) || $sType == 'ins') && (@$aData[$fld] || @!$rule['not_empty'])) {
-                        if (!isset($aData[$fld])) {
-                            $aData[$fld] = null;
+                    $method = 'rule_' . $rule['rule_name'];
+                    if ((isset($data[$fld]) || $type === 'ins') && (!empty($data[$fld]) || empty($rule['not_empty']))) {
+                        if (!isset($data[$fld])) {
+                            $data[$fld] = null;
                         }
-                        if (!$this->$sMethod($aData[$fld], @$rule['rule_data'], $sType, $nId)) {
-                            $aErr[$fld] = str_replace('{FIELD_LABEL}', $this->getFieldLabel($fld), @$rule['error_msg'] ? $rule['error_msg'] : 'Error');
+                        if (!$this->$method($data[$fld], adduceToArray($rule['rule_data'] ?? []), $type, $id)) {
+                            $err[$fld] = str_replace('{FIELD_LABEL}', $this->getFieldLabel($fld), !empty($rule['error_msg']) ? $rule['error_msg'] : 'Error');
                             continue 2;
                         }
                     }
                 }
             }
         }
-        return $aErr;
-    } // function doValidate
+        return $err;
+    }
 
 
 
     /**
-     * Check up if a value is not empty
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return mixed value
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_is_required($mValue)
+    protected function rule_is_required(mixed $value): bool
     {
-        return $mValue != '';
-    } // function rule_is_required
+        return is_array($value) ? $value !== [] : (string)$value !== '';
+    }
 
     /**
-     * Check up if a value is a integer number
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_is_int($mValue, $aData)
+    protected function rule_is_int(mixed $value, array $data): bool
     {
-        if (!preg_match('/^\-?\d+$/', $mValue)) {
+        if (!preg_match('/^\-?\d+$/', (string)$value)) {
             return false;
         }
-        if (isset($aData['min_value']) && $mValue < $aData['min_value']) {
+        if (isset($data['min_value']) && $value < $data['min_value']) {
             return false;
         }
-        if (isset($aData['max_value']) && $mValue > $aData['max_value']) {
+        if (isset($data['max_value']) && $value > $data['max_value']) {
             return false;
         }
         return true;
-    } // function rule_is_int
+    }
 
     /**
-     * Check up if a value is a real number
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_is_float($mValue, $aData)
+    protected function rule_is_float(mixed $value, array $data): bool
     {
-        $value = str_replace(',', '.', $mValue);
-        if (!is_numeric($mValue)) {
+        $value = str_replace(',', '.', (string)$value);
+        if (!is_numeric($value)) {
             return false;
         }
-        if (isset($aData['min_value']) && $mValue < $aData['min_value'] - 0.000001) {
+        if (isset($data['min_value']) && $value < $data['min_value'] - 0.000001) {
             return false;
         }
-        if (isset($aRule['max_value']) && $mValue > $aData['max_value'] + 0.000001) {
+        if (isset($data['max_value']) && $value > $data['max_value'] + 0.000001) {
             return false;
         }
         return true;
-    } // function rule_is_float
+    }
 
     /**
-     * Check up if a value is a date and is in given interval
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_is_date($mValue, $aData)
+    protected function rule_is_date(mixed $value, array $data): bool
     {
-        $mValue = str_replace(',', '.', $mValue);
+        $value = str_replace(',', '.', (string)$value);
         try {
-            $oDate = service('date', $mValue);
-            /* @var $oDate \fan\core\service\date */
+            $dateService = service('date', $value);
+            /* @var $dateService \fan\core\service\date */
         } catch (\fan\core\exception\base $e) {
             return false;
         }
-        $sDate = $oDate->get('mysql');
-        return (!isset($aData['min_value']) || $sDate >= $aData['min_value']) && (!isset($aData['max_value']) || $sDate <= $aData['max_value']);
-    } // function rule_is_date
+        $date = $dateService->get('mysql');
+        return (!isset($data['min_value']) || $date >= $data['min_value']) && (!isset($data['max_value']) || $date <= $data['max_value']);
+    }
 
     /**
-     * Check up if a value contains e-mail address
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_is_email($mValue, $aData)
+    protected function rule_is_email(mixed $value, array $data): bool
     {
-        if (!preg_match('/^[a-z_0-9!#*=.-]+@([a-z0-9-]+\.)+[a-z]{2,4}$/i', $mValue)) {
+        if (!preg_match('/^[a-z_0-9!#*=.-]+@([a-z0-9-]+\.)+[a-z]{2,4}$/i', (string)$value)) {
             return false;
         }
         return true;
-    } // function rule_is_email
+    }
 
     /**
-     * Check up if a value consists of letters, numbers, _, @, ., - and begging from letter or number
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_is_alphalogin($mValue, $aData)
+    protected function rule_is_alphalogin(mixed $value, array $data): bool
     {
-        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9_@\.-]*$/', $mValue)) {
+        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9_@\.-]*$/', (string)$value)) {
             return false;
         }
         return true;
-    } // function rule_is_alphalogin
+    }
 
     /**
-     * Check up if a value consists of letters, numbers, _, - and begging from letter or number
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_is_alphanumeric($mValue, $aData)
+    protected function rule_is_alphanumeric(mixed $value, array $data): bool
     {
-        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9_-]*$/', $mValue)) {
+        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9_-]*$/', (string)$value)) {
              return false;
         }
         return true;
-    } // function rule_is_alphanumeric
+    }
 
     /**
-     * Check up if a value matchs with the regular expression
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_match_regexp($mValue, $aData)
+    protected function rule_match_regexp(mixed $value, array $data): bool
     {
-        if (!preg_match($aData['regexp'], $mValue)) {
+        if (!preg_match((string)$data['regexp'], (string)$value)) {
             return false;
         }
         return true;
-    } // function rule_match_regexp
+    }
 
     /**
-     * Check up if a value is equal to compare field
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_equal_to($mValue, $aData)
+    protected function rule_equal_to(mixed $value, array $data): bool
     {
-        $mValue2 = null;
-        if (isset($aData['compare_field'])) {
-            $mValue2 = @$this->aFieldValue[$aData['compare_field']];
+        $value2 = null;
+        if (isset($data['compare_field'])) {
+            $value2 = $this->fieldValue[$data['compare_field']] ?? null;
         }
-           if ($mValue != $mValue2) {
+           if ((string)$value !== (string)$value2) {
             return false;
         }
         return true;
-    } // function rule_equal_to
+    }
 
     /**
-     * Check up if a value is not equal to compare field
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_not_equal_to($mValue, $aData)
+    protected function rule_not_equal_to(mixed $value, array $data): bool
     {
-        $mValue2 = null;
-        if (isset($aData['compare_field'])) {
-            $mValue2 = @$this->aFieldValue[$aData['compare_field']];
+        $value2 = null;
+        if (isset($data['compare_field'])) {
+            $value2 = $this->fieldValue[$data['compare_field']] ?? null;
         }
-        if ($mValue == $mValue2) {
+        if ((string)$value === (string)$value2) {
             return false;
         }
         return true;
-    } // function rule_not_equal_to
+    }
 
     /**
-     * Check up if a value is greater then compare field
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_greater_than($mValue, $aData)
+    protected function rule_greater_than(mixed $value, array $data): bool
     {
-        $mValue2 = null;
-        if (isset($aData['compare_field'])) {
-            $mValue2 = @$this->aFieldValue[$aData['compare_field']];
+        $value2 = null;
+        if (isset($data['compare_field'])) {
+            $value2 = $this->fieldValue[$data['compare_field']] ?? null;
         }
-        if (@$aData['data_type']=='DATE' ||  @$aData['data_type']=='DATETIME') {
-            $mValue = dateL2M($mValue);
-            $mValue2 = dateL2M($mValue2);
+        $dataType = (string)($data['data_type'] ?? '');
+        if ($dataType === 'DATE' || $dataType === 'DATETIME') {
+            $value = dateL2M((string)$value);
+            $value2 = dateL2M((string)$value2);
         }
-        if ($mValue <= $mValue2) {
+        if ($value <= $value2) {
             return false;
         }
         return true;
-    } // function rule_greater_than
+    }
 
     /**
-     * Check up if a value is lesser then compare field
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_lesser_than($mValue, $aData)
+    protected function rule_lesser_than(mixed $value, array $data): bool
     {
-        $mValue2 = null;
-        if (isset($aData['compare_field'])) {
-            $mValue2 = @$this->aFieldValue[$aData['compare_field']];
+        $value2 = null;
+        if (isset($data['compare_field'])) {
+            $value2 = $this->fieldValue[$data['compare_field']] ?? null;
         }
-        if (@$aData['data_type']=='DATE' ||  @$aData['data_type']=='DATETIME') {
-            $mValue = dateL2M($mValue);
-            $mValue2 = dateL2M($mValue2);
+        $dataType = (string)($data['data_type'] ?? '');
+        if ($dataType === 'DATE' || $dataType === 'DATETIME') {
+            $value = dateL2M((string)$value);
+            $value2 = dateL2M((string)$value2);
         }
-        if ($mValue >= $mValue2) {
+        if ($value >= $value2) {
             return false;
         }
         return true;
-    } // function rule_lesser_than
+    }
 
     /**
-     * Check up if a value is greater or equal to compare field
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_greater_or_equal_to($mValue, $aData)
+    protected function rule_greater_or_equal_to(mixed $value, array $data): bool
     {
-        $mValue2 = null;
-        if (isset($aData['compare_field'])) {
-            $mValue2 = @$this->aFieldValue[$aData['compare_field']];
+        $value2 = null;
+        if (isset($data['compare_field'])) {
+            $value2 = $this->fieldValue[$data['compare_field']] ?? null;
         }
-        if ($mValue < $mValue2) {
+        if ($value < $value2) {
             return false;
         }
         return true;
-    } // function rule_greater_or_equal_to
+    }
 
     /**
-     * Check up if a value is lesser or equal to compare field
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function rule_lesser_or_equal_to($mValue, $aData)
+    protected function rule_lesser_or_equal_to(mixed $value, array $data): bool
     {
-        $mValue2 = null;
-        if (isset($aData['compare_field'])) {
-            $mValue2 = @$this->aFieldValue[$aData['compare_field']];
+        $value2 = null;
+        if (isset($data['compare_field'])) {
+            $value2 = $this->fieldValue[$data['compare_field']] ?? null;
         }
-        if ($mValue > $mValue2) {
+        if ($value > $value2) {
             return false;
         }
         return true;
-    } // function rule_lesser_or_equal_to
+    }
 
-} // class \fan\core\block\admin\data
-?>
+}

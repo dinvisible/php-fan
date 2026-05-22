@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\common;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\common;
 /**
  * Base class for all kind of dynamic menu, wich formed by data base
  *
@@ -18,89 +22,67 @@
 abstract class html_nav_db extends html_nav
 {
 
-    /**
-     * @var array menu entity objects
-     */
-    private $aNavElements = array();
+    private array $navElements = [];
 
-    /**
-     * @var array menu entity objects
-     */
-    protected $aSrcElements = array();
+    protected array $srcElements = [];
 
-    /**
-     * Get menu from data base
-     * @param string $sGroupKey - group key of meta file
-     * @return array
-     */
-    protected function _getNav($sGroupKey = null)
+    protected function _getNav(mixed $groupKey = null): array
     {
         /*
-        $oRowset = ge('menu_element')->getRowsetByKey('get_menu_list', array(
-            'group_key'        => $sGroupKey ? $sGroupKey : $this->getMeta('group_key'),
+        $rowset = ge('menu_element')->getRowsetByKey('get_menu_list', [
+            'group_key'        => $groupKey ? $groupKey : $this->getMeta('group_key'),
             'id_site_language' => service('language')->getIdSiteLanguage(),
-        ));
+        ]);
          */
-        $oRowset = service('entity')->getMenuElement($sGroupKey);
+        $rowset = $this->containerService('entity')->getMenuElement($groupKey);
 
-        $aRet  = array();
-        $aChld = array();
+        $ret  = [];
+        $chld = [];
 
-        foreach ($oRowset as $e) {
+        foreach ($rowset as $e) {
             $id = $e->getId();
-            $this->aNavElements[$id] = $e;
+            $this->navElements[$id] = $e;
             if (role($e->get___url_role())) {
                 $v = $e->getFields();
-                $this->aSrcElements[$id] = array(
+                $this->srcElements[$id] = [
                     'order_key'     => $v['order_key'],
                     'condition_key' => $v['condition_key'],
-                    'target'        => $v['target'] == 'self' ? null : '_' . $v['target'],
-                    'url_value'     => $this->getMenuURL($v['menu_type'] == 'local' ? $v['__url_value'] : $v['__foreign_url'], $v['menu_type'], $v['__protocol']),
+                    'target'        => (string)$v['target'] === 'self' ? null : '_' . $v['target'],
+                    'url_value'     => $this->getMenuURL((string)((string)$v['menu_type'] === 'local' ? $v['__url_value'] : $v['__foreign_url']), (string)$v['menu_type'], (string)$v['__protocol']),
                     'menu_name'     => $v['__menu_name'],
-                    'current'       => $this->checkCurrentElement($v['menu_key']),
-                    'children'      => array(),
-                );
-                if ($v['id_menu_element_parent'] && $v['id_menu_element_parent'] != $v['id_menu_element']) {
-                    $aChld[$id] =& $this->aSrcElements[$id];
-                    $aChld[$id]['parent'] = $v['id_menu_element_parent'];
+                    'current'       => $this->checkCurrentElement((string)$v['menu_key']),
+                    'children'      => [],
+                ];
+                if ($v['id_menu_element_parent'] && (string)$v['id_menu_element_parent'] !== (string)$v['id_menu_element']) {
+                    $chld[$id] =& $this->srcElements[$id];
+                    $chld[$id]['parent'] = $v['id_menu_element_parent'];
                 } else {
-                    $aRet[$id] =& $this->aSrcElements[$id];
+                    $ret[$id] =& $this->srcElements[$id];
                 }
             }
         }
 
-        foreach ($aChld as $id => &$v) {
-            $this->aSrcElements[$v['parent']]['children'][] =& $v;
+        foreach ($chld as $id => &$v) {
+            $this->srcElements[$v['parent']]['children'][] =& $v;
         }
-        return $aRet;
-    } // function _getNav
+        return $ret;
+    }
 
-    /**
-     * Get navigation name
-     * @param string $sKey - group key of meta file
-     * @return bolean
-     */
-    protected function _getNavName($sKey = 'group_key')
+    protected function _getNavName(string $key = 'group_key'): string|false
     {
         /*
-        $oMenuGroup = se('entity_menu_group')->loadByParam(array('group_key' => $this->getMeta($sKey)));
+        $menuGroup = se('entity_menu_group')->loadByParam(['group_key' => $this->getMeta($key)]);
          */
-        $oMenuGroup = service('entity')->getMenuGroup($sKey);
-        if ($oMenuGroup->checkIsLoad()) {
-            return $oMenuGroup->group_name;
+        $menuGroup = $this->containerService('entity')->getMenuGroup($key);
+        if ($menuGroup->checkIsLoad()) {
+            return $menuGroup->group_name;
         }
         return false;
-    } // function _getNavName
+    }
 
-    /**
-     * Get nav row
-     * @param number $nId menu_element id
-     * @return menu_element
-     */
-    protected function _getNavRow($nId)
+    protected function _getNavRow(int|float $id): ?object
     {
-        return isset($this->aNavElements[$nId]) ? $this->aNavElements[$nId] : null;
-    } // function _getNavRow
+        return isset($this->navElements[$id]) ? $this->navElements[$id] : null;
+    }
 
-} // class \fan\core\block\common\html_nav_db
-?>
+}

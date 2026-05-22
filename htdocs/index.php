@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Main entry point for application requests
  *
@@ -22,4 +25,3 @@ if (!defined('BASE_DIR')) {
 require_once __DIR__ . '/../_core/bootstrap.php';
 // Change the path below to match the way to "bootstrap.ini" from the current directory.
 \bootstrap::run(__DIR__ . '/../_project/conf/bootstrap.ini');
-?>

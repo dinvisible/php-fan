@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\entity\designer;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\entity\designer;
 /**
  * Designer of SQL-request UPDATE
  *
@@ -20,11 +24,11 @@ class update extends \fan\core\service\entity\designer
      * SQL-request parts
      * @var string
      */
-    protected $aQueryParts = array(
+    protected array $queryParts = [
         'insertTable'    => null,
         'setData'        => null,
-        'whereCondition' => array(),
-    );
+        'whereCondition' => [],
+    ];
 
 
     // ======== Static methods ======== \\
@@ -33,24 +37,17 @@ class update extends \fan\core\service\entity\designer
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Set parts of SQL-requests for Update by data and parameters
-     * @param appay $aData
-     * @param mixed $mParam
-     * @return \fan\core\service\entity\designer\update
-     */
-    public function setUpdateByParam($aData, $mParam)
+    public function setUpdateByParam(array $data, mixed $param): static
     {
-        $this->aQueryParts = array(
+        $this->queryParts = [
             'insertTable'    => 'UPDATE `' . $this->getEntity()->getTableName() . '` SET ',
-            'setData'        => $this->_makeSetupPart($aData),
-            'whereCondition' => $this->makeWhere($mParam, false),
-        );
-        $this->aSrcParam = array_merge($aData, $mParam);
+            'setData'        => $this->_makeSetupPart($data),
+            'whereCondition' => $this->makeWhere($param, false),
+        ];
+        $this->srcParam = is_array($param) ? array_merge($data, $param) : $data;
         return $this;
-    } // function setUpdateByParam
+    }
 
     // ======== Private/Protected methods ======== \\
 
-} // class \fan\core\service\entity\designer\update
-?>
+}

@@ -1,8 +1,11 @@
 <?php
+
+declare(strict_types=1);
+
 /*
  * Short messages array for language "ua"
  */
-return array (
+return [
   'BUTTON_SEND_EMAIL' => 'Надіслати email',
   'BUTTON_SUBMIT' => 'Відправити',
   'BUTTON_UPLOAD' => 'Завантажити',
@@ -20,5 +23,4 @@ return array (
   'MENU_NEWS' => 'Новини',
   'NOTE_FIELDS_MARKED_AS_REQUIRED_FOR_FILL' => 'Поля, позначені як "{b} * {/ b}", обов\'язкові для заповнення.',
   'NOTE_UPLOAD_FILE_LIMIT' => 'Розмір файлів, що не повинен перевищувати {video-size} Kb.',
-);
-?>
+];

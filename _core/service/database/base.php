@@ -1,4 +1,17 @@
-<?php namespace fan\core\service\database;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\database;
+if (!defined('MYSQL_ASSOC')) {
+    define('MYSQL_ASSOC', defined('MYSQLI_ASSOC') ? MYSQLI_ASSOC : 1);
+}
+if (!defined('MYSQL_NUM')) {
+    define('MYSQL_NUM', defined('MYSQLI_NUM') ? MYSQLI_NUM : 2);
+}
+if (!defined('MYSQL_BOTH')) {
+    define('MYSQL_BOTH', defined('MYSQLI_BOTH') ? MYSQLI_BOTH : 3);
+}
 /**
  * Description of base
  *
@@ -20,122 +33,73 @@ abstract class base
      * Facade of service
      * @var fan\core\base\service
      */
-    protected $oFacade = null;
+    protected ?object $facade = null;
 
-    /**
-     * @var integer Result Types
-     */
-    protected $iResultType = MYSQL_ASSOC;
+    protected int $resultType = MYSQL_ASSOC;
 
     /**
      * Connection Parameters
      * @var string
      */
-    protected $aParam = null;
+    protected ?array $param = null;
 
-    /**
-     * @var string Error message
-     */
-    protected $aErrorData = null;
+    protected ?array $errorData = null;
 
-    /**
-     * Constructor of Database engine
-     * @param \fan\core\base\service $oFacade
-     * @param array $aParam
-     */
-    public function __construct(\fan\core\service\database $oFacade, array $aParam)
+    public function __construct(\fan\core\service\database $facade, array $param)
     {
-        $this->oFacade = $oFacade;
-        $this->aParam  = $aParam;
+        $this->facade = $facade;
+        $this->param  = $param;
         $this->setResultTypes();
-    } // function __construct
+    }
 
-    /**
-     * Set Facade
-     * @param \fan\core\base\service $oFacade
-     * @return \fan\core\service\database\base
-     */
-    public function setFacade(\fan\core\base\service $oFacade)
+    public function setFacade(\fan\core\base\service $facade): static
     {
-        if (empty($this->oFacade)) {
-            $this->oFacade = $oFacade;
+        if (empty($this->facade)) {
+            $this->facade = $facade;
         }
         return $this;
-    } // function setFacade
+    }
 
-    /**
-     * Set Result Types for methods: execute, getRow, getAll, getAllLimit
-     * @param integer $iResultType
-     * @return \fan\core\service\database
-     */
-    public function setResultTypes($iResultType = MYSQL_ASSOC)
+    public function setResultTypes(int|string $resultType = MYSQL_ASSOC): static
     {
-        if ($this->_isValidType($iResultType)) {
-            $this->iResultType = $iResultType;
+        if ($this->_isValidType($resultType)) {
+            $this->resultType = (int)$resultType;
         } // ToDo: Maybe exception there if point incorrect type
         return $this;
-    } // function setResultTypes
+    }
 
-    /**
-     * Reconnect to Db
-     * @param array $aParam
-     * @param boolean $bMakeException Make Exception if connection impossible
-     * @return boolean
-     */
-    abstract public function reconnect($aParam, $bMakeException = true);
+    abstract public function reconnect(array $param, bool $makeException = true): mixed;
 
-    /**
-     * Return last error data
-     * @return array Error data
-     */
-    public function getErrorData()
+    public function getErrorData(): ?array
     {
-        return $this->aErrorData;
-    } // function getErrorData
+        return $this->errorData;
+    }
 
-    /**
-     * Reset error message
-     * @return \fan\core\service\database\mysql
-     */
-    public function resetError()
+    public function resetError(): static
     {
-        $this->aErrorData = null;
+        $this->errorData = null;
         return $this;
-    } // function resetError
+    }
 
-    /**
-     * Validate
-     * @param string $iResultType
-     * @return boolean
-     */
-    protected function _isValidType($iResultType)
+    protected function _isValidType(int|string $resultType): bool
     {
-        $aValidTypes = array(
+        $validTypes = [
             MYSQL_ASSOC,
             MYSQL_NUM,
             MYSQL_BOTH
-        );
-        return in_array($iResultType, $aValidTypes);
-    } // function _isValidType
+        ];
+        return in_array((int)$resultType, $validTypes, true);
+    }
 
-    /**
-     * Fix Error
-     * @param numeric $nOperCode
-     * @param string  $sOperMessage
-     * @param numeric $nErrorCode
-     * @param string  $sErrorMessage
-     * @param boolean $bMakeException
-     */
-    protected function _fixError($nOperCode, $sOperMessage, $nErrorCode, $sErrorMessage, $bMakeException = false)
+    protected function _fixError(int|float $operCode, string $operMessage, int|float $errorCode, string $errorMessage, bool $makeException = false): void
     {
-        $this->aErrorData = array(
-            'oper_code' => $nOperCode,
-            'oper_msg'  => $sOperMessage,
-            'err_code'  => $nErrorCode,
-            'err_msg'   => iconv('','UTF-8', $sErrorMessage),
-            'sql'       => $this->sParsedSql,
-        );
-        $this->oFacade->fixError($this, $bMakeException);
-    } // function _fixError
-} // class \fan\core\service\database\base
-?>
+        $this->errorData = [
+            'oper_code' => $operCode,
+            'oper_msg'  => $operMessage,
+            'err_code'  => $errorCode,
+            'err_msg'   => iconv('', 'UTF-8', $errorMessage),
+            'sql'       => $this->parsedSql,
+        ];
+        $this->facade->fixError($this, $makeException);
+    }
+}

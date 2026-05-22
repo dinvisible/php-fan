@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\common;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\common;
 /**
  * Pager base class
  *
@@ -20,104 +24,81 @@ class html_pager extends \fan\core\block\base
      * Name of block
      * @var \fan\core\service\pager
      */
-    protected $oPager = '';
+    protected mixed $pager = '';
 
-    /**
-     * Init pager
-     */
-    public function init()
+    public function init(): void
     {
-    } // function init
+    }
 
 
-    /**
-     * Get page url
-     * @return string
-     */
-    public function getPageUri($iPage)
+    public function getPageUri(int|string $page): string
     {
-        return $this->oPager->getPageUri($iPage);
-    } // function getPageUri
+        return $this->pager->getPageUri($page);
+    }
 
-    /**
-     *
-     * @return string
-     */
-    public function getEmbeddedForm()
+    public function getEmbeddedForm(): string
     {
         return '';
-    } // function getEmbeddedForm
+    }
 
-    /**
-     * Get pager code [usualy for additional pager(s)]
-     * @param string $sType - type of pager template
-     * @return string HTML code
-     */
-    public function _getPageGroup($iPageQtt, $iCurPage)
+    public function _getPageGroup(int|float|string $pageQtt, int|float|string $curPage): array
     {
-        $aQttLimit = $this->getMeta('qttLimit', array('startEnd' => 2, 'middle' => 5), true);
-        $iMidlHalf = floor($aQttLimit['middle'] / 2);
-        $iStEnd    = $aQttLimit['startEnd'];
-        if ($iPageQtt <= $iStEnd * 2 + $aQttLimit['middle']) {
-            $aPages = array(
-               range(1, $iPageQtt),
-           );
-        } elseif ($iCurPage <= $iStEnd + $iMidlHalf + 1) {
-            $aPages = array(
-                range(1, $iCurPage + $iMidlHalf),
-                range($iPageQtt - $iStEnd + 1, $iPageQtt)
-            );
-        } elseif ($iPageQtt - $iCurPage <= $iStEnd + $iMidlHalf) {
-            $aPages = array(
-                range(1, $iStEnd),
-                range($iCurPage - $iMidlHalf, $iPageQtt)
-            );
+        $pageQtt = (int)$pageQtt;
+        $curPage = (int)$curPage;
+        $qttLimit = (array)$this->getMeta('qttLimit', ['startEnd' => 2, 'middle' => 5], true);
+        $midlHalf = floor($qttLimit['middle'] / 2);
+        $stEnd    = (int)$qttLimit['startEnd'];
+        if ($pageQtt <= $stEnd * 2 + $qttLimit['middle']) {
+            $pages = [
+               range(1, $pageQtt),
+           ];
+        } elseif ($curPage <= $stEnd + $midlHalf + 1) {
+            $pages = [
+                range(1, $curPage + $midlHalf),
+                range($pageQtt - $stEnd + 1, $pageQtt)
+            ];
+        } elseif ($pageQtt - $curPage <= $stEnd + $midlHalf) {
+            $pages = [
+                range(1, $stEnd),
+                range($curPage - $midlHalf, $pageQtt)
+            ];
         } else {
-            $aPages = array(
-                range(1, $iStEnd),
-                range($iCurPage - $iMidlHalf, $iCurPage + $iMidlHalf),
-                range($iPageQtt - $iStEnd + 1, $iPageQtt)
-            );
+            $pages = [
+                range(1, $stEnd),
+                range($curPage - $midlHalf, $curPage + $midlHalf),
+                range($pageQtt - $stEnd + 1, $pageQtt)
+            ];
         }
-        $iStart = $iCurPage - $iMidlHalf;
-        $iEnd = $iCurPage + $iMidlHalf;
+        $start = $curPage - $midlHalf;
+        $end = $curPage + $midlHalf;
 
-        return array(
-            'aPagesNL' => range(
-                $iStart <= 0 ? 1 : $iStart,
-                $iEnd >= $iPageQtt ? $iPageQtt : $iEnd
+        return [
+            'pagesNL' => range(
+                $start <= 0 ? 1 : $start,
+                $end >= $pageQtt ? $pageQtt : $end
             ),
-            'aPages'   => $aPages,
-        );
-    } // function getPagerCode
+            'pages'   => $pages,
+        ];
+    }
 
-    /**
-     * Method for redefine in child class
-     * Method if run after construct operation
-     */
-    protected function _postCreate()
+    protected function _postCreate(): void
     {
-        $this->oPager = service('pager', $this->getContainer());
+        $this->pager = service('pager', $this->getContainer());
         // ToDo: Define quntifire there
-    } // function _postCreate
+    }
 
-    /**
-     * Method for redefine in child class
-     * Method if run before output-view operation
-     */
-    protected function _preOutput()
+    protected function _preOutput(): void
     {
-        $iPageQtt   = $this->oPager->getPageQtt();
-        $iCurPage   = $this->oPager->getPageNum();
-        $aPageGroup = $this->_getPageGroup($iPageQtt, $iCurPage);
+        $pageQtt   = $this->pager->getPageQtt();
+        $curPage   = $this->pager->getPageNum();
+        $pageGroup = $this->_getPageGroup($pageQtt, $curPage);
 
-        $this->view->iPageQtt      = $iPageQtt;
-        $this->view->iCurrentPage  = $iCurPage;
-        $this->view->aPages        = $aPageGroup['aPages'];
-        $this->view->aPagesNL      = $aPageGroup['aPagesNL'];
-        $this->view->showIfOnePage = $this->getMeta(array('quantifier', 'allow')) ? true : false;
+        $this->view->pageQtt      = $pageQtt;
+        $this->view->currentPage  = $curPage;
+        $this->view->pages        = $pageGroup['pages'];
+        $this->view->pagesNL      = $pageGroup['pagesNL'];
+        $this->view->showIfOnePage = $this->getMeta(['quantifier', 'allow']) ? true : false;
         $this->view->tplType       = $this->getMeta('tplType', 'references');
-    } // function _preOutput
+    }
 
-} // class \fan\core\block\common\html_pager
-?>
+}

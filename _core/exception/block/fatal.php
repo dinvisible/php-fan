@@ -1,4 +1,8 @@
-<?php namespace fan\core\exception\block;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\exception\block;
 /**
  * Exception a block fatal error
  *
@@ -16,32 +20,19 @@
  */
 class fatal extends local
 {
-    /**
-     * Exception's constructor
-     * @param \fan\core\block\base $oBlock Object - instance of block
-     * @param string $sLogErrMsg Log error message
-     * @param numeric $nCode Error Code
-     * @param \Exception $oPrevious Previous Exception
-     */
-    public function __construct(\fan\core\block\base $oBlock, $sLogErrMsg, $nCode = E_USER_ERROR, $oPrevious = null)
+    public function __construct(\fan\core\block\base $block, string $logErrMsg, int $code = E_USER_ERROR, ?\Throwable $previous = null)
     {
         if (!headers_sent()) {
             header('HTTP/1.1 500 Internal Server Error');
         }
 
-        parent::__construct($oBlock, $sLogErrMsg, $nCode, $oPrevious);
+        parent::__construct($block, $logErrMsg, $code, $previous);
 
-        $this->_logByService($sLogErrMsg, 'Block\'s exception (CLASS: ' . get_class($oBlock) . ').');
-    } // function __construct
+        $this->_logByService($logErrMsg, 'Block\'s exception (CLASS: ' . get_class($block) . ').');
+    }
 
-    /**
-     * Get operation for Db (rollback) when exception occured
-     * @param string $sDbOper
-     * @return null|string
-     */
-    protected function _defineDbOper($sDbOper = 'rollback')
+    protected function _defineDbOper(?string $dbOper = 'rollback'): ?string
     {
-        return parent::_defineDbOper($sDbOper);
-    } // function _defineDbOper
-} // class \fan\core\exception\block\fatal
-?>
+        return parent::_defineDbOper($dbOper);
+    }
+}

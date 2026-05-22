@@ -1,4 +1,8 @@
-<?php namespace fan\core\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service;
 /**
  * Cron-timer manager service
  *
@@ -19,202 +23,156 @@ class timer extends \fan\core\base\service\single
     /**
      * Limit jointly runned program (default)
      */
-    const JOINTLY_LIMIT_DEFAULT = 5;
+    public const JOINTLY_LIMIT_DEFAULT = 5;
 
     /**
      * Max count jointly runned program
      */
-    const JOINTLY_LIMIT_MAX = 32;
+    public const JOINTLY_LIMIT_MAX = 32;
 
     /**
      * @var sting EntityName
      */
-    protected $sEttName;
+    protected ?string $ettName = null;
     /**
      * @var sting Base Path to timer classes
      */
-    protected $sBasePath;
+    protected ?string $basePath = null;
     /**
      * @var sting Base NameSpace to timer classes
      */
-    protected $sBaseNS;
+    protected ?string $baseNS = null;
 
-    /**
-     * Service's constructor
-     */
     protected function __construct()
     {
         parent::__construct();
-        $this->sEttName  = $this->getConfig('ENTITY', 'timer_program');
-        $this->sBasePath = \bootstrap::parsePath($this->getConfig('TIMER_DIR', '{PROJECT}/cli/timer/'));
-        $this->sBaseNS   = $this->getConfig('BASE_NS', '\fan\project\cli\timer');
-    } // function __construct
+        $this->ettName  = (string)$this->getConfig('ENTITY', 'timer_program');
+        $this->basePath = \bootstrap::parsePath((string)$this->getConfig('TIMER_DIR', '{PROJECT}/cli/timer/'));
+        $this->baseNS   = (string)$this->getConfig('BASE_NS', '\fan\project\cli\timer');
+    }
 
-    /**
-     * Charge new Program for run
-     * @param mixed $mStartTime - date (string) or time shift from current (integer in sec)
-     * @param string $sClassName
-     * @param string $sMethodName
-     * @param array $aParam
-     * @param number $nPeriod - period of run this program
-     * @param number $nOvercall - overcall limit ("-1" - no limits, "0" - disable any overcall, ">0" - exactly limit)
-     * @param boolean $bIsShell - use shell fo run program
-     * @return string - Id of Process
-     */
-    public function chargeProgram($mStartTime, $sClassName, $sMethodName, $aParam, $nPeriod = 0, $nOvercall = null, $bIsShell = true)
+    public function chargeProgram(mixed $startTime, string $className, string $methodName, array $param, int|float $period = 0, int|float|null $overcall = null, bool $isShell = true): mixed
     {
-        $sStartTime = is_numeric($mStartTime) ? service('date', array(date('Y-m-d H:i:s'), 'mysql'))->shiftDate($mStartTime) : $mStartTime;
-        if (!$sStartTime) {
+        $startTime = is_numeric($startTime) ? service('date', [date('Y-m-d H:i:s'), 'mysql'])->shiftDate($startTime) : $startTime;
+        if (!$startTime) {
             return null;
         }
-        $oRow = gr($this->sEttName);
-        $oRow->setFields(array(
-            'start_time'     => $sStartTime,
-            'class_name'     => $sClassName,
-            'method_name'    => $sMethodName,
-            'parameters'     => $aParam,
-            'period'         => $nPeriod,
-            'overcall_limit' => is_null($nOvercall) ? ($nPeriod > 0 ? 0 : -1) : $nOvercall,
+        $row = gr($this->ettName);
+        $row->setFields([
+            'start_time'     => $startTime,
+            'class_name'     => $className,
+            'method_name'    => $methodName,
+            'parameters'     => $param,
+            'period'         => $period,
+            'overcall_limit' => is_null($overcall) ? ($period > 0 ? 0 : -1) : $overcall,
             'overcall_qtt'   => 0,
             'is_active'      => 0,
             'last_start'     => null,
-        ), true);
+        ], true);
 
-        if ($bIsShell && $this->getConfig('ENABLE_EXEC') && $this->getConfig('IS_AT_COMMAND')) {
+        if ($isShell && $this->getConfig('ENABLE_EXEC') && $this->getConfig('IS_AT_COMMAND')) {
             // Emulate work of Crontab-line by "at"-command in Windows
-            $sCommand = $this->_getCommandLine('CRON_FILE') . $oRow->getId();
+            $command = $this->_getCommandLine('CRON_FILE') . $row->getId();
 
-            $aDate = service('date', array($oRow->get_start_time(), 'mysql'))->getDateAsArray();
-            $aDate[4] += ($aDate[5] > 55 ? 2 : 1);
-            if ($aDate[4] > 59) {
-                $aDate[4] -= 60;
-                $aDate[3]++;
-                if ($aDate[3] > 23) {
-                    $aDate[3] -= 24;
-                    $aDate[2]++;
+            $date = service('date', [$row->get_start_time(), 'mysql'])->getDateAsArray();
+            $date[4] += ($date[5] > 55 ? 2 : 1);
+            if ($date[4] > 59) {
+                $date[4] -= 60;
+                $date[3]++;
+                if ($date[3] > 23) {
+                    $date[3] -= 24;
+                    $date[2]++;
                 }
             }
 
-            $sCommand = 'at ' . $aDate[3] . ':' . $aDate[4] . ($aDate[2] != date('d') ? ' /next:' . $aDate[2] : '') . ' ' . $sCommand;
-            $this->execBackBin($sCommand);
+            $command = 'at ' . $date[3] . ':' . $date[4] . ((string)$date[2] !== date('d') ? ' /next:' . $date[2] : '') . ' ' . $command;
+            $this->execBackBin($command);
         }
 
-        return $oRow->getId();
-    } // function chargeProgram
+        return $row->getId();
+    }
 
-    /**
-     * Modify existing Program
-     * @param string $sClassName
-     * @param string $sMethodName
-     * @param array  $aParam
-     * @param number $nPeriod - period of run this program
-     * @param number $nOvercall - allowed overcall quantity
-     * @return string - Id of Process
-     */
-    public function modifyChargedProgram($sClassName, $sMethodName, $aParam = null, $nPeriod = null, $nOvercall = null)
+    public function modifyChargedProgram(string $className, string $methodName, ?array $param = null, int|float|null $period = null, int|float|null $overcall = null): mixed
     {
-        $oRow = ge($this->sEttName)->getRowByParam(array(
-            'class_name'  => $sClassName,
-            'method_name' => $sMethodName,
-        ));
+        $row = ge($this->ettName)->getRowByParam([
+            'class_name'  => $className,
+            'method_name' => $methodName,
+        ]);
 
-        if ($oRow->checkIsLoad()) {
-            $this->_modifyProgram($oRow, $aParam, $nPeriod, $nOvercall);
-            return $oRow->getId();
+        if ($row->checkIsLoad()) {
+            $this->_modifyProgram($row, $param, $period, $overcall);
+            return $row->getId();
         }
-        return $this->chargeProgram(0, $sClassName, $sMethodName, $aParam, is_null($nPeriod) ? 0 : $nPeriod, $nOvercall);
-    } // function modifyChargedProgram
+        return $this->chargeProgram(0, $className, $methodName, $param ?? [], is_null($period) ? 0 : $period, $overcall);
+    }
 
-    /**
-     * Modify existing Program by process ID
-     * @param string $sPID
-     * @param array  $aParam
-     * @param number $nPeriod - period of run this program
-     * @param number $nOvercall - allowed overcall quantity
-     * @return string - Id of Process
-     */
-    public function modifyChargedProgramByPID($sPID, $aParam = null, $nPeriod = null, $nOvercall = null)
+    public function modifyChargedProgramByPID(string $pid, ?array $param = null, int|float|null $period = null, int|float|null $overcall = null): ?string
     {
-        $oRow = gr($this->sEttName, $sPID);
-        if ($oRow->checkIsLoad()) {
-            $this->_modifyProgram($oRow, $aParam, $nPeriod, $nOvercall);
-            return $sPID;
+        $row = gr($this->ettName, $pid);
+        if ($row->checkIsLoad()) {
+            $this->_modifyProgram($row, $param, $period, $overcall);
+            return $pid;
         }
         return null;
 
-    } // function modifyChargedProgramByPID
+    }
 
-    /**
-     * run Timer Program
-     * @param string $sPID
-     */
-    public function runCronProgram($sPID = null)
+    public function runCronProgram(?string $pid = null): bool
     {
-        if ($sPID) {
-            $oRow = gr($this->sEttName, $sPID);
-            if ($oRow->checkIsLoad()) {
-                $this->_runProgram($oRow);
+        if ($pid) {
+            $row = gr($this->ettName, $pid);
+            if ($row->checkIsLoad()) {
+                $this->_runProgram($row);
                 return true;
             }
             return false;
         } else {
-            $oEtt = ge($this->sEttName);
+            $ett = ge($this->ettName);
             if ($this->getConfig('ENABLE_EXEC')) {
-                $oRowset = $oEtt->getRowsetByParam('start_time <= \'' . date('Y-m-d H:i:s') . '\'', -1, -1, 'ORDER BY `last_start`');
-                $nJointlyLimit = $this->getConfig('JOINTLY_LIMIT', self::JOINTLY_LIMIT_DEFAULT);
-                if ($nJointlyLimit > self::JOINTLY_LIMIT_MAX) {
-                    $nJointlyLimit = self::JOINTLY_LIMIT_MAX;
+                $rowset = $ett->getRowsetByParam('start_time <= \'' . date('Y-m-d H:i:s') . '\'', -1, -1, 'ORDER BY `last_start`');
+                $jointlyLimit = $this->getConfig('JOINTLY_LIMIT', self::JOINTLY_LIMIT_DEFAULT);
+                if ($jointlyLimit > self::JOINTLY_LIMIT_MAX) {
+                    $jointlyLimit = self::JOINTLY_LIMIT_MAX;
                 }
-                $nIteration = 0;
-                foreach ($oRowset as $e) {
+                $iteration = 0;
+                foreach ($rowset as $e) {
                     $this->_runBackground($e->getId());
-                    $nIteration++;
-                    if ($nIteration >= $nJointlyLimit) {
+                    $iteration++;
+                    if ($iteration >= $jointlyLimit) {
                         break;
                     }
                 }
             } else {
-                $oRowset = $oEtt->getRowsetByParam('start_time <= \'' . date('Y-m-d H:i:s') . '\'', 1, -1, 'ORDER BY IF(`period`=0, IF(`is_active`=0, 0, 3), IF(`is_active`=0, 1, 2)), `last_start`');
-                if (count($oRowset) > 0) {
-                    $this->_runProgram($oRowset[0]);
+                $rowset = $ett->getRowsetByParam('start_time <= \'' . date('Y-m-d H:i:s') . '\'', 1, -1, 'ORDER BY IF(`period`=0, IF(`is_active`=0, 0, 3), IF(`is_active`=0, 1, 2)), `last_start`');
+                if (count($rowset) > 0) {
+                    $this->_runProgram($rowset[0]);
                 }
             }
         }
         return true;
-    } // function runCronProgram
-    /**
-     * Run php program in background
-     * @param string $sClassName
-     * @param string $sMethodName
-     * @param array  $aParam
-     * @param number $nOvercall - allowed overcall quantity
-     */
-    public function execBackPhp($sClassName, $sMethodName, $aParam, $nOvercall = -1)
+    }
+    public function execBackPhp(string $className, string $methodName, array $param, int|float $overcall = -1): mixed
     {
-        $bIsExec = $this->getConfig('ENABLE_EXEC');
+        $isExec = $this->getConfig('ENABLE_EXEC');
          // If process is started by PID shift time for many hour ahed so disable casual run by CRON
-        $sPID = $this->chargeProgram($bIsExec ? 10000 : 0, $sClassName, $sMethodName, $aParam, 0, $nOvercall, false);
-        if ($bIsExec) {
-            ge($this->sEttName)->getConnection()->commit(); // ToDo: rebuild it
-            $this->_runBackground($sPID);
+        $pid = $this->chargeProgram($isExec ? 10000 : 0, $className, $methodName, $param, 0, $overcall, false);
+        if ($isExec) {
+            ge($this->ettName)->getConnection()->commit(); // ToDo: rebuild it
+            $this->_runBackground((string)$pid);
         }
-        return $sPID;
+        return $pid;
     }
 
-    /**
-     * Exec binary program in background
-     * @param string $sCmd
-     */
-    public function execBackBin($sCmd)
+    public function execBackBin(string $cmd): bool
     {
         if ($this->getConfig('ENABLE_EXEC')) {
-            if (substr(php_uname(), 0, 7) == 'Windows'){ // || !function_exists('exec')
+            if (substr(php_uname(), 0, 7) === 'Windows'){ // || !function_exists('exec')
                 if (function_exists('popen') && function_exists('pclose')) {
-                    pclose(popen('start /B ' . $sCmd, 'r'));
+                    pclose(popen('start /B ' . $cmd, 'r'));
                     return true;
                 }
             } elseif (function_exists('exec')) {
-                exec($sCmd . ' > /dev/null &');
+                exec($cmd . ' > /dev/null &');
                 return true;
             }
         }
@@ -223,140 +181,110 @@ class timer extends \fan\core\base\service\single
 
     // =========================================================== \\
 
-    /**
-     * Run One Timer Program
-     * @param \fan\model\timer_program\row $oTimerRow
-     * @return \fan\core\service\timer
-     */
-    protected function _runProgram($oTimerRow)
+    protected function _runProgram(\fan\model\timer_program\row $timerRow): static
     {
-        $oError = service('error');
-        /* @var $oError \fan\core\service\error */
-        $sClassName = $oTimerRow->get_class_name();
+        $error = $this->containerService('error');
+        /* @var $error \fan\core\service\error */
+        $className = $timerRow->get_class_name();
 
         // Check overcall before run Timer-class
-        $nPeriod = $oTimerRow->get_period();
-        if ($oTimerRow->get_is_active()) {
-            $nQttLimit = $oTimerRow->get_overcall_limit();
-            if ($nQttLimit < 0 && !$nPeriod) {
+        $period = $timerRow->get_period();
+        if ($timerRow->get_is_active()) {
+            $qttLimit = $timerRow->get_overcall_limit();
+            if ($qttLimit < 0 && !$period) {
                 return $this;
             }
-            if ($nQttLimit > -1) {
-                $nQtt = $oTimerRow->get_overcall_qtt() + 1;
-                service('log')->logMessage('overcall', 'Quantity of owercall is ' . $nQtt . ($nQtt > $nQttLimit ? ".\nIt is critical quantity (limit = " . $nQttLimit . ').' : '.'), 'Timer program overcall', $sClassName);
-                if ($nQtt > $nQttLimit) {
-                    $oError->makeErrorEmail('overcall', 'Timer program overcall', 'Quantity of owercall (' . $nQtt . ") is more limit.\n\n" . $sClassName);
-                    if (!$nPeriod) {
+            if ($qttLimit > -1) {
+                $qtt = $timerRow->get_overcall_qtt() + 1;
+                service('log')->logMessage('overcall', 'Quantity of owercall is ' . $qtt . ($qtt > $qttLimit ? ".\nIt is critical quantity (limit = " . $qttLimit . ').' : '.'), 'Timer program overcall', $className);
+                if ($qtt > $qttLimit) {
+                    $error->makeErrorEmail('overcall', 'Timer program overcall', 'Quantity of owercall (' . $qtt . ") is more limit.\n\n" . $className);
+                    if (!$period) {
                         return $this; // Return after one-call procedure
                     }
                 } else {
-                    $oTimerRow->set_overcall_qtt($nQtt);
-                    $oTimerRow->save();
-                    $oTimerRow->getEntity()->getConnection()->commit();
+                    $timerRow->set_overcall_qtt($qtt);
+                    $timerRow->save();
+                    $timerRow->getEntity()->getConnection()->commit();
                     return $this; // Return after allowed overcall
                 }
             }
         }
 
         // Prepare time-parameters before run Timer-class
-        $oTimerRow->setFields(array(
+        $timerRow->setFields([
             'overcall_qtt' => 0,
             'is_active'    => 1,
             'last_start'   => date('Y-m-d H:i:s'),
-        ));
-        $oPrevDate = service('date', array($oTimerRow->get_start_time(), 'mysql'));
-        if ($nPeriod > 0) {
-            $nDifference = $oPrevDate->getDifference(date('Y-m-d H:i:s'));
-            $sStartTime  = $oPrevDate->shiftDate($nPeriod * ceil($nDifference / $nPeriod));
-            if ($sStartTime) {
-                $oTimerRow->set_start_time($sStartTime);
+        ]);
+        $prevDate = service('date', [$timerRow->get_start_time(), 'mysql']);
+        if ($period > 0) {
+            $difference = $prevDate->getDifference(date('Y-m-d H:i:s'));
+            $startTime  = $prevDate->shiftDate($period * ceil($difference / $period));
+            if ($startTime) {
+                $timerRow->set_start_time($startTime);
             }
         }
-        $oTimerRow->save();
-        $oTimerRow->getEntity()->getConnection()->commit();
+        $timerRow->save();
+        $timerRow->getEntity()->getConnection()->commit();
 
-        // Check Timer-class
-        $sPath = $this->sBasePath . $sClassName . '.php';
-        if (!file_exists($sPath)) {
-            $oError->logErrorMessage('File "'. $sPath . '" for timer doesn\'t exists.', 'Error run timer proggamm');
+        $className = '\\' . trim((string)$this->baseNS, '\\') . '\\' . (string)$className;
+        if (!class_exists($className)) {
+            $error->logErrorMessage('Class "'. $className . '" for timer doesn\'t exists.', 'Error run timer proggamm');
             return $this;
         }
-        require_once($sPath);
-        $sClassName = '\\' . trim($this->sBaseNS, '\\') . '\\' . $sClassName;
-        if (!class_exists($sClassName, false)) {
-            $oError->logErrorMessage('Class "'. $sClassName . ' in the file "' . $sPath . '" for timer doesn\'t exists.', 'Error run timer proggamm');
-            return $this;
-        }
-        $oObj = new $sClassName();
-        if (!$oObj instanceof \fan\core\base\timer_program) {
-            $oError->logErrorMessage('Class "'. $sClassName . ' isn\'t instance of \fan\core\base\timer_program.', 'Error run timer proggamm');
+        $obj = new $className();
+        if (!$obj instanceof \fan\core\base\timer_program) {
+            $error->logErrorMessage('Class "'. $className . ' isn\'t instance of \fan\core\base\timer_program.', 'Error run timer proggamm');
             return $this;
         }
 
         // Run Timer-class
-        $oObj->setTimerRow($oTimerRow);
-        call_user_func_array(array($oObj, $oTimerRow->get_method_name()), $oTimerRow->get_parameters());
+        $obj->setTimerRow($timerRow);
+        call_user_func_array([$obj, (string)$timerRow->get_method_name()], (array)$timerRow->get_parameters());
 
         // Fix result of Timer-class
-        $nPeriod2 = $oObj->getPeriod();
-        if ($nPeriod2 > 0) {
-            $nDifference = $oPrevDate->getDifference(date('Y-m-d H:i:s'));
-            $sStartTime  = $oPrevDate->shiftDate($nPeriod2 * ceil($nDifference / $nPeriod2));
-            if ($sStartTime) {
-                $oTimerRow->set_start_time($sStartTime);
+        $period2 = $obj->getPeriod();
+        if ($period2 > 0) {
+            $difference = $prevDate->getDifference(date('Y-m-d H:i:s'));
+            $startTime  = $prevDate->shiftDate($period2 * ceil($difference / $period2));
+            if ($startTime) {
+                $timerRow->set_start_time($startTime);
             }
-            $oTimerRow->set_is_active(0);
-            $oTimerRow->save();
-        } elseif ($oTimerRow->checkIsLoad()) {
-            $oTimerRow->delete();
+            $timerRow->set_is_active(0);
+            $timerRow->save();
+        } elseif ($timerRow->checkIsLoad()) {
+            $timerRow->delete();
         }
-        $oTimerRow->getEntity()->getConnection()->commit();
+        $timerRow->getEntity()->getConnection()->commit();
 
         return $this;
-    } // function _runProgram
+    }
 
-    /**
-     * Modify existing Program
-     * @param timer_program $oRow
-     * @param array  $aParam
-     * @param number $nPeriod - period of run this program
-     * @param number $nOvercall - allowed overcall quantity
-     */
-    protected function _modifyProgram($oRow, $aParam, $nPeriod, $nOvercall)
+    protected function _modifyProgram(\fan\core\base\timer_program $row, mixed $param, int|float|null $period, int|float|null $overcall): void
     {
-        if (!is_null($aParam)) {
-            $oRow->set_parameters($aParam);
+        if (!is_null($param)) {
+            $row->set_parameters($param);
         }
-        if (!is_null($nPeriod)) {
-            $oRow->set_period($nPeriod);
+        if (!is_null($period)) {
+            $row->set_period($period);
         }
-        if (!is_null($nOvercall)) {
-            $oRow->set_overcall_limit($nOvercall);
+        if (!is_null($overcall)) {
+            $row->set_overcall_limit($overcall);
         }
-        $oRow->save();
-    } // function _modifyProgram
+        $row->save();
+    }
 
-    /**
-     * Run php program in background
-     * @param string $sPID
-     * @return boolean
-     */
-    protected function _runBackground($sPID)
+    protected function _runBackground(string $pid): bool
     {
-        return $this->execBackBin($this->_getCommandLine('BGR_FILE') . $sPID);
-    } // function _runBackground
+        return $this->execBackBin($this->_getCommandLine('BGR_FILE') . $pid);
+    }
 
-    /**
-     * Get string of command line
-     * @param string $sKey
-     * @return string
-     */
-    protected function _getCommandLine($sKey)
+    protected function _getCommandLine(string $key): string
     {
-        $sSeparator = defined('DIR_SEPARATOR') ? DIR_SEPARATOR : '/';
-        $sCommand   = str_replace($sSeparator, DIRECTORY_SEPARATOR, \bootstrap::parsePath($this->getConfig($sKey)));
-        return $this->getConfig('PHP_INTERPRETER') . ' ' . $sCommand . ' ';
-    } // function _getCommandLine
+        $separator = defined('DIR_SEPARATOR') ? DIR_SEPARATOR : '/';
+        $command   = str_replace($separator, DIRECTORY_SEPARATOR, \bootstrap::parsePath((string)$this->getConfig($key)));
+        return (string)$this->getConfig('PHP_INTERPRETER') . ' ' . $command . ' ';
+    }
 
-} // class \fan\core\service\timer
-?>
+}

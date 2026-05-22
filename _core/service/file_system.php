@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 /**
  * File-system service
  *
@@ -16,197 +19,141 @@
  */
 class file_system extends \fan\core\base\service\multi
 {
-    /**
-     * @var array Service's Instances
-     */
-    private static $aInstances;
+    private static ?array $instances = null;
 
-    /**
-     * @var string full Path
-     */
-    protected $sFullPath = '';
+    protected string $fullPath = '';
 
-    /**
-     * @var boolean true/false or NULL if file/dir doesn't exist yet
-     */
-    protected $bIsFile = null;
+    protected ?bool $isFile = null;
 
     /**
      * @var file/dir handler
      */
-    protected $oHandle = null;
+    protected mixed $handle = null;
 
-    /**
-     * @var array inside parameters
-     */
-    protected $aParam = '';
+    protected mixed $param = '';
 
-    /**
-     * Service's constructor
-     */
-    protected function __construct($sFullPath)
+    protected function __construct(string $fullPath)
     {
         parent::__construct(false);
-        $this->sFullPath = $sFullPath;
-        if (file_exists($sFullPath)) {
-            $this->bIsFile = is_file($sFullPath);
+        $this->fullPath = (string)$fullPath;
+        if (file_exists($this->fullPath)) {
+            $this->isFile = is_file($this->fullPath);
         } else {
-            trigger_error('File "' . $sFullPath . '" isn\'t found.', E_NOTICE);
+            throw new \RuntimeException('File "' . $this->fullPath . '" isn\'t found.');
         }
-    } // function __construct
+    }
 
-    /**
-     * Get Service's instance of current service
-     * @param string $sSrcPath full Path
-     * @return \fan\core\service\file_system
-     */
-    public static function instance($sSrcPath = null)
+    public static function instance(?string $srcPath = null): ?self
     {
-        if(!$sSrcPath) {
+        if (!$srcPath) {
             return null;
         }
-        $sFullPath = \bootstrap::parsePath($sSrcPath);
-        if (!isset(self::$aInstances[$sFullPath])) {
-            self::$aInstances[$sFullPath] = new self($sFullPath);
+        $fullPath = \bootstrap::parsePath($srcPath);
+        if (!isset(self::$instances[$fullPath])) {
+            self::$instances[$fullPath] = new self($fullPath);
         }
-        return self::$aInstances[$sFullPath];
-    } // function instance
+        return self::$instances[$fullPath];
+    }
 
-    /**
-     * Check is file exitts
-     * @return boolean
-     */
-    public function isFile()
+    public function isFile(): ?bool
     {
-        return $this->bIsFile;
-    } // function isFile
+        return $this->isFile;
+    }
 
-    /**
-     * Check is file exitts
-     * @return boolean
-     */
-    public function isRreadable()
+    public function isRreadable(): bool
     {
-        return $this->bIsFile && is_readable($this->getFullPath());
-    } // function isRreadable
+        return $this->isFile && is_readable($this->getFullPath());
+    }
 
-    /**
-     * Get full path to file/dir
-     * @return string
-     */
-    public function getFullPath()
+    public function getFullPath(): string
     {
-        return $this->sFullPath;
-    } // function getFullPath
+        return $this->fullPath;
+    }
 
-    /**
-     * Set parameters of Parts
-     * @param numeric $nRowsQtt
-     * @param string $sRowSeparator
-     * @param string $sColSeparator
-     * @return \fan\core\service\file_system
-     */
-    public function setReadByPart($nRowsQtt = 100, $sRowSeparator = "\n", $sColSeparator = "\t", $bOpenFile = true)
+    public function setReadByPart(int|float $rowsQtt = 100, string $rowSeparator = "\n", string $colSeparator = "\t", mixed $openFile = true): static
     {
         if ($this->isRreadable()) {
-            $this->aParam['rowsQtt']      = $nRowsQtt;
-            $this->aParam['rowSeparator'] = $sRowSeparator;
-            $this->aParam['colSeparator'] = $sColSeparator;
-            $this->aParam['dataPart']     = array();
-            if ($bOpenFile) {
+            $this->param['rowsQtt']      = $rowsQtt;
+            $this->param['rowSeparator'] = $rowSeparator;
+            $this->param['colSeparator'] = $colSeparator;
+            $this->param['dataPart']     = [];
+            if ($openFile) {
                 $this->openFile();
             }
         }
         return $this;
-    } // function setReadByPart
+    }
 
-    /**
-     * Close file
-     * @return \fan\core\service\file_system
-     */
-    public function openFile()
+    public function openFile(): static
     {
         $this->closeFile();
-        $this->oHandle = fopen($this->sFullPath, 'r');
+        $this->handle = fopen($this->fullPath, 'r');
         return $this;
-    } // function openFile
+    }
 
-    /**
-     * Close file
-     * @return \fan\core\service\file_system
-     */
-    public function closeFile()
+    public function closeFile(): static
     {
-        if ($this->oHandle) {
-            fclose($this->oHandle);
-            $this->oHandle = null;
+        if ($this->handle) {
+            fclose($this->handle);
+            $this->handle = null;
         }
         return $this;
-    } // function closeFile
+    }
 
-    /**
-     * Get Data Part As String
-     * @return array
-     */
-    public function getPartAsString()
+    public function getPartAsString(): ?array
     {
-        $aData = &$this->aParam['dataPart'];
-        $nQtt  = $this->aParam['rowsQtt'];
+        $data = &$this->param['dataPart'];
+        $qtt  = $this->param['rowsQtt'];
 
-        $nPartSize = $this->getConfig('APPROX_ROW_LENGTH', 64) * $nQtt;
-        if ($nPartSize > $this->getConfig('PART_SIZE', 8192)) {
-            $nPartSize = $this->getConfig('PART_SIZE', 8192);
+        $partSize = (int)$this->getConfig('APPROX_ROW_LENGTH', 64) * (int)$qtt;
+        if ($partSize > $this->getConfig('PART_SIZE', 8192)) {
+            $partSize = (int)$this->getConfig('PART_SIZE', 8192);
         }
-        $aRet = array();
+        $ret = [];
 
-        while (count($aRet) < $nQtt) {
-            if ($this->oHandle && count($aData) < $nQtt) {
-                $sTmp = fread($this->oHandle, $nPartSize);
-                $sSrcEnc  = $this->getConfig('SOURCE_ENCODING');
-                $sBaseEnc = $this->getConfig('BASE_ENCODING', 'UTF-8');
-                if ($sSrcEnc && $sSrcEnc != $sBaseEnc) {
-                    $sTmp = iconv($sSrcEnc, $sBaseEnc, $sTmp);
+        while (count($ret) < $qtt) {
+            if ($this->handle && count($data) < $qtt) {
+                $tmp = fread($this->handle, $partSize);
+                $srcEnc  = $this->getConfig('SOURCE_ENCODING');
+                $baseEnc = (string)$this->getConfig('BASE_ENCODING', 'UTF-8');
+                if ($srcEnc && (string)$srcEnc !== $baseEnc) {
+                    $tmp = iconv((string)$srcEnc, $baseEnc, (string)$tmp);
                 }
-                if (feof($this->oHandle)) {
-                    fclose($this->oHandle);
-                    $this->oHandle = null;
+                if (feof($this->handle)) {
+                    fclose($this->handle);
+                    $this->handle = null;
                 }
-                $aTmp = explode($this->aParam['rowSeparator'], $sTmp);
-                if ($aData) {
-                    $aData[count($aData) - 1] .= array_shift($aTmp);
-                    $aData = array_merge($aData, $aTmp);
+                $tmp = explode((string)$this->param['rowSeparator'], (string)$tmp);
+                if ($data) {
+                    $data[count($data) - 1] .= array_shift($tmp);
+                    $data = array_merge($data, $tmp);
                 } else {
-                    $aData = $aTmp;
+                    $data = $tmp;
                 }
             }
 
-            while (count($aData) > ($this->oHandle ? 1 : 0) && count($aRet) < $nQtt) {
-                $aRet[] = array_shift($aData);
+            while (count($data) > ($this->handle ? 1 : 0) && count($ret) < $qtt) {
+                $ret[] = array_shift($data);
             }
 
-            if (!$this->oHandle && !count($aData)) {
+            if (!$this->handle && !count($data)) {
                 break;
             }
         }
-        return $aRet ? $aRet : null;
-    } // function getPartAsString
+        return $ret ? $ret : null;
+    }
 
-    /**
-     * Get Data Part As Array
-     * @return array
-     */
-    public function getPartAsArray()
+    public function getPartAsArray(): ?array
     {
-        $aData = $this->getPartAsString();
-        if (is_null($aData)) {
+        $data = $this->getPartAsString();
+        if (is_null($data)) {
             return null;
         }
-        $aRet = array();
-        foreach ($aData as $v) {
-            $aRet[] = explode($this->aParam['colSeparator'], $v);
+        $ret = [];
+        foreach ($data as $v) {
+            $ret[] = explode((string)$this->param['colSeparator'], (string)$v);
         }
-        return $aRet;
-    } // function getPartAsArray
+        return $ret;
+    }
 
-} // class \fan\core\service\file_system
-?>
+}

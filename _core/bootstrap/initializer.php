@@ -1,4 +1,8 @@
-<?php namespace fan\core\bootstrap;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\bootstrap;
 /**
  * Description of initializer
  *
@@ -21,151 +25,107 @@ class initializer
      * Ini-config data
      * @var array
      */
-    protected $aConfig = array();
+    protected array $config = [];
 
-    /**
-     * Construct of class
-     * @param array $aConfig
-     */
-    public function __construct($aConfig)
+    public function __construct($config)
     {
-        $this->setConfig($aConfig);
+        $config = is_array($config) ? $config : [];
+        $this->setConfig($config);
 
         $this->initBeforeLoader();
-    } // function __construct
+    }
 
-    /**
-     * Set Config-data
-     * @param array $aConfig
-     * @return initializer
-     */
-    public function setConfig($aConfig)
+    public function setConfig(array $config): static
     {
-        foreach ($aConfig as $k => $v) {
-            if (preg_match('/^(?:(main)|(check|app|service)_(.*?))_(\d+)$/', $k, $a)) {
+        foreach ($config as $k => $v) {
+            if (preg_match('/^(?:(main)|(check|app|service)_(.*?))_(\d+)$/', (string)$k, $a)) {
                 if (empty($a[1])) {
-                    $this->aConfig[$a[2]][$a[3]][$a[4]] = explode(':', $v, 2);
+                    $this->config[$a[2]][$a[3]][$a[4]] = explode(':', (string)$v, 2);
                 } else {
-                    $this->aConfig['main'][$a[4]]       = explode(':', $v, 2);
+                    $this->config['main'][$a[4]]       = explode(':', (string)$v, 2);
                 }
             }
         }
         return $this;
-    } // function setConfig
+    }
 
-    /**
-     * Init before loader
-     * @return initializer
-     */
-    public function initBeforeLoader()
+    public function initBeforeLoader(): static
     {
         $this->checkRequiredParam();
         $this->checkAdvisedParam();
         $this->setMainParam();
         return $this;
-    } // function initBeforeLoader
+    }
 
-    /**
-     * Init after loader
-     * @return initializer
-     */
-    public function initAfterLoader()
+    public function initAfterLoader(): static
     {
         set_error_handler('handleError');
-        $oMatcher = \fan\project\service\matcher::instance();
+        $matcher = \fan\project\service\matcher::instance();
         if (\bootstrap::isCli()) {
-            $aPathParts = pathinfo($GLOBALS['argv'][0]);
-            $oMatcher->setCli($aPathParts['basename'], $aPathParts['dirname']);
+            $pathParts = pathinfo($GLOBALS['argv'][0]);
+            $matcher->setCli($pathParts['basename'], $pathParts['dirname']);
         } else {
-            $oMatcher->setUri(array_val($_SERVER, 'REQUEST_URI'), array_val($_SERVER, 'HTTP_HOST'));
+            $host = array_val($_SERVER, 'HTTP_HOST');
+            $matcher->setUri((string)array_val($_SERVER, 'REQUEST_URI', ''), is_null($host) ? null : (string)$host);
         }
         return $this;
-    } // function initAfterLoader
+    }
 
 
-    /**
-     * Check Required Parameters
-     */
-    public function checkRequiredParam()
+    public function checkRequiredParam(): void
     {
         $this->_checkPhpConf('req', true);
-    } // function checkRequiredParam
+    }
 
-    /**
-     * Check Advised Param
-     */
-    public function checkAdvisedParam()
+    public function checkAdvisedParam(): void
     {
         $this->_checkPhpConf('adv', false);
-    } // function checkAdvisedParam
+    }
 
-    /**
-     * Set Main Parameters
-     */
-    public function setMainParam()
+    public function setMainParam(): void
     {
-        foreach ($this->aConfig['main'] as $v) {
-            ini_set(trim($v[0]), trim($v[1]));
+        foreach ($this->config['main'] as $v) {
+            ini_set(trim((string)$v[0]), trim((string)$v[1]));
         }
-    } // function setMainParam
+    }
 
-    /**
-     * Set Application Parameters
-     * @param string $sName Name of Application
-     */
-    public function setAppParam($sName)
+    public function setAppParam(string $name): ?array
     {
-        return $this->_setPhpConf('app', $sName);
-    } // function setAppParam
+        return $this->_setPhpConf('app', $name);
+    }
 
-    /**
-     * Set Service Parameters
-     * @param string $sName Name of Service
-     */
-    public function setServiceParam($sName)
+    public function setServiceParam(string $name): ?array
     {
-        return $this->_setPhpConf('service', $sName);
-    } // function setServiceParam
+        return $this->_setPhpConf('service', $name);
+    }
 
-    /**
-     * Check php-configuration parameter
-     * @param string $sType Type of php_conf
-     * @param boolean $bSetErr Set error
-     */
-    protected function _checkPhpConf($sType, $bSetErr = false)
+    protected function _checkPhpConf(string $type, bool $setErr = false): void
     {
-        if (isset($this->aConfig['check'][$sType])) {
-            foreach ($this->aConfig['check'][$sType] as $v) {
-                $val = ini_get(trim($v[0]));
-                if ($val != trim($v[1])) {
-                    $sErrMsg = 'Incorrect value of param "' . $v[0] . ' = <b>' . $val . '</b>". Need value = <b>' . $v[1] . '</b><br />';
-                    if ($bSetErr) {
-                        trigger_error($sErrMsg, E_USER_ERROR);
+        if (isset($this->config['check'][$type])) {
+            foreach ($this->config['check'][$type] as $v) {
+                $val = ini_get(trim((string)$v[0]));
+                if ((string)$val !== trim((string)$v[1])) {
+                    $errMsg = 'Incorrect value of param "' . $v[0] . ' = <b>' . $val . '</b>". Need value = <b>' . $v[1] . '</b><br />';
+                    if ($setErr) {
+                        throw new \RuntimeException($errMsg);
                     } else {
-                        \bootstrap::logError($sErrMsg);
+                        \bootstrap::logError($errMsg);
                     }
                 }
             }
         }
 
-    } // function _checkPhpConf
+    }
 
-    /**
-     * Set php-configuration parameter
-     * @param string $sType Type of php_conf
-     * @param string $sName Name of Type
-     * @return array
-     */
-    protected function _setPhpConf($sType, $sName)
+    protected function _setPhpConf(string $type, string $name): ?array
     {
-        if (isset($this->aConfig[$sType][$sName])) {
-            foreach ($this->aConfig[$sType][$sName] as $v) {
-                ini_set(trim($v[0]), trim($v[1]));
+        if (isset($this->config[$type][$name])) {
+            foreach ($this->config[$type][$name] as $v) {
+                ini_set(trim((string)$v[0]), trim((string)$v[1]));
             }
-            return $this->aConfig[$sType][$sName];
+            return $this->config[$type][$name];
         }
         return null;
-    } // function _setPhpConf
+    }
 
-} // class \fan\core\bootstrap\initializer
-?>
+}

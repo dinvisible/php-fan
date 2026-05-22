@@ -1,4 +1,8 @@
-<?php namespace fan\core\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Entity manager service
@@ -17,325 +21,233 @@ use fan\project\exception\service\fatal as fatalException;
  */
 class entity extends \fan\core\base\service\multi
 {
-    /**
-     * @var array Service's Instances
-     */
-    private static $aInstances = array();
+    private static array $instances = [];
+
+    private array $entities = [];
+
+    protected mixed $collection = null;
 
     /**
-     * @var array Instances of Entity
-     */
-    private $aEntities = array();
-
-    /**
-     * @var mixed Collection Key
-     */
-    protected $mCollection = null;
-
-    /**
-     * Constructor of Service of entity
-     * @param mixed $mCollection
      * @throws \fan\project\exception\service\fatal
      */
-    protected function __construct($mCollection = 0)
+    protected function __construct(int|float|string|bool $collection = 0)
     {
         parent::__construct();
 
-        if (is_null($mCollection)) {
+        if (is_null($collection)) {
             throw new fatalException($this, 'Collection Key can not be NULL.');
         }
-        if (!is_scalar($mCollection)) {
+        if (!is_scalar($collection)) {
             throw new fatalException($this, 'Collection Key can not be only scalar type.');
         }
 
-        $this->mCollection = $mCollection;
-        self::$aInstances[$mCollection] = $this;
+        $this->collection = $collection;
+        self::$instances[$collection] = $this;
 
-        $aDelegate = $this->getConfig('delegate');
-        if (!empty($aDelegate)) {
-            if (!is_array_alt($aDelegate)) {
+        $delegate = $this->getConfig('delegate');
+        if (!empty($delegate)) {
+            if (!is_array_alt($delegate)) {
                 throw new fatalException($this, 'Delegate list must be as array.');
             }
-            foreach ($aDelegate as $k => $v) {
-                if (!isset($this->aDelegateRule[$v])) {
-                    $this->aDelegateRule[$v] = array($k);
+            foreach ($delegate as $k => $v) {
+                if (!isset($this->delegateRule[$v])) {
+                    $this->delegateRule[$v] = [$k];
                 } else {
-                    $this->aDelegateRule[$v][] = $k;
+                    $this->delegateRule[$v][] = $k;
                 }
             }
             $x = 1;
         }
-    } // function __construct
+    }
 
 
     // ======== Static methods ======== \\
-    /**
-     * Get instance of service of entity
-     * @param mixed $mCollection Key of collection
-     * @return \fan\core\service\entity
-     */
-    public static function instance($mCollection = 0)
+    public static function instance(int|float|string|bool $collection = 0): static
     {
-        if (!isset(self::$aInstances[$mCollection])) {
-            new self($mCollection);
+        if (!isset(self::$instances[$collection])) {
+            new self($collection);
         }
-        return self::$aInstances[$mCollection];
-    } // function instance
+        return self::$instances[$collection];
+    }
 
     // ======== The magic methods ======== \\
-    public function __get($sName)
+    /**
+     * Handles dynamic property reads for this current component.
+     */
+    public function __get(string $name): mixed
     {
-        return $this->get($sName);
+        return $this->get((string)$name);
     }
 
     // ======== Main Interface methods ======== \\
     /**
-     * Get entity
-     * Param keys:
-     *   'connectionName', 'connectionKey', 'cacheEnabled',
-     *   'tableName', 'primeryKey', 'fields', 'keys', 'relations',
-     *   ''
-     * @param string $sName
-     * @param array $aParam
-     * @return \fan\core\base\model\entity
      * @throws \fan\project\exception\service\fatal
      */
-    public function get($sName, $aParam = array())
+    public function get(string $name, array $param = []): \fan\core\base\model\entity
     {
-        if (!isset($this->aEntities[$sName])) {
-            $sPrefix = $this->getNsPrefix();
-            if (substr($sName, 0, strlen($sPrefix)) == $sPrefix) {
-                $sClass = $sName . '\entity';
-                $sName  = substr($sName, strlen($sPrefix));
+        if (!isset($this->entities[$name])) {
+            $prefix = $this->getNsPrefix();
+            if (substr($name, 0, strlen($prefix)) === $prefix) {
+                $class = $name . '\entity';
+                $name  = substr($name, strlen($prefix));
             } else {
-                $sName = trim($sName, '\\');
-                $sClass = $sPrefix . $sName . '\entity';
+                $name = trim($name, '\\');
+                $class = $prefix . $name . '\entity';
             }
-            $this->aEntities[$sName] = $this->_getEntity($sClass, $aParam, $sName);
+            $this->entities[$name] = $this->_getEntity($class, $param, $name);
         }
-        return $this->aEntities[$sName];
+        return $this->entities[$name];
     }
 
-    /**
-     * Get Anonymous entity
-     *   Note: Anonymous entity doesn't have name
-     * @param string $sClass
-     * @param array $aParam
-     * @return \fan\core\base\model\entity
-     */
-    public function getAnonymous($sClass, $aParam = array())
+    public function getAnonymous(string $class, array $param = []): \fan\core\base\model\entity
     {
-        return $this->_getEntity($sClass, $aParam);
+        return $this->_getEntity($class, $param);
     }
 
-    /**
-     * Get Object of Entity By Name of Table in DB
-     * @param string $sTableName
-     * @param string $sConnectionName
-     * @param boolean $bForce - do not use cache
-     * @return \fan\core\base\model\entity|null
-     */
-    public function getEntityByTable($sTableName, $sConnectionName = null, $bForce = false)
+    public function getEntityByTable(string $tableName, ?string $connectionName = null, bool $force = false): ?\fan\core\base\model\entity
     {
-        $sName = $this->_getNameByTable($sTableName, $sConnectionName, $bForce);
-        if (empty($sName)) {
+        $name = $this->_getNameByTable($tableName, $connectionName, $force);
+        if (empty($name)) {
             return null;
         }
         try {
-            $oEtt  = $this->get($sName);
+            $ett  = $this->get($name);
         } catch (fatalException $e) {
             return null;
         }
-        return $oEtt;
+        return $ett;
+    }
+
+    public function getSqlDir(): string
+    {
+        $dir = $this->_getConfigParam('SQL_DIR');
+        return empty($dir) ? 'sql' : $dir;
+    }
+
+    public function getNsPrefix(): string
+    {
+        $prefix = $this->_getConfigParam('NS_PREFIX');
+        return empty($prefix) ? '\fan\model\\' : '\\' . trim($prefix, '\\') . '\\';
+    }
+    public function getFileNsSuffix(): string
+    {
+        $suffix = $this->_getConfigParam('FILE_NS_SUFFIX');
+        return empty($suffix) ? '' : trim($suffix, '\\') . '\\';
+    }
+
+    public function getCollectionKey(): mixed
+    {
+        return $this->collection;
+    }
+
+    public function getDescription(\fan\core\base\model\entity $entity, array $param = []): \fan\core\service\entity\description
+    {
+        return new \fan\project\service\entity\description($entity, $param);
     }
 
     /**
-     * Name of directory with SQL-requests
-     * @return string
-     */
-    public function getSqlDir()
-    {
-        $sDir = $this->_getConfigParam('SQL_DIR');
-        return empty($sDir) ? 'sql' : $sDir;
-    }
-
-    /**
-     * Get namespace prefix of all entity classes
-     * @return string
-     */
-    public function getNsPrefix()
-    {
-        $sPrefix = $this->_getConfigParam('NS_PREFIX');
-        return empty($sPrefix) ? '\fan\model\\' : '\\' . trim($sPrefix, '\\') . '\\';
-    }
-    /**
-     * Get namespace suffix of entity "file_data", "image", "flash", "video", etc
-     * @return string
-     */
-    public function getFileNsSuffix()
-    {
-        $sSuffix = $this->_getConfigParam('FILE_NS_SUFFIX');
-        return empty($sSuffix) ? '' : trim($sSuffix, '\\') . '\\';
-    } // function getFileNsSuffix
-
-    /**
-     * Get Collection Key
-     * @return string|integer
-     */
-    public function getCollectionKey()
-    {
-        return $this->mCollection;
-    } // function getCollectionKey
-
-    /**
-     * Get Entity table Description
-     * @param \fan\core\base\model\entity $oEntity
-     * @param array $aParam
-     * @return \fan\core\service\entity\description
-     */
-    public function getDescription(\fan\core\base\model\entity $oEntity, $aParam = array())
-    {
-        return new \fan\project\service\entity\description($oEntity, $aParam);
-    } // function getDescription
-
-    /**
-     * Get SQL-designer
-     * @param \fan\core\base\model\entity $oEntity
-     * @param string $sType
-     * @return \fan\core\service\entity\designer
      * @throws \fan\project\exception\service\fatal
      */
-    public function getDesigner(\fan\core\base\model\entity $oEntity, $sType = 'select')
+    public function getDesigner(\fan\core\base\model\entity $entity, string $type = 'select'): \fan\core\service\entity\designer
     {
-        $sClassName = '\fan\project\service\entity\designer\\' . $sType;
-        if (!class_exists($sClassName)) {
-            throw new fatalException($this, 'Class of SQL-designer "' . $sType . '" doesn\'t exist.');
+        $className = '\fan\project\service\entity\designer\\' . $type;
+        if (!class_exists($className)) {
+            throw new fatalException($this, 'Class of SQL-designer "' . $type . '" doesn\'t exist.');
         }
-        return new $sClassName($oEntity);
-    } // function getDesigner
+        return new $className($entity);
+    }
 
     /**
-     * Make new object of Snippet
-     * @param \fan\core\service\entity\designer\snippety $oSnippety
-     * @param type $sQuery
-     * @param type $sSrcCondition
-     * @param type $sCallback
-     * @return \fan\project\service\entity\snippet
+     * @param mixed $callback Callable invoked to complete the delegated operation.
      */
-    public function getSnippet(\fan\core\service\entity\designer\snippety $oSnippety, $sQuery, $sSrcCondition, $sCallback)
+    public function getSnippet(\fan\core\service\entity\designer\snippety $snippety, mixed $query, mixed $srcCondition, mixed $callback): \fan\core\service\entity\snippet
     {
-        return new \fan\project\service\entity\snippet($oSnippety, $sQuery, $sSrcCondition, $sCallback);
-    } // function getSnippet
+        return new \fan\project\service\entity\snippet($snippety, $query, $srcCondition, $callback);
+    }
 
-    /**
-     * Get Encapsulant
-     * @param string $sClass
-     * @return \fan\core\service\entity\encapsulant\simple
-     */
-    public function getEncapsulant($sClass = null)
+    public function getEncapsulant(?string $class = null): object
     {
-        $sClass = '\fan\project\service\entity\encapsulant\\' . ($sClass ? $sClass : $this->getConfig('encapsulantClass', 'simple'));
-        return new $sClass($this);
-    } // function getEncapsulant
+        $class = '\fan\project\service\entity\encapsulant\\' . ($class ? $class : (string)$this->getConfig('encapsulantClass', 'simple'));
+        return new $class($this);
+    }
 
     // ======== Private/Protected methods ======== \\
     /**
-     * Get Entity
-     * @param string $sClass
-     * @param array $aParam
-     * @param string $sName
-     * @return \fan\core\service\entity
      * @throws fatalException
      */
-    protected function _getEntity($sClass, $aParam, $sName = null)
+    protected function _getEntity(string $class, array $param, ?string $name = null): \fan\core\base\model\entity
     {
-        if (!class_exists($sClass)) {
-            throw new fatalException($this, 'Undefind entity "' . $sClass . '"');
+        if (!class_exists($class)) {
+            throw new fatalException($this, 'Undefind entity "' . $class . '"');
         }
 
-        $oEntity = new $sClass($this, $sName, $aParam);
-        if (!$oEntity instanceof \fan\core\base\model\entity) {
-            throw new fatalException($this, 'Entity "' . (empty($sName) ? $sClass : $sName) . '" must be instance of "\fan\core\base\model\entity"');
+        $entity = new $class($this, $name, $param);
+        if (!$entity instanceof \fan\core\base\model\entity) {
+            throw new fatalException($this, 'Entity "' . (empty($name) ? $class : $name) . '" must be instance of "\fan\core\base\model\entity"');
         }
-        return $oEntity;
-    } // function _getEntity
+        return $entity;
+    }
 
-    /**
-     * Get parameter from the config taking into account current collection name
-     * @param string $sKey
-     * @return mixed
-     */
-    protected function _getConfigParam($sKey)
+    protected function _getConfigParam(string $key): mixed
     {
-        $mData0 = $this->getConfig($sKey, array());
-        $oExtraConf = $this->getConfig(array('COLLECTION', $this->getCollectionKey()));
-        $mData1 = is_object($oExtraConf) ? $oExtraConf->get($sKey) : null;
-        return empty($mData1) ? $mData0 : $mData1;
-    } // function _getConfigParam
+        $data0 = $this->getConfig($key, []);
+        $extraConf = $this->getConfig(['COLLECTION', $this->getCollectionKey()]);
+        $data1 = is_object($extraConf) ? $extraConf->get($key) : null;
+        return empty($data1) ? $data0 : $data1;
+    }
 
-    /**
-     * Get entity name by table name
-     * @param string $sKey
-     * @return mixed
-     */
-    protected function _getNameByTable($sTableName, $sConnectionName, $bForce)
+    protected function _getNameByTable(string $tableName, ?string $connectionName, bool $force): mixed
     {
-        $aData = $bForce ? array() : $this->_getCacheData('reverce_link', array());
+        $data = $force ? [] : $this->_getCacheData('reverce_link', []);
 
         // Try to pull entity name from the cache
-        if (!empty($sConnectionName) && isset($aData[$sConnectionName][$sTableName])) {
-            return $aData[$sConnectionName][$sTableName];
+        if (!empty($connectionName) && isset($data[$connectionName][$tableName])) {
+            return $data[$connectionName][$tableName];
         }
-        if (empty($sConnectionName) && !empty($aData)) {
-            foreach ($aData as $v) {
-                if (isset($v[$sTableName])) {
-                    return $v[$sTableName];
+        if (empty($connectionName) && !empty($data)) {
+            foreach ($data as $v) {
+                if (isset($v[$tableName])) {
+                    return $v[$tableName];
                 }
             }
         }
 
         // Make New data by FileSystem
-        $sNs   = rtrim($this->getNsPrefix(), '\\');
-        $aDirs = array(
-            $sNs => \bootstrap::getLoader()->getPathByNS($sNs),
-        );
+        $ns   = rtrim($this->getNsPrefix(), '\\');
+        $dirs = [
+            $ns => \bootstrap::getLoader()->getPathByNS($ns),
+        ];
 
-        while (!empty($aDirs)) {
-            reset($aDirs);
-            $sNs   = key($aDirs);
-            $sDir  = array_shift($aDirs);
-            $aList = scandir($sDir);
-            foreach ($aList as $v) {
-                $sCheck = $sDir . '/' . $v;
-                if ($v != '.' && $v != '..' && is_dir($sCheck)) {
-                    if (file_exists($sCheck . '/entity.php')) {
+        while (!empty($dirs)) {
+            reset($dirs);
+            $ns   = key($dirs);
+            $dir  = array_shift($dirs);
+            $list = scandir($dir);
+            foreach ($list as $v) {
+                $check = $dir . '/' . $v;
+                if ($v !== '.' && $v !== '..' && is_dir($check)) {
+                    if (file_exists($check . '/entity.php')) {
                         try {
-                            $oEtt = $this->get($sNs . '\\' . $v);
+                            $ett = $this->get($ns . '\\' . $v);
                         } catch (fatalException $e) {
                             continue;
                         }
-                        $aData[$oEtt->getConnectionName()][$oEtt->getTableName()] = $oEtt->getName();
+                        $data[$ett->getConnectionName()][$ett->getTableName()] = $ett->getName();
                     } else {
-                        $aDirs[$sNs . '\\' . $v] = $sCheck;
+                        $dirs[$ns . '\\' . $v] = $check;
                     }
                 }
             }
         }
 
         // Save new data to the cache and return requested value
-        $this->_setCacheData('reverce_link', $aData);
-        return array_val($aData, array($sConnectionName, $sTableName));
-    } // function _getNameByTable
+        $this->_setCacheData('reverce_link', $data);
+        return array_val($data, [$connectionName, $tableName]);
+    }
 
 
-    /**
-     * Get delegate class
-     * @param string $sName
-     * @return \fan\core\base\model\entity
-     */
-    protected function _getDelegate($sName)
+    protected function _getDelegate(mixed $name): mixed
     {
-        return $this->get($sName);
-    } // function _getDelegate
-} // class \fan\core\service\entity
-?>
+        return $this->get($name);
+    }
+}

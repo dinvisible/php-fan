@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\database;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\database;
 /**
  * ADOdb wrapper for template engine
  *
@@ -17,257 +21,170 @@
 class adodb extends base
 {
 
-    /**
-     * @var object Connection instance
-     */
-    private $oConn;
+    private ?object $conn = null;
 
-    /**
-     * @var string Error message
-     */
-    private $sErrorMsg;
+    private ?string $errorMsg = null;
 
-    /**
-     * Constructor
-     * @param array $oConfig Configuration data
-     */
-    public function __construct(\fan\core\base\service $oFacade, \fan\core\service\config\base $oConfig)
+    public function __construct(\fan\core\base\service $facade, \fan\core\service\config\base $config)
     {
-        parent::__construct($oFacade, $oConfig, false);
-        if (!defined('ADODB_ERROR_HANDLER')) {
-            define('ADODB_ERROR_HANDLER', 'adodb_error_handler');
-            require_once \bootstrap::parsePath('{CORE_DIR}/../libraries/ADOdb/adodb.inc.php');
-        }
+        parent::__construct($facade, $config, false);
+        \fan\project\adapter\adodb::defineErrorHandler();
 
-        $this->oConn = &ADONewConnection($oConfig['DRIVER']);
-        $this->reconnect($oConfig->toArray());
+        $this->conn = \fan\project\adapter\adodb::newConnection((string)$config['DRIVER']);
+        $this->reconnect($config->toArray());
         $this->_handleSql();
-    } // function __construct
+    }
+
+    public function qstr(string $s): string
+    {
+        return $this->conn->qstr($s);
+    }
+
+    public function start_transaction(): void
+    {
+        $this->conn->BeginTrans();
+    }
+
+    public function commit(): void
+    {
+        $this->conn->CommitTrans();
+    }
+
+    public function rollback(): void
+    {
+        $this->conn->RollbackTrans();
+    }
+
+    public function connectionClose(): void
+    {
+        $this->conn->close();
+    }
+
+    public function reconnect(array $config, bool $makeException = true): mixed
+    {
+        $this->conn->NConnect((string)$config['HOST'], (string)$config['USER'], (string)$config['PASSWORD'], (string)$config['DATABASE']);
+    }
 
     /**
-     * Quotes a string to be sent to the database
-     * @param string $s string to be sent to the database
-     * @param bool $magic_quotes_gpc pass get_magic_quotes_gpc() as value
-     * @return string Quoted string
+     * @param ?array $params Parameter set passed into the operation.
      */
-    public function qstr($s, $magic_quotes_gpc = false)
+    public function execute(string $sql, ?array $params = null): mixed
     {
-        return $this->oConn->qstr($s, $magic_quotes_gpc);
-    } // function qstr
+        return $this->_handleSql("Execute", $sql, $params, false);
+    }
 
-    /**
-     * Start Transaction
-     */
-    public function start_transaction()
+    public function getInsertId(): mixed
     {
-        $this->oConn->BeginTrans();
-    } // function start_transaction
-
-    /**
-     * Commit Transaction
-     */
-    public function commit()
-    {
-        $this->oConn->CommitTrans();
-    } // function commit
-
-    /**
-     * Rollback Transaction
-     */
-    public function rollback()
-    {
-        $this->oConn->RollbackTrans();
-    } // function rollback
-
-    /**
-     * Close connection
-     */
-    public function connectionClose()
-    {
-        $this->oConn->close();
-    } // function connectionClose
-
-    /**
-     * Restore connection
-     */
-    public function reconnect($oConfig)
-    {
-        $this->oConn->NConnect($oConfig['HOST'], $oConfig['USER'], $oConfig['PASSWORD'], $oConfig['DATABASE']);
-    } // function reconnect
-
-    /**
-     * Execute SQL query
-     * @param string $sSql SQL query
-     * @param array $aParams Input parameters
-     * @return object Result set
-     */
-    public function execute($sSql, $aParams = null)
-    {
-        return $this->_handleSql("Execute", $sSql, $aParams, false);
-    } // function execute
-
-    /**
-     * Get last insert id
-     * @return int Id
-     */
-    public function getInsertId()
-    {
-        $cResult = $this->oConn->Insert_ID();
+        $cResult = $this->conn->Insert_ID();
         if ($this->_handleSql()) {
             return $cResult;
         }
         return false;
-    } // function getInsertId
+    }
 
     /**
-     * Get one value
-     * @param string $sSql SQL query
-     * @param array $aParams Input parameters
-     * @return object Result set
+     * @param ?array $params Parameter set passed into the operation.
      */
-    public function getOne($sSql, $aParams = null)
+    public function getOne(string $sql, ?array $params = null): mixed
     {
-        return $this->_handleSql("GetOne", $sSql, $aParams, false);
-    } // function getOne
+        return $this->_handleSql("GetOne", $sql, $params, false);
+    }
 
     /**
-     * Get row
-     * @param string $sSql SQL query
-     * @param array $aParams Input parameters
-     * @return object Result set
+     * @param ?array $params Parameter set passed into the operation.
      */
-    public function getRow($sSql, $aParams = null)
+    public function getRow(string $sql, ?array $params = null): mixed
     {
-        return $this->_handleSql("GetRow", $sSql, $aParams);
-    } // function getRow
+        return $this->_handleSql("GetRow", $sql, $params);
+    }
 
     /**
-     * Get row assoc
-     * @param string $sSql SQL query
-     * @param array $aParams Input parameters
-     * @return object Result set
+     * @param ?array $params Parameter set passed into the operation.
      */
-    public function getRowAssoc($sSql, $aParams = null)
+    public function getRowAssoc(string $sql, ?array $params = null): array
     {
-        $rs = $this->oConn->Execute($sSql, $aParams);
+        $rs = $this->conn->Execute($sql, $params);
         if ($rs && !$rs->EOF) {
             $cResult = $rs->GetRowAssoc(false);
-            if ($this->_handleSql(null, $sSql)) {
+            if ($this->_handleSql(null, $sql)) {
                 return $cResult;
             }
         } // check result set
-        return array();
-    } // function getRowAssoc
+        return [];
+    }
 
     /**
-     * Get col
-     * @param string $sSql SQL query
-     * @param array $aParams Input parameters
-     * @return object Result set
+     * @param ?array $params Parameter set passed into the operation.
      */
-    public function getCol($sSql, $aParams = null)
+    public function getCol(string $sql, ?array $params = null): mixed
     {
-        return $this->_handleSql("GetCol", $sSql, $aParams);
-    } // function getCol
+        return $this->_handleSql("GetCol", $sql, $params);
+    }
 
     /**
-     * Get assoc
-     * @param string $sSql SQL query
-     * @param array $aParams Input parameters
-     * @return object Result set
+     * @param ?array $params Parameter set passed into the operation.
      */
-    public function getAssoc($sSql, $aParams = null)
+    public function getAssoc(string $sql, ?array $params = null): mixed
     {
-        return $this->_handleSql("GetAssoc", $sSql, $aParams);
-    } // function getAssoc
+        return $this->_handleSql("GetAssoc", $sql, $params);
+    }
 
     /**
-     * Get all
-     * @param string $sSql SQL query
-     * @param array $aParams Input parameters
-     * @return object Result set
+     * @param ?array $params Parameter set passed into the operation.
      */
-    public function getAll($sSql, $aParams = null)
+    public function getAll(string $sql, ?array $params = null): mixed
     {
-        return $this->_handleSql("GetAll", $sSql, $aParams);
-    } // function getAll
+        return $this->_handleSql("GetAll", $sql, $params);
+    }
 
     /**
-     * Get all
-     * @param string $sSql SQL query
-     * @param array $aParams Input parameters
-     * @return object Result set
+     * @param ?array $params Parameter set passed into the operation.
      */
-    public function getAllLimit($sSql, $aParams = null, $nQtt = -1, $nOffset = -1)
+    public function getAllLimit(string $sql, ?array $params = null, int|float $qtt = -1, int|float $offset = -1): array
     {
-        $cResult = $this->oConn->SelectLimit($sSql, $nQtt, $nOffset, $aParams);
-        $this->aErrorData = $this->oConn->ErrorMsg();
-        if ($this->aErrorData || !$cResult) {
-            if (!$this->aErrorData) {
-                $this->aErrorData = "No result!";
+        $cResult = $this->conn->SelectLimit($sql, (int)$qtt, (int)$offset, $params);
+        $this->errorData = $this->conn->ErrorMsg();
+        if ($this->errorData || !$cResult) {
+            if (!$this->errorData) {
+                $this->errorData = "No result!";
             }
-            return array();
+            return [];
         } // if Is Error
-        $aRet = $cResult->GetArray();
-        return $aRet ? $aRet : array();
-    } // function getAllLimit
+        $ret = $cResult->GetArray();
+        return $ret ? $ret : [];
+    }
+
+    public function getVersion(): mixed
+    {
+        return $GLOBALS['ADODB_vers'] ?? null;
+    }
 
     /**
-     * Get ADOdb version
-     * @return string Parameter value
+     * @param ?array $params Parameter set passed into the operation.
      */
-    public function getVersion()
+    protected function _handleSql(?string $method = null, ?string $sql = null, ?array $params = null, bool $retArr = true): mixed
     {
-        return @$GLOBALS['ADODB_vers'];
-    } // function getVersion
+        $cResult = $method ? $this->conn->$method($sql, $params) : true;
 
-    /**
-     * Handler of SQL: Execute request and check error
-     * It shows SQL-error or writes it to log-file or sends it to email
-     * @param string $sMethod Method of SQL engine
-     * @param string $sSql SQL query
-     * @param array $aParams Input parameters
-     * @param boolean $bRetArr Return result as array (true) or boolean (false)
-     * @return "Result" if NO Error else return False
-     */
-    protected function _handleSql($sMethod = null, $sSql = null, $aParams = null, $bRetArr = true)
-    {
-        $cResult = $sMethod ? $this->oConn->$sMethod($sSql, $aParams) : true;
+        $this->errorData = $this->conn->ErrorMsg();
 
-        $this->aErrorData = $this->oConn->ErrorMsg();
-
-        if ($this->aErrorData) {
-            return $sSql && $bRetArr ? array() : null;
+        if ($this->errorData) {
+            return $sql && $retArr ? [] : null;
         } // if Is Error
 
-        return $sSql && $bRetArr && !$cResult ? array() : $cResult;
-    } // function _handleSql
+        return $sql && $retArr && !$cResult ? [] : $cResult;
+    }
 
-    /**
-     * Log
-     */
-    protected function _logTime($t, $sSql)
+    protected function _logTime(int|float $t, string $sql): void
     {
-        $dt = microtime(true) - $t;
+        $dt = microtime(true) - (float)$t;
         if ($dt > 0.5) {
-            error_log(date("d/m H-i-s") . ":\t" . $dt . "\t" . $sSql . "\t" . $_SERVER['REQUEST_URI'] . "\n\n", 3, __DIR__ . "/../../../_logs/sql.log");
+            error_log(date("d/m H-i-s") . ":\t" . $dt . "\t" . $sql . "\t" . $_SERVER['REQUEST_URI'] . "\n\n", 3, __DIR__ . "/../../../_logs/sql.log");
         }
-    } // function log_time
-} // class \fan\core\service\database\adodb
+    }
+}
 
-/**
- * Parse Data Base error and output message to screen, logfile or email
- * @param string $sDBType Data Base Type
- * @param string $sOperation Operation generate error
- * @param number $nErrorNum Number of error
- * @param string $sErrMsg Error message
- * @param mixed $mMainParam Main parameters
- * @param mixed $mAddParam Add parameters
- * @param object $oObj link to current object
- * @return True if it may parse error else return False
- */
-function adodb_error_handler($sDBType, $sOperation, $nErrorNum, $sErrMsg, $mMainParam, $mAddParam, $oObj)
+function adodb_error_handler(string $dbType, string $operation, int|float $errorNum, string $errMsg, mixed $mainParam, mixed $addParam, object $obj): void
 {
-    \fan\project\service\error::instance()->database_error($sDBType, $sOperation, $nErrorNum, $sErrMsg, $mMainParam, $mAddParam, $oObj);
-} // function adodb_error_handler
-?>
+    \service_container()->get('error')->database_error($dbType, $operation, $errorNum, $errMsg, $mainParam, $addParam, $obj);
+}

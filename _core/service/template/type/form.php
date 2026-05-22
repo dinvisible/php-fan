@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\template\type;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\template\type;
 /**
  *
  * This file is part PHP-FAN (php-framework from Alexandr Nosov)
@@ -18,648 +22,535 @@ abstract class form extends base
     /**
      * Regexp for parse combi field name
      */
-    const RE_NAME = '/^(\w+)((?:\[[^\]]+\])+)$/';
+    public const RE_NAME = '/^(\w+)((?:\[[^\]]+\])+)$/';
 
     /**
      * Form service
      * @var \fan\core\service\form
      */
-    protected $oForm;
+    protected ?object $form = null;
 
-    /**
-     * @var array Numbers of Each Form
-     */
-    private static $aFormNumber = array();
+    private static array $formNumber = [];
 
-    /**
-     * @var integer Curent Form Number
-     */
-    private $iCurNum;
+    private ?int $curNum = null;
 
     /**
      * Template variables
      * @var \fan\core\base\meta\row
      */
-    protected $oFormMeta;
+    protected ?object $formMeta = null;
 
-    /**
-     * @var array Template variables
-     */
-    protected $aFieldType;
+    protected ?array $fieldType = null;
 
-    /**
-     * @var integer Index of Separated Select
-     */
-    protected $iSeparateInd = 0;
+    protected int $separateInd = 0;
 
-    /**
-     * @var array of used Tab Indexes
-     */
-    private $aTabIndex = array();
+    private array $tabIndex = [];
 
-    /**
-     * @var boolean Is Multi-language
-     */
-    protected $bMultiLng;
+    protected ?bool $multiLng = null;
 
-    /**
-     * Template block constructor
-     * @param \fan\core\block\form\usual $oBlock
-     */
-    public function __construct(\fan\core\block\form\usual $oBlock)
+    public function __construct(\fan\core\block\form\usual $block)
     {
-        parent::__construct($oBlock);
+        parent::__construct($block);
 
-        $this->oForm     = $oBlock->getForm();
-        $this->oFormMeta = $oBlock->getFormMeta();
-        foreach (array('input', 'checking', 'select', 'select_separated', 'select_multi', 'select_multi_separated') as $sType) {
-            foreach ($this->_getFormMeta(array('design', $sType), array()) as $k => $v) {
-                $this->aFieldType[$k] = $sType;
+        $this->form     = $block->getForm();
+        $this->formMeta = $block->getFormMeta();
+        foreach (['input', 'checking', 'select', 'select_separated', 'select_multi', 'select_multi_separated'] as $type) {
+            foreach ($this->_getFormMeta(['design', $type], []) as $k => $v) {
+                $this->fieldType[$k] = $type;
             }
         }
 
-        for ($i = $this->oFormMeta['formNumber']; $i < 500; $i++) {
-            if (!isset(self::$aFormNumber[$i])) {
-                self::$aFormNumber[$i] = $this->sBlockName;
-                $this->iCurNum = $i;
+        for ($i = $this->formMeta['formNumber']; $i < 500; $i++) {
+            if (!isset(self::$formNumber[$i])) {
+                self::$formNumber[$i] = $this->blockName;
+                $this->curNum = $i;
                 break;
             }
         }
 
-        $this->bMultiLng = $this->oForm->isMultiLanguage();
-    } // function __construct
+        $this->multiLng = $this->form->isMultiLanguage();
+    }
 
-    /**
-     * Get Engine List
-     * @return array
-     */
-    public static function getEngineList()
+    public static function getEngineList(): array
     {
-        return array('main', 'form');
-    } // function getEngineList
+        return ['main', 'form'];
+    }
 
-    /**
-     * Get Auto-parse data
-     * @return array
-     */
-    public static function getAutoParseTag()
+    public static function getAutoParseTag(): array
     {
-        return array(
-            'form_row'    => array('method' => 'getFormRow',  'require' => array('name')),
-            'form_label'  => array('method' => 'getLabel',    'require' => array('name')),
-            'form_field'  => array('method' => 'getField',    'require' => array('name')),
-            'form_error'  => array('method' => 'getErrorMsg', 'require' => array('name')),
-            'form_note'   => array('method' => 'getNote',     'require' => array()),
-            'form_button' => array('method' => 'getButton',   'require' => array('text')),
-        );
-    } // function getAutoParseTag
+        return [
+            'form_row'    => ['method' => 'getFormRow',  'require' => ['name']],
+            'form_label'  => ['method' => 'getLabel',    'require' => ['name']],
+            'form_field'  => ['method' => 'getField',    'require' => ['name']],
+            'form_error'  => ['method' => 'getErrorMsg', 'require' => ['name']],
+            'form_note'   => ['method' => 'getNote',     'require' => []],
+            'form_button' => ['method' => 'getButton',   'require' => ['text']],
+        ];
+    }
 
-    /**
-     * Get hidden field form key
-     * @return string
-     */
-    public function getKeyField()
+    public function getKeyField(): string
     {
-        $sKeyValue = $this->oFormMeta['form_id'];
-        $nCsrfLen  = (integer)$this->oFormMeta['csrf_protection'];
-        if ($nCsrfLen >= 4) {
-            $sCsrfCode = substr(md5(microtime() . $sKeyValue), 0, min(32, $nCsrfLen));
-            service('session', array($sKeyValue, 'form_key'))->set('csrf', $sCsrfCode);
-            $sKeyValue .= '_' . $sCsrfCode;
+        $keyValue = (string)$this->formMeta['form_id'];
+        $csrfLen  = (int)$this->formMeta['csrf_protection'];
+        if ($csrfLen >= 4) {
+            $csrfCode = substr(md5(microtime() . $keyValue), 0, min(32, $csrfLen));
+            $this->containerService('session', $keyValue, 'form_key')->set('csrf', $csrfCode);
+            $keyValue .= '_' . $csrfCode;
         }
-        return '<input type="hidden" name="form_key_field" value="' . $sKeyValue . '" />' . $this->getSidField();
-    } // function getKeyField
+        return '<input type="hidden" name="form_key_field" value="' . $keyValue . '" />' . $this->getSidField();
+    }
 
-    /**
-     * Get hidden field SID if cookies is disabled
-     * @return string
-     */
-    public function getSidField()
+    public function getSidField(): string
     {
-        $oSes = \fan\project\service\session::instance();
-        return $oSes->isByCookies() ? '' : '<input type="hidden" name="' . $oSes->getSessionName() . '" value="' . $oSes->getSessionId() .'" />';
-    } // function getSidField
+        $ses = $this->containerService('session');
+        return $ses->isByCookies() ? '' : '<input type="hidden" name="' . $ses->getSessionName() . '" value="' . $ses->getSessionId() .'" />';
+    }
 
-    /**
-     * Get Form Row
-     * @param array $aData
-     * @return string
-     */
-    public function getFormRow($aData)
+    public function getFormRow(array $data): string
     {
-        $sPattern = $this->_getFormMeta(array(
+        $pattern = $this->_getFormMeta([
             'design',
             'formRow',
-            empty($aData['type']) ? $this->_getFormMeta(array('default_type', 'formRow')) : $aData['type'],
-        ), '<div>{LABEL}{FORM_FIELD}{ERROR}{NOTE}</div>');
-        $aFind = $aReplace = array();
-        foreach (array(
-            array('{LABEL}',      'getLabel',    'label_type'),
-            array('{FORM_FIELD}', 'getField',    'field_type'),
-            array('{ERROR}',      'getErrorMsg', 'error_type'),
-            array('{NOTE}',       'getNote',     'note_type')
-        ) as $v) {
-            if (strstr($sPattern, $v[0])) {
-                $aFind[]    = $v[0];
-                $sMethod    = $v[1];
-                $aReplace[] = $this->$sMethod(array_merge($aData, array('type' => array_val($aData, $v[2]))));
+            empty($data['type']) ? $this->_getFormMeta(['default_type', 'formRow']) : $data['type'],
+        ], '<div>{LABEL}{FORM_FIELD}{ERROR}{NOTE}</div>');
+        $find = $replace = [];
+        foreach ([
+            ['{LABEL}',      'getLabel',    'label_type'],
+            ['{FORM_FIELD}', 'getField',    'field_type'],
+            ['{ERROR}',      'getErrorMsg', 'error_type'],
+            ['{NOTE}',       'getNote',     'note_type']
+        ] as $v) {
+            if (strstr($pattern, $v[0])) {
+                $find[]    = $v[0];
+                $method    = $v[1];
+                $replace[] = $this->$method(array_merge($data, ['type' => array_val($data, $v[2])]));
             }
         }
-        return str_replace($aFind, $aReplace, $sPattern);
-    } // function getFormRow
+        return str_replace($find, $replace, (string)$pattern);
+    }
 
-    /**
-     * Get Form Label
-     * @param array $aData
-     * @return string
-     */
-    public function getLabel($aData)
+    public function getLabel(array $data): string
     {
-        $aFieldMeta = $this->_getFieldMeta($aData);
-        if (empty($aFieldMeta['label'])) {
+        $fieldMeta = $this->_getFieldMeta($data);
+        if (empty($fieldMeta['label'])) {
             return '#!Label isn\'t set!#';
         }
 
-        $bRequired = false;
-        if (!empty($aFieldMeta['is_required'])) {
-            $bRequired = true;
-        } elseif (isset($aFieldMeta['validate_rules'])){
-            foreach ($aFieldMeta['validate_rules'] as $aRule){
-                if (!empty($aRule['rule_name']) && $aRule['rule_name'] == 'is_required'){
-                    $bRequired = true;
+        $required = false;
+        if (!empty($fieldMeta['is_required'])) {
+            $required = true;
+        } elseif (isset($fieldMeta['validate_rules'])){
+            foreach ($fieldMeta['validate_rules'] as $rule){
+                if (!empty($rule['rule_name']) && (string)$rule['rule_name'] === 'is_required'){
+                    $required = true;
                     break;
                 }
             }
         }
 
-        $sType     = empty($aData['type']) ? $this->_getFormMeta(array('default_type', 'label')) : $aData['type'];
-        $aPatterns = $this->_getFormMeta(array('design', 'label'));
-        $sPattern  = $bRequired && isset($aPatterns[$sType . '_required']) ? $aPatterns[$sType . '_required'] : array_val($aPatterns, $sType, '<span>{LABEL}:</span>');
+        $type     = empty($data['type']) ? $this->_getFormMeta(['default_type', 'label']) : $data['type'];
+        $patterns = $this->_getFormMeta(['design', 'label']);
+        $pattern  = $required && isset($patterns[$type . '_required']) ? $patterns[$type . '_required'] : array_val($patterns, $type, '<span>{LABEL}:</span>');
 
-        return str_replace('{LABEL}', $this->_getMsgByLng($aFieldMeta['label'], $aData), $sPattern);
-    } // function getLabel
+        return str_replace('{LABEL}', (string)$this->_getMsgByLng($fieldMeta['label'], $data), (string)$pattern);
+    }
 
-    /**
-     * Get Form Error Message
-     * @param array $aData
-     * @return string
-     */
-    public function getErrorMsg($aData)
+    public function getErrorMsg(array $data): string
     {
-        $mError = $this->oForm->getErrorMsg($aData['name']);
-        if(empty($mError)) {
-            $mError = $this->oForm->getErrorMsg($this->_parseCombiName($aData));
+        $error = $this->form->getErrorMsg($data['name']);
+        if (empty($error)) {
+            $error = $this->form->getErrorMsg($this->_parseCombiName($data));
         }
-        if(empty($mError)) {
+        if (empty($error)) {
             return '';
         }
-        $sPattern = $this->_getFormMeta(array(
+        $pattern = $this->_getFormMeta([
             'design',
             'error',
-            empty($aData['type']) ? $this->_getFormMeta(array('default_type', 'error')) : $aData['type'],
-        ), '<div>{TEXT}</div>');
+            empty($data['type']) ? $this->_getFormMeta(['default_type', 'error']) : $data['type'],
+        ], '<div>{TEXT}</div>');
 
-        if (!is_array($mError)) {
-            $sText = $mError;
-        } elseif (isset($aData['index'])) {
-            $sText = array_val($mError, $aData['index'], '');
+        if (!is_array($error)) {
+            $text = $error;
+        } elseif (isset($data['index'])) {
+            $text = array_val($error, $data['index'], '');
         } else {
-            $sText = '';
-            foreach ($mError as $v) {
-                if (!empty($sText) && !empty($v)) {
-                    $sText .= '<br />';
+            $text = '';
+            foreach ($error as $v) {
+                if (!empty($text) && !empty($v)) {
+                    $text .= '<br />';
                 }
-                $sText .= $v;
+                $text .= $v;
             }
         }
-        return str_replace('{TEXT}', $sText, $sPattern);
-    } // function getErrorMsg
+        return str_replace('{TEXT}', (string)$text, (string)$pattern);
+    }
 
-    /**
-     * Get Form Note
-     * @param array $aData
-     * @return string
-     */
-    public function getNote($aData)
+    public function getNote(array $data): string
     {
-        $sText = array_val($aData, 'note');
-        if(empty($sText)) {
-            $sText = $this->_getFieldMeta($aData, 'note');
+        $text = array_val($data, 'note');
+        if (empty($text)) {
+            $text = $this->_getFieldMeta($data, 'note');
         }
-        if(empty($sText)) {
+        if (empty($text)) {
             return '';
         }
 
-        $bMultiLng = array_val($aData, 'multiLng', $this->bMultiLng);
-        $sPattern  = $this->_getFormMeta(array(
+        $multiLng = array_val($data, 'multiLng', $this->multiLng);
+        $pattern  = $this->_getFormMeta([
             'design',
             'note',
-            empty($aData['type']) ? $this->_getFormMeta(array('default_type', 'note')) : $aData['type'],
-        ), '<div>{TEXT}</div>');
+            empty($data['type']) ? $this->_getFormMeta(['default_type', 'note']) : $data['type'],
+        ], '<div>{TEXT}</div>');
 
-        return str_replace(array(
+        return str_replace([
             '{NOTE}',
             '{TEXT}'
-        ), array(
-            $this->_getMsgByLng($bMultiLng ? 'NOTE_FORM_ROW' : 'Note', $aData),
-            $this->_getMsgByLng($sText, $aData)
-        ), $sPattern);
-    } // function getNote
+        ], [
+            (string)$this->_getMsgByLng($multiLng ? 'NOTE_FORM_ROW' : 'Note', $data),
+            (string)$this->_getMsgByLng($text, $data)
+        ], (string)$pattern);
+    }
 
-    /**
-     * Get Form Button
-     * @param array $aData
-     * @return string
-     */
-    public function getButton($aData)
+    public function getButton(array $data): string
     {
-        $sPattern = $this->_getFormMeta(array(
+        $pattern = $this->_getFormMeta([
             'design',
             'button',
-            empty($aData['type']) ? $this->_getFormMeta(array('default_type', 'button')) : $aData['type'],
-        ), '<input type="submit"{NAME} value="{VALUE}"{TABINDEX} />');
-        return str_replace(' name=""', '', str_replace(array(
+            empty($data['type']) ? $this->_getFormMeta(['default_type', 'button']) : $data['type'],
+        ], '<input type="submit"{NAME} value="{VALUE}"{TABINDEX} />');
+        return str_replace(' name=""', '', str_replace([
             '{TEXT}',
             '{NAME}',
             '{ID}',
             '{VALUE}',
             '{CLASS}',
-        ), array(
-            $this->_getMsgByLng($aData['text'], $aData),
-            isset($aData['name'])  ? ' name="' . $aData['name'] . '"' : '',
-            empty($aData['id'])    ? '' : 'id="' . $aData['id'] . '"',
-            array_val($aData, 'value', 1),
-            isset($aData['class']) ? ' class="' . $aData['class'] . '"' : '',
-        ), $this->_setAttributes($sPattern, $aData)));
-    } // function getButton
+        ], [
+            (string)$this->_getMsgByLng($data['text'], $data),
+            isset($data['name'])  ? ' name="' . $data['name'] . '"' : '',
+            empty($data['id'])    ? '' : 'id="' . $data['id'] . '"',
+            (string)array_val($data, 'value', 1),
+            isset($data['class']) ? ' class="' . $data['class'] . '"' : '',
+        ], $this->_setAttributes($pattern, $data)));
+    }
 
-    /**
-     * Get Form element for Input/Select data
-     * @param array $aData
-     * @return string
-     */
-    public function getField($aData)
+    public function getField(array $data): string
     {
-        if (empty($aData['type'])) {
-            $aData['type'] = $this->_getFieldMeta($aData, 'input_type');
+        if (empty($data['type'])) {
+            $data['type'] = $this->_getFieldMeta($data, 'input_type');
         }
 
-        if (!isset($this->aFieldType[$aData['type']])) {
+        if (!isset($this->fieldType[$data['type']])) {
             return '<!-- Undefined field type -->';
         }
-        switch ($this->aFieldType[$aData['type']]) {
+        switch ($this->fieldType[$data['type']]) {
         case 'input':
-            $sMetod = 'getInput';
+            $metod = 'getInput';
             break;
         case 'checking':
-            $sMetod = 'getChecking';
+            $metod = 'getChecking';
             break;
         case 'select':
         case 'select_multi':
-            $sMetod = 'getSelect';
+            $metod = 'getSelect';
             break;
         case 'select_separated':
         case 'select_multi_separated':
-            $sMetod = 'getSeparatedSelect';
+            $metod = 'getSeparatedSelect';
             break;
         }
-        return $this->$sMetod($aData);
-    } // function getField
+        return $this->$metod($data);
+    }
 
-    /**
-     * Get Form element for Input data
-     * @param array $aData
-     * @return string
-     */
-    public function getInput($aData)
+    public function getInput(array $data): string
     {
-        $sPattern = $this->_getFormMeta(
-                array('design', 'input', empty($aData['type']) ? 'text' : $aData['type']),
+        $pattern = $this->_getFormMeta(
+                ['design', 'input', empty($data['type']) ? 'text' : $data['type']],
                 '<input type="text" name="{NAME}" value="{VALUE}"{MAXLENGTH}{ATTRIBUTES}{TABINDEX} />'
         );
 
-        $sMaxLength = $this->_getFieldMeta($aData, 'maxlength');
-        if (!empty($sMaxLength)) {
-            $sMaxLength = ' maxlength="' . (int)$sMaxLength . '"';
-            unset($aData['attributes']['maxlength']);
+        $maxLength = $this->_getFieldMeta($data, 'maxlength');
+        if (!empty($maxLength)) {
+            $maxLength = ' maxlength="' . (int)$maxLength . '"';
+            unset($data['attributes']['maxlength']);
         }
-        $mVal = $this->_getFieldValue($aData);
-        return str_replace(array(
+        $val = $this->_getFieldValue($data);
+        return str_replace([
             '{NAME}',
             '{ID}',
             '{VALUE}',
             '{MAXLENGTH}',
-        ), array(
-            $aData['name'],
-            empty($aData['id']) ? '' : ' id="' . $this->_getIdByName($aData['name']) . '"',
-            is_scalar($mVal) ? $mVal : '',
-            $sMaxLength,
-        ), $this->_setAttributes($sPattern, $aData));
-    } // function getInput
+        ], [
+            $data['name'],
+            empty($data['id']) ? '' : ' id="' . $this->_getIdByName($data['name']) . '"',
+            is_scalar($val) ? $val : '',
+            $maxLength,
+        ], $this->_setAttributes($pattern, $data));
+    }
 
-    /**
-     * Get Form element for checkbox or radio
-     * @param array $aData
-     * @return string
-     */
-    public function getChecking($aData)
+    public function getChecking(array $data): string
     {
-        $sPattern = $this->_getFormMeta(
-                array('design', 'checking', empty($aData['type']) ? 'checkbox' : $aData['type']),
+        $pattern = $this->_getFormMeta(
+                ['design', 'checking', empty($data['type']) ? 'checkbox' : $data['type']],
                 '<input type="text" name="{NAME}" value="1"{CHECKED}{ATTRIBUTES}{TABINDEX} />'
         );
-        //$aFldMeta = $this->_getFieldMeta($aData);
-        $mVal = $this->_getFieldValue($aData);
-        return str_replace(array(
+        //$fldMeta = $this->_getFieldMeta($data);
+        $val = $this->_getFieldValue($data);
+        return str_replace([
             '{NAME}',
             '{ID}',
             '{CHECKED}',
-        ), array(
-            $aData['name'],
-            empty($aData['id']) ? '' : 'id="' . $this->_getIdByName($aData['name']) . '"',
-            empty($mVal)        ? '' : ' checked="checked"',
-        ), $this->_setAttributes($sPattern, $aData));
-    } // function getChecking
+        ], [
+            $data['name'],
+            empty($data['id']) ? '' : 'id="' . $this->_getIdByName($data['name']) . '"',
+            empty($val)        ? '' : ' checked="checked"',
+        ], $this->_setAttributes($pattern, $data));
+    }
 
-    /**
-     * Get Form element for Select data
-     * @param array $aData
-     * @return string
-     */
-    public function getSelect($aData)
+    public function getSelect(array $data): string
     {
-        $sFieldType = isset($this->aFieldType[$aData['type']]) ? $this->aFieldType[$aData['type']] : null;
-        if (!$sFieldType || $sFieldType == 'input') {
-            $sFieldType = 'select';
+        $fieldType = isset($this->fieldType[$data['type']]) ? $this->fieldType[$data['type']] : null;
+        if (!$fieldType || $fieldType === 'input') {
+            $fieldType = 'select';
         }
-        $sPattern = $this->_getFormMeta(
-                array('design', $sFieldType, empty($aData['type']) ? 'select' : $aData['type']),
+        $pattern = $this->_getFormMeta(
+                ['design', $fieldType, empty($data['type']) ? 'select' : $data['type']],
                 '<select name="{NAME}"{ATTRIBUTES}{TABINDEX}>[<option value="{VALUE}"{SELECTED}>{TEXT}</option>]</select>'
         );
-        $aMatches = array();
-        if (preg_match('/^(?:[^\[]+|\[\])*\[(.+?)(?<!\[)\].*$/', $sPattern, $aMatches)) {
-            $sSubPattern = $aMatches[1];
-            $sPattern = str_replace('[' . $sSubPattern . ']', '{SUB_PATTERN}', $sPattern);
+        $matches = [];
+        if (preg_match('/^(?:[^\[]+|\[\])*\[(.+?)(?<!\[)\].*$/', $pattern, $matches)) {
+            $subPattern = $matches[1];
+            $pattern = str_replace('[' . $subPattern . ']', '{SUB_PATTERN}', $pattern);
         } else {
-            $sSubPattern = '';
+            $subPattern = '';
         }
 
-        $mVal = $this->_getFieldValue($aData);
-        $mFdt = $this->_getFieldData($aData);
-        return  str_replace(array(
+        $val = $this->_getFieldValue($data);
+        $fdt = $this->_getFieldData($data);
+        return  str_replace([
             '{NAME}',
             '{ID}',
             '{SUB_PATTERN}',
-        ), array(
-            $aData['name'],
-            empty($aData['id']) ? '' : 'id="' . $this->_getIdByName($aData['name']) . '"',
-            empty($sSubPattern) ? '' : $this->_parseSubPattern(
-                    $sSubPattern,
-                    (is_scalar($mVal) || $sFieldType == 'select_multi') ? $mVal : '',
-                    $mFdt,
-                    $aData,
-                    $sFieldType
+        ], [
+            $data['name'],
+            empty($data['id']) ? '' : 'id="' . $this->_getIdByName($data['name']) . '"',
+            empty($subPattern) ? '' : $this->_parseSubPattern(
+                    $subPattern,
+                    (is_scalar($val) || $fieldType === 'select_multi') ? $val : '',
+                    $fdt,
+                    $data,
+                    $fieldType
             ),
-        ), $this->_setAttributes($sPattern, $aData));
-    } // function getSelect
+        ], $this->_setAttributes($pattern, $data));
+    }
 
-    /**
-     * Get Form element for Select data
-     * @param array $aData
-     * @return string
-     */
-    public function getSeparatedSelect($aData)
+    public function getSeparatedSelect(array $data): string
     {
-        $sFieldType = isset($this->aFieldType[$aData['type']]) ? $this->aFieldType[$aData['type']] : null;
-        $sPattern   = $this->_getFormMeta(
-                array('design', $sFieldType, empty($aData['type']) ? 'checkbox_alone' : $aData['type']),
+        $fieldType = isset($this->fieldType[$data['type']]) ? $this->fieldType[$data['type']] : null;
+        $pattern   = $this->_getFormMeta(
+                ['design', $fieldType, empty($data['type']) ? 'checkbox_alone' : $data['type']],
                 '<input type="checkbox" name="{NAME}[]" id="{ID}" value="{VALUE}"{CHECKED}{ATTRIBUTES}{TABINDEX} />'
         );
 
-        $mFdt = $this->_getFieldData($aData);
-        if (is_scalar($mFdt)) {
+        $fdt = $this->_getFieldData($data);
+        if (is_scalar($fdt)) {
             return 'Incorrect data';
         }
 
-        if (empty($mFdt[$this->iSeparateInd++])) {
+        if (empty($fdt[$this->separateInd++])) {
             return '';
         }
-        $nInd = $this->iSeparateInd - 1;
-        $mCdt = $mFdt[$nInd];
-        $mCdt['value'] = array_val($mCdt, 'value');
-        $mCdt['text']  = array_val($mCdt, 'text');
+        $ind = $this->separateInd - 1;
+        $cdt = $fdt[$ind];
+        $cdt['value'] = array_val($cdt, 'value');
+        $cdt['text']  = array_val($cdt, 'text');
 
-        $mVal = $this->_getFieldValue($aData, array());
-        if ($sFieldType == 'select_multi_separated' && !is_array($mVal)) {
-            $mVal = array();
+        $val = $this->_getFieldValue($data, []);
+        if ($fieldType === 'select_multi_separated' && !is_array($val)) {
+            $val = [];
         }
+        $selectedValue = is_scalar($val) || $val === null ? (string)$val : '';
+        $selectedValues = is_array($val) ? array_map(
+                static fn($item) => is_scalar($item) || $item === null ? (string)$item : $item,
+                $val
+        ) : [];
 
-        return  str_replace(array(
+        return  str_replace([
             '{NAME}',
             '{ID}',
             '{VALUE}',
             '{TEXT}',
             '{CHECKED}',
-        ), array(
-            $aData['name'],
-            $this->_getIdByName($aData['name']) . '_' . ($nInd),
-            array_val($mCdt, 'value'),
-            array_val($mCdt, 'text'),
-            isset($mCdt['value']) && ($sFieldType == 'select_separated' ? $mCdt['value'] == $mVal : in_array($mCdt['value'], $mVal)) ?
+        ], [
+            $data['name'],
+            $this->_getIdByName($data['name']) . '_' . ($ind),
+            array_val($cdt, 'value'),
+            array_val($cdt, 'text'),
+            isset($cdt['value']) && (
+                    $fieldType === 'select_separated' ?
+                    (string)$cdt['value'] === $selectedValue :
+                    in_array((string)$cdt['value'], $selectedValues, true)
+            ) ?
                 ' checked="checked"' :
                 '',
-        ), $this->_setAttributes($sPattern, $aData));
-    } // function getSeparatedSelect
+        ], $this->_setAttributes($pattern, $data));
+    }
 
 
     // ---------------------------------------------------- \\
 
-    /**
-     * Get text by langeage setting
-     * @param string $sText - sourse text
-     * @param array $aData - tag data
-     * @return mixed - value of meta var
-     */
-    protected function _getMsgByLng($sText, $aData)
+    protected function _getMsgByLng(string $text, array $data): mixed
     {
-        return array_val($aData, 'multiLng', $this->bMultiLng) ? msg($sText) : $sText;
-    } // function _getMsgByLng
+        return array_val($data, 'multiLng', $this->multiLng) ? msg((string)$text) : (string)$text;
+    }
 
     /**
-     * Preliminary parsing of "select"
-     * @param string $sSubPattern
-     * @param string $mValue
-     * @param mixed $mFdt
-     * @param array $aData
-     * @param string $sFieldType
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function _parseSubPattern($sSubPattern, $mValue, $mFdt, $aData, $sFieldType)
+    protected function _parseSubPattern(string $subPattern, mixed $value, mixed $fdt, array $data, string $fieldType): string
     {
-        $sRet = '';
-        if (is_array($mFdt)) {
-            foreach ($mFdt as $k =>$d) {
+        $ret = '';
+        if (is_array($fdt)) {
+            foreach ($fdt as $k =>$d) {
                 $d['value'] = array_val($d, 'value');
                 $d['text']  = array_val($d, 'text');
-                $bSelected = !is_null($mValue) && ($sFieldType == 'select_multi' ? in_array($d['value'], adduceToArray($mValue)) : strcmp($d['value'], $mValue) == 0);
-                $sRet .= str_replace(array(
+                $normalizedValues = array_map(
+                        static fn($item) => is_scalar($item) || $item === null ? (string)$item : $item,
+                        adduceToArray($value)
+                );
+                $normalizedValue = is_scalar($value) || $value === null ? (string)$value : '';
+                $selected = !is_null($value) && (
+                        $fieldType === 'select_multi' ?
+                        in_array((string)$d['value'], $normalizedValues, true) :
+                        strcmp((string)$d['value'], $normalizedValue) === 0
+                );
+                $ret .= str_replace([
                     '{NAME}',
                     '{ID}',
                     '{VALUE}',
                     '{TEXT}',
                     '{SELECTED}',
                     '{CHECKED}',
-                ), array(
-                    $aData['name'],
-                    $this->_getIdByName($aData['name']) . '_' . $k,
+                ], [
+                    $data['name'],
+                    $this->_getIdByName($data['name']) . '_' . $k,
                     $d['value'],
                     $d['text'],
-                    ($bSelected ? ' selected="selected"' : ''),
-                    ($bSelected ? ' checked="checked"' : ''),
-                ), $this->_setAttributes($sSubPattern, $aData));
+                    ($selected ? ' selected="selected"' : ''),
+                    ($selected ? ' checked="checked"' : ''),
+                ], $this->_setAttributes($subPattern, $data));
             }
         }
-        return $sRet;
-    } // function _parseSubPattern
+        return $ret;
+    }
 
-    /**
-     * Set Attributes in the Pattern
-     * @param string $sPattern
-     * @param array $aData
-     * @param boolean $bIsTabInd
-     * @return string
-     */
-    protected function _setAttributes($sPattern, $aData, $bIsTabInd = true)
+    protected function _setAttributes(string $pattern, array $data, bool $isTabInd = true): string
     {
-        if ($bIsTabInd) {
-            $sPattern = $this->_setTabIndex($sPattern, $aData);
+        if ($isTabInd) {
+            $pattern = $this->_setTabIndex($pattern, $data);
         }
-        $sAttrRepl = '';
-        if (!empty($aData['name'])) {
-            $aAttr = $this->_getFieldMeta($aData, 'attributes', array_val($aData, 'attributes'));
-            if ($aAttr) {
-                foreach ($aAttr as $k => $v) {
-                    $sAttrRepl .= ' ' . $k . '="' . $v . '"';
+        $attrRepl = '';
+        if (!empty($data['name'])) {
+            $attr = $this->_getFieldMeta($data, 'attributes', array_val($data, 'attributes'));
+            if ($attr) {
+                foreach ($attr as $k => $v) {
+                    $attrRepl .= ' ' . $k . '="' . $v . '"';
                 }
             }
         }
-        return str_replace('{ATTRIBUTES}', $sAttrRepl, $sPattern);
-    } // function _setAttributes
+        return str_replace('{ATTRIBUTES}', $attrRepl, $pattern);
+    }
 
-    /**
-     * Set current TabIndex in the Pattern
-     * @param string $sPattern
-     * @param array $aData
-     * @return string
-     */
-    protected function _setTabIndex($sPattern, $aData)
+    protected function _setTabIndex(string $pattern, array $data): string
     {
-        if (!strstr($sPattern, '{TABINDEX}') || (isset($aData['tabindex']) && empty($aData['tabindex']))) {
-            return $sPattern;
+        if (!strstr($pattern, '{TABINDEX}') || (isset($data['tabindex']) && empty($data['tabindex']))) {
+            return $pattern;
         }
-        $nTabIndex = array_val($aData, 'tabindex', empty($this->aTabIndex) ? 1 : max($this->aTabIndex) + 1);
-        if (in_array($nTabIndex, $this->aTabIndex)) {
-            trigger_error('Duplicate TabIndex ' . $nTabIndex . ' at the form "' . $this->sBlockName . '".', E_USER_NOTICE);
+        $tabIndex = array_val($data, 'tabindex', empty($this->tabIndex) ? 1 : max($this->tabIndex) + 1);
+        if (in_array($tabIndex, $this->tabIndex)) {
+            throw new \UnexpectedValueException('Duplicate TabIndex ' . $tabIndex . ' at the form "' . $this->blockName . '".');
         } else {
-            $this->aTabIndex[] = $nTabIndex;
+            $this->tabIndex[] = $tabIndex;
         }
-        return str_replace('{TABINDEX}', ' tabindex="' . ($this->iCurNum * 100 + $nTabIndex) . '"', $sPattern);
-    } // function _setTabIndex
+        return str_replace('{TABINDEX}', ' tabindex="' . ($this->curNum * 100 + $tabIndex) . '"', $pattern);
+    }
+
+    protected function _getIdByName(string $name): string
+    {
+        return str_replace(']', '', str_replace('[', '_', str_replace('][', '_', (string)$name)));
+    }
 
     /**
-     * Get Id By Name (replace "[" and "]" to "_")
-     * @param string $sName
-     * @return string
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    protected function _getIdByName($sName)
+    protected function _getFormMeta(mixed $key, mixed $default = null): mixed
     {
-        return str_replace(']', '', str_replace('[', '_', str_replace('][', '_', $sName)));
-    } // function _getIdByName
-
-    /**
-     * Get meta-element variable value
-     * @param mixed $mKey - key of var
-     * @param mixed $mDefault - default value
-     * @return mixed - value of meta var
-     */
-    protected function _getFormMeta($mKey, $mDefault = null)
-    {
-        if (is_array($mKey)) {
-            $aDest = array_get_element($this->oFormMeta, $mKey, false);
-            return is_null($aDest) ? $mDefault : $aDest;
+        if (is_array($key)) {
+            $dest = array_get_element($this->formMeta, $key, false);
+            return is_null($dest) ? $default : $dest;
         }
-        return array_val($this->oFormMeta, $mKey, $mDefault);
-    } // function _getFormMeta
+        return array_val($this->formMeta, $key, $default);
+    }
 
     /**
-     * Get Meta-data by combi Field-name
-     * @param array $aData
-     * @param string $sKey
-     * @param mixed $mDefault - default value
-     * @return mixed
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    protected function _getFieldMeta($aData, $sKey = null, $mDefault = null)
+    protected function _getFieldMeta(array $data, mixed $key = null, mixed $default = null): mixed
     {
-        $sName = $aData['name'];
-        $aMatches = array();
+        $name = $data['name'];
+        $matches = [];
         for ($i = 0; $i < 2; $i++) {
-            $aKey = is_null($sKey) ? array('fields', $sName) : array('fields', $sName, $sKey);
-            $mVal = $this->_getFormMeta($aKey);
-            if (!is_null($mVal)) {
-                return $mVal;
+            $key = is_null($key) ? ['fields', $name] : ['fields', $name, $key];
+            $val = $this->_getFormMeta($key);
+            if (!is_null($val)) {
+                return $val;
             }
-            if (!empty($i) || !preg_match(self::RE_NAME, $sName, $aMatches)) {
+            if (!empty($i) || !preg_match(self::RE_NAME, $name, $matches)) {
                 break;
             }
-            $sName = $aMatches[1];
+            $name = $matches[1];
         }
-        return $mDefault;
-    } // function _getFieldMeta
+        return $default;
+    }
 
     /**
-     * Get Value of field by combi Field-name
-     * @param array $aData
-     * @param mixed $mDefault - default value
-     * @return mixed
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    protected function _getFieldValue($aData, $mDefault = null)
+    protected function _getFieldValue(array $data, mixed $default = null): mixed
     {
-        $mVal = $this->oForm->getFieldValue($this->_parseCombiName($aData), false);
-        return is_null($mVal) ? $mDefault : $mVal;
-    } // function _getFieldValue
+        $val = $this->form->getFieldValue($this->_parseCombiName($data), false);
+        return is_null($val) ? $default : $val;
+    }
 
     /**
-     * Get Data of field by combi Field-name
-     * @param array $aData
-     * @param mixed $mDefault - default value
-     * @return mixed
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    protected function _getFieldData($aData, $mDefault = null)
+    protected function _getFieldData(array $data, mixed $default = null): mixed
     {
-        $mName = $aData['name'];
-        $aMatches = array();
+        $name = $data['name'];
+        $matches = [];
         for ($i = 0; $i < 2; $i++) {
-            $mVal = $this->oForm->getFieldData($mName);
-            if (!is_null($mVal)) {
-                return $mVal;
+            $val = $this->form->getFieldData($name);
+            if (!is_null($val)) {
+                return $val;
             }
-            if (!empty($i) || !preg_match(self::RE_NAME, $mName, $aMatches)) {
+            if (!empty($i) || !preg_match(self::RE_NAME, $name, $matches)) {
                 break;
             }
-            $mName = $aMatches[1];
+            $name = $matches[1];
         }
-        return $mDefault;
-    } // function _getFieldData
+        return $default;
+    }
 
-    protected function _parseCombiName($aData)
+    protected function _parseCombiName(array $data): string|array
     {
-        $mName = $aData['name'];
-        $aMatches = array();
-        if (preg_match(self::RE_NAME, $mName, $aMatches)) {
-            $mName = explode('][', substr($aMatches[2], 1, -1));
-            array_unshift($mName, $aMatches[1]);
+        $name = $data['name'];
+        $matches = [];
+        if (preg_match(self::RE_NAME, $name, $matches)) {
+            $name = explode('][', substr($matches[2], 1, -1));
+            array_unshift($name, $matches[1]);
         }
-        return $mName;
-    } // function _getFieldValue
+        return $name;
+    }
 
-} // class \fan\core\service\template\type\form
-?>
+}

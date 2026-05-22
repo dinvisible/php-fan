@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\admin;
 /**
  * Admin info data class for loader block
  *
@@ -17,31 +21,21 @@
 class data_info extends data
 {
 
-    /**
-     * Get Main Data
-     * @param array $aData
-     * @param array $aForce
-     * @return boolean
-     */
-    protected function getMainData($aData, $aForce = array())
+    protected function getMainData(mixed $data, mixed $force = []): array
     {
-        if (!isset($aForce['template'])) {
-            $aForce['template'] = 1;
+        if (!isset($force['template'])) {
+            $force['template'] = 1;
         }
-        return parent::getMainData($aData, $aForce);
-    } // function getMainData
+        return parent::getMainData($data, $force);
+    }
 
-    /**
-     * Get Content ExtraData
-     */
-    public function getExtraData()
+    public function getExtraData(): array
     {
-        $aRet = parent::getExtraData();
-        $sPS = $this->getMeta('parsingScript');
-        if ($sPS) {
-            $aRet['parsingScript'] = $sPS;
+        $ret = parent::getExtraData();
+        $ps = $this->getMeta('parsingScript');
+        if ($ps) {
+            $ret['parsingScript'] = $ps;
         }
-        return $aRet;
-    } // function getExtraData
-} // class \fan\core\block\admin\data_info
-?>
+        return $ret;
+    }
+}

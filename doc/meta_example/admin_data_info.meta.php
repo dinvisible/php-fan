@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Example of meta file for admin_content_info block
  * Note:
@@ -16,14 +19,14 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 02.002
  */
-return array(
-    'own' => array(
-        'force'  => array(
+return [
+    'own' => [
+        'force'  => [
             'template'   => true OR false, // NR. Set it if you want to parce template each time.     By default: false
             'add_param'  => true OR false, // NR. Set it if you want to set add parameters each time. By default: false
             'extra_data' => true OR false, // NR. Set it if you want to set extra data each time.     By default: false
-        ),
-		
+        ],
+
         'tagId' => 'id_name', // NR. Id for tag container. It will be with prefix "cont_". Usualy use for css-classes
 
         'parsingScript' => 'Some script which run after create block',
@@ -33,10 +36,9 @@ return array(
         /**
          * All parameters below it is possible to set as "own"-part, amd in 'common'-part
          */
-        'tplVars' => array( // variable, which sets in template automaticaly
+        'tplVars' => [ // variable, which sets in template automaticaly
             'tplVar1' => 'Value of variable 1',
             'tplVar2' => 'Value of variable 2',
-        ),
-    ),
-);
-?>
+        ],
+    ],
+];

@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Captcha manager service
@@ -21,175 +24,121 @@ class captcha extends \fan\core\base\service\multi
      * Service's Instances
      * @var \fan\core\service\captcha[]
      */
-    private static $aInstances = array();
+    private static array $instances = [];
 
     /**
      * Engine object of text generator
      * @var \fan\core\service\captcha\base
      */
-    private $oTextGenerator;
+    private ?object $textGenerator = null;
     /**
      * Engine object of binary File Maker
      * @var \fan\core\service\captcha\base
      */
-    private $oFileMaker;
+    private ?object $fileMaker = null;
 
     /**
      * Form Id
      * @var string
      */
-    private $sFormId;
+    private ?string $formId = null;
 
-    /**
-     * Service's constructor
-     * @param string $sFormId
-     */
-    protected function __construct($sFormId)
+    protected function __construct(string $formId)
     {
         parent::__construct(true);
-        $this->sFormId = $sFormId;
-        self::$aInstances[$sFormId] = $this;
-    } // function __construct
+        $this->formId = (string)$formId;
+        self::$instances[$this->formId] = $this;
+    }
 
     // ======== Static methods ======== \\
-    /**
-     *
-     * @param string|\fan\core\block\form\usual $mFormId
-     * @return \fan\core\service\captcha
-     */
-    public static function instance($mFormId)
+    public static function instance(string|\fan\core\block\form\usual $formId): static
     {
-        if (is_object($mFormId) && $mFormId instanceof \fan\core\block\form\usual) {
-            $mFormId = $mFormId->getMeta(array('form', 'form_id'));
-        } elseif (!is_string($mFormId)) {
-            $mFormId = 'main';
+        if (is_object($formId) && $formId instanceof \fan\core\block\form\usual) {
+            $formId = (string)$formId->getMeta(['form', 'form_id']);
+        } elseif (!is_string($formId)) {
+            $formId = 'main';
         }
-        if (!isset(self::$aInstances[$mFormId])) {
-            new self($mFormId);
+        if (!isset(self::$instances[$formId])) {
+            new self($formId);
         }
-        return self::$aInstances[$mFormId];
-    } // function instance
+        return self::$instances[$formId];
+    }
 
     // ======== Main Interface methods ======== \\
-    /**
-     * Make New text for captcha
-     * @param int $iLength
-     * @param string $sType
-     * @return \fan\core\service\captcha
-     */
-    public function makeNewText($iLength = null, $sType = null)
+    public function makeNewText(mixed $length = null, mixed $type = null): static
     {
-        if (is_null($iLength)) {
-            $iLength = $this->getConfig('TEXT_LENGTH', 5);
+        if (is_null($length)) {
+            $length = $this->getConfig('TEXT_LENGTH', 5);
         }
-        if (is_null($sType)) {
-            $sType = $this->getConfig('TEXT_TYPE', 'char');
+        if (is_null($type)) {
+            $type = $this->getConfig('TEXT_TYPE', 'char');
         }
-        $sText = $this->_getTextGenerator()->makeNewText($iLength, $sType);
-        $this->_getSession()->set($this->sFormId, $sText);
+        $text = $this->_getTextGenerator()->makeNewText((int)$length, (string)$type);
+        $this->_getSession()->set($this->formId, $text);
         return $this;
-    } // function makeNewText
+    }
 
-    /**
-     * Get new text for captcha
-     * @return string
-     */
-    public function getText()
+    public function getText(): mixed
     {
-        return $this->_getSession()->get($this->sFormId);
-    } // function getText
+        return $this->_getSession()->get($this->formId);
+    }
 
-    /**
-     * Clear text for captcha from session
-     * @return string
-     */
-    public function clearText()
+    public function clearText(): mixed
     {
-        return $this->_getSession()->remove($this->sFormId);
-    } // function getText
+        return $this->_getSession()->remove($this->formId);
+    }
 
-    /**
-     * Check captcha
-     * @param string $sText checked code
-     * @param boolean $bDel delete captcha
-     * @return boolean
-     */
-    public function checkCaptcha($sText, $bDel = true)
+    public function checkCaptcha(string $text, bool $del = true): bool
     {
-        $bRet = strlen($sText) > 0 && strtolower($sText) == strtolower($this->getText());
-        if ($bDel) {
+        $ret = strlen($text) > 0 && strtolower($text) === strtolower((string)$this->getText());
+        if ($del) {
             $this->clearText();
         }
-        return $bRet;
-    } // function checkCaptcha
+        return $ret;
+    }
 
-    /**
-     * Get Urn for load captcha
-     * @return string
-     */
-    public function getUrn()
+    public function getUrn(): string
     {
-        return $this->getConfig('URN_PREFIX' ,  '/captcha/') . $this->sFormId;
-    } // function getUrn
+        return $this->getConfig('URN_PREFIX' ,  '/captcha/') . $this->formId;
+    }
 
-    /**
-     * Get Headers for Binary Data of Captcha
-     * @return string
-     */
-    public function getHeaders()
+    public function getHeaders(): array
     {
         return $this->_getFileMaker()->getHeaders();
-    } // function getHeaders
+    }
 
-    /**
-     * Get Binary Data of Captcha
-     * @return string
-     */
-    public function getBinaryData()
+    public function getBinaryData(): string
     {
         return $this->_getFileMaker()->getData();
-    } // function getBinaryData
+    }
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Object of generator of text is showed on captcha
-     * @return object
-     */
-    protected function _getTextGenerator()
+    protected function _getTextGenerator(): \fan\core\service\captcha\base
     {
-        if (empty($this->oTextGenerator)) {
-            $sEngine = $this->getConfig('TEXT_GENERATOR', 'simple');
-            $this->oTextGenerator = $this->_getEngine('text_generator\\' . $sEngine);
-            $this->oTextGenerator->setConfig($this->oConfig);
+        if (empty($this->textGenerator)) {
+            $engine = $this->getConfig('TEXT_GENERATOR', 'simple');
+            $this->textGenerator = $this->_getEngine('text_generator\\' . $engine);
+            $this->textGenerator->setConfig($this->config);
         }
-        return $this->oTextGenerator;
-    } // function _getTextGenerator
+        return $this->textGenerator;
+    }
 
-    /**
-     * Object for make binary file for show a captcha
-     * @return object
-     */
-    protected function _getFileMaker()
+    protected function _getFileMaker(): \fan\core\service\captcha\base
     {
-        if (empty($this->oFileMaker)) {
-            $sEngine = $this->getConfig('FILE_MAKER', 'picture_1');
-            $this->oFileMaker = $this->_getEngine('file_maker\\' . $sEngine);
-            $this->oFileMaker->setConfig($this->oConfig);
+        if (empty($this->fileMaker)) {
+            $engine = $this->getConfig('FILE_MAKER', 'picture_1');
+            $this->fileMaker = $this->_getEngine('file_maker\\' . $engine);
+            $this->fileMaker->setConfig($this->config);
         }
-        return $this->oFileMaker;
-    } // function _getFileMaker
+        return $this->fileMaker;
+    }
 
-    /**
-     * Get system session
-     * @return \fan\core\service\session
-     */
-    protected function _getSession()
+    protected function _getSession(): mixed
     {
-        return service('session', array('captcha', 'service'));
-    } // function _getSession
+        return $this->containerService('session', 'captcha', 'service');
+    }
 
     // ======== The magic methods ======== \\
 
     // ======== Required Interface methods ======== \\
-} // class \fan\core\service\captcha
-?>
+}

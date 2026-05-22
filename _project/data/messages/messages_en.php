@@ -1,8 +1,11 @@
 <?php
+
+declare(strict_types=1);
+
 /*
  * Short messages array for language "en"
  */
-return array (
+return [
   'BUTTON_SEND_EMAIL' => 'Send email',
   'BUTTON_SUBMIT' => 'Submit',
   'BUTTON_UPLOAD' => 'Upload',
@@ -25,5 +28,4 @@ return array (
   'NOTE_UPLOAD_FILE_LIMIT' => 'The size of attached file should not exceed {video-size} Kb.',
   'OTHER_TEST' => 'Test',
   'OTHER_TEST_TAG' => 'Test {b}bold text{/b}',
-);
-?>
+];

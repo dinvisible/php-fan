@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\cache;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\cache;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * ADOdb wrapper for template engine
@@ -21,82 +24,64 @@ class memcache extends base
      * Keepers of Memcache
      * @var string
      */
-    private static $aKeepers = array();
+    private static array $keepers = [];
 
-    /**
-     * Method for load data from cache
-     * Must define property $this->mData and $this->aMetaData
-     */
-    protected function _loadData($bLoadMetaOnly)
+    protected function _loadData(bool $loadMetaOnly): bool
     {
-        $oKeeper         = $this->_getKeeper();
-        $aMetaData       = $oKeeper->get($this->_getKey('meta'));
-        $this->aMetaData = !$aMetaData ? array() : $aMetaData;
-        if (!$this->_checkActual($this->aMetaData) || $bLoadMetaOnly) {
+        $keeper         = $this->_getKeeper();
+        $metaData       = $keeper->get($this->_getKey('meta'));
+        $this->metaData = !$metaData ? [] : $metaData;
+        if (!$this->_checkActual($this->metaData) || $loadMetaOnly) {
             return false;
         }
 
-        $this->mData = $oKeeper->get($this->_getKey('data'));
+        $this->data = $keeper->get($this->_getKey('data'));
         return true;
     }
 
-    /**
-     * Method for save data to cache
-     * Must define property $this->mData and $this->aMetaData
-     */
-    protected function _saveData()
+    protected function _saveData(): static
     {
-        $oKeeper = $this->_getKeeper();
-        $oKeeper->set($this->_getKey('meta'), $this->aMetaData, 0, (int)$this->aMetaData['lifetime']);
-        $oKeeper->set($this->_getKey('data'), $this->mData,     0, (int)$this->aMetaData['lifetime']);
+        $keeper = $this->_getKeeper();
+        $keeper->set($this->_getKey('meta'), $this->metaData, 0, (int)$this->metaData['lifetime']);
+        $keeper->set($this->_getKey('data'), $this->data,     0, (int)$this->metaData['lifetime']);
+        return $this;
     }
 
-    /**
-     * Delete cached data
-     */
-    protected function _deleteData()
+    protected function _deleteData(): static
     {
-        $oKeeper = $this->_getKeeper();
-        $oKeeper->delete($this->_getKey('meta'));
-        $oKeeper->delete($this->_getKey('data'));
+        $keeper = $this->_getKeeper();
+        $keeper->delete($this->_getKey('meta'));
+        $keeper->delete($this->_getKey('data'));
         parent::_deleteData();
         return $this;
     }
 
     /**
-     * Get Keeper - instance of Memcache
-     * @return \Memcache
      * @throws fatalException
      */
-    protected function _getKeeper()
+    protected function _getKeeper(): object
     {
-        if (empty(self::$aKeepers[$this->sType])) {
+        if (empty(self::$keepers[$this->type])) {
             if (!class_exists('\Memcache')) {
-                $sErrMsg = 'Memcache doesn\'t setup there.';
-                if ($this->sType == 'config') {
-                    throw new \fan\core\exception\fatal($sErrMsg);
+                $errMsg = 'Memcache doesn\'t setup there.';
+                if ($this->type === 'config') {
+                    throw new \fan\core\exception\fatal($errMsg);
                 } else {
-                    throw new fatalException($this->oFacade, $sErrMsg);
+                    throw new fatalException($this->facade, $errMsg);
                 }
             }
-            self::$aKeepers[$this->sType] = new \Memcache();
-            self::$aKeepers[$this->sType]->addServer(
-                array_val($this->oConfig, 'HOST', 'localhost'),
-                array_val($this->oConfig, 'PORT', 11211)
+            self::$keepers[$this->type] = new \Memcache();
+            self::$keepers[$this->type]->addServer(
+                (string)array_val($this->config, 'HOST', 'localhost'),
+                (int)array_val($this->config, 'PORT', 11211)
             );
         }
-        return self::$aKeepers[$this->sType];
+        return self::$keepers[$this->type];
     }
 
-    /**
-     * Get key for save data
-     * @param string $sSuffix
-     * @return string
-     */
-    protected function _getKey($sSuffix)
+    protected function _getKey(string $suffix): string
     {
-        return $this->sType . '-' . $this->sKey . '-' . $sSuffix;
+        return $this->type . '-' . $this->key . '-' . $suffix;
     }
 
-} // class \fan\core\service\cache\memcache
-?>
+}

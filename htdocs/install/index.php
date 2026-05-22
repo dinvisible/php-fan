@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Run install-process
  *
@@ -9,26 +12,32 @@
  *     http://www.opensource.org/licenses/lgpl-license.php
  *
  * Do not remove this comment if you want to use script!
- * Не удаляйте данный комментарий, если вы хотите использовать скрипт!
+ * пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ!
  *
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.007 (31.08.2015)
  */
 header('Content-Type: text/html; charset=utf-8');
-require_once 'incl/header.php';
-require_once 'incl/base.php';
 
-$aClasses = array(
+require_once __DIR__ . '/../../vendor/autoload.php';
+
+echo \fan\project\adapter\php_template_file::render(__DIR__ . '/incl/header.php');
+if (!\fan\project\adapter\project_tool_loader::load('base', __DIR__ . '/incl/base.php')) {
+    throw new \RuntimeException('Installer base class is not available.');
+}
+
+$classes = [
     'check_configuration',
     'check_directories',
     'fan_version',
-);
-foreach ($aClasses as $v) {
-    require_once 'incl/' . $v . '.php';
-    if (!call_user_func(array($v, 'run'))) {
+];
+foreach ($classes as $v) {
+    if (!\fan\project\adapter\project_tool_loader::load($v, __DIR__ . '/incl/' . $v . '.php')) {
+        throw new \RuntimeException('Installer step class "' . $v . '" is not available.');
+    }
+    if (!call_user_func([$v, 'run'])) {
         break;
     }
 }
 
-require_once 'incl/footer.php';
-?>
+echo \fan\project\adapter\php_template_file::render(__DIR__ . '/incl/footer.php');

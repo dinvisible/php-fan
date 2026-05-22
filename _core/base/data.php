@@ -1,4 +1,8 @@
-<?php namespace fan\core\base;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\base;
 /**
  * Any types of Data (config, meta, entity, etc)
  *
@@ -14,13 +18,15 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-abstract class data implements \ArrayAccess, \Iterator, \Countable, \Serializable
+abstract class data implements \ArrayAccess, \Iterator, \Countable
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * Error messages
      * @var array
      */
-    protected $aErrMsg = array(
+    protected array $errMsg = [
         0  => 'Reserved for fatal error.',
         3  => 'Incorrect type of key "{KEY_TYPE}". Call class "{CLASS}".',
         5  => 'Unknown type ({TYPE}) of setter.',
@@ -28,203 +34,172 @@ abstract class data implements \ArrayAccess, \Iterator, \Countable, \Serializabl
         11 => 'Unrecognised setter tryed to reset data in "{CLASS}".',
         12 => 'Unrecognised setter tryed to unset data for key "{KEY}" in "{CLASS}".',
         14 => 'Set new data data inpossible for key "{KEY}" in the "{CLASS}".',
-    );
+    ];
 
     /**
      * Saved data
      * @var array
      */
-    protected $aData = array();
+    protected array $data = [];
 
     /**
      * List of classes who can set/change data
      * If array is empty - any caller can set/change data
      * @var array
      */
-    protected $aSetter = array();
+    protected array $setter = [];
 
     /**
      * Flag shows there are subelements - instances of this class
      * @var boolean
      */
-    protected $bMultiLevel = true;
+    protected bool $multiLevel = true;
 
     /**
      * Key of superior in multilevel systems (if null - this is root element)
      * @var string
      */
-    protected $sKey = null;
+    protected int|string|null $key = null;
 
     /**
      * Superior in multilevel systems (if null - this is root element)
      * @var \fan\core\base\data
      */
-    protected $oSuperior = null;
+    protected ?object $superior = null;
 
     /**
      * Flag allows Full data Rewrite
      * @var boolean
      */
-    protected $bFullRewrite = false;
+    protected bool $fullRewrite = false;
 
-    /**
-     * Constructor of Config-data
-     * @param array $aData
-     * @param string $sKey
-     * @param fan\core\service\config\row $oSuperior
-     */
-    public function __construct($aData = null, $sKey = null, $oSuperior = null)
+    public function __construct(mixed $data = null, int|string|null $key = null, ?\fan\core\base\data $superior = null)
     {
-        $this->sKey      = $sKey;
-        $this->oSuperior = $oSuperior;
-        if (is_array($aData)) {
-            foreach ($aData as $k => $v) {
+        $this->key      = $key;
+        $this->superior = $superior;
+        if (is_array($data)) {
+            foreach ($data as $k => $v) {
                 $this->set($k, $v, true);
             }
         }
-    } // function __construct
+    }
 
     // ======== Main Interface methods ======== \\
     /**
-     * Get value of data
-     * @param string|array $mKey
-     * @param mixed $mDefault
-     * @param boolean $bLogError
-     * @return mixed
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    public function get($mKey = null, $mDefault = null, $bLogError = false)
+    public function get(mixed $key = null, mixed $default = null, bool $logError = false): mixed
     {
-        if (is_scalar($mKey)) {
-            return isset($this->aData[$mKey]) ? $this->aData[$mKey] : $mDefault;
-        } elseif (is_null($mKey)) {
+        if (is_scalar($key)) {
+            return isset($this->data[$key]) ? $this->data[$key] : $default;
+        } elseif (is_null($key)) {
             return $this;
-        } elseif (!is_array($mKey)) {
-            if ($bLogError) {
-                $this->_logError(3, array('key_type' => gettype($mKey)));
+        } elseif (!is_array($key)) {
+            if ($logError) {
+                $this->_logError(3, ['key_type' => gettype($key)]);
             }
-            return $mDefault;
+            return $default;
         }
-        return $this->bMultiLevel ? $this->_getMultilevelData($mKey, $mDefault, $bLogError) : array_get_element($this->aData, $mKey, false);
-    } // function get
+        return $this->multiLevel ? $this->_getMultilevelData($key, $default, $logError) : array_get_element($this->data, $key, false);
+    }
 
     /**
-     * Set value of data
-     * @param string|number $mKey
-     * @param mixed $mValue
-     * @param boolean $bRewriteExisting - rewrite exists value
-     * @param boolean $bConvArray - convert array to object of this class (null is true for Multi-Level data)
-     * @return \fan\core\base\data
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function set($mKey, $mValue, $bRewriteExisting = true, $bConvArray = null)
+    public function set(mixed $key, mixed $value, bool $rewriteExisting = true, ?bool $convArray = null): static
     {
         if ($this->_checkSetter()) {
-            $bConvArray = is_null($bConvArray) ? $this->bMultiLevel : !empty($bConvArray);
+            $convArray = is_null($convArray) ? $this->multiLevel : !empty($convArray);
 
-            if (is_scalar($mKey)) {
-                if ($this->bMultiLevel && is_array($mValue) && isset($this->aData[$mKey]) && $this->_isThisClass($this->aData[$mKey])) {
-                    foreach ($mValue as $k => $v) {
-                        $this->aData[$mKey]->set($k, $v, $bRewriteExisting, $bConvArray);
+            if (is_scalar($key)) {
+                if ($this->multiLevel && is_array($value) && isset($this->data[$key]) && $this->_isThisClass($this->data[$key])) {
+                    foreach ($value as $k => $v) {
+                        $this->data[$key]->set($k, $v, $rewriteExisting, $convArray);
                     }
-                } elseif ($bRewriteExisting || !isset($this->aData[$mKey])) {
-                    $this->aData[$mKey] = is_array($mValue) && $bConvArray ? $this->_makeSubData($mKey, $mValue) : $mValue;
+                } elseif ($rewriteExisting || !isset($this->data[$key])) {
+                    $this->data[$key] = is_array($value) && $convArray ? $this->_makeSubData($key, $value) : $value;
                 } else {
-                    $this->_logError(14, array('key' => $mKey));
+                    $this->_logError(14, ['key' => $key]);
                 }
-            } elseif ($this->bMultiLevel && is_array($mKey)) {
-                $sKey = array_shift($mKey);
-                if (empty($mKey)) {
-                    $this->set($sKey, $mValue, $bRewriteExisting, $bConvArray);
+            } elseif ($this->multiLevel && is_array($key)) {
+                $path = $key;
+                $firstKey = array_shift($path);
+                if (empty($path)) {
+                    $this->set($firstKey, $value, $rewriteExisting, $convArray);
                 } else {
-                    if (!isset($this->aData[$sKey]) || !$this->_isThisClass($this->aData[$sKey])) {
-                        $this->aData[$sKey] = $this->_makeSubData($sKey, array());
+                    if (!isset($this->data[$firstKey]) || !$this->_isThisClass($this->data[$firstKey])) {
+                        $this->data[$firstKey] = $this->_makeSubData($firstKey, []);
                     }
 
-                    if (!is_object($this->aData[$sKey])) {
-                        trigger_error('Element of data with key "' . $sKey . '" has incorrect type "' . gettype($this->aData[$sKey]) . '" in class "' . get_class() . '".', E_USER_WARNING);
-                    } elseif (!method_exists($this->aData[$sKey], 'set')) {
-                        trigger_error('Element of data with key "' . $sKey . '" is instance of class "' . get_class($this->aData[$sKey]) . '" without method "set" in container class "' . get_class() . '".', E_USER_WARNING);
+                    if (!is_object($this->data[$firstKey])) {
+                        throw new \UnexpectedValueException('Element of data with key "' . $firstKey . '" has incorrect type "' . gettype($this->data[$firstKey]) . '" in class "' . get_class() . '".');
+                    } elseif (!method_exists($this->data[$firstKey], 'set')) {
+                        throw new \UnexpectedValueException('Element of data with key "' . $firstKey . '" is instance of class "' . get_class($this->data[$firstKey]) . '" without method "set" in container class "' . get_class() . '".');
                     } else {
-                        $this->aData[$sKey]->set($mKey, $mValue, $bRewriteExisting, $bConvArray);
+                        $this->data[$firstKey]->set($path, $value, $rewriteExisting, $convArray);
                     }
                 }
-            } elseif (is_array($mKey)) {
-                $mData =& array_get_element($this->aData, $mKey, true);
-                $mData = $mValue;
-            } elseif (is_null($mKey) && 0) {
-                // ToDo: $this->aData = $mValue;
+            } elseif (is_array($key)) {
+                $data =& array_get_element($this->data, $key, true);
+                $data = $value;
+            } elseif (is_null($key) && 0) {
+                // ToDo: $this->data = $value;
             } else {
-                $this->_logError(3, array('key_type' => gettype($mKey)));
+                $this->_logError(3, ['key_type' => gettype($key)]);
             }
 
         } else {
             $this->_logError(10);
         }
         return $this;
-    } // function set
-
-    public function toArray()
-    {
-        if (!$this->bMultiLevel) {
-            return $this->aData;
-        }
-        $aRet = array();
-        foreach ($this->aData as $k => $v) {
-            $aRet[$k] = $this->_isThisClass($v) ? $v->toArray() : $v;
-        }
-        return $aRet;
     }
 
-    /**
-     * Is Allowed Full Rewrite data
-     * @return boolean
-     */
-    public function isFullRewrite()
+    public function toArray(): array
     {
-        return $this->bFullRewrite;
+        if (!$this->multiLevel) {
+            return $this->data;
+        }
+        $ret = [];
+        foreach ($this->data as $k => $v) {
+            $ret[$k] = $this->_isThisClass($v) ? $v->toArray() : $v;
+        }
+        return $ret;
+    }
+
+    public function isFullRewrite(): bool
+    {
+        return $this->fullRewrite;
     }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Restore of Setter
-     * @return \fan\core\base\data
-     */
-    protected function _restoreSetters()
+    protected function _restoreSetters(): static
     {
         //Redefine this method for restore list of Setters
         return $this;
-    } // function _restoreSetters
+    }
 
-    /**
-     * Set Classes of Setter
-     * @param object|string $mSetter
-     * @return boolean
-     */
-    protected function _setSetter($mSetter)
+    protected function _setSetter(object|string $setter): bool
     {
-        if (is_object($mSetter) || is_string($mSetter)) {
-            $this->aSetter[] = $mSetter;
+        if (is_object($setter) || is_string($setter)) {
+            $this->setter[] = $setter;
             return true;
         }
-        $this->_logError(5, array('type' => gettype($mSetter)));
+        $this->_logError(5, ['type' => gettype($setter)]);
         return false;
-    } // function _setSetter
+    }
 
-    /**
-     * Check Setter
-     * @return boolean
-     */
-    protected function _checkSetter()
+    protected function _checkSetter(): bool
     {
-        if (empty($this->aSetter)) {
+        if (empty($this->setter)) {
             return true;
         }
-        $aTrace = debug_backtrace();
+        $trace = debug_backtrace();
         // Skip calling from this class
         do {
-            foreach ($aTrace as $aLink) {
+            foreach ($trace as $link) {
                 // ToDo: There is possible collisie for MultiLevel data (Instances of this classes from another branches can change data there)
-                if (!isset($aLink['object']) || ($this->bMultiLevel ? !$this->_isThisClass($aLink['object']) : $aLink['object'] !== $this)) {
+                if (!isset($link['object']) || ($this->multiLevel ? !$this->_isThisClass($link['object']) : $link['object'] !== $this)) {
                     break 2;
                 }
             }
@@ -232,314 +207,256 @@ abstract class data implements \ArrayAccess, \Iterator, \Countable, \Serializabl
         } while (false);
 
         // Check object or class of caller
-        foreach ($this->aSetter as $v) {
+        foreach ($this->setter as $v) {
             if (is_object($v)) {
-                if (!empty($aLink['object']) && $aLink['object'] === $v) {
+                if (!empty($link['object']) && $link['object'] === $v) {
                     return true;
                 }
-            } elseif ($this->_checkSetterClass($aLink, $v)) {
+            } elseif ($this->_checkSetterClass($link, $v)) {
                 return true;
             }
         }
 
         return false;
-    } // function _checkSetter
+    }
 
     /**
-     * Get Multilevel Data
-     * @param mixed $mKey
-     * @param mixed $mDefault
-     * @return mixed
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    protected function _getMultilevelData($mKey, $mDefault, $bLogError)
+    protected function _getMultilevelData(array $key, mixed $default, bool $logError): mixed
     {
-        $sKey = array_shift($mKey);
-        if (empty($mKey)) {
-            return $this->get($sKey, $mDefault, $bLogError);
-        } elseif (isset($this->aData[$sKey]) && $this->_isThisClass($this->aData[$sKey])) {
-            return $this->aData[$sKey]->get($mKey, $mDefault, $bLogError);
+        $path = $key;
+        $firstKey = array_shift($path);
+        if (empty($path)) {
+            return $this->get($firstKey, $default, $logError);
+        } elseif (isset($this->data[$firstKey]) && $this->_isThisClass($this->data[$firstKey])) {
+            return $this->data[$firstKey]->get($path, $default, $logError);
         }
-        return $mDefault;
-    } // function _getMultilevelData
+        return $default;
+    }
 
     /**
-     * Convert Array to another structure (usually instance of this class)
-     * Methd need to redefine in children classes if it use another parameter of constructor
-     * @param string $sKey
-     * @param array $aValue
-     * @return mixed
+     * @param mixed $value Value that should be applied or transformed.
      */
-    protected function _makeSubData($sKey, $aValue)
+    protected function _makeSubData(mixed $key, mixed $value): \fan\core\base\data
     {
-        $sClass = get_class($this);
-        return new $sClass($aValue, $sKey, $this);
-    } // function _makeSubData
+        $class = get_class($this);
+        return new $class($value, $key, $this);
+    }
 
-    /**
-     * Check is Object instance of this Class
-     * @param object $oObject
-     * @return boolean
-     */
-    protected function _isThisClass($oObject)
+    protected function _isThisClass(mixed $object): bool
     {
-        return get_class_alt($oObject) == get_class($this);
-    } // function _isThisClass
+        return is_object($object) && get_class_alt($object) === get_class($this);
+    }
 
-    /**
-     * Check Class of setter
-     * If don't need to pay attention on parent classes - redefine this method
-     * @param array $aLink
-     * @param string $sClass
-     * @return boolean
-     */
-    protected function _checkSetterClass($aLink, $sClass)
+    protected function _checkSetterClass(array $link, string $class): bool
     {
-        return $aLink['class'] == $sClass || !empty($aLink['object']) && $aLink['object'] instanceof $sClass;
-    } // function _checkSetterClass
+        return (string)$link['class'] === $class || !empty($link['object']) && $link['object'] instanceof $class;
+    }
 
-    /**
-     * Get Objects of Sub-Data - Instances of current class
-     * @return array
-     */
-    protected function _getSubData()
+    protected function _getSubData(): array
     {
-        $aRet = array();
-        $sClass = get_class($this);
-        foreach ($this->aData as $v) {
-            if ($v instanceof $sClass) {
-                $aRet[] = $v;
+        $ret = [];
+        $class = get_class($this);
+        foreach ($this->data as $v) {
+            if ($v instanceof $class) {
+                $ret[] = $v;
             }
         }
-        return $aRet;
-    } // function _getSubrows
+        return $ret;
+    }
 
-    /**
-     * Log Error message
-     * @param string $sErrKey
-     * @param array $aReplacement
-     * @return boolean
-     */
-    protected function _logError($sErrKey, $aReplacement = array())
+    protected function _logError(int|string $errKey, array $replacement = []): static
     {
-        $sErrMsg = $this->aErrMsg[$sErrKey];
-        if (!isset($aReplacement['class'])) {
-            $aReplacement['class'] = get_class($this);
+        $errMsg = $this->errMsg[$errKey];
+        if (!isset($replacement['class'])) {
+            $replacement['class'] = get_class($this);
         }
-        foreach ($aReplacement as $k => $v) {
-            $sErrMsg = str_replace('{' . strtoupper($k) . '}', $v, $sErrMsg);
+        foreach ($replacement as $k => $v) {
+            $errMsg = str_replace('{' . strtoupper($k) . '}', $v, $errMsg);
         }
-        \fan\project\service\error::instance()->logErrorMessage($sErrMsg, 'Data error', '', true);
+        $this->containerService('error')->logErrorMessage($errMsg, 'Data error', '', true);
         return $this;
-    } // function _logError
+    }
 
     // ======== The magic methods ======== \\
 
     /**
-     * Magic set method for data-array
-     * @param mixed $sKey
-     * @param mixed $mValue
+     * Handles dynamic property writes for this current component.
+     *
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function __set($sKey, $mValue)
+    public function __set(string $key, mixed $value): void
     {
-        $this->set($sKey, $mValue);
-    } // function __set
+        $this->set($key, $value);
+    }
 
     /**
-     * Magic get method for data-array
-     * @param mixed $sKey
-     * @return mixed
+     * Handles dynamic property reads for this current component.
      */
-    public function __get($sKey)
+    public function __get(string $key): mixed
     {
-        return $this->get($sKey);
-    } // function __get
+        return $this->get($key);
+    }
 
     /**
-     * Magic isset method for data-array
-     * @param mixed $sKey
-     * @return boolean
+     * Checks whether a dynamic property is available.
      */
-    public function __isset($sKey)
+    public function __isset(string $key): bool
     {
-        return isset($this->aData[$sKey]);
-    } // function __isset
+        return isset($this->data[$key]);
+    }
 
     /**
-     * Magic unset method for data-array
-     * @param mixed $sKey
+     * Handles dynamic property removal for this current component.
      */
-    public function __unset($sKey)
+    public function __unset(string $key): void
     {
         if ($this->_checkSetter()) {
-            unset($this->aData[$sKey]);
+            unset($this->data[$key]);
         } else {
-            $this->_logError(12, array('key' => $sKey));
+            $this->_logError(12, ['key' => $key]);
         }
-    } // function __unset
+    }
 
     /**
-     * Magic method for convert this object to string
-     * @return string
+     * Implements PHP magic behavior for this current component.
      */
-    public function __toString()
+    public function __toString(): string
     {
-        $sRet = '';
-        foreach ($this->aData as $k => $v) {
-            if (!empty($sRet)) {
-                $sRet .= "\n";
+        $ret = '';
+        foreach ($this->data as $k => $v) {
+            if (!empty($ret)) {
+                $ret .= "\n";
             }
-            $sRet .= $k . ' => ';
+            $ret .= $k . ' => ';
 
             if (is_null($v)) {
-                $sRet .= '(NULL)';
+                $ret .= '(NULL)';
             } elseif (is_bool($v)) {
-                $sRet .= '(boolean) ' . ($v ? 'TRUE' : 'FALSE');
+                $ret .= '(boolean) ' . ($v ? 'TRUE' : 'FALSE');
             } elseif (is_scalar($v)) {
-                $sRet .= '(' . gettype($v) . ') ' . $v;
+                $ret .= '(' . gettype($v) . ') ' . $v;
             } elseif (is_object($v)) {
-                $sRet .= '(Intanse Of ' . get_class($v) . ")\n";
+                $ret .= '(Intanse Of ' . get_class($v) . ")\n";
                 if (method_exists($v, '__toString')) {
-                    $sRet .= $v->__toString();
+                    $ret .= $v->__toString();
                 } else {
                     // ToDo: Show Another objects
                 }
             } elseif (is_array($v)) {
-                $sRet .= '(array) ';
+                $ret .= '(array) ';
                 // ToDo: Show Array
             }
         }
-        return $sRet;
-    } // function __toString
+        return $ret;
+    }
 
     // ======== Required Interface methods ======== \\
-    /**
-     * Method of interface ArrayAccess
-     * @param mixed $sKey
-     * @return boolean
-     */
-    public function offsetExists($sKey)
+    public function offsetExists(mixed $key): bool
     {
-        return isset($this->aData[$sKey]);
-    } // function offsetExists
+        return isset($this->data[$key]);
+    }
 
-    /**
-     * Method of interface ArrayAccess
-     * @param mixed $sKey
-     * @return mixed
-     */
-    public function offsetGet($sKey)
+    public function offsetGet(mixed $key): mixed
     {
-        return $this->get($sKey);
-    } // function offsetGet
+        return $this->get($key);
+    }
 
-    /**
-     * Method of interface ArrayAccess
-     * @param mixed $sKey
-     * @param mixed $mValue
-     */
-    public function offsetSet($sKey, $mValue)
+    public function offsetSet(mixed $key, mixed $value): void
     {
-        $this->set($sKey, $mValue);
-    } // function offsetSet
+        $this->set($key, $value);
+    }
 
-    /**
-     * Method of interface ArrayAccess
-     * @param mixed $sKey
-     */
-    public function offsetUnset($sKey)
+    public function offsetUnset(mixed $key): void
     {
-        unset($this->aData[$sKey]);
-    } // function offsetUnset
+        unset($this->data[$key]);
+    }
 
-    /**
-     * Method of interface Iterator
-     * @return mixed
-     */
-    public function current()
+    public function current(): mixed
     {
-        return current($this->aData);
-    } // function current
+        return current($this->data);
+    }
+
+    public function key(): mixed
+    {
+        return key($this->data);
+    }
+
+    public function next(): void
+    {
+        next($this->data);
+    }
+
+    public function rewind(): void
+    {
+        reset($this->data);
+    }
+
+    public function valid(): bool
+    {
+        return key($this->data) !== null;
+    }
 
     /**
-     * Method of interface Iterator
-     * @return mixed
+     * @return int Returns the numeric result produced by the operation.
      */
-    public function key()
+    public function count(): int
     {
-        return key($this->aData);
-    } // function key
+        return count($this->data);
+    }
 
     /**
-     * Method of interface Iterator
+     * Exports object state for PHP serialization.
+     *
+     * @return array Returns the structured data produced by the operation.
      */
-    public function next()
+    public function __serialize(): array
     {
-        next($this->aData);
-    } // function next
+        return [
+            'multiLevel'  => $this->multiLevel,
+            'fullRewrite' => $this->fullRewrite,
+            'errMsg'      => $this->errMsg,
+            'data'        => $this->data,
+        ];
+    }
+
+    public function serialize(): string
+    {
+        return \fan\core\adapter\safe_serializer::encodePhpSnapshot($this->__serialize());
+    }
 
     /**
-     * Method of interface Iterator
+     * Restores object state from PHP serialization data.
      */
-    public function rewind()
+    public function __unserialize(array $recover): void
     {
-        reset($this->aData);
-    } // function rewind
+        $this->restoreSerializedData($recover);
+    }
 
-    /**
-     * Method of interface Iterator
-     * @return booleean
-     */
-    public function valid()
+    public function unserialize(string $recover): void
     {
-        return key($this->aData) !== null;
-    } // function valid
+        $this->restoreSerializedData(
+            \fan\core\adapter\safe_serializer::decodePhpSnapshot($recover, [])
+        );
+    }
 
-    /**
-     * Method of interface Countable
-     * @return integer
-     */
-    public function count()
+    private function restoreSerializedData(array $recover): void
     {
-        return count($this->aData);
-    } // function count
+        $this->multiLevel  = $recover['multiLevel'];
+        $this->fullRewrite = $recover['fullRewrite'];
+        $this->errMsg      = $recover['errMsg'];
 
-    /**
-     * Method of interface Serializable
-     * @return string
-     */
-    public function serialize()
-    {
-        return serialize(array(
-            'multiLevel'  => $this->bMultiLevel,
-            'fullRewrite' => $this->bFullRewrite,
-            'errMsg'      => $this->aErrMsg,
-            'data'        => $this->aData,
-        ));
-    } // function serialize
-
-    /**
-     * Method of interface Serializable
-     * @param string $sRecover
-     */
-    public function unserialize($sRecover)
-    {
-        $aRecover = unserialize($sRecover);
-
-        $this->bMultiLevel  = $aRecover['multiLevel'];
-        $this->bFullRewrite = $aRecover['fullRewrite'];
-        $this->aErrMsg      = $aRecover['errMsg'];
-
-        $this->aData = $aRecover['data'];
-        if ($this->bMultiLevel) {
-            foreach ($this->aData as $k => $v) {
+        $this->data = $recover['data'];
+        if ($this->multiLevel) {
+            foreach ($this->data as $k => $v) {
                 if (is_object($v) && $v instanceof \fan\core\base\data) {
-                    $v->sKey      = $k;
-                    $v->oSuperior = $this;
+                    $v->key      = $k;
+                    $v->superior = $this;
                 }
             }
         }
         // Attention: restore Setter in the children class by method _setSetter
-    } // function unserialize
+    }
 
-} // class \fan\core\base\data
-?>
+}

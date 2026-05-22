@@ -1,4 +1,8 @@
-<?php namespace fan\core\base\transfer;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\base\transfer;
 /**
  * Outer transfer
  *
@@ -16,19 +20,12 @@
  */
 class out extends \fan\core\base\transfer
 {
-    /**
-     * Transfer's constructor
-     * @param string $sNewUrn New Transfer's URL
-     * @param string $sNewQueryString New Query String
-     * @param string $sDbOper Database Operation (commit, rollback)
-     */
-    public function __construct($sNewUrn, $sNewQueryString = null, $sDbOper = null)
+    public function __construct(string $newUrn, ?string $newQueryString = null, ?string $dbOper = null)
     {
-        $this->sTransferType = 'out';
-        if ($sDbOper != 'rollback') {
-            $sDbOper = 'commit';
+        $this->transferType = 'out';
+        if ($dbOper !== 'rollback') {
+            $dbOper = 'commit';
         }
-        parent::__construct($sNewUrn, $sNewQueryString, $sDbOper);
+        parent::__construct($newUrn, $newQueryString, $dbOper);
     }
-} // class \fan\core\base\transfer\out
-?>
+}

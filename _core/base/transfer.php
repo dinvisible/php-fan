@@ -1,4 +1,8 @@
-<?php namespace fan\core\base;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\base;
 /**
  * Base abstract service
  *
@@ -17,94 +21,54 @@
  */
 abstract class transfer extends \Exception
 {
-    /**
-     * @var string Transfer Type
-     */
-    protected $sTransferType;
-    /**
-     * @var string Applicatin name
-     */
-    protected $sNewUri;
-    /**
-     * @var string New Query String
-     */
-    protected $sNewQueryString;
+    protected ?string $transferType = null;
+    protected ?string $newUri = null;
+    protected ?string $newQueryString = null;
 
-    /**
-     * Transfer's constructor
-     * @param string $sNewUri New Transfer's URL
-     * @param string $sNewQueryString New Query String
-     * @param string $sDbOper Database Operation (commit, rollback)
-     */
-    public function __construct($sNewUri, $sNewQueryString = null, $sDbOper = null)
+    public function __construct(string $newUri, ?string $newQueryString = null, ?string $dbOper = null)
     {
-        $this->sNewUri = $sNewUri;
-        $this->sNewQueryString = $sNewQueryString;
-        if ($sDbOper) {
-            \fan\project\service\database::fixAll($sDbOper, false);
+        $this->newUri = $newUri;
+        $this->newQueryString = $newQueryString;
+        if ($dbOper) {
+            \fan\project\service\database::fixAll($dbOper, false);
         }
-        parent::__construct($this->sTransferType, E_USER_NOTICE);
+        parent::__construct($this->transferType, E_USER_NOTICE);
     }
 
-    /**
-     * Get Transfer Type
-     * @return string
-     */
-    public function getTransferType()
+    public function getTransferType(): ?string
     {
-        return $this->sTransferType;
-    } // function getTransferType
+        return $this->transferType;
+    }
 
-    /**
-     * Get Request
-     * @return string
-     */
-    public function getRequest()
+    public function getRequest(): ?string
     {
-        $sNewUri      = $this->getNewUri();
-        $sQueryString = $this->getNewQueryString();
-        if (empty($sQueryString) || $sQueryString == '?') {
-            return  $sNewUri;
+        $newUri      = $this->getNewUri();
+        $queryString = $this->getNewQueryString();
+        if (empty($queryString) || (string)$queryString === '?') {
+            return  $newUri;
         }
-        $sMainUri = strstr($sNewUri, '?', true);
-        return (empty($sMainUri) ? $sNewUri : $sMainUri) . '?' . ltrim($sQueryString, '?');
-    } // function getRequest
+        $mainUri = strstr($newUri, '?', true);
+        return (empty($mainUri) ? $newUri : $mainUri) . '?' . ltrim($queryString, '?');
+    }
 
-    /**
-     * Get Host
-     * @return string
-     */
-    public function getHost()
+    public function getHost(): ?string
     {
         return null;
-    } // function getHost
+    }
 
-    /**
-     * Is Shift Current matcher stack
-     * @return boolean
-     */
-    public function isShiftCurrent()
+    public function isShiftCurrent(): bool
     {
-        return $this->getTransferType() != 'sham';
-    } // function isShiftCurrent
+        return $this->getTransferType() !== 'sham';
+    }
 
-    /**
-     * Get New Url
-     * @return string
-     */
-    public function getNewUri()
+    public function getNewUri(): ?string
     {
-        return $this->sNewUri;
-    } // function getNewUri
+        return $this->newUri;
+    }
 
-    /**
-     * Get Public error-message
-     * @return string
-     */
-    public function getNewQueryString()
+    public function getNewQueryString(): ?string
     {
-        return $this->sNewQueryString;
-    } // function getNewQueryString
+        return $this->newQueryString;
+    }
 
-} // class \fan\core\base\transfer
-?>
+}

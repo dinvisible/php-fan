@@ -1,4 +1,8 @@
-<?php namespace fan\app\__log_viewer\common;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__log_viewer\common;
 /**
  * Viewer root block
  *
@@ -17,16 +21,10 @@
 class root extends \fan\project\block\root\html
 {
 
-    /**
-     * Set tab title
-     * @param string $sTitle - new title
-     * @param boolean $bCheckIsSet - Check - if set - do not change
-     */
-    public function setTitle($sTitle, $bCheckIsSet = false)
+    public function setTitle(string $title, bool $checkIsSet = false): static
     {
-        parent::setTitle(service('application')->getProjectName() . ' - ' . $sTitle, $bCheckIsSet);
-    } // function setTitle
+        return parent::setTitle($this->containerService('application')->getProjectName() . ' - ' . $title, $checkIsSet);
+    }
 
 
-} // class \fan\app\__log_viewer\common\root
-?>
+}

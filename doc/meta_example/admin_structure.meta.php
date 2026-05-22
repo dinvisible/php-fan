@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Example of meta file for block
  * Note:
@@ -16,70 +19,69 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 02.008
  */
-return array(
-    'own' => array(
-        'json' => array (
+return [
+    'own' => [
+        'json' => [
             'title' => 'Title for left frame',
 
-            'top_content' => array(
+            'top_content' => [
                 '{prs}m_url_1.php',
                 '{prs}m_url_2.php',
                 // ....
-            ),
+            ],
 
-            'bottom_content' => array( // NR.
+            'bottom_content' => [ // NR.
                 '{prs}m_url_3.php',
                 '{prs}m_url_4.php',
                 // ....
-            ),
+            ],
 
-            'right_frm' => array( // NR.
-                'r_key_1' => array(
+            'right_frm' => [ // NR.
+                'r_key_1' => [
                     'name' => 'Name 1',
                     'title' => 'Title for right frame 1',
-                    'top_content' => array(
+                    'top_content' => [
                         '{prs}r_url_1.php',
                         '{prs}r_url_2.php',
                         // ....
-                    )
-                ),
-                'r_key_2' => array(
+                    ]
+                ],
+                'r_key_2' => [
                     'name' => 'Name 2',
                     'title' => 'Title for right frame 2',
-                    'top_content' => array(
+                    'top_content' => [
                         '{prs}r_url_3.php',
                         '{prs}r_url_4.php',
                         // ....
-                    )
-                ),
+                    ]
+                ],
                 // ....
-            ),
-        ),
+            ],
+        ],
 
-        'addParam' => array( // NR. Add parameters for condition
-            'select' =>array( // For tags: select, radio-group, checkbox-group
-                'condition_1' =>array(
+        'addParam' => [ // NR. Add parameters for condition
+            'select' =>[ // For tags: select, radio-group, checkbox-group
+                'condition_1' =>[
                     'key_1' => 'val_1',
                     'key_2' => 'val_2',
                     // ....
-                ),
-            ),
-        ),
+                ],
+            ],
+        ],
 
-        'cond' => array( // Start condition value
+        'cond' => [ // Start condition value
             'condition_1' => 'st_val_1',
             'condition_2' => 'st_val_2',
             // ....
-        ),
+        ],
 
-        'extra' => array(
-            'active' => array( // Reload content after change next condition
+        'extra' => [
+            'active' => [ // Reload content after change next condition
                 'condition_1' => 1,
                 'condition_2' => 1,
                 // ....
-            ),
+            ],
             'subtitle' => 'condition_1', // NR. Use this condition for set subtitle
-        ),
-    ),
-);
-?>
+        ],
+    ],
+];

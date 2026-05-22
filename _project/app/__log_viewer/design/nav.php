@@ -1,4 +1,8 @@
-<?php namespace fan\app\__log_viewer\design;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__log_viewer\design;
 /**
  * main_nav block
  *
@@ -16,30 +20,19 @@
  */
 class nav extends \fan\project\block\base
 {
-    /**
-     * Get Nav Url
-     * @param string $sKey
-     * @param string $sAddUrl
-     * @return string
-     */
-    public function getNavUrl($sKey, $sAddUrl = '')
+    public function getNavUrl(string $key, string $addUrl = ''): string
     {
-        return $this->oTab->getURI('/' . $sKey . $sAddUrl . '.html', 'link', null, null);
+        return $this->tab->getURI('/' . $key . $addUrl . '.html', 'link', null, null);
     }
 
-    /**
-     * Get Variety List
-     * @return array
-     */
-    public function getVarieties()
+    public function getVarieties(): array
     {
-        $aList = array();
-        $aTpl = $this->getMeta('tplVars');
-        foreach ($aTpl['aNav'] as $v) {
-            $aList[] = $v['key'];
+        $list = [];
+        $tpl = $this->getMeta('tplVars');
+        foreach ($tpl['nav'] as $v) {
+            $list[] = $v['key'];
         }
-        return $aList;
-    } // function getVarieties
+        return $list;
+    }
 
-} // class \fan\app\__log_viewer\design\nav
-?>
+}

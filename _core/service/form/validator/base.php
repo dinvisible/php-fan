@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\form\validator;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\form\validator;
 /**
  * Base class of validators
  *
@@ -20,25 +24,20 @@ abstract class base
      * Form config
      * @var \fan\core\service\form
      */
-    protected $oFacade;
+    protected ?object $facade = null;
 
     /**
      * Form config
      * @var \fan\core\service\config\row
      */
-    protected $oConfig;
+    protected ?object $config = null;
 
-    /**
-     * Set Facade
-     * @param \fan\core\service\form $oFacade
-     */
-    public function setFacade(\fan\core\service\form $oFacade)
+    public function setFacade(\fan\core\service\form $facade): static
     {
-        if (empty($this->oFacade)) {
-            $this->oFacade = $oFacade;
-            $this->oConfig = $oFacade->getConfig();
+        if (empty($this->facade)) {
+            $this->facade = $facade;
+            $this->config = $facade->getConfig();
         }
         return $this;
-    } // function setFacade
-} // class \fan\core\service\form\validator\base
-?>
+    }
+}

@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\template\type;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\template\type;
 /**
  *
  * This file is part PHP-FAN (php-framework from Alexandr Nosov)
@@ -15,280 +18,212 @@
  */
 abstract class base implements \ArrayAccess
 {
-    /**
-     * @var array Template variables
-     */
-    protected $aTplVar;
+    use \fan\core\di\container_aware_trait;
+
+    protected ?array $tplVar = null;
 
     /**
      * @var \fan\core\block\base Object of block
      */
-    protected $oBlock;
+    protected ?object $block = null;
 
-    /**
-     * @var string Name of block
-     */
-    protected $sBlockName;
+    protected ?string $blockName = null;
 
-    /**
-     * @var string HTML-code
-     */
-    protected $sFullHTML = '';
+    protected string $fullHTML = '';
 
-    /**
-     * @var array Exception keys
-     */
-    private $aExceptVar = array('this', 'oBlock', 'oTab', 'sAssignTplKey', 'mAssignTplVal', 'sReturnHtmlVal');
+    private array $exceptVar = ['this', 'block', 'tab', 'assignTplKey', 'assignTplVal', 'returnHtmlVal'];
 
-    /**
-     * @var array Foreach sourse data
-     */
-    private $aObjectData = array();
+    private array $objectData = [];
 
-    /**
-     * Template block constructor
-     * @param \fan\core\block\base $oBlock
-     */
-    public function __construct($oBlock = null)
+    public function __construct(?\fan\core\block\base $block = null)
     {
-        if (is_object($oBlock) && $oBlock instanceof \fan\core\block\base) {
-            $this->oBlock = $oBlock;
-            if (method_exists ($oBlock, 'getBlockName')) {
-                $this->sBlockName = $oBlock->getBlockName();
+        if (is_object($block) && $block instanceof \fan\core\block\base) {
+            $this->block = $block;
+            if (method_exists ($block, 'getBlockName')) {
+                $this->blockName = $block->getBlockName();
             }
 
-            $this->aTplVar['oBlock'] = $oBlock;
-            $this->aTplVar['oTab']   = $oBlock->getTab();
+            $this->tplVar['block']  = $block;
+            $this->tplVar['oBlock'] = $block;
+            $this->tplVar['tab']    = $block->getTab();
         }
-    } // function __construct
+    }
 
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
-    public function __set($sKey, $value)
+    /**
+     * Handles dynamic property writes for this current component.
+     *
+     * @param mixed $value Value that should be applied or transformed.
+     */
+    public function __set(string $key, mixed $value): void
     {
-        return $this->offsetSet($sKey, $value);
+        $this->offsetSet((string)$key, $value);
     }
 
-    public function __get($sKey)
+    /**
+     * Handles dynamic property reads for this current component.
+     */
+    public function __get(string $key): mixed
     {
-        return $this->offsetGet($sKey);
+        return $this->offsetGet((string)$key);
     }
 
     // ======== Required Interface methods ======== \\
-    public function offsetSet($sKey, $mValue)
+    /**
+     * @param mixed $value Value that should be applied or transformed.
+     */
+    public function offsetSet(mixed $key, mixed $value): void
     {
-        $sMethod = 'set';
-        foreach (explode('_', $sKey) as $v) {
-            $sMethod .= ucfirst($v);
+        $method = 'set';
+        $key = (string)$key;
+        foreach (explode('_', $key) as $v) {
+            $method .= ucfirst($v);
         }
-        if (method_exists($this, $sMethod)) {
-            $this->$sMethod($mValue);
+        if (method_exists($this, $method)) {
+            $this->$method($value);
         } else {
-            $this->aTplVar[$sKey] = $mValue;
+            $this->tplVar[$key] = $value;
         }
     }
 
-    public function offsetExists($sKey)
+    public function offsetExists(mixed $key): bool
     {
-        return !empty($this->aTplVar[$sKey]);
+        $key = (string)$key;
+        return !empty($this->tplVar[$key]);
     }
 
-    public function offsetUnset($sKey)
+    public function offsetUnset(mixed $key): void
     {
-        unset($this->aTplVar[$sKey]);
+        $key = (string)$key;
+        unset($this->tplVar[$key]);
     }
 
-    public function offsetGet($sKey)
+    public function offsetGet(mixed $key): mixed
     {
-        $sMethod = 'get';
-        foreach (explode('_', $sKey) as $v) {
-            $sMethod .= ucfirst($v);
+        $method = 'get';
+        $key = (string)$key;
+        foreach (explode('_', $key) as $v) {
+            $method .= ucfirst($v);
         }
-        return method_exists($this, $sMethod) ? $this->$sMethod() : $this->aTplVar[$sKey];
+        return method_exists($this, $method) ? $this->$method() : $this->tplVar[$key];
     }
 
     // ======== Main Interface methods ======== \\
-    /**
-     * Get Engine List
-     * @return array
-     */
-    public static function getEngineList()
+    public static function getEngineList(): array
     {
-        return array('main');
-    } // function getEngineList
+        return ['main'];
+    }
+
+    public static function getAutoParseTag(): array
+    {
+        return [];
+    }
 
     /**
-     * Get Auto-parse data
-     * @return array
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public static function getAutoParseTag()
+    public function assign(string $key, mixed $value): void
     {
-        return array();
-    } // function getAutoParseTag
+        $this->checkVars($key);
+        $this->tplVar[$key] = $value;
+    }
 
     /**
-     * Assign value to parameter of template
-     * @param string $sKey Template's Key
-     * @param mixed $mValue Assigned value to the parameter
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function assign($sKey, $mValue)
+    public function assignByRef(string $key, mixed &$value): void
     {
-        $this->checkVars($sKey);
-        $this->aTplVar[$sKey] = $mValue;
-    } // function assign
-
-    /**
-     * Assign value to parameter of template
-     * @param string $sKey Template's Key
-     * @link mixed $mValue Assigned value to the parameter
-     */
-    public function assignByRef($sKey, &$mValue)
-    {
-        $this->checkVars($sKey);
-        $this->aTplVar[$sKey] = &$mValue;
-    } // function assignByRef
+        $this->checkVars($key);
+        $this->tplVar[$key] = &$value;
+    }
 
 
-    /**
-     * Clear assigned values
-     * @param string $sKey Template's Key
-     */
-    public function clearAssign($sKey)
+    public function clearAssign(string $key): void
     {
-        $this->checkVars($sKey);
-        unset($this->aTplVar[$sKey]);
-    } // function clearAssign
+        $this->checkVars($key);
+        unset($this->tplVar[$key]);
+    }
 
-    /**
-     * Get assigned values
-     * @param string $sKey Template's Key
-     */
-    public function getVars($sKey = null)
+    public function getVars(mixed $key = null): mixed
     {
-        return is_null($sKey) ? @$this->aTplVar : @$this->aTplVar[$sKey];
-    } // function getVars
+        return is_null($key) ? $this->tplVar : ($this->tplVar[$key] ?? null);
+    }
 
-    /**
-     * Fetch parced template
-     */
-    public function fetch()
+    public function fetch(): string
     {
-        $this->sFullHTML = $this->parseHtml();
-        return $this->sFullHTML;
-    } // function fetch
+        $this->fullHTML = (string)$this->parseHtml();
+        return $this->fullHTML;
+    }
 
     // ======== Private/Protected methods ======== \\
     /**
-     * Fetch parced template
+     * Transforms html between supported representations.
      */
-    abstract protected function parseHtml();
+    abstract protected function parseHtml(): mixed;
 
-    /**
-     * Link For Assign
-     * @param string $sKey Template's Key
-     */
-    protected function &linkForAssign($sKey)
+    protected function &linkForAssign(string $key): mixed
     {
-        $this->checkVars($sKey);
-        return $this->aTplVar[$sKey];
-    } // function linkForAssign
+        $this->checkVars($key);
+        return $this->tplVar[$key];
+    }
 
-    /**
-     * Get number of iteration
-     * @param string $sKey Foreach Key
-     * @return integer
-     */
-    protected function getIteration($sKey)
+    protected function getIteration(string $key): int
     {
-        return $this->aObjectData[$sKey]['iteration'];
-    } // function getIteration
+        return $this->objectData[$key]['iteration'];
+    }
 
-    /**
-     * Get total count of iteration
-     * @param string $sKey Foreach Key
-     * @return integer
-     */
-    protected function getTotal($sKey)
+    protected function getTotal(string $key): int
     {
-        return count($this->aObjectData[$sKey]['data']);
-    } // function getTotal
+        return count($this->objectData[$key]['data']);
+    }
 
-    /**
-     * Check if first iteration
-     * @param string $sKey Foreach Key
-     * @return boolean
-     */
-    protected function isFirst($sKey)
+    protected function isFirst(string $key): bool
     {
-        return $this->aObjectData[$sKey]['iteration'] < 2;
-    } // function isFirst
+        return $this->objectData[$key]['iteration'] < 2;
+    }
 
-    /**
-     * Check if last iteration
-     * @param string $sKey Foreach Key
-     * @return boolean
-     */
-    protected function isLast($sKey)
+    protected function isLast(string $key): bool
     {
-        return is_null(@$this->aObjectData[$sKey]['data']) ? false : $this->aObjectData[$sKey]['iteration'] == count($this->aObjectData[$sKey]['data']);
-    } // function isLast
+        return isset($this->objectData[$key]['data']) ? (int)$this->objectData[$key]['iteration'] === count($this->objectData[$key]['data']) : false;
+    }
 
-    /**
-     * Check if last iteration
-     * @param string $sKey Foreach Key
-     * @return boolean
-     */
-    protected function isEven($sKey, $bIsBoolean = false)
+    protected function isEven(string $key, bool $isBoolean = false): bool|int
     {
-        $bRet = is_null($this->aObjectData[$sKey]['data']) ? false : $this->aObjectData[$sKey]['iteration']%2 == 0;
-	return ($bIsBoolean ? $bRet : ($bRet ? 1 : 0));
-    } // function isEven
+        $ret = is_null($this->objectData[$key]['data']) ? false : (int)$this->objectData[$key]['iteration'] % 2 === 0;
+	return ($isBoolean ? $ret : ($ret ? 1 : 0));
+    }
 
-    /**
-     * Check if last iteration
-     * @param string $sKey Foreach Key
-     * @return string
-     */
-    protected function makeTagAttr($sAttr, $mData, $sKey = null)
+    protected function makeTagAttr(string $attr, mixed $data, mixed $key = null): string
     {
-        if(is_object($mData)) {
-            $mVal = empty($mData->$sKey) ?
-                (method_exists($mData, '__toString') ? $mData->__toString() : '') :
-                $mData->$sKey;
+        if (is_object($data)) {
+            $val = empty($data->$key) ?
+                (method_exists($data, '__toString') ? $data->__toString() : '') :
+                $data->$key;
         } else {
-            $mVal = is_array($mData) ? array_val($mData, is_null($sKey) ? $sAttr : $sKey) : $mData;
+            $val = is_array($data) ? array_val($data, is_null($key) ? $attr : $key) : $data;
         }
-        return empty($mVal) ? '' : ' ' . $sAttr . '="' . $mVal . '"';
-    } // function makeTagAttr
+        return empty($val) ? '' : ' ' . $attr . '="' . $val . '"';
+    }
 
-    /**
-     * Set Object Data
-     * @param string $sKey Foreach Key
-     */
-    final protected function setObjectData($sType, $sKey, &$aData = null)
+    final protected function setObjectData(string $type, string $key, mixed &$data = null): void
     {
-        $this->aObjectData[$sKey] = array('type' => $sType, 'iteration' => 0);
-        $this->aObjectData[$sKey]['data'] = &$aData;
-    } // function setObjectData
+        $key = (string)$key;
+        $this->objectData[$key] = ['type' => $type, 'iteration' => 0];
+        $this->objectData[$key]['data'] = &$data;
+    }
 
-    /**
-     *
-     * @param string $sKey Foreach Key
-     */
-    final protected function setIteration($sKey)
+    final protected function setIteration(string $key): void
     {
-        $this->aObjectData[$sKey]['iteration']++;
-    } // function setIteration
+        $key = (string)$key;
+        $this->objectData[$key]['iteration']++;
+    }
 
-    /**
-     * Check exception keys
-     * @param string $sKey Template's Key
-     */
-    final private function checkVars($sKey)
+    private function checkVars($key): void
     {
-        if (in_array($sKey, $this->aExceptVar)) {
-            throw new \fan\project\exception\template\fatal($this, 'Incorrecn key name "' . $sKey . '". It is reserved name.');
+        $key = (string)$key;
+        if (in_array($key, $this->exceptVar)) {
+            throw new \fan\project\exception\template\fatal($this, 'Incorrecn key name "' . $key . '". It is reserved name.');
         }
-    } // function checkVars
-} // class \fan\core\service\template\type\base
-?>
+    }
+}

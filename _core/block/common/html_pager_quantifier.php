@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\common;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\common;
 /**
  * Pager quantifier class
  *
@@ -16,70 +20,58 @@
  */
 class html_pager_quantifier extends \fan\core\block\form\usual
 {
-    /**
-     * Init pager quantifier
-     */
-    public function init()
+    public function init(): void
     {
-        $aGurrentGet = array();
-        $aGet = service('request')->getAll('G', array());
-        foreach ($aGet as $k => $v) {
-            if ($k != 'pager_quantifier') {
-                $aGurrentGet[$k] = $v;
+        $gurrentGet = [];
+        $get = $this->containerService('request')->getAll('G', []);
+        foreach ($get as $k => $v) {
+            if ((string)$k !== 'pager_quantifier') {
+                $gurrentGet[$k] = $v;
             }
         }
-        $this->_setViewVar('aGurrentGet', $aGurrentGet);
+        $this->_setViewVar('aGurrentGet', $gurrentGet);
 
-        $this->_parseForm(true, !empty($aGet['pager_quantifier']));
-    } // function init
+        $this->_parseForm(true, !empty($get['pager_quantifier']));
+    }
 
-    protected function onSubmit()
+    protected function onSubmit(): void
     {
-        $this->oContainer->setElmPerPage($this->aFieldValue['pager_quantifier']);
-    } // function onSubmit
+        $this->container->setElmPerPage((int)$this->fieldValue['pager_quantifier']);
+    }
 
-    /**
-     * Get Dynamic Meta-data
-     * @param array $aMeta Allow change meta in the parent chain
-     * @return array
-     */
-    public function getDynamicMeta($aMeta)
+    public function getDynamicMeta(mixed $meta): array
     {
-        $aSrcData = $this->oContainer->getMeta('quantifier', array());
+        $srcData = $this->container->getMeta('quantifier', []);
 
-        $aFormData = array();
+        $formData = [];
 
-        $aMetaFormData = explode(',', $aSrcData['values']);
-        foreach ($aMetaFormData as $v) {
+        $metaFormData = explode(',', (string)$srcData['values']);
+        foreach ($metaFormData as $v) {
             $v = trim($v);
-            $aFormData[] = array(
+            $formData[] = [
                 'value' => $v,
                 'text'  => $v,
-            );
+            ];
         }
 
-        return array(
-            'form'  => array(
-                'fields'    => array(
-                    'pager_quantifier'  => array(
-                        'label'         => $aSrcData['label'],
-                        'data'          => $aFormData,
-                        'default_value' => $this->oContainer->getElmPerPage(),
-                    ),
-                ),
-            ),
-        );
-    } // function getDynamicMeta
+        return [
+            'form'  => [
+                'fields'    => [
+                    'pager_quantifier'  => [
+                        'label'         => (string)$srcData['label'],
+                        'data'          => $formData,
+                        'default_value' => $this->container->getElmPerPage(),
+                    ],
+                ],
+            ],
+        ];
+    }
 
-    /**
-     * Get Meta-data from parent classes
-     * @param string $sMetaFile path to Meta-File set from class-file
-     */
-    public function getParentMeta(){
+    public function getParentMeta(): array
+    {
 
-        $aFileMeta = $this->readMetaFile(substr(__FILE__, 0, -3) . 'meta.php');
-        return array_merge_recursive_alt(parent::getParentMeta(), $aFileMeta);
+        $fileMeta = $this->readMetaFile(substr(__FILE__, 0, -3) . 'meta.php');
+        return array_merge_recursive_alt(parent::getParentMeta(), $fileMeta);
 
-    } // function getParentMeta
-} // class \fan\core\block\common\html_pager_quantifier
-?>
+    }
+}

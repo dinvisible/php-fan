@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\template\parser;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\template\parser;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Template parser engine base
@@ -20,142 +23,100 @@ abstract class base
     /**
      * @var \fan\core\service\template Service template instance
      */
-    protected $oFacade;
+    protected ?object $facade = null;
 
-    /**
-     * @var array Defined tpl-tag list
-     */
-    protected $aTagList = array();
+    protected array $tagList = [];
 
-    /**
-     * @var array Automatic defined Tag List
-     */
-    protected $aAutoTagList = array();
+    protected array $autoTagList = [];
 
 
-    /**
-     * Set Facade
-     * @param fan\core\service\template $oFacade
-     */
-    public function setFacade(\fan\core\service\template $oFacade)
+    public function setFacade(\fan\core\service\template $facade): void
     {
-        $this->oFacade = $oFacade;
-    } // function setFacade
+        $this->facade = $facade;
+    }
 
-    /**
-     * Parse form label
-     * @param string $sData
-     * @return string
-     */
-    public function __call($sMethod, $aArgs)
+    public function __call(string $method, array $args): mixed
     {
-        $sTagName = substr($sMethod, 6);
-        $aAutoData = @$this->aAutoTagList[$sTagName];
-        if(substr($sMethod, 0, 6) == 'parse_' && $aAutoData) {
-            return '$sReturnHtmlVal.=$this->' . $aAutoData['method'] . '(' . $this->getDynamicArray($aArgs[0], @$aAutoData['require']) . ');' . "\n";
+        $method = (string)$method;
+        $tagName = substr($method, 6);
+        $autoData = $this->autoTagList[$tagName] ?? null;
+        if (substr($method, 0, 6) === 'parse_' && $autoData) {
+            return '$returnHtmlVal.=$this->' . $autoData['method'] . '(' . $this->getDynamicArray((string)($args[0] ?? ''), $autoData['require'] ?? []) . ');' . "\n";
         }
-        $aParseData = $this->oFacade->getParseData();
-        throw new fatalException($this->oFacade, 'Call for undefined method "' . $sMethod . '".
-At the file "' . $aParseData['template'] . '".
-Near "' . $aParseData['part'] . '". At the file "');
-    } // function __call
+        $parseData = $this->facade->getParseData();
+        throw new fatalException($this->facade, 'Call for undefined method "' . $method . '".
+At the file "' . $parseData['template'] . '".
+Near "' . $parseData['part'] . '". At the file "');
+    }
 
-    /**
-     * Get Tag List
-     * @return array
-     */
-    public function getTagList()
+    public function getTagList(): array
     {
-        return $this->aTagList;
-    } // function getTagList
+        return $this->tagList;
+    }
 
-    /**
-     * Set Auto-parse tag
-     * @return array
-     */
-    public function setAutoTag($sTagName, $aData)
+    public function setAutoTag(string $tagName, array $data): bool
     {
-        $this->aAutoTagList[$sTagName] = $aData;
+        $this->autoTagList[(string)$tagName] = $data;
         return true;
-    } // function setAutoTag
+    }
 
-    /**
-     * Get Simple Parameters
-     * @param string $sData
-     * @return array
-     */
-    protected function getSimpleParam($sData)
+    protected function getSimpleParam(string $data): array
     {
-        $aRet = array();
-        if (preg_match_all(\fan\project\service\template::paramSimplePcre, $sData, $aMatches)) {
-            foreach ($aMatches[0] as $i => $val) {
-                $aRet[] = $aMatches[2][$i] == '"' ?
-                    stripslashes(substr($aMatches[1][$i], 1, -1)) :
-                    (empty($aMatches[2][$i]) && substr($aMatches[1][$i], 0, 1) != '$' ?
-                        '\'' . $aMatches[1][$i] . '\'' :
-                        $aMatches[1][$i]
+        $ret = [];
+        if (preg_match_all(\fan\project\service\template::paramSimplePcre, $data, $matches)) {
+            foreach ($matches[0] as $i => $val) {
+                $ret[] = $matches[2][$i] === '"' ?
+                    stripslashes(substr($matches[1][$i], 1, -1)) :
+                    (empty($matches[2][$i]) && substr($matches[1][$i], 0, 1) !== '$' ?
+                        '\'' . $matches[1][$i] . '\'' :
+                        $matches[1][$i]
                     );
             }
         }
-        return $aRet;
-    } // function getSimpleParam
+        return $ret;
+    }
 
-    /**
-     * Get Standard Parameters
-     * @param string $sData
-     * @param array $aRequire required parameters
-     * @param array $aStrip list of name of parameters where quotes is need to strip
-     * @return array
-     */
-    protected function getStandardParam($sData, $aRequire = array(), $aStrip = array())
+    protected function getStandardParam(string $data, array $require = [], array $strip = []): array
     {
-        $aRet = array();
-        if (preg_match_all(\fan\project\service\template::paramStandardPcre, $sData, $aMatches)) {
-            foreach ($aMatches[0] as $i => $val) {
-                $aRet[$aMatches[1][$i]] = $aMatches[3][$i] == '"' ?
-                    stripslashes(substr($aMatches[2][$i], 1, -1)) :
-                    (empty($aMatches[3][$i]) && substr($aMatches[2][$i], 0, 1) != '$' ?
-                        '\'' . $aMatches[2][$i] . '\'' :
-                        $aMatches[2][$i]
+        $ret = [];
+        if (preg_match_all(\fan\project\service\template::paramStandardPcre, $data, $matches)) {
+            foreach ($matches[0] as $i => $val) {
+                $ret[$matches[1][$i]] = $matches[3][$i] === '"' ?
+                    stripslashes(substr($matches[2][$i], 1, -1)) :
+                    (empty($matches[3][$i]) && substr($matches[2][$i], 0, 1) !== '$' ?
+                        '\'' . $matches[2][$i] . '\'' :
+                        $matches[2][$i]
                     );
             }
         }
-        if ($aRequire) {
-            foreach ($aRequire as $k) {
-                if (!isset($aRet[$k])) {
-                    $aParseData = $this->oFacade->getParseData();
-                    throw new fatalException($this->oFacade, 'Undefined required control key "' . $k . '".
-At the file "' . $aParseData['template'] . '".
-Near "' . $aParseData['part'] . '". At the file "');
+        if ($require) {
+            foreach ($require as $k) {
+                if (!isset($ret[$k])) {
+                    $parseData = $this->facade->getParseData();
+                    throw new fatalException($this->facade, 'Undefined required control key "' . $k . '".
+At the file "' . $parseData['template'] . '".
+Near "' . $parseData['part'] . '". At the file "');
                 }
             }
         }
-        foreach ($aStrip as $k) {
-            if (isset($aRet[$k]) && substr($aRet[$k], 0, 1) == '\'') {
-                $aRet[$k] = substr($aRet[$k], 1, -1);
+        foreach ($strip as $k) {
+            if (isset($ret[$k]) && substr($ret[$k], 0, 1) === '\'') {
+                $ret[$k] = substr($ret[$k], 1, -1);
             }
         }
-        return $aRet;
-    } // function getStandardParam
+        return $ret;
+    }
 
-    /**
-     * Get dynamic array for custom function
-     * @param string $sData
-     * @param array $aRequire required parameters
-     * @param array $aStrip list of name of parameters where quotes is need to strip
-     * @return string
-     */
-    protected function getDynamicArray($sData, $aRequire = array())
+    protected function getDynamicArray(string $data, array $require = []): string
     {
-        if (!$sData) {
+        if (!$data) {
             return '';
         }
-        $sRet = 'array(';
-        foreach ($this->getStandardParam($sData, $aRequire) as $k => $v) {
-            $sRet .= '\'' . $k . '\'=>' . $v . ',';
+        $ret = '[';
+        foreach ($this->getStandardParam($data, $require) as $k => $v) {
+            $ret .= '\'' . $k . '\'=>' . $v . ',';
         }
-        return substr($sRet, 0, -1) . ')';
-    } // function getDynamicArray
+        return substr($ret, 0, -1) . ']';
+    }
 
-} // class \fan\core\service\template\parser\base
-?>
+}

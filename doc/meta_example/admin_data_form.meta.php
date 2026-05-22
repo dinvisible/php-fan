@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Example of meta file for admin_content_table block
  * Note:
@@ -16,131 +19,130 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 02.022
  */
-return array(
-    'own' => array(
+return [
+    'own' => [
         'entity' => 'table_name',
         'entity_key' => 'key_name', // NR. It is need to set it when used special SQL-request
 
-        'force'  => array(
+        'force'  => [
             'template'   => true OR false, // NR. Set it if you want to parce template each time.     By default: false
             'add_param'  => true OR false, // NR. Set it if you want to set add parameters each time. By default: false
             'extra_data' => true OR false, // NR. Set it if you want to set extra data each time.     By default: false
-        ),
+        ],
 
-        'condition' => array( // NR. Add condition for select data for table
+        'condition' => [ // NR. Add condition for select data for table
             'key_1' => 'val_1',
             'key_2' => 'val_2',
             // ....
-        ),
+        ],
 
         'useMainPage' => true OR false, // NR. Allow for additional content data to use Main pager
 
-        'addParam' => array( // NR. Add parameters
+        'addParam' => [ // NR. Add parameters
             'mainConditionKey' => 'key_name', // NR. Now it is used for show image
-            'select' =>array( // For tags: select, radio-group, checkbox-group
-                'field_name_0' =>array(
+            'select' =>[ // For tags: select, radio-group, checkbox-group
+                'field_name_0' =>[
                     'key_1' => 'val_1',
                     'key_2' => 'val_2',
                     // ....
-                ),
-                'field_name_1' =>array(
-                ),
+                ],
+                'field_name_1' =>[
+                ],
                 // ....
-            ),
-            'combo_select' => array(
-                'field_name_0' => array(
-                    'data' => array(
-                        'key_1' => array('val' => 'val_1', 'child' => array() /* The same data*/),
-                        'key_2' => array('val' => 'val_2', 'child' => array() /* The same data*/),
+            ],
+            'combo_select' => [
+                'field_name_0' => [
+                    'data' => [
+                        'key_1' => ['val' => 'val_1', 'child' => [] /* The same data*/],
+                        'key_2' => ['val' => 'val_2', 'child' => [] /* The same data*/],
                         // ....
-                    ),
+                    ],
                     'depth'  => 2, // max depth
-                    'label'  => array('label_0','label_1',),
-                    'key'    => array('sel_key_0','sel_key_1',),
+                    'label'  => ['label_0','label_1',],
+                    'key'    => ['sel_key_0','sel_key_1',],
                     'loader' => 'Path of loader',
-                ),
-                'field_name_1' =>array(
+                ],
+                'field_name_1' =>[
                     // ....
-                ),
+                ],
                 // ....
-            ),
-            'default_val' => array( // NR. Set condition key or real value.
+            ],
+            'default_val' => [ // NR. Set condition key or real value.
                 'field_name_0' => '[condition_key_1]',
                 'field_name_4' => 'XXX',
-            ),
+            ],
             // Special additional Java-script \\
-            'wysiwyg' => array(
+            'wysiwyg' => [
                 'field_name_0' => 'config_name_0',
                 'field_name_1' => 'config_name_0',
                 // ....
-            ),
-            'image_loader' => array(
+            ],
+            'image_loader' => [
                 'field_name_0' => 'image_loader_0',
                 'field_name_1' => 'image_loader_1',
                 // ....
-            ),
-            'flash_loader' => array(
+            ],
+            'flash_loader' => [
                 'field_name_0' => 'flash_loader_0',
                 'field_name_1' => 'flash_loader_1',
                 // ....
-            ),
-            'file_loader' => array(
+            ],
+            'file_loader' => [
                 'field_name_0' => 'file_loader_0',
                 'field_name_1' => 'file_loader_1',
                 // ....
-            ),
-            'not_standard' => array(
+            ],
+            'not_standard' => [
                 'field_name_0' => 'script_name_0',
                 'field_name_1' => 'script_name_1',
                 // ....
-            ),
-        ),
+            ],
+        ],
 
         'tagId' => 'id_name', // NR. Id for tag container. It will be with prefix 'cont_'. Usualy use for css-classes
 
         'default_tpl' => substr(__FILE__, 0, -8) . 'tpl', // NR. Template for make table. Default template is set in base class
 
-        'form_struct' => array(
-            'rows' =>  array( // Form rows
-                array(
+        'form_struct' => [
+            'rows' =>  [ // Form rows
+                [
                     'field' => 'field_name_1',
                     'label' => 'Fileld label 1',
                     'type'  => 'text',          // Pattern type
                     'width'   => '400',         // NR. Field width (px).
                     'notSQL'  => true OR false, // NR. Not use this field in SQL-request. By default: false
                     'default' => '[condition_key_1]' OR 'XXX', // NR. Set condition key or real value.
-                ),
-                array(
+                ],
+                [
                     'field' => 'field_name_2',
                     'label' => 'Fileld label 2',
                     'type'  => 'radio_group',
-                ),
-                array(
+                ],
+                [
                     'field' => 'field_name_3',
                     'label' => 'Fileld label 3',
                     'type'  => 'not_edit',
-                ),
-            ),
-        ),
+                ],
+            ],
+        ],
 
-        'validation' => array(
-            'field_name1' => array(
+        'validation' => [
+            'field_name1' => [
                 'is_required' => true OR false, // NR. By default: false
                 'trim_data'   => true OR false, // NR. true - trim data before validate; false - do not trim data. By default: true
-                'validate_rules' => array( //NR.
-                    array(
+                'validate_rules' => [ //NR.
+                    [
                         'rule_name' => 'name of validation rule', // Rule method
-                        'rule_data' => array('data for rule'), //NR. It is need for rule with additional data
+                        'rule_data' => ['data for rule'], //NR. It is need for rule with additional data
                         'not_empty' => true OR false, // NR. true - use rule for not empty data only; false - use rule for all type data false. By default: false
                         'error_msg' => 'Message about error for field "{FIELD_LABEL}"',
-                    )
-                ),
-            ),
-            'field_name2' => array(
+                    ]
+                ],
+            ],
+            'field_name2' => [
                 //...
-            ),
+            ],
             // etc.
-        ),
-    ),
-);
-?>
+        ],
+    ],
+];

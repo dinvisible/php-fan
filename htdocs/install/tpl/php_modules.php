@@ -1,23 +1,23 @@
-<section class="test unfolded">
+<?php declare(strict_types=1); ?><section class="test unfolded">
     <h3>{#CHECK_PHP_MODULES}</h3>
 
     <p><b>{#REQUIRED_PHP_MODULES}</b></p>
     <ul class="module_list">
-        <?php foreach ($aUseRequired as $k => $v) : ?>
+        <?php foreach ($useRequired as $k => $v) : ?>
         <li><img src="image/<?php echo $v; ?>.gif" /> <?php echo $k; ?></li>
         <?php endforeach ?>
     </ul>
-    <?php if (!$bAllRequired) : ?>
+    <?php if (!$allRequired) : ?>
         <p>{#SETUP_REQUIRED_MODULES}!</p>
     <?php endif ?>
 
         <p><br /><b>{#RECOMMENDED_PHP_MODULES}</b></p>
     <ul class="module_list">
-        <?php foreach ($aUseRecommended as $k => $v) : ?>
+        <?php foreach ($useRecommended as $k => $v) : ?>
         <li><img src="image/<?php echo $v; ?>.gif" /> <?php echo $k; ?></li>
         <?php endforeach ?>
     </ul>
-    <?php if (!$bAllRecommended) : ?>
+    <?php if (!$allRecommended) : ?>
         <p>{#SETUP_RECOMMENDED_MODULES}.</p>
     <?php endif ?>
 

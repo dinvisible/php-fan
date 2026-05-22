@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\admin;
 /**
  * Class admin index block
  *
@@ -17,20 +21,13 @@
 class index extends \fan\core\block\common\simple
 {
 
-    /**
-     * Init block data
-     */
-    public function init()
+    public function init(): void
     {
         $this->initRequired();
     }
 
-    /**
-     * Init block data
-     */
-    public function initRequired()
+    public function initRequired(): void
     {
-        $this->oTab->disableCache();
+        $this->tab->disableCache();
     }
-} // class \fan\core\block\admin\index
-?>
+}

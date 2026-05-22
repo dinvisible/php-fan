@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Example of meta file for block
  * Note:
@@ -17,28 +20,28 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.005 (12.02.2015)
  */
-return array(
+return [
     /**
      * Meta data for curent form block
      */
-    'own' => array(
-        'externalCss' => array(
-            'style' => array('frm' => '/css/form.css'),
-        ),
+    'own' => [
+        'externalCss' => [
+            'style' => ['frm' => '/css/form.css'],
+        ],
 
         'tpl_parent_class' => '\fan\project\service\template\type\form',
 
         /**
          * form parameters
          */
-        'form' => array(
+        'form' => [
             'action_method' => 'POST',
 
-            'js_url' => array(
+            'js_url' => [
                 'js-wrapper' => '/js/js-wrapper.js',
                 'js-loader'  => '/js/load-wrapper.js',
                 'validator'  => '/js/form_validation.js'
-            ),
+            ],
             'js_validator'  => 'form_validation',
             'js_err_format' => 'alert',
 
@@ -47,23 +50,23 @@ return array(
             'notUseHtmlMaker' => false,
             'not_role' => false,
 
-            'default_type' => array(
+            'default_type' => [
                 'label'   => 'span',
                 'error'   => 'field',
                 'note'    => 'field',
                 'button'  => 'submit_1',
                 'formRow' => 'standard',
-            ),
-            'design' => array(
-                'label' => array(
+            ],
+            'design' => [
+                'label' => [
                     'span_required'         => '<span class="label require">{LABEL}<b>*</b>:</span>',
                     'span'                  => '<span class="label">{LABEL}:</span>',
                     'span_table_required'   => '<span class="label require">{LABEL}<b>*</b></span>',
                     'span_table'            => '<span class="label">{LABEL}</span>',
                     'simple_required'       => '{LABEL}<b>*</b>',
                     'simple'                => '{LABEL}',
-                ),
-                'input' => array(
+                ],
+                'input' => [
                     'text'              => '<input type="text" name="{NAME}" value="{VALUE}"{MAXLENGTH}{ATTRIBUTES}{TABINDEX}{ID} class="inpText" />',
                     'text_empty'        => '<input type="text" name="{NAME}" value=""{MAXLENGTH}{ATTRIBUTES}{TABINDEX}{ID} class="inpText" />',
                     'text_short'        => '<input type="text" name="{NAME}" value="{VALUE}"{MAXLENGTH}{ATTRIBUTES}{TABINDEX}{ID} class="inpText shortText" />',
@@ -75,57 +78,56 @@ return array(
 
                     'text_multiple'     => '<input type="text" name="{NAME}[]" value="{VALUE}"{MAXLENGTH}{ATTRIBUTES}{TABINDEX}{ID} class="inpText" />',
                     'file_multiple'     => '<input type="file" name="{NAME}[]" value="{VALUE}"{ATTRIBUTES}{TABINDEX}{ID} />',
-                ),
-                'checking' => array(
+                ],
+                'checking' => [
                     'checkbox'          => '<input type="checkbox" name="{NAME}" value="1"{CHECKED}{ATTRIBUTES}{TABINDEX}{ID} class="inpChkBx" />',
                     'radio'             => '<input type="radio" name="{NAME}" value="1"{CHECKED}{ATTRIBUTES}{TABINDEX}{ID} class="inpRadio" />',
-                ),
-                'select' => array(
+                ],
+                'select' => [
                     'select'            => '<select name="{NAME}"{ATTRIBUTES}{TABINDEX}{ID}>[<option value="{VALUE}"{SELECTED}>{TEXT}</option>]</select>',
                     'select_short'      => '<select name="{NAME}"{ATTRIBUTES}{TABINDEX}{ID} class="shortSelect">[<option value="{VALUE}"{SELECTED}>{TEXT}</option>]</select>',
                     'radio_group'       => '<span class="formData">[<input type="radio" name="{NAME}" id="{ID}" value="{VALUE}"{CHECKED}{ATTRIBUTES}{TABINDEX} class="inpRadio" /><label for="{ID}">- {TEXT}</label>]</span>',
                     'radio_group_ml'    => '<div class="formData multiLine">[<div><input type="radio" name="{NAME}" id="{ID}" value="{VALUE}"{CHECKED}{ATTRIBUTES}{TABINDEX} class="inpRadio" /><label for="{ID}">- {TEXT}</label></div>]</div>',
-                ),
-                'select_separated' => array(
+                ],
+                'select_separated' => [
                     'radio_alone'   => '<input type="radio" name="{NAME}" id="{ID}" value="{VALUE}"{CHECKED}{ATTRIBUTES}{TABINDEX} class="inpRadio" />',
                     'radio_w_label' => '<input type="radio" name="{NAME}" id="{ID}" value="{VALUE}"{CHECKED}{ATTRIBUTES}{TABINDEX} class="inpRadio" /><label for="{ID}">- {TEXT}</label>',
-                ),
-                'select_multi' => array(
+                ],
+                'select_multi' => [
                     'select_multiple'   => '<select name="{NAME}[]" multiple="multiple"{ATTRIBUTES}{TABINDEX}{ID}>[<option value="{VALUE}"{SELECTED}>{TEXT}</option>]</select>',
                     'checkbox_group'    => '<div class="formData">[<input type="checkbox" name="{NAME}[]" id="{ID}" value="{VALUE}"{CHECKED}{ATTRIBUTES}{TABINDEX} class="inpChkBx" /><label for="{ID}">- {TEXT}</label>]</div>',
                     'checkbox_group_ml' => '<div class="formData multiLine">[<div><input type="checkbox" name="{NAME}[]" id="{ID}" value="{VALUE}"{CHECKED}{ATTRIBUTES}{TABINDEX} class="inpChkBx" /><label for="{ID}">- {TEXT}</label></div>]</div>',
-                ),
-                'select_multi_separated' => array(
+                ],
+                'select_multi_separated' => [
                     'checkbox_alone'       => '<input type="checkbox" name="{NAME}[]" id="{ID}" value="{VALUE}"{CHECKED}{ATTRIBUTES}{TABINDEX} class="inpChkBx" />',
                     'checkbox_w_label'     => '<input type="checkbox" name="{NAME}[]" id="{ID}" value="{VALUE}"{CHECKED}{ATTRIBUTES}{TABINDEX} class="inpChkBx" /><label for="{ID}">- {TEXT}</label>',
                     'checkbox_w_label_one' => '<input type="checkbox" name="{NAME}" value="1"{CHECKED}{ATTRIBUTES}{TABINDEX} class="inpChkBx" id="{ID}" /><label for="{ID}">- {TEXT}</label>',
-                ),
-                'error' => array(
+                ],
+                'error' => [
                     'field' => '<div class="errorField">{TEXT}</div>',
                     'form'  => '<div class="errorForm">{TEXT}</div>',
-                ),
-                'note' => array(
+                ],
+                'note' => [
                     'field'       => '<div class="fieldNote"><i>{NOTE}</i>: {TEXT}</div>',
                     'field_short' => '<div class="fieldNote shortNote"><i>{NOTE}</i>: {TEXT}</div>',
                     'field_popup' => '<a class="fieldNote popupNote" href="#"><span>{TEXT}</span></a>',
                     'form'        => '<div class="formNote"><i>{NOTE}</i>: {TEXT}</div>',
                     'form_short'  => '<div class="formNote shortNote"><i>{NOTE}</i>: {TEXT}</div>',
-                ),
-                'button' => array(
+                ],
+                'button' => [
                     'submit_1' => '<button type="submit"{NAME} value="{VALUE}"{ATTRIBUTES}{TABINDEX}{CLASS}{ID}><span>{TEXT}</span></button>',
                     'submit_2' => '<button type="submit"{NAME} value="{VALUE}"{ATTRIBUTES}{TABINDEX}{CLASS}{ID}><span><span>{TEXT}</span></span></button>',
-                ),
-                'formRow' => array(
+                ],
+                'formRow' => [
                     'standard'   => '<div class="formRow">{LABEL}{FORM_FIELD}{ERROR}{NOTE}</div>',
                     'label_left' => '<div class="formRow labelLeft">{LABEL}{FORM_FIELD}{ERROR}{NOTE}</div>',
                     'label_right' => '<div class="formRow labelRight">{LABEL}{FORM_FIELD}{ERROR}{NOTE}</div>',
-                ),
-            ),
-        ), //'form'
+                ],
+            ],
+        ], //'form'
 
-        'cache' => array(
+        'cache' => [
             'mode'     => 2,
-        ),
-    ),
-);
-?>
+        ],
+    ],
+];

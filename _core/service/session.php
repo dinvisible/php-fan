@@ -1,4 +1,8 @@
-<?php namespace fan\core\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service;
 /**
  * Session service
  *
@@ -16,78 +20,69 @@
  */
 class session extends \fan\core\base\service\multi
 {
-    /**
-     * @var array Service's Instances
-     */
-    private static $aInstances = array();
-    /**
-     * @var object Session engine
-     */
-    private static $oEngine = null;
+    private static array $instances = [];
+    private static ?object $engine = null;
     /**
      * @var \fan\core\service\request Session engine
      */
-    protected static $oSR = null;
+    protected static ?object $sr = null;
     /**
      * Flag: Session is got by cookie
      * @var boolean
      */
-    private static $bByCookie = null;
+    private static ?bool $byCookie = null;
     /**
      * Flag: Session is expired
      * @var boolean
      */
-    private static $bIsExpired = false;
+    private static bool $isExpired = false;
 
     /**
      * Buffer of Data for data communication beetween different parts of code
      * @var array
      */
-    private static $aBufferData = array();
+    private static array $bufferData = [];
 
     /**
      * Session name-space in the group
      * @var string
      */
-    private $sNameSpace = null;
+    private ?string $nameSpace = null;
 
     /**
      * Session group for several Session name-space
      * @var string
      */
-    private $sGroup = null;
+    private ?string $group = null;
 
-    /**
-     * Service's constructor
-     * @param string $sNameSpace
-     * @param string $sGroup
-     */
-    protected function __construct($sNameSpace, $sGroup)
+    protected function __construct(string $nameSpace, string $group)
     {
-        parent::__construct(empty(self::$aInstances));
-        self::$aInstances[$sGroup][$sNameSpace] = $this;
+        parent::__construct(empty(self::$instances));
+        $nameSpace = (string)$nameSpace;
+        $group = (string)$group;
+        self::$instances[$group][$nameSpace] = $this;
 
         if ($this->isEnabled()) {
-            $this->sNameSpace = $sNameSpace;
-            $this->sGroup     = $sGroup;
+            $this->nameSpace = $nameSpace;
+            $this->group     = $group;
 
-            if (is_null(self::$oEngine)) {
-                self::$oSR = \fan\project\service\request::instance();
-                $sSid = $this->_prepareParameters();
+            if (is_null(self::$engine)) {
+                self::$sr = $this->containerService('request');
+                $sid = $this->_prepareParameters();
 
                 // ========= {START session engine} ========= \\
-                $sClass = $this->_getEngine($this->oConfig['ENGINE'], false);
-                self::$oEngine = new $sClass($sSid);
-                self::$oEngine->setFacade($this);
+                $class = $this->_getEngine((string)$this->config['ENGINE'], false);
+                self::$engine = new $class($sid);
+                self::$engine->setFacade($this);
 
                 // Compare Urer's system
-                $aMismatch = $this->_compareSystem();
-                if (!empty($aMismatch)) {
-                    $sErMsg  = '{key => ' . $aMismatch['key'] . ', ';
-                    $sErMsg .= 'old => '  . $aMismatch['old'] . ', ';
-                    $sErMsg .= 'new => '  . $aMismatch['new'] . ', ';
-                    $sErMsg .= 'ip => ' . @$_SERVER['REMOTE_ADDR'] . '}';
-                    l($sErMsg, 'Session is not compared');
+                $mismatch = $this->_compareSystem();
+                if (!empty($mismatch)) {
+                    $erMsg  = '{key => ' . $mismatch['key'] . ', ';
+                    $erMsg .= 'old => '  . $mismatch['old'] . ', ';
+                    $erMsg .= 'new => '  . $mismatch['new'] . ', ';
+                    $erMsg .= 'ip => ' . ($_SERVER['REMOTE_ADDR'] ?? '') . '}';
+                    l($erMsg, 'Session is not compared');
                     $this->setSessionId(md5($this->getSessionId() . microtime()));
                     $this->_killAll();
                 }
@@ -97,442 +92,331 @@ class session extends \fan\core\base\service\multi
             }
 
             // Broadcast Message about start session
-            $this->_broadcastMessage('sesson_start', array($sNameSpace, $sGroup));
+            $this->_broadcastMessage('sesson_start', [$nameSpace, $group]);
         } // check enabling status
-    } // function __construct
+    }
 
     // ======== Static methods ======== \\
     /**
-     * Get instance of Session service
-     * @param string $sNameSpace
-     * @param string $sGroup
-     * @return \fan\core\service\session
      * @throws \fan\project\exception\fatal
      */
-    public static function instance($sNameSpace = null, $sGroup = 'custom')
+    public static function instance(mixed $nameSpace = null, mixed $group = 'custom'): static
     {
-        if (is_null($sGroup)) {
+        if (is_null($group)) {
             throw new \fan\project\exception\fatal('Unset group name for \fan\core\service\session.');
         }
-        if (is_null($sNameSpace)) {
-            $oConfig    = \fan\project\service\config::instance()->get('session');
-            $sGroup     = 'app';
-            $sNameSpace = \fan\project\service\application::instance()->getAppName();
-            $sRepName   = $oConfig->get(array('REPLACE_APP', $sNameSpace));
-            if ($sRepName) {
-                $sNameSpace = $sRepName;
+        if (is_null($nameSpace)) {
+            $config    = self::staticContainerService('config')->get('session');
+            $group     = 'app';
+            $nameSpace = self::staticContainerService('application')->getAppName();
+            $repName   = $config->get(['REPLACE_APP', $nameSpace]);
+            if ($repName) {
+                $nameSpace = (string)$repName;
             }
         }
-        if (!isset(self::$aInstances[$sGroup][$sNameSpace])) {
-            new self($sNameSpace, $sGroup);
+        $nameSpace = (string)$nameSpace;
+        $group = (string)$group;
+        if (!isset(self::$instances[$group][$nameSpace])) {
+            new self($nameSpace, $group);
         }
-        return self::$aInstances[$sGroup][$sNameSpace];
-    } // function instance
+        return self::$instances[$group][$nameSpace];
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Get Session parameter
-     * @param array|string $mKey The Session key
-     * @param mixed $mDefaultValue The default value
-     * @param boolean $bRemoveFromSes Remove after read
-     * @return mixed Session parameter
-     */
-    public function get($mKey, $mDefaultValue = null, $bRemoveFromSes = false)
+    public function get(array|string $key, mixed $defaultValue = null, bool $removeFromSes = false): mixed
     {
-        if (self::$oEngine) {
-            $aData = $this->_getEngineData();
-            $mResult = array_get_element($aData, $mKey, false);
-            if ($bRemoveFromSes) {
-                $this->remove($mKey);
+        if (self::$engine) {
+            $data = $this->_getEngineData();
+            $result = array_get_element($data, $key, false);
+            if ($removeFromSes) {
+                $this->remove($key);
             }
-            return is_null($mResult) ? $mDefaultValue : $mResult;
+            return is_null($result) ? $defaultValue : $result;
         }
         return null;
-    } // function get
+    }
 
-    /**
-     * Get Session parameter by link
-     * @param mixed $mKey The Session key
-     * @param mixed $mDefaultValue The default value
-     * @return mixed Session parameter
-     */
-    public function &getByLink($mKey, $mDefaultValue = null)
+    public function &getByLink(mixed $key, mixed $defaultValue = null): mixed
     {
-        if (self::$oEngine) {
-            $aData   =& $this->_getEngineData();
-            $mResult =& array_get_element($aData, $mKey, true);
-            if (is_null($mResult)) {
-                $mResult = $mDefaultValue;
+        if (self::$engine) {
+            $data   =& $this->_getEngineData();
+            $result =& array_get_element($data, $key, true);
+            if (is_null($result)) {
+                $result = $defaultValue;
             }
         } else {
-            $mResult = null;
+            $result = null;
         }
-        return $mResult;
-    } // function getByLink
-    /**
-     * Get All data in current Name-space
-     * @return array
-     */
-    public function getAll()
+        return $result;
+    }
+    public function getAll(): mixed
     {
         return $this->_getEngineData();
-    } // function getAll
+    }
 
-    /**
-     * Set Session parameter
-     * @access public
-     * @param mixed $mKey The Session key
-     * @param mixed $mValue The Session value
-     * @return boolean True if parameter set
-     */
-    public function set($mKey, $mValue)
+    public function set(mixed $key, mixed $value): ?bool
     {
-        if (self::$oEngine) {
-            if (is_array($mKey)) {
-                $aData = &$this->getByLink($mKey, null);
-                $aData = $mValue;
+        if (self::$engine) {
+            if (is_array($key)) {
+                $data = &$this->getByLink($key, null);
+                $data = $value;
                 return true;
-            } elseif (is_scalar($mKey)) {
-                $aData = &$this->_getEngineData();
-                $aData[$mKey] = $mValue;
+            } elseif (is_scalar($key)) {
+                $data = &$this->_getEngineData();
+                $data[$key] = $value;
                 return true;
             }
             return false;
         }
         return null;
-    } // function set
+    }
 
-    /**
-     * UnSet Session parameter
-     * @param mixed $mKey The Session key
-     * @return boolean True if parameter removed
-     */
-    public function remove($mKey)
+    public function remove(mixed $key): ?bool
     {
-        if (self::$oEngine) {
-            $aData =& $this->_getEngineData();
-            if (is_array($mKey) && count($mKey) == 1) {
-                $mKey = reset($mKey);
+        if (self::$engine) {
+            $data =& $this->_getEngineData();
+            if (is_array($key) && count($key) === 1) {
+                $key = reset($key);
             }
-            if (is_array($mKey)) {
-                $sKey = array_pop($mKey);
-                $aDest =& array_get_element($aData, $mKey, false);
-                if ($aDest) {
-                    unset($aDest[$sKey]);
+            if (is_array($key)) {
+                $key = array_pop($key);
+                $dest =& array_get_element($data, $key, false);
+                if ($dest) {
+                    unset($dest[$key]);
                     return true;
                 }
             } else {
-                unset($aData[$mKey]);
+                unset($data[$key]);
                 return true;
             }
             return false;
         }
         return null;
-    } // function remove
+    }
 
-    /**
-     * UnSet all Session parameters
-     * @return boolean True if parameters removed
-     */
-    public function removeAll()
+    public function removeAll(): ?bool
     {
-        if (self::$oEngine) {
-            $aData = &$this->_getEngineData();
-            $aData = null;
+        if (self::$engine) {
+            $data = &$this->_getEngineData();
+            $data = null;
             return true;
         }
         return null;
-    } // function removeAll
+    }
 
-    /**
-     * Set Data to Buffer for data communication beetween different parts of code
-     * @param string $sKey
-     * @param mixed $mVal
-     * @return \fan\core\service\session
-     */
-    public function setBufferData($sKey, $mVal)
+    public function setBufferData(string $key, mixed $val): static
     {
-        self::$aBufferData[$sKey] = $mVal;
+        self::$bufferData[$key] = $val;
         return $this;
-    } // function setBufferedData
+    }
 
-    /**
-     * Get Data from Buffer of data communication
-     * @param string $sKey
-     * @param mixed $mDefault
-     * @return mixed
-     */
-    public function getBufferData($sKey, $mDefault = null)
+    public function getBufferData(string $key, mixed $default = null): mixed
     {
-        return array_val(self::$aBufferData, $sKey, $mDefault);
-    } // function getBufferedData
+        return array_val(self::$bufferData, $key, $default);
+    }
 
-    /**
-     * Get Session Id
-     * @return string Session Id
-     */
-    public function getSessionId()
+    public function getSessionId(): ?string
     {
-        if (self::$oEngine) {
-            return self::$oEngine->getSessionId();
+        if (self::$engine) {
+            return self::$engine->getSessionId();
         }
         return null;
-    } // function getSessionId
+    }
 
-    /**
-     * Session is Get By Cookie
-     * @return boolean
-     */
-    public function isByCookies()
+    public function isByCookies(): ?bool
     {
-        return self::$bByCookie;
-    } // function isByCookies
+        return self::$byCookie;
+    }
 
-    /**
-     * Set Session Id
-     * @param string $sSid
-     */
-    public function setSessionId($sSid)
+    public function setSessionId(string $sid): bool
     {
-        if (self::$oEngine) {
-            if ($this->_checkSessionId($sSid)) {
-                self::$oEngine->setSessionId($sSid);
-                $this->_setCookie($this->getSessionName(), $sSid);
+        if (self::$engine) {
+            if ($this->_checkSessionId($sid)) {
+                self::$engine->setSessionId($sid);
+                $this->_setCookie((string)$this->getSessionName(), $sid);
                 return true;
             }
         }
         return false;
-    } // function setSessionId
+    }
 
-    /**
-     * Get Session Id
-     * @return string
-     */
-    public function getSessionName()
+    public function getSessionName(): ?string
     {
-        if (self::$oEngine) {
-            return self::$oEngine->getSessionName();
+        if (self::$engine) {
+            return self::$engine->getSessionName();
         }
         return null;
-    } // function getSessionName
+    }
 
-    /**
-     * Get Group
-     * @return string
-     */
-    public function getGroup()
+    public function getGroup(): ?string
     {
-        return $this->sGroup;
-    } // function getGroup
+        return $this->group;
+    }
 
-    /**
-     * Get NameSpace
-     * @return string
-     */
-    public function getNameSpace()
+    public function getNameSpace(): ?string
     {
-        return $this->sNameSpace;
-    } // function getNameSpace
+        return $this->nameSpace;
+    }
 
-    /**
-     * Check session is expired
-     * @return boolean
-     */
-    public function isExpired()
+    public function isExpired(): bool
     {
-        return self::$bIsExpired;
-    } // function isExpired
+        return self::$isExpired;
+    }
 
-    /**
-     * Reset Expired
-     * @return boolean
-     */
-    public function resetExpired($bClearAll = true)
+    public function resetExpired(bool $clearAll = true): static
     {
-        if ($bClearAll && self::$bIsExpired) {
+        if ($clearAll && self::$isExpired) {
             $this->_killAll();
         }
-        self::$bIsExpired = false;
+        self::$isExpired = false;
         return $this;
-    } // function resetExpired
+    }
 
-    /**
-     * Destroy the session
-     * @return \fan\core\service\session
-     */
-    public function destroy()
+    public function destroy(): static
     {
-        if (self::$oEngine) {
-            self::$oEngine->destroy();
+        if (self::$engine) {
+            self::$engine->destroy();
 
-            self::$aInstances = array();
-            self::$oEngine    = null;
-            self::$bByCookie  = null;
+            self::$instances = [];
+            self::$engine    = null;
+            self::$byCookie  = null;
         }
         return $this;
-    } // function destroy
+    }
 
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Prepare session parameters
-     */
-    protected function _prepareParameters()
+    protected function _prepareParameters(): ?string
     {
-        $aConfig = $this->oConfig->toArray();
+        $config = $this->config->toArray();
         // Check conf - Session MAXLIFETIME
-        if ($aConfig['MAXLIFETIME']){
-            ini_set('session.gc_maxlifetime', $aConfig['MAXLIFETIME']);
+        if ($config['MAXLIFETIME']){
+            ini_set('session.gc_maxlifetime', (string)$config['MAXLIFETIME']);
         }
 
         // Check conf - Session COOKIE_SECURE
-        ini_set('session.cookie_secure', !empty($aConfig['COOKIE_SECURE']));
+        ini_set('session.cookie_secure', !empty($config['COOKIE_SECURE']) ? '1' : '0');
 
         // Check conf - Session COOKIE_HTTPONLY
-        ini_set('session.cookie_httponly', !isset($aConfig['COOKIE_HTTPONLY']) || !empty($aConfig['COOKIE_HTTPONLY']));
+        ini_set('session.cookie_httponly', !isset($config['COOKIE_HTTPONLY']) || !empty($config['COOKIE_HTTPONLY']) ? '1' : '0');
 
         // Set main session parameters
-        if (empty($aConfig['COOKIE_DOMAIN'])) {
+        if (empty($config['COOKIE_DOMAIN'])) {
             session_set_cookie_params (0, '/');
         } else {
-            session_set_cookie_params (0, '/', $aConfig['COOKIE_DOMAIN']);
+            session_set_cookie_params (0, '/', (string)$config['COOKIE_DOMAIN']);
         }
-        session_cache_limiter($aConfig['CACHE_LIMITER']);
+        session_cache_limiter((string)$config['CACHE_LIMITER']);
 
         // ---- Define sessin by Cookie/GET/POST ---- \\
-        $sSesName   = $this->oConfig->get('SESSION_NAME', 'SID');
-        $sCookieSid = self::$oSR->get($sSesName, 'C');
-        self::$bByCookie = !empty($sCookieSid);
+        $sesName   = (string)$this->config->get('SESSION_NAME', 'SID');
+        $cookieSid = self::$sr->get($sesName, 'C');
+        self::$byCookie = !empty($cookieSid);
 
         // Check session ID by GET/POST
-        $sSid = self::$oSR->get(strtoupper($sSesName), 'GP', self::$oSR->get(strtolower($sSesName), 'GP'));
-        if ($this->_checkSessionId($sSid, $sSesName) && (!self::$bByCookie || $this->oConfig->get('IS_GET_PRIORITY', false))) {
-            self::$bByCookie = self::$bByCookie && $sCookieSid == $sSid;
-            $this->_setCookie($sSesName, $sSid);
-        } elseif (self::$bByCookie && !$this->_checkSessionId($sCookieSid)) {
-            $sSid = md5($sCookieSid . microtime());
-            self::$bByCookie = false;
-            $this->_setCookie($sSesName, $sSid);
+        $sid = self::$sr->get(strtoupper($sesName), 'GP', self::$sr->get(strtolower($sesName), 'GP'));
+        if ($this->_checkSessionId($sid, $sesName) && (!self::$byCookie || $this->config->get('IS_GET_PRIORITY', false))) {
+            self::$byCookie = self::$byCookie && (string)$cookieSid === (string)$sid;
+            $this->_setCookie($sesName, (string)$sid);
+        } elseif (self::$byCookie && !$this->_checkSessionId($cookieSid)) {
+            $sid = md5((string)$cookieSid . microtime());
+            self::$byCookie = false;
+            $this->_setCookie($sesName, $sid);
         }
-        session_name($sSesName);
+        session_name($sesName);
 
-        return self::$bByCookie ? $sCookieSid : $sSid;
-    } // function _prepareParameters
+        return self::$byCookie ? (string)$cookieSid : (is_null($sid) ? null : (string)$sid);
+    }
 
-    /**
-     * Set session cookie
-     * @param string $sVar
-     * @param string $sVal
-     */
-    protected function _setCookie($sVar, $sVal)
+    protected function _setCookie(string $var, string $val): static
     {
-        \fan\project\service\cookie::instance('/', $this->oConfig['COOKIE_DOMAIN'])->set($sVar, $sVal);
+        \fan\project\service\cookie::instance('/', $this->config['COOKIE_DOMAIN'])->set($var, $val);
         return $this;
-    } // function _setCookie
+    }
 
-    /**
-     * Get engine session data
-     * @return mixed link to session data
-     */
-    protected function &_getEngineData()
+    protected function &_getEngineData(): mixed
     {
-        return self::$oEngine->getData($this->sGroup, $this->sNameSpace);
-    } // function _getEngineData
+        return self::$engine->getData((string)$this->group, (string)$this->nameSpace);
+    }
 
-    /**
-     * Check Session Id
-     * @param string $sSid
-     */
-    protected function _checkSessionId(&$sSid, $sSesName = null)
+    protected function _checkSessionId(mixed &$sid, ?string $sesName = null): bool
     {
-        $sSidSrc = $sSid;
-        $sSid = substr(preg_replace('/\W/', '', $sSid), 0, 32);
-        if ($sSidSrc == $sSid && strlen($sSid) > 16) {
+        $sidSrc = $sid;
+        $sid = substr((string)preg_replace('/\W/', '', (string)$sid), 0, 32);
+        if ((string)$sidSrc === $sid && strlen($sid) > 16) {
             return true;
         }
-        if ($sSesName) { // ToDo: Make this by service request
-            self::$oSR->remove($sSesName, 'GPR', true);
+        if ($sesName) { // ToDo: Make this by service request
+            self::$sr->remove((string)$sesName, 'GPR', true);
         }
-        $sSid = null;
+        $sid = null;
         return false;
-    } // function _checkSessionId
+    }
 
-    /**
-     * Check and clear session data by timeout
-     * @return array Mismatched data
-     */
-    protected function _compareSystem()
+    protected function _compareSystem(): ?array
     {
-        $aMismatch = null;
-        $aCheck    = $this->oConfig['CHECK_SYSTEM'];
-        if ($aCheck) {
-            $aServer = self::$oSR->getAll('S', array());
-            $oSes    = \fan\project\service\session::instance('data', 'session');
-            $aParam  = &$oSes->getByLink('param');
-            if ($oSes->get('is_fill', false)) {
-                foreach ($aCheck as $v) {
-                    if (array_val($aParam, $v) != array_val($aServer, $v)) {
-                        $aMismatch = array(
+        $mismatch = null;
+        $check    = $this->config['CHECK_SYSTEM'];
+        if ($check) {
+            $server = self::$sr->getAll('S', []);
+            $ses    = $this->containerService('session', 'data', 'session');
+            $param  = &$ses->getByLink('param');
+            if ($ses->get('is_fill', false)) {
+                foreach ($check as $v) {
+                    if ((string)array_val($param, $v) !== (string)array_val($server, $v)) {
+                        $mismatch = [
                             'key' => $v,
-                            'old' => array_val($aParam,  $v),
-                            'new' => array_val($aServer, $v),
-                        );
+                            'old' => array_val($param,  $v),
+                            'new' => array_val($server, $v),
+                        ];
                         break;
                     }
                 }
             }
 
-            foreach ($aCheck as $v) {
-                if (isset($aServer[$v])) {
-                    $aParam[$v] = $aServer[$v];
+            foreach ($check as $v) {
+                if (isset($server[$v])) {
+                    $param[$v] = $server[$v];
                 }
             }
-            $oSes->set('is_fill', true);
+            $ses->set('is_fill', true);
         }
-        return $aMismatch;
-    } // function _compareSystem
+        return $mismatch;
+    }
 
-    /**
-     * Check and clear session data by timeout
-     * @return boolean True if session checked
-     */
-    protected function _checkSessionTimeout()
+    protected function _checkSessionTimeout(): bool
     {
-        $oConf = $this->oConfig;
-        if ($oConf['KILL_BY_TIMEOUT']) {
-            $oSes = \fan\project\service\session::instance('time', 'session');
+        $conf = $this->config;
+        if ($conf['KILL_BY_TIMEOUT']) {
+            $ses = $this->containerService('session', 'time', 'session');
 
-            self::$bIsExpired = &$oSes->getByLink('isKilled');
-            $sNowDt = date('Y-m-d H:i:s');
-            $oNow = \fan\project\service\date::instance($sNowDt);
-            $nDiffer = $oNow->getDifference($oSes->get('reload', $sNowDt));
+            self::$isExpired = &$ses->getByLink('isKilled');
+            $nowDt = date('Y-m-d H:i:s');
+            $now = \fan\project\service\date::instance($nowDt);
+            $differ = $now->getDifference($ses->get('reload', $nowDt));
 
-            if ($nDiffer > $oConf['MAXLIFETIME']) {
+            if ($differ > $conf['MAXLIFETIME']) {
                 $this->_killAll();
-                self::$bIsExpired = true;
+                self::$isExpired = true;
             }
-            $oSes->set('reload', $sNowDt);
-            return !self::$bIsExpired;
+            $ses->set('reload', $nowDt);
+            return !self::$isExpired;
         }
         return true;
-    } // function _checkSessionTimeout
+    }
 
-    /**
-     * Kill all session data
-     */
-    protected function _killAll()
+    protected function _killAll(): void
     {
-        $aSes = &self::$oEngine->getRoot();
-        foreach ($aSes as $sGroup => &$aGr) {
-            if ($sGroup != 'ses' && @is_array($aGr)) {
-                foreach ($aGr as &$aDt) {
-                    $aDt = array();
+        $ses = &self::$engine->getRoot();
+        foreach ($ses as $group => &$gr) {
+            if ($group !== 'ses' && is_array($gr)) {
+                foreach ($gr as &$dt) {
+                    $dt = [];
                 }
             }
         }
-    } // function _killAll
+    }
 
-} // class \fan\core\service\session
-?>
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\entity\designer;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\entity\designer;
 /**
  * Designer of SQL-request INSERT
  *
@@ -20,10 +24,10 @@ class insert extends \fan\core\service\entity\designer
      * SQL-request parts
      * @var string
      */
-    protected $aQueryParts = array(
+    protected array $queryParts = [
         'insertTable' => null,
-        'setData'     => array(),
-    );
+        'setData'     => [],
+    ];
 
 
     // ======== Static methods ======== \\
@@ -32,22 +36,16 @@ class insert extends \fan\core\service\entity\designer
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Set parts of SQL-requests for Insert by parameters
-     * @param array $mParam
-     * @return \fan\core\service\entity\designer\insert
-     */
-    public function setInsertByParam($mParam)
+    public function setInsertByParam(array $param): static
     {
-        $this->aQueryParts = array(
+        $this->queryParts = [
             'insertTable' => 'INSERT INTO `' . $this->getEntity()->getTableName() . '` SET ',
-            'setData'     => $this->_makeSetupPart($mParam),
-        );
-        $this->aSrcParam = $mParam;
+            'setData'     => $this->_makeSetupPart($param),
+        ];
+        $this->srcParam = $param;
         return $this;
-    } // function setInsertByParam
+    }
 
     // ======== Private/Protected methods ======== \\
 
-} // class \fan\core\service\entity\designer\insert
-?>
+}

@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\tab\delegate;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\tab\delegate;
 /**
  * Description of urlMaker
  *
@@ -19,313 +22,241 @@ class urlMaker extends \fan\core\service\tab\delegate
     /**
      * @var \fan\core\service\matcher
      */
-    protected $oMatcher = null;
+    protected ?object $matcher = null;
 
     public function __construct()
     {
-        $this->oMatcher = \fan\project\service\matcher::instance();
-    } // function __construct
+        $this->matcher = \fan\project\service\matcher::instance();
+    }
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Is Used Https-protocol
-     * @return boolean
-     */
-    public function isUseHttps()
+    public function isUseHttps(): bool
     {
-        return !empty($this->oConfig['USE_HTTPS']);
-    } // function isUseHttps
+        return !empty($this->config['USE_HTTPS']);
+    }
 
-    /**
-     * Get Current Parsed URI
-     *
-     * $oTab->getCurrentURI(array(
-     *     'correct_language' => $val1,
-     *     'add_extension'    => $val2,
-     *     'add_query_string' => $val3,
-     *     'add_session_id'   => $val4,
-     *     'query_separator'  => $val5
-     * ));
-     * - such variant of call allows you to pass the arguments in any order
-     *
-     * @param boolean  $bCorLanguage
-     * @param boolean  $bAddExt
-     * @param boolean  $bAddQueryStr
-     * @param boolean  $bAddSid
-     * @param string  $sSprtr
-     * @return string
-     */
-    public function getCurrentURI($bCorLanguage = true, $bAddExt = true, $bAddQueryStr = true, $bAddSid = null, $sSprtr = null)
+    public function getCurrentURI(mixed $corLanguage = true, bool $addExt = true, bool $addQueryStr = true, mixed $addSid = null, mixed $sprtr = null): string
     {
-        if (is_array($bCorLanguage)) {
+        if (is_array($corLanguage)) {
             return $this->getCurrentURI(
-                    array_val($bCorLanguage, 'correct_language', true),
-                    array_val($bCorLanguage, 'add_extension',    true),
-                    array_val($bCorLanguage, 'add_query_string', true),
-                    array_val($bCorLanguage, 'add_session_id',   null),
-                    array_val($bCorLanguage, 'query_separator',  null)
+                    array_val($corLanguage, 'correct_language', true),
+                    (bool)array_val($corLanguage, 'add_extension',    true),
+                    (bool)array_val($corLanguage, 'add_query_string', true),
+                    array_val($corLanguage, 'add_session_id',   null),
+                    array_val($corLanguage, 'query_separator',  null)
             );
         }
 
-        $oReq    = \fan\project\service\request::instance();
-        /* @var $oReq \fan\core\service\request */
-        $oParsed = $this->oMatcher->getCurrentItem()->parsed;
-        /* @var $oParsed \fan\core\service\matcher\item\parsed */
+        $req    = $this->containerService('request');
+        /* @var $req \fan\core\service\request */
+        $parsed = $this->matcher->getCurrentItem()->parsed;
+        /* @var $parsed \fan\core\service\matcher\item\parsed */
 
         // Set Request path
-        $aRequest = $oReq->getAll('B'); // ToDo: Do non receive empty elemenents there.
-        if (empty($aRequest) && $oParsed->src_path != '') {
+        $request = $req->getAll('B'); // ToDo: Do non receive empty elemenents there.
+        if (empty($request) && (string)$parsed->src_path !== '') {
             // If sham transter from fake URN (for example by alias)
-            $aRequest = explode('/', trim($oParsed->src_path, '/'));
-            $sLast    =& $aRequest[count($aRequest) - 1];
-            $aMatche  = null;
-            if (preg_match('/^(.+)\.\w{1,5}$/', $sLast, $aMatche)) {
-                $sLast = $aMatche[1];
+            $request = explode('/', trim($parsed->src_path, '/'));
+            $last    =& $request[count($request) - 1];
+            $matche  = null;
+            if (preg_match('/^(.+)\.\w{1,5}$/', $last, $matche)) {
+                $last = $matche[1];
             }
         }
-        foreach ($aRequest as &$v) {
-            $v = urlencode($v);
+        foreach ($request as &$v) {
+            $v = urlencode((string)$v);
         }
 
         // Add app prefix
-        if ($oParsed->app_prefix) {
-            array_unshift($aRequest, trim($oParsed->app_prefix, '/'));
+        if ($parsed->app_prefix) {
+            array_unshift($request, trim((string)$parsed->app_prefix, '/'));
         }
         // Add language
-        if (is_null($bCorLanguage)) {
-            $bCorLanguage = \fan\project\service\locale::instance()->isEnabled();
+        if (is_null($corLanguage)) {
+            $corLanguage = $this->containerService('locale')->isEnabled();
         }
-        if ($bCorLanguage) {
-            $sLng = \fan\project\service\locale::instance()->getLanguage();
-            if (!empty($sLng)) {
-                array_unshift($aRequest, $sLng);
+        if ($corLanguage) {
+            $lng = $this->containerService('locale')->getLanguage();
+            if (!empty($lng)) {
+                array_unshift($request, $lng);
             }
         }
 
-        $sCurRequest = '/' . implode('/', $aRequest);
+        $curRequest = '/' . implode('/', $request);
 
         // Add extension
-        if ($bAddExt && substr($sCurRequest, -1) != '/') {
-            $sCurRequest .= '.' . $this->getDefaultExtension();
+        if ($addExt && substr($curRequest, -1) !== '/') {
+            $curRequest .= '.' . $this->getDefaultExtension();
         }
 
-        if (is_null($sSprtr)) {
-            $sSprtr = $this->getConfig('GET_SEPARATOR', '&amp;');
+        if (is_null($sprtr)) {
+            $sprtr = (string)$this->getConfig('GET_SEPARATOR', '&amp;');
         }
 
         // Add Query String
-        if ($bAddQueryStr) {
-            $sQueryStr = $oReq->getQueryString(true, true, $sSprtr);
-            $sCurRequest .= empty($sQueryStr) ? '' : '?' . $sQueryStr;
+        if ($addQueryStr) {
+            $queryStr = $req->getQueryString(true, true, (string)$sprtr);
+            $curRequest .= empty($queryStr) ? '' : '?' . $queryStr;
         }
 
         // Add Session ID
-        if (is_null($bAddSid)) {
-            $bAddSid = $this->getConfig('ALLOW_GET_SID', true);
+        if (is_null($addSid)) {
+            $addSid = $this->getConfig('ALLOW_GET_SID', true);
         }
-        if ($bAddSid) {
-            $oSes = \fan\project\service\session::instance();
-            if (!$oSes->isByCookies()) {
-                $sCurRequest = $this->addQuery($sCurRequest, $oSes->getSessionName(), $oSes->getSessionId(), $sSprtr);
+        if ($addSid) {
+            $ses = $this->containerService('session');
+            if (!$ses->isByCookies()) {
+                $curRequest = $this->addQuery($curRequest, $ses->getSessionName(), $ses->getSessionId(), (string)$sprtr);
             }
         }
 
-        return $sCurRequest;
-    } // function getCurrentURI
+        return $curRequest;
+    }
 
 
-    /**
-     * Get Modified Current URI
-     * This method allow to change current URI - include or exclude elements to add-request or GET
-     *   Structure of $aModifier:
-     *   array(
-     *      'exclude' => array(
-     *          'A' => array(...), // Keys of "add request" for exclude
-     *          'G' => array(...), // Keys of "GET" for exclude
-     *      ),
-     *      'include' => array(
-     *          'A' => array(...), // Array of elements for add to "add request"
-     *          'G' => array(...), // Array of elements for add to "GET"
-     *      ),
-     *   )
-     * @param array $aModifier
-     * @param type $bAddExt
-     * @param type $bAddSid
-     * @param type $bProtocol
-     * @return type
-     */
-    public function getModifiedCurrentURI($aModifier, $bAddExt = true, $bAddSid = null, $bProtocol = null)
+    public function getModifiedCurrentURI(array $modifier, mixed $addExt = true, mixed $addSid = null, mixed $protocol = null): string
     {
-        $oRequest = service('request');
-        /* @var $oRequest \fan\core\service\request */
-        $aMain  = $oRequest->getAll('M', array());
-        $aAdd   = $oRequest->getAll('A', array(), false);
-        $aGet   = $oRequest->getAll('G', array());
-        $sDelim = $oRequest->getAddDelimiter();
+        $request = $this->containerService('request');
+        /* @var $request \fan\core\service\request */
+        $main  = $request->getAll('M', []);
+        $add   = $request->getAll('A', [], false);
+        $get   = $request->getAll('G', []);
+        $delim = $request->getAddDelimiter();
 
         // --- Modifying Add-request --- \\
         // Exclude data
-        if (!empty($aAdd) && !empty($aModifier['exclude']['A'])) {
-            foreach ($aModifier['exclude']['A'] as $k0) {
+        if (!empty($add) && !empty($modifier['exclude']['A'])) {
+            foreach ($modifier['exclude']['A'] as $k0) {
                 if (is_int($k0)) {
-                    unset($aAdd[$k0]);
+                    unset($add[$k0]);
                 } else {
-                    $k0 .= $sDelim;
-                    foreach ($aAdd as $k1 => $v) {
-                        if (substr($v, 0, strlen($k0)) == $k0) {
-                            unset($aAdd[$k1]);
+                    $k0 .= $delim;
+                    foreach ($add as $k1 => $v) {
+                        if (substr((string)$v, 0, strlen($k0)) === $k0) {
+                            unset($add[$k1]);
                         }
                     }
                 }
             }
         }
         // Include data
-        if (!empty($aModifier['include']['A'])) {
-            foreach ($aModifier['include']['A'] as $k => $v) {
+        if (!empty($modifier['include']['A'])) {
+            foreach ($modifier['include']['A'] as $k => $v) {
                 if (is_int($k)) {
-                    $aAdd[$k] = $v;
+                    $add[$k] = $v;
                 }
             }
-            $aAdd = array_merge($aAdd);
-            foreach ($aModifier['include']['A'] as $k => $v) {
+            $add = array_merge($add);
+            foreach ($modifier['include']['A'] as $k => $v) {
                 if (!is_int($k)) {
-                    $aAdd[] = $k . $sDelim . urlencode($v);
+                    $add[] = $k . $delim . urlencode($v);
                 }
             }
         }
 
         // --- Modifying GET --- \\
         // Exclude data
-        if (!empty($aGet) && !empty($aModifier['exclude']['G'])) {
-            foreach ($aModifier['exclude']['G'] as $k0) {
-                unset($aGet[$k0]);
+        if (!empty($get) && !empty($modifier['exclude']['G'])) {
+            foreach ($modifier['exclude']['G'] as $k0) {
+                unset($get[$k0]);
             }
         }
         // Include data
-        if (!empty($aModifier['include']['G'])) {
-            foreach ($aModifier['include']['G'] as $k => $v) {
-                $aGet[$k] = $v;
+        if (!empty($modifier['include']['G'])) {
+            foreach ($modifier['include']['G'] as $k => $v) {
+                $get[$k] = $v;
             }
         }
 
         // --- Make URN --- \\
-        $sUrn = '~/' . implode('/', $aMain);
-        if (!empty($aAdd)) {
-            $sUrn .= '/' . implode('/', $aAdd);
+        $urn = '~/' . implode('/', $main);
+        if (!empty($add)) {
+            $urn .= '/' . implode('/', $add);
         }
-        if ($bAddExt) {
-            $sExt  = service('tab')->getDefaultExtension();
-            $sUrn .= empty($sExt) ? '' : '.' . $sExt;
+        if ($addExt) {
+            $ext  = $this->containerService('tab')->getDefaultExtension();
+            $urn .= empty($ext) ? '' : '.' . $ext;
         }
-        if (!empty($aGet)) {
-            $sUrn .= '?' . http_build_query($aGet);
+        if (!empty($get)) {
+            $urn .= '?' . http_build_query($get);
         }
 
-        return $this->getURI($sUrn, 'link', $bAddSid, $bProtocol);
-    } // function getModifiedCurrentURI
+        return $this->getURI($urn, 'link', $addSid, $protocol);
+    }
 
-    /**
-     * Get full URL
-     * @param string $sUrn
-     * @param string $sType
-     * @param boolean $bAddSid - add SID to URL
-     * @param boolean $bProtocol - consider PROTOCOL in transfer URL (null: use current protocol; false: use "http" only; true: use "https" only;)
-     * @return string
-     */
-    public function getURI($sUrn = '', $sType = 'link', $bAddSid = null, $bProtocol = null)
+    public function getURI(string $urn = '', string $type = 'link', mixed $addSid = null, mixed $protocol = null): string
     {
-        if (is_null($bAddSid)) {
-            $bAddSid = ($sType == 'link') && $this->getConfig('ALLOW_GET_SID', true);
+        if (is_null($addSid)) {
+            $addSid = ($type === 'link') && $this->getConfig('ALLOW_GET_SID', true);
         }
 
-        if (!$sUrn) {
-            $sUrn = $this->oMatcher->getCurrentUri();
+        if (!$urn) {
+            $urn = $this->matcher->getCurrentUri();
         }
 
-        if (substr($sUrn, 0, 1) == \fan\core\service\tab::URN_AP) {
-            $sUrnPrefix = $this->getConfig(array('URN_prefix', $sType));
-            $sAppPrefix = trim($this->oMatcher->getCurrentItem()->parsed['app_prefix'], '/');
-            $sUrn = (empty($sAppPrefix) ? '' : '/' . $sAppPrefix) . $sUrnPrefix . substr($sUrn, 1);
+        if (substr($urn, 0, 1) === \fan\core\service\tab::URN_AP) {
+            $urnPrefix = $this->getConfig(['URN_prefix', $type]);
+            $appPrefix = trim((string)$this->matcher->getCurrentItem()->parsed['app_prefix'], '/');
+            $urn = (empty($appPrefix) ? '' : '/' . $appPrefix) . (string)$urnPrefix . substr($urn, 1);
         }
 
-        if ($bAddSid) {
-            $oSes = \fan\project\service\session::instance();
-            if (!$oSes->isByCookies()) {
-                $sUrn = $this->addQuery($sUrn, $oSes->getSessionName(), $oSes->getSessionId());
+        if ($addSid) {
+            $ses = $this->containerService('session');
+            if (!$ses->isByCookies()) {
+                $urn = $this->addQuery($urn, $ses->getSessionName(), $ses->getSessionId());
             }
         }
 
-        if (!preg_match('/^https?\:\/\/\w/i', $sUrn)) {
-            $oLocale = \fan\project\service\locale::instance();
-            if ($sType == 'link' && $oLocale->isUriParsing()) {
-                $sUrn = $oLocale->modifyUrn($sUrn);
+        if (!preg_match('/^https?\:\/\/\w/i', $urn)) {
+            $locale = $this->containerService('locale');
+            if ($type === 'link' && $locale->isUriParsing()) {
+                $urn = $locale->modifyUrn($urn);
             }
 
-            if ($this->isUseHttps() && !is_null($bProtocol) && $bProtocol != (@$_SERVER['HTTPS'] == 'on')) {
-                $sUrn = ($bProtocol ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . $sUrn;
+            if ($this->isUseHttps() && !is_null($protocol) && (bool)$protocol !== (($_SERVER['HTTPS'] ?? '') === 'on')) {
+                $urn = ($protocol ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . $urn;
             }
         }
-        return $sUrn;
-    } // function getURI
+        return $urn;
+    }
 
-    /**
-     * Add Query to URL
-     *
-     * @param string $sUrn
-     * @param string $sQuery
-     * @return string
-     */
-    public function addQuery($sUrn, $sKey, $sVal, $sSprtr = null)
+    public function addQuery(string $urn, mixed $key, mixed $val, mixed $sprtr = null): string
     {
-        if ($sKey && $sVal) {
-            if (is_null($sSprtr)) {
-                $sSprtr = $this->getConfig('GET_SEPARATOR', '&amp;');
+        if ($key && $val) {
+            if (is_null($sprtr)) {
+                $sprtr = $this->getConfig('GET_SEPARATOR', '&amp;');
             }
 
-            $sVal = htmlspecialchars($sVal);
-            if (!preg_match('/(?:\?|' . $this->_addSlashes($sSprtr) . ')' . $this->_addSlashes($sKey) . '\=' . $this->_addSlashes($sVal) . '/', $sUrn)) {
-                $sUrn .= (strstr($sUrn, '?') ? $sSprtr : '?') . urlencode($sKey) . '=' . urlencode($sVal);
+            $key = (string)$key;
+            $sprtr = (string)$sprtr;
+            $val = htmlspecialchars((string)$val);
+            if (!preg_match('/(?:\?|' . $this->_addSlashes($sprtr) . ')' . $this->_addSlashes($key) . '\=' . $this->_addSlashes($val) . '/', $urn)) {
+                $urn .= (strstr($urn, '?') ? $sprtr : '?') . urlencode($key) . '=' . urlencode($val);
             }
         }
-        return $sUrn;
-    } // function addQuery
+        return $urn;
+    }
 
-    /**
-     * Returns default extension
-     *
-     * @return string
-     */
-    public function getDefaultExtension()
+    public function getDefaultExtension(): string
     {
-        return trim($this->oFacade->getConfig('DEFAULT_EXT', 'html'), ' .');
-    } // function getDefaultExtension
+        return trim((string)$this->facade->getConfig('DEFAULT_EXT', 'html'), ' .');
+    }
 
-    /**
-     * Reduce extantion from URL-request
-     * @param string $sUrl
-     * @return string
-     */
-    public function reduceExt($sUrl, $nMinLen = 2, $nMaxLen = 4)
+    public function reduceExt(string $url, mixed $minLen = 2, mixed $maxLen = 4): string
     {
-        $aMatches = null;
-        if (preg_match('/^(.+?)(\.\w{' . $nMinLen. ',' . $nMaxLen . '})?$/', $sUrl, $aMatches)) {
-            return $aMatches[1];
+        $matches = null;
+        if (preg_match('/^(.+?)(\.\w{' . (int)$minLen. ',' . (int)$maxLen . '})?$/', $url, $matches)) {
+            return $matches[1];
         }
-        return $sUrl;
-    } // function reduceExt
+        return $url;
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Add slashes for regexp
-     * @param string $sVal
-     * @return string
-     */
-    protected function _addSlashes($sVal)
+    protected function _addSlashes(string $val): string
     {
-        return addcslashes($sVal, '~@#$%^&|\\.,!?:;-+*/=<>()[]{}`"\'');
-    } // function addSlashes
+        return addcslashes($val, '~@#$%^&|\\.,!?:;-+*/=<>()[]{}`"\'');
+    }
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
-} // class \fan\core\service\tab\delegate\urlMaker
-?>
+}

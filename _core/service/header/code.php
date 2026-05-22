@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\header;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\header;
 /**
  * List of additional response codes
  *
@@ -16,28 +20,18 @@
  */
 class code
 {
-    /**
-     * Get Codes "1"
-     * Informational
-     * @return array
-     */
-    public static function getCodes1()
+    public static function getCodes1(): array
     {
-        return array(
+        return [
             100 => 'Continue',
             101 => 'Switching Protocols',
             102 => 'Processing',
-        );
-    } // function getCodes1
+        ];
+    }
 
-    /**
-     * Get Codes "2"
-     * Success
-     * @return array
-     */
-    public static function getCodes2()
+    public static function getCodes2(): array
     {
-        return array(
+        return [
             200 => 'OK',
             201 => 'Created',
             202 => 'Accepted',
@@ -47,17 +41,12 @@ class code
             206 => 'Partial Content',
             207 => 'Multi-Status',
             226 => 'IM Used',
-        );
-    } // function getCodes2
+        ];
+    }
 
-    /**
-     * Get Codes "3"
-     * Redirection
-     * @return array
-     */
-    public static function getCodes3()
+    public static function getCodes3(): array
     {
-        return array(
+        return [
             300 => 'Multiple Choices',
             301 => 'Moved Permanently',
             302 => 'Found',
@@ -67,17 +56,12 @@ class code
             306 => '',
             307 => 'Temporary Redirect',
             308 => 'Permanent Redirect',
-            );
-    } // function getCodes3
+            ];
+    }
 
-    /**
-     * Get Codes "4"
-     * Client Error
-     * @return array
-     */
-    public static function getCodes4()
+    public static function getCodes4(): array
     {
-        return array(
+        return [
             400 => 'Bad Request',
             401 => 'Unauthorized',
             402 => 'Payment Required',
@@ -103,17 +87,12 @@ class code
             428 => 'Precondition Required',
             429 => 'Too Many Requests',
             431 => 'Request Header Fields Too Large',
-        );
-    } // function getCodes4
+        ];
+    }
 
-    /**
-     * Get Codes "5"
-     * Server Error
-     * @return array
-     */
-    public static function getCodes5()
+    public static function getCodes5(): array
     {
-        return array(
+        return [
             500 => 'Internal Server Error',
             501 => 'Not Implemented',
             502 => 'Bad Gateway',
@@ -126,7 +105,6 @@ class code
             509 => 'Bandwidth Limit Exceeded',
             510 => 'Not Extended',
             511 => 'Network Authentication Required',
-        );
-    } // function getCodes5
-} // class \fan\core\service\header\code
-?>
+        ];
+    }
+}

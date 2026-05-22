@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\root;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\root;
 /**
  * Base abstract root html block
  *
@@ -21,491 +25,391 @@ abstract class html extends \fan\core\block\base
      * Name of block
      * @var string
      */
-    protected $sModalWin = '';
+    protected string $modalWin = '';
 
     /**
      * External CSS
      * @var array
      */
-    protected $aExternalCSS = array(
-        'link'  => array(
-            'all' => array(),
-        ),
-        'style' => array(
-            'all' => array(),
-        ),
-        'ie'    => array(
-            'all' => array(),
-        ),
-    );
+    protected array $externalCSS = [
+        'link'  => [
+            'all' => [],
+        ],
+        'style' => [
+            'all' => [],
+        ],
+        'ie'    => [
+            'all' => [],
+        ],
+    ];
 
     /**
      * Embeded CSS-data by media-type
      * @var array
      */
-    protected $aEmbedCSS = array('all' => '');
+    protected array $embedCSS = ['all' => ''];
 
     /**
      * External JS
      * @var array
      */
-    protected $aExternalJS = array(
-        'head' => array(),
-        'body' => array(),
-    );
+    protected array $externalJS = [
+        'head' => [],
+        'body' => [],
+    ];
 
     /**
      * Embeded JS-data for head and body
      * @var type
      */
-    protected $aEmbedJS = array(
+    protected array $embedJS = [
         'head' => null,
         'body' => null,
-    );
+    ];
 
     /**
      * List of CSS-media type
      * @var array
      */
-    protected $aCssMedia = array('all', 'braille', 'handheld', 'print', 'screen', 'speech', 'projection', 'tty', 'tv');
+    protected array $cssMedia = ['all', 'braille', 'handheld', 'print', 'screen', 'speech', 'projection', 'tty', 'tv'];
 
-    /**
-     * Init block data
-     */
-    public function init()
+    public function init(): void
     {
-        $sBrowserClass = '';
-        foreach ($this->getMeta('browserClasses', array()) as $sBrowser => $aParam) {
-            $aMatch = null;
-            if (preg_match($aParam['regExp'], $this->request->get('HTTP_USER_AGENT', 'H', ''), $aMatch)) {
-                $sBrowserClass = $sBrowser;
-                if (!empty($aMatch[1])) {
-                    foreach ($aParam['olderVer'] as $sAddClass => $nBeforeVer) {
-                        if ($aMatch[1] < $nBeforeVer) {
-                            $sBrowserClass .= ' ' . $sAddClass;
+        $browserClass = '';
+        foreach ($this->getMeta('browserClasses', []) as $browser => $param) {
+            $match = null;
+            if (preg_match((string)$param['regExp'], (string)$this->request->get('HTTP_USER_AGENT', 'H', ''), $match)) {
+                $browserClass = (string)$browser;
+                if (!empty($match[1])) {
+                    foreach ($param['olderVer'] as $addClass => $beforeVer) {
+                        if ($match[1] < $beforeVer) {
+                            $browserClass .= ' ' . (string)$addClass;
                         }
                     }
                 }
                 break;
             }
         }
-        $this->_setViewVar('bodyClass', $sBrowserClass);
-        $this->_setViewVar('poweredBy', $this->getMeta('show_power', true) ? service('application')->getCoreVersion() : null);
-    } // function init
+        $this->_setViewVar('bodyClass', $browserClass);
+        $this->_setViewVar('poweredBy', $this->getMeta('show_power', true) ? $this->containerService('application')->getCoreVersion() : null);
+    }
 
-    /**
-     * Additional Init for root-block
-     */
-    public function runAfterInit()
+    public function runAfterInit(): void
     {
         if (!$this->view['title']) {
-            $oMain = $this->_getBlock('main', false);
-            if ($oMain) {
-                if (method_exists($oMain, 'getTitle')) {
-                    $sTitle = $oMain->getTitle();
+            $main = $this->_getBlock('main', false);
+            if ($main) {
+                if (method_exists($main, 'getTitle')) {
+                    $title = $main->getTitle();
                 }
-                if (empty($sTitle)) {
-                    $sTitle = $oMain->getMeta('title');
-                }
-            }
-            if (empty($sTitle)) {
-                $oApp = service('application');
-                /* @var $oApp \fan\core\service\application */
-                $sTitle  = $oApp->getConfig('PROJECT_NAME');
-                $sTitle .= (empty($sTitle) ? '' : ' | ') . $oApp->getAppName();
-                if ($oMain) {
-                    $sTitle .= ' | ' . get_class_name($oMain);
+                if (empty($title)) {
+                    $title = $main->getMeta('title');
                 }
             }
-            $this->view['title'] = $sTitle;
+            if (empty($title)) {
+                $app = $this->containerService('application');
+                /* @var $app \fan\core\service\application */
+                $title  = $app->getConfig('PROJECT_NAME');
+                $title .= (empty($title) ? '' : ' | ') . $app->getAppName();
+                if ($main) {
+                    $title .= ' | ' . get_class_name($main);
+                }
+            }
+            $this->view['title'] = $title;
         }
-    } // function runAfterInit
+    }
 
-    /**
-     * Set tab title
-     * @param string $sTitle - new title
-     * @param boolean $bCheckIsSet - Check - if set - do not change
-     * @return \fan\core\block\root\html
-     */
-    public function setTitle($sTitle, $bCheckIsSet = false)
+    public function setTitle(string $title, bool $checkIsSet = false): static
     {
-        if(!$bCheckIsSet || !$this->view['title']) {
-            $this->view['title'] = $sTitle;
+        if (!$checkIsSet || !$this->view['title']) {
+            $this->view['title'] = $title;
         }
         return $this;
-    } // function setTitle
+    }
 
-    /**
-     * Get tab title
-     * @return string Tab title
-     */
-    public function getTitle()
+    public function getTitle(): mixed
     {
         return $this->view['title'];
-    } // function getTitle
+    }
 
-    /**
-     * Set meta tag
-     * @param array $aMeta Array with meta parameters
-     */
-    public function setMetaTag($aMeta)
+    public function setMetaTag(mixed $meta): void
     {
-        if (is_object($aMeta) && method_exists($aMeta, 'toArray')) {
-            $aMeta = $aMeta->toArray();
+        if (is_object($meta) && method_exists($meta, 'toArray')) {
+            $meta = $meta->toArray();
         }
-        if (!is_array($aMeta)) {
+        if (!is_array($meta)) {
             error_log('Incorrect value for meta-tag.', E_USER_NOTICE);
             return;
         }
 
-        $aMetaData = $this->view->get('meta', array());
-        foreach ($aMetaData as $v) {
-            if($this->_compareArray($v, $aMeta, array('name', 'property', 'content', 'http_equiv', 'scheme', 'id'))) {
+        $metaData = $this->view->get('meta', []);
+        foreach ($metaData as $v) {
+            if ($this->_compareArray($v, $meta, ['name', 'property', 'content', 'http_equiv', 'scheme', 'id'])) {
                 return;
             }
         }
-        $aMetaData[] = $aMeta;
-        $this->view->set('meta', $aMetaData);
-    } // function setMetaTag
+        $metaData[] = $meta;
+        $this->view->set('meta', $metaData);
+    }
 
-    /**
-     * Get meta tag
-     * @return array $aMeta
-     */
-    public function getMetaTag()
+    public function getMetaTag(): array
     {
-        return empty($this->view['meta']) ? array() : $this->view['meta'];
-    } // function getMetaTag
+        return empty($this->view['meta']) ? [] : $this->view['meta'];
+    }
 
-    /**
-     * Set meta tag
-     * @param string $sRel   relation
-     * @param string $sType  type
-     * @param string $sHref  href
-     * @param string $sTitle title
-     * @return \fan\core\block\root\html
-     */
-    public function setLinkTag($sRel, $sType, $sHref, $sTitle = '')
+    public function setLinkTag(string $rel, string $type, string $href, string $title = ''): static
     {
-        $aLink = array('rel' => $sRel, 'type' => $sType, 'href' => $sHref);
-        if ($sTitle) {
-            $aLink['title'] = $sTitle;
+        $link = ['rel' => $rel, 'type' => $type, 'href' => $href];
+        if ($title) {
+            $link['title'] = $title;
         }
-        $aTagLink   = $this->view->get('tagLink', array());
-        $aTagLink[] = $aLink;
-        $this->view->set('tagLink', $aTagLink);
+        $tagLink   = $this->view->get('tagLink', []);
+        $tagLink[] = $link;
+        $this->view->set('tagLink', $tagLink);
         return $this;
-    } // function setLinkTag
+    }
 
-    /**
-     * Set external css by includes.
-     * Possible value of type:
-     *   - style|style_all|style_braille|style_handheld|style_print|style_screen|style_speech|style_projection|style_tty|style_tv
-     *   - link |link_all |link_braille |link_handheld |link_print |link_screen |link_speech |link_projection |link_tty |link_tv
-     * @param mixed $aCssFile array of files
-     * @param string $sType type of css file (it is need set if first argument is not array)
-     * @return \fan\core\block\root\html
-     */
-    public function setExternalCss($aCssFile, $sType = 'style')
+    public function setExternalCss(mixed $cssFile, string $type = 'style'): static
     {
-        if (is_object($aCssFile) && method_exists($aCssFile, 'toArray')) {
-            $aCssFile = $aCssFile->toArray();
-        } elseif (!is_array($aCssFile)) {
-            $aCssFile = array($sType => array($aCssFile));
+        if (is_object($cssFile) && method_exists($cssFile, 'toArray')) {
+            $cssFile = $cssFile->toArray();
+        } elseif (!is_array($cssFile)) {
+            $cssFile = [$type => [$cssFile]];
         }
 
-        $aCSS =& $this->aExternalCSS;
-        foreach ($aCssFile as $k => $v1) {
+        $css =& $this->externalCSS;
+        foreach ($cssFile as $k => $v1) {
 
-            $tmp = explode('_', $k, 2);
+            $tmp = explode('_', (string)$k, 2);
             if (empty($tmp[1])) {
                 $tmp[1] = 'all';
-            } elseif (!in_array($tmp[1], $this->aCssMedia)) {
-                trigger_error('Unknown media "' . $tmp[1] .'" for External CSS "' . $sType .'".', E_USER_WARNING);
-                continue;
+            } elseif (!in_array($tmp[1], $this->cssMedia)) {
+                throw new \InvalidArgumentException('Unknown media "' . $tmp[1] .'" for External CSS "' . $type .'".');
             }
             list($k0, $k1) = $tmp;
-            if (!isset($aCSS[$k0][$k1])) {
-                $aCSS[$k0][$k1] = array();
+            if (!isset($css[$k0][$k1])) {
+                $css[$k0][$k1] = [];
             }
 
             foreach ($v1 as $v2) {
-                if(empty($v2)) {
+                if (empty($v2)) {
                     continue;
                 }
-                $v2 = $this->oTab->getURI($v2, 'css', false);
-                if(!in_array($v2, $aCSS[$k0][$k1])) {
-                    $aCSS[$k0][$k1][] = $v2;
+                $v2 = $this->tab->getURI((string)$v2, 'css', false);
+                if (!in_array($v2, $css[$k0][$k1])) {
+                    $css[$k0][$k1][] = $v2;
                 }
             }
         }
         return $this;
-    } // function setExternalCss
+    }
 
-    /**
-     * Set embed css
-     * @param string $sCss - string of css-code
-     * @param string $sMedia - Media-type of css
-     * @return \fan\core\block\root\html
-     */
-    public function setEmbedCss($sCss, $sMedia = 'all')
+    public function setEmbedCss(mixed $css, string $media = 'all'): static|null
     {
-        if (is_object($sCss)) {
-            if (!method_exists($sCss, '__toString')) {
+        if (is_object($css)) {
+            if (!method_exists($css, '__toString')) {
                 error_log('Incorrect value for Embed Css.', E_USER_NOTICE);
-                return;
+                return null;
             }
-            $sCss = $sCss->__toString();
+            $css = $css->__toString();
         }
-        if (!in_array($sMedia, $this->aCssMedia)) {
-            error_log('Incorrect Media type of CSS: "' . $sMedia . '".', E_USER_WARNING);
-            return;
+        if (!in_array($media, $this->cssMedia)) {
+            error_log('Incorrect Media type of CSS: "' . $media . '".', E_USER_WARNING);
+            return null;
+        }
+        $css = (string)$css;
+
+        if (isset($this->embedCSS[$media])) {
+            $this->embedCSS[$media] = '';
         }
 
-        if (isset($this->aEmbedCSS[$sMedia])) {
-            $this->aEmbedCSS[$sMedia] = '';
-        }
-
-        $sEmbedCss =& $this->aEmbedCSS[$sMedia];
-        if (!strstr($sEmbedCss, $sCss)) {
-            $sEmbedCss .= empty($sEmbedCss) ? $sCss : "\n" . $sCss;
+        $embedCss =& $this->embedCSS[$media];
+        if (!strstr($embedCss, $css)) {
+            $embedCss .= empty($embedCss) ? $css : "\n" . $css;
         }
         return $this;
-    } // function setEmbedCss
+    }
 
-    /**
-     * Set Embed CSS By data from Block Meta
-     * @param \fan\core\base\meta\row $aMeta
-     * @return \fan\core\block\root\html
-     */
-    public function setEmbedCssByMeta($aMeta)
+    public function setEmbedCssByMeta(mixed $meta): static
     {
-        if (is_array_alt($aMeta)) {
-            foreach ($aMeta as $k => $v) {
-                $this->setEmbedCss($v, $k);
+        if (is_array_alt($meta)) {
+            foreach ($meta as $k => $v) {
+                $this->setEmbedCss($v, (string)$k);
             }
-        } elseif (is_string($aMeta)) {
-            $this->setEmbedCss($aMeta);
+        } elseif (is_string($meta)) {
+            $this->setEmbedCss($meta);
         }
 
         return $this;
-    } // function setEmbedCssByMeta
+    }
 
-    /**
-     * Set external JavaScript
-     * @param mixed $aJsFile array of files
-     * @param string $sPos position of JavaScript (it is need set if first argument is not array)
-     * @return \fan\core\block\root\html
-     */
-    public function setExternalJs($aJsFile, $sPos = 'head')
+    public function setExternalJs(mixed $jsFile, string $pos = 'head'): static
     {
-        if (is_object($aJsFile) && method_exists($aJsFile, 'toArray')) {
-            $aJsFile = $aJsFile->toArray();
-        } elseif(!is_array($aJsFile)) {
-            $aJsFile = array($sPos => array($aJsFile));
+        if (is_object($jsFile) && method_exists($jsFile, 'toArray')) {
+            $jsFile = $jsFile->toArray();
+        } elseif (!is_array($jsFile)) {
+            $jsFile = [$pos => [$jsFile]];
         }
 
-        foreach ($aJsFile as $k => $v1) {
-            if (!isset($this->aExternalJS[$k])) {
-                trigger_error('Unknown position key "' . $k .'" for External JS.', E_USER_WARNING);
-                continue;
+        foreach ($jsFile as $k => $v1) {
+            if (!isset($this->externalJS[$k])) {
+                throw new \InvalidArgumentException('Unknown position key "' . $k .'" for External JS.');
             }
             foreach ($v1 as $v2) {
-                if(empty($v2)) {
+                if (empty($v2)) {
                     continue;
                 }
-                $v2 = $this->oTab->getURI($v2, 'js', false);
-                $this->_addJsFile($v2, $k);
+                $v2 = $this->tab->getURI((string)$v2, 'js', false);
+                $this->_addJsFile($v2, (string)$k);
             }
         }
         return $this;
-    } // function setExternalJs
+    }
 
-    /**
-     * Set embed JavaScript
-     * @param mixed $mJs
-     * @param string $sPos position of JavaScript (it is need set if first argument is not array)
-     * @param integer $nOrd order run (-1 - before all, 0 - as default, 1 - after all)
-     * @return \fan\core\block\root\html
-     */
-    public function setEmbedJs($mJs, $sPos = 'head', $nOrd = 0, $bAllowDebug = true)
+    public function setEmbedJs(mixed $js, string $pos = 'head', int $ord = 0, bool $allowDebug = true): static
     {
-        if (!array_key_exists($sPos, $this->aEmbedJS)) {
-            trigger_error('Unknown position key "' . $sPos .'" for Embeded JS.', E_USER_WARNING);
-            return $this;
+        if (!array_key_exists($pos, $this->embedJS)) {
+            throw new \InvalidArgumentException('Unknown position key "' . $pos .'" for Embeded JS.');
         }
-        if (empty($this->aEmbedJS[$sPos])) {
-            $this->aEmbedJS[$sPos] = array('', '', '');
-        }
-
-        if (is_object($mJs) && method_exists($mJs, 'toArray')) {
-            $mJs = $mJs->toArray();
+        if (empty($this->embedJS[$pos])) {
+            $this->embedJS[$pos] = ['', '', ''];
         }
 
-        if(is_array($mJs)) {
-            $sJs = array_shift($mJs) . '(';
-            $oJson = service('json');
-            foreach ($mJs as $v) {
-                $sJs .= $oJson->encode($v) . ', ';
+        if (is_object($js) && method_exists($js, 'toArray')) {
+            $js = $js->toArray();
+        }
+
+        if (is_array($js)) {
+            $jsArgs = $js;
+            $js = (string)array_shift($jsArgs) . '(';
+            $json = $this->containerService('json');
+            foreach ($jsArgs as $v) {
+                $js .= $json->encode($v) . ', ';
             }
-            $sJs = substr($sJs, 0, -2) . ');';
+            $js = substr($js, 0, -2) . ');';
         } else {
-            $sJs = $mJs;
+            $js = (string)$js;
         }
 
-        $sEmbedJS =& $this->aEmbedJS[$sPos][$nOrd < 0 ? 0 : ($nOrd > 0 ? 2 : 1)];
-        if (!empty($sEmbedJS)) {
-            $sEmbedJS .= "\n";
+        $embedJS =& $this->embedJS[$pos][$ord < 0 ? 0 : ($ord > 0 ? 2 : 1)];
+        if (!empty($embedJS)) {
+            $embedJS .= "\n";
         }
-        if (!preg_match('/^\s*try\s*\{.+?\}\s*catch\s*\(.*?\)\s*\{.*?\}\s*$/is', $sJs)) {
-            $sJs = 'try{' . $sJs . '}catch(e){' . ($this->tab->isDebugAllowed() && $bAllowDebug ? 'alert((e.fileName ? "Error in " + e.fileName : "") + (e.lineNumber ? " line " + e.lineNumber : "")+ (e.fileName || e.lineNumber ? "\n" : "") + (e.name ? e.name + ": " : "") + e.message);' : '') . '}';
+        if (!preg_match('/^\s*try\s*\{.+?\}\s*catch\s*\(.*?\)\s*\{.*?\}\s*$/is', $js)) {
+            $js = 'try{' . $js . '}catch(e){' . ($this->tab->isDebugAllowed() && $allowDebug ? 'alert((e.fileName ? "Error in " + e.fileName : "") + (e.lineNumber ? " line " + e.lineNumber : "")+ (e.fileName || e.lineNumber ? "\n" : "") + (e.name ? e.name + ": " : "") + e.message);' : '') . '}';
         }
-        $sEmbedJS .= $sJs;
+        $embedJS .= $js;
         return $this;
-    } // function setEmbedJs
+    }
 
-    /**
-     * Set head Before
-     * @param string $sHtmlCode
-     * @return \fan\core\block\root\html
-     */
-    public function setHeadBefore($sHtmlCode)
+    public function setHeadBefore(string $htmlCode): static
     {
-        $sCodeBefore = $this->view->get('headBefore', '');
-        $this->view->set('headBefore', $sCodeBefore . $sHtmlCode);
+        $codeBefore = $this->view->get('headBefore', '');
+        $this->view->set('headBefore', $codeBefore . $htmlCode);
         return $this;
-    } // function setHeadBefore
+    }
 
-    /**
-     * Set head After
-     * @param string $sHtmlCode
-     * @return \fan\core\block\root\html
-     */
-    public function setHeadAfter($sHtmlCode)
+    public function setHeadAfter(string $htmlCode): static
     {
-        $sCodeAfter = $this->view->get('headAfter', '');
-        $this->view->set('headAfter', $sCodeAfter . $sHtmlCode);
+        $codeAfter = $this->view->get('headAfter', '');
+        $this->view->set('headAfter', $codeAfter . $htmlCode);
         return $this;
-    } // function setHeadAfter
+    }
 
-    /**
-     * Set modal window
-     * @param string $sFilePath
-     * @param array $aTplVars
-     * @return \fan\core\block\root\html
-     */
-    public function setModalWindow($sFilePath, $aTplVars = array(), $sCssFile = '/css/modal_win.css', $sJsFile = null)
+    public function setModalWindow(string $filePath, array $tplVars = [], mixed $cssFile = '/css/modal_win.css', mixed $jsFile = null): static
     {
-        if(!empty($sFilePath)) {
-            if (!\is_file($sFilePath)) {
-                $sFilePath = \bootstrap::parsePath($sFilePath);
+        if (!empty($filePath)) {
+            if (!\is_file($filePath)) {
+                $filePath = \bootstrap::parsePath($filePath);
             }
-            if (\is_readable($sFilePath)) {
-                $oTemplate = service('template')->get($sFilePath, null, $this);
-                /* @var $oTemplate \fan\core\service\template\type\base */
+            if (\is_readable($filePath)) {
+                $template = $this->containerService('template')->get($filePath, null, $this);
+                /* @var $template \fan\core\service\template\type\base */
 
-                foreach ($aTplVars as $k => $v) {
-                    $oTemplate->assign($k, $v);
+                foreach ($tplVars as $k => $v) {
+                    $template->assign($k, $v);
                 }
 
-                $this->sModalWin .= $oTemplate->fetch();
+                $this->modalWin .= $template->fetch();
 
-                if (!empty($sCssFile)) {
-                    $this->setExternalCss($sCssFile);
+                if (!empty($cssFile)) {
+                    $this->setExternalCss($cssFile);
                 }
-                if (!empty($sJsFile)) {
-                    $this->setExternalJs($sJsFile);
+                if (!empty($jsFile)) {
+                    $this->setExternalJs($jsFile);
                 }
             } else {
-                trigger_error('Unknown path to modal template "' . $sFilePath . '"', E_USER_WARNING);
+                throw new \RuntimeException('Unknown path to modal template "' . $filePath . '"');
             }
         }
         return $this;
-    } // function setModalWindow
+    }
 
-    /**
-     * Check is available CSS-files for this type of css
-     * @param string $sKey
-     * @return boolean
-     */
-    public function isExtCSS($sKey)
+    public function isExtCSS(string $key): bool
     {
-        $aCSS = $this->view->get('externalCSS', array());
-        if (!isset($aCSS[$sKey])) {
+        $css = $this->view->get('externalCSS', []);
+        if (!isset($css[$key])) {
             return false;
-        } elseif (!is_array($aCSS[$sKey])) {
-            trigger_error('Values of CSS for key "' . $sKey . '" must be as array.', E_USER_WARNING);
-            return false;
+        } elseif (!is_array($css[$key])) {
+            throw new \UnexpectedValueException('Values of CSS for key "' . $key . '" must be as array.');
         }
-        foreach ($aCSS[$sKey] as $v) {
+        foreach ($css[$key] as $v) {
             if (!empty($v)) {
                 return true;
             }
         }
         return false;
-    } // function isExtCSS
+    }
     // ==================== protected methods ==================== \\
 
     /**
-     * Add new JS-file path
-     * @param string $sUri
-     * @param string $sType
-     * @return \fan\core\block\root\html
+     * @param string $uri URI used as the routing or request target.
      */
-    protected function _addJsFile($sUri, $sType)
+    protected function _addJsFile(string $uri, string $type): static
     {
-        $aJS =& $this->aExternalJS[$sType];
-        if(!in_array($sUri, $aJS)) {
-            if (is_readable(BASE_DIR . $sUri) && preg_match('/\/\*\*include\s*(.+?)\s*\*\//is', file_get_contents(BASE_DIR . $sUri), $aMatches)) {
-                $aScripts = explode("\n", $aMatches[1]);
-                foreach ($aScripts as $sScr) {
-                    list($sScrFile) = explode(';', $sScr, 2);
-                    $this->_addJsFile($sScrFile, $sType);
+        $js =& $this->externalJS[$type];
+        if (!in_array($uri, $js)) {
+            $jsFileContent = is_readable(BASE_DIR . $uri) ? file_get_contents(BASE_DIR . $uri) : false;
+            if (is_string($jsFileContent) && preg_match('/\/\*\*include\s*(.+?)\s*\*\//is', $jsFileContent, $matches)) {
+                $scripts = explode("\n", $matches[1]);
+                foreach ($scripts as $scr) {
+                    list($scrFile) = explode(';', $scr, 2);
+                    $this->_addJsFile($scrFile, $type);
                 }
             }
-            if(!in_array($sUri, $aJS)) {
-                $aJS[] = $sUri;
+            if (!in_array($uri, $js)) {
+                $js[] = $uri;
             }
         }
         return $this;
-    } // function _addJsFile
+    }
 
-    /**
-     * Method for redefine in child class
-     * Method if run before output-view operation
-     */
-    protected function _preOutput()
+    protected function _preOutput(): void
     {
-        if (!empty($this->sModalWin)) {
-            $this->view->set('modal_win', $this->sModalWin);
+        if (!empty($this->modalWin)) {
+            $this->view->set('modal_win', $this->modalWin);
         }
 
-        $aExternalCSS = service('obfuscator', 'css')->getNewList($this->aExternalCSS);
-        $this->view->set('externalCSS', $aExternalCSS);
-        $this->view->set('embedCSS',    $this->aEmbedCSS);
+        $externalCSS = service('obfuscator', 'css')->getNewList($this->externalCSS);
+        $this->view->set('externalCSS', $externalCSS);
+        $this->view->set('embedCSS',    $this->embedCSS);
 
-        $aExternalJS = service('obfuscator', 'js')->getNewList($this->aExternalJS);
-        $this->view->set('externalJS',  $aExternalJS);
-        $this->view->set('embedJS',     $this->aEmbedJS);
-    } // function _preOutput
-    /**
-     * Compare two array by keys
-     * @param array $aArray1
-     * @param array $aArray2
-     * @param array $aKeys
-     * @return boolean
-     */
-    protected function _compareArray($aArray1, $aArray2, $aKeys)
+        $externalJS = service('obfuscator', 'js')->getNewList($this->externalJS);
+        $this->view->set('externalJS',  $externalJS);
+        $this->view->set('embedJS',     $this->embedJS);
+    }
+    protected function _compareArray(array $array1, array $array2, array $keys): bool
     {
-        foreach ($aKeys as $k) {
-            if (!isset($aArray1[$k]) && !isset($aArray2[$k])) {
+        foreach ($keys as $k) {
+            if (!isset($array1[$k]) && !isset($array2[$k])) {
                 continue;
             }
-            if (!isset($aArray1[$k]) || !isset($aArray2[$k]) || $aArray1[$k] != $aArray2[$k]) {
+            $value1 = is_scalar($array1[$k] ?? null) || ($array1[$k] ?? null) === null ? (string)($array1[$k] ?? '') : $array1[$k];
+            $value2 = is_scalar($array2[$k] ?? null) || ($array2[$k] ?? null) === null ? (string)($array2[$k] ?? '') : $array2[$k];
+            if (!isset($array1[$k]) || !isset($array2[$k]) || $value1 !== $value2) {
                 return false;
             }
         }
         return true;
-    } // function _compareArray
-} // class \fan\core\block\root\html
-?>
+    }
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\core\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Email manager service
@@ -18,302 +22,197 @@ use fan\project\exception\service\fatal as fatalException;
 class email extends \fan\core\base\service\multi
 {
 
-    /**
-     * @var array Service's Instances
-     */
-    private static $aInstances;
+    private static ?array $instances = null;
 
-    /**
-     * @var object Encryption engine
-     */
-    private $oEngine;
+    private ?object $engine = null;
 
-    /**
-     * @var string Instance Name
-     */
-    private $sInstName;
+    private ?string $instName = null;
 
-    /**
-     * Service's constructor
-     */
-    protected function __construct($sInstName)
+    protected function __construct(?string $instName)
     {
         parent::__construct(true);
 
-        $this->sInstName = $sInstName;
+        $this->instName = (string)$instName;
 
         if ($this->isEnabled()) {
-            $oConfig = $this->oConfig;
-            $this->oEngine = $this->_getEngine($oConfig->get('ENGINE', 'phpmailer'));
+            $config = $this->config;
+            $this->engine = $this->_getEngine((string)$config->get('ENGINE', 'phpmailer'));
 
-            if (!empty($oConfig->FROM_EMAIL)) {
-                $oLng = \fan\project\service\locale::instance();
-                /* @var $oLng \fan\core\service\locale */
-                $sKey = 'FROM_NAME' . ($oLng->isEnabled() ? '_' . $oLng->getLanguage() : '');
-                if (empty($oConfig->$sKey)) {
-                    $sKey = 'FROM_NAME';
+            if (!empty($config->FROM_EMAIL)) {
+                $lng = $this->containerService('locale');
+                /* @var $lng \fan\core\service\locale */
+                $key = 'FROM_NAME' . ($lng->isEnabled() ? '_' . $lng->getLanguage() : '');
+                if (empty($config->$key)) {
+                    $key = 'FROM_NAME';
                 }
-                $this->setFrom($oConfig->FROM_EMAIL, $oConfig->get($sKey, ''));
+                $this->setFrom((string)$config->FROM_EMAIL, (string)$config->get($key, ''));
             }
 
         }
-    } // function __construct
+    }
 
-    /**
-     * Get Service's instance of current service
-     * @return \core\service\email
-     */
-    public static function instance($sInstName = 'default')
+    public static function instance(?string $instName = 'default'): static
     {
-        $sClassName = __CLASS__;
-        if (is_null($sInstName)) {
-            $oConfig = service('config')->get(get_class_name($sClassName));
-            $sInstName = empty($oConfig['DEFAULT_NAME']) ? 'DEFAULT_EMAIL_NAME' : $oConfig['DEFAULT_NAME'];
+        $className = __CLASS__;
+        if (is_null($instName)) {
+            $config = self::staticContainerService('config')->get(get_class_name($className));
+            $instName = empty($config['DEFAULT_NAME']) ? 'DEFAULT_EMAIL_NAME' : $config['DEFAULT_NAME'];
         }
-        if (!isset(self::$aInstances[$sInstName])) {
-            self::$aInstances[$sInstName] = new $sClassName($sInstName);
+        if (!isset(self::$instances[$instName])) {
+            self::$instances[$instName] = new $className($instName);
         }
-        return self::$aInstances[$sInstName];
-    } // function instance
+        return self::$instances[$instName];
+    }
 
-    /**
-     * Set From-parameters
-     * @param string $sEmailFrom FROM address
-     * @param string $sNameFrom FROM name
-     * @return \fan\core\service\email
-     */
-    public function setFrom($sEmailFrom, $sNameFrom = '')
+    public function setFrom(string $emailFrom, string $nameFrom = ''): static
     {
         if ($this->isEnabled()) {
-            $this->oEngine->setFrom($sEmailFrom, $this->_recodingText($sNameFrom, 'NAME_RECODING'));
-        }
-        return $this;
-    } // function setFrom
-
-    /**
-     * Clears all recipients assigned in the TO, CC and BCC array.
-     * @return \fan\core\service\email
-     */
-    public function clearAllRecipients()
-    {
-        if ($this->isEnabled()) {
-            $this->oEngine->ClearAllRecipients();
-        }
-        return $this;
-    } // function clearAllRecipients
-
-    /**
-     * Adds a "CC" address. Note: this function works
-     * with the SMTP mailer on win32, not with the "mail"
-     * mailer.
-     * @param string $sAddress
-     * @param string $sName
-     * @return \fan\core\service\email
-     */
-    function addCc($sAddress, $sName = '')
-    {
-        if ($this->isEnabled()) {
-            $this->oEngine->AddCC($sAddress, $sName);
-        }
-        return $this;
-    } // function addCc
-
-    /**
-     * Adds a "Bcc" address. Note: this function works
-     * with the SMTP mailer on win32, not with the "mail"
-     * mailer.
-     * @param string $sAddress
-     * @param string $sName
-     * @return \fan\core\service\email
-     */
-    function addBcc($sAddress, $sName = '')
-    {
-         if ($this->isEnabled()) {
-            $this->oEngine->addBCC($sAddress, $sName);
-        }
-        return $this;
-    } // function addBcc
-
-    /**
-     * Adds a "Reply-to" address.
-     * @param string $sAddress
-     * @param string $sName
-     * @return \fan\core\service\email
-     */
-    function addReplyTo($sAddress, $sName = '')
-    {
-        if ($this->isEnabled()) {
-            $this->oEngine->AddReplyTo($sAddress, $sName);
-        }
-        return $this;
-    } // function addReplyTo
-
-    /**
-     * Adds an attachment from a path on the filesystem.
-     * Returns false if the file could not be found
-     * or accessed.
-     * @param string $path Path to the attachment.
-     * @param string $sName Overrides the attachment name.
-     * @param string $encoding File encoding ("8bit", "7bit", "binary", "base64", and "quoted-printable").
-     * @param string $type File extension (MIME) type.
-     * @return \fan\core\service\email
-     */
-    function addAttachment($path, $sName = '', $encoding = 'base64', $type = 'application/octet-stream')
-    {
-        if ($this->isEnabled()) {
-            $this->oEngine->AddAttachment($path, $sName, $encoding, $type);
+            $this->engine->setFrom($emailFrom, $this->_recodingText($nameFrom, 'NAME_RECODING'));
         }
         return $this;
     }
 
-    /**
-     * Send Email
-     * @param string $sSubj Subject of the email
-     * @param string $sBody Body of the email
-     * @param string $sEmailTo TO address
-     * @param string $sNameTo TO name
-     * @param bool $bIsHtml True if the email send as HTML
-     */
-    public function send($sSubj, $sBody, $sEmailTo, $sNameTo = '', $bIsHtml = false)
+    public function clearAllRecipients(): static
     {
-        return $this->isEnabled() ? $this->oEngine->send($this->_recodingText($sSubj, 'SUBJECT_RECODING'), $this->_recodingText($sBody, 'BODY_RECODING'), $sEmailTo, $this->_recodingText($sNameTo, 'NAME_RECODING'), $bIsHtml) : null;
-    } // function send
+        if ($this->isEnabled()) {
+            $this->engine->ClearAllRecipients();
+        }
+        return $this;
+    }
 
-    /**
-     * Send Email with using template
-     * @param string $sTemplateName Template Name
-     * @param array $aPlaceholders Placeholders for the email
-     * @param string $sEmailTo TO address
-     * @param string $sNameTo TO name
-     * @param bool $bIsHtml True if the email send as HTML
-     */
-    public function sendTemplate($sTemplateName, $aPlaceholders, $sEmailTo, $sNameTo = '', $bIsHtml = true)
+    public function addCc(string $address, string $name = ''): static
     {
-        $sFullPath = $this->_checkFilename($sTemplateName);
-        if (!$sFullPath) {
-            throw new fatalException($this, 'Incorrect path for email template "' . $sTemplateName . '"');
+        if ($this->isEnabled()) {
+            $this->engine->AddCC($address, $name);
         }
-        $oST = service('template');
-        //$oST->disableStrip();
-        $oTplObj = $oST->get($sFullPath);
+        return $this;
+    }
 
-        if(!is_array($aPlaceholders)) {
-            $aPlaceholders = array();
+    public function addBcc(string $address, string $name = ''): static
+    {
+         if ($this->isEnabled()) {
+            $this->engine->addBCC($address, $name);
         }
-        if (!isset($aPlaceholders['SUBJECT_SEPARATOR'])) {
-            $aPlaceholders['SUBJECT_SEPARATOR'] = md5(microtime());
+        return $this;
+    }
+
+    public function addReplyTo(string $address, string $name = ''): static
+    {
+        if ($this->isEnabled()) {
+            $this->engine->AddReplyTo($address, $name);
         }
-        foreach ($aPlaceholders as $sKey => $sValue) {
-            $oTplObj->assign($sKey, $sValue);
+        return $this;
+    }
+
+    public function addAttachment(string $path, string $name = '', string $encoding = 'base64', string $type = 'application/octet-stream'): static
+    {
+        if ($this->isEnabled()) {
+            $this->engine->AddAttachment($path, $name, $encoding, $type);
+        }
+        return $this;
+    }
+
+    public function send(string $subj, string $body, string $emailTo, string $nameTo = '', bool $isHtml = false): ?bool
+    {
+        return $this->isEnabled() ? $this->engine->send($this->_recodingText($subj, 'SUBJECT_RECODING'), $this->_recodingText($body, 'BODY_RECODING'), $emailTo, $this->_recodingText($nameTo, 'NAME_RECODING'), $isHtml) : null;
+    }
+
+    public function sendTemplate(string $templateName, mixed $placeholders, string $emailTo, string $nameTo = '', bool $isHtml = true): ?bool
+    {
+        $fullPath = $this->_checkFilename($templateName);
+        if (!$fullPath) {
+            throw new fatalException($this, 'Incorrect path for email template "' . $templateName . '"');
+        }
+        $st = $this->containerService('template');
+        //$st->disableStrip();
+        $tplObj = $st->get($fullPath);
+
+        if (!is_array($placeholders)) {
+            $placeholders = [];
+        }
+        if (!isset($placeholders['SUBJECT_SEPARATOR'])) {
+            $placeholders['SUBJECT_SEPARATOR'] = md5(microtime());
+        }
+        foreach ($placeholders as $key => $value) {
+            $tplObj->assign((string)$key, $value);
         }
 
-        $sContent = $oTplObj->fetch();
+        $content = $tplObj->fetch();
 
-        if(strpos($sContent, $aPlaceholders['SUBJECT_SEPARATOR']) === false) {
-            $sBody = $sContent;
-            $sSubj = 'No subject';
-            trigger_error('Use variable {$SUBJECT_SEPARATOR} in the email-template for separate "Subject and Body"', E_USER_NOTICE);
+        if (strpos($content, $placeholders['SUBJECT_SEPARATOR']) === false) {
+            throw new \UnexpectedValueException('Use variable {$SUBJECT_SEPARATOR} in the email-template for separate "Subject and Body"');
         } else {
-            list($sSubj, $sBody) = explode($aPlaceholders['SUBJECT_SEPARATOR'], $sContent, 2);
+            list($subj, $body) = explode((string)$placeholders['SUBJECT_SEPARATOR'], $content, 2);
         }
 
-        return $this->send($sSubj, trim($sBody), $sEmailTo, $sNameTo, $bIsHtml);
-    } // function send_template
+        return $this->send($subj, trim($body), $emailTo, $nameTo, $isHtml);
+    }
 
 
-    /**
-     * Send Email with using template
-     * @param string $sTemplateName Template Name
-     * @param array $aPlaceholders Placeholders for the email
-     * @param string $sEmailTo TO address
-     * @param string $sNameTo TO name
-     * @param bool $bIsHtml True if the email send as HTML
-     */
-    public function sendTemplatePlain($sTemplateName, $aPlaceholders, $sEmailTo, $sNameTo = '', $bIsHtml = false)
+    public function sendTemplatePlain(string $templateName, array $placeholders, string $emailTo, string $nameTo = '', bool $isHtml = false): ?bool
     {
-        $sFullPath = $this->_checkFilename($sTemplateName);
-        if (!$sFullPath) {
+        $fullPath = $this->_checkFilename($templateName);
+        if (!$fullPath) {
             return null;
         }
-        $sContent = is_readable($sFullPath) ? file_get_contents($sFullPath) : '';
-        if (!$sContent) {
+        $content = is_readable($fullPath) ? file_get_contents($fullPath) : '';
+        if (!$content) {
             return null;
         }
 
-        foreach ((array) $aPlaceholders as $sKey => $sValue) {
-            $sContent = str_replace($sKey, $sValue, $sContent);
+        foreach ((array) $placeholders as $key => $value) {
+            $content = str_replace((string)$key, (string)$value, $content);
         }
 
-        list($sSubj, $sBody) = explode("\n", $sContent, 2);
-        return $this->send($sSubj, $sBody, $sEmailTo, $sNameTo, $bIsHtml);
-    } // function send_template
+        list($subj, $body) = explode("\n", $content, 2);
+        return $this->send($subj, $body, $emailTo, $nameTo, $isHtml);
+    }
 
-    /**
-     * Get Name of this Instance
-     * @return string
-     */
-    public function getInstanceName()
+    public function getInstanceName(): ?string
     {
-        return $this->sInstName;
-    } // function getInstanceName
+        return $this->instName;
+    }
 
-    /**
-     * Check file name
-     * @param string $sTemplateName Template Name
-     * @return string full path
-     */
-    protected function _checkFilename(&$sTemplateName)
+    protected function _checkFilename(string &$templateName): ?string
     {
-        $aDir = array('');
-        if ($this->oConfig['EMAIL_DIR']) {
-            $aDir[] = \bootstrap::parsePath($this->oConfig['EMAIL_DIR']);
+        $dir = [''];
+        if ($this->config['EMAIL_DIR']) {
+            $dir[] = \bootstrap::parsePath((string)$this->config['EMAIL_DIR']);
         }
 
-        $sEmailExt = $this->oConfig['EMAIL_TPL_EXT'];
-        if(substr($sTemplateName, -strlen($sEmailExt)) == $sEmailExt) {
-            $sTemplateName = substr($sTemplateName, 0, -strlen($sEmailExt));
+        $emailExt = (string)$this->config['EMAIL_TPL_EXT'];
+        if (substr($templateName, -strlen($emailExt)) === $emailExt) {
+            $templateName = substr($templateName, 0, -strlen($emailExt));
         }
-        $sLanguage = \fan\project\service\locale::instance()->get();
-        foreach ($aDir as $sDir) {
-            if ($sLanguage && is_file($sDir . $sTemplateName . '.' . $sLanguage . $sEmailExt)) {
-                $sTemplateName .= '.' . $sLanguage . $sEmailExt;
-                return $sDir . $sTemplateName;
-            } elseif (is_file($sDir . $sTemplateName . $sEmailExt)) {
-                $sTemplateName .= $sEmailExt;
-                return $sDir . $sTemplateName;
+        $language = $this->containerService('locale')->get();
+        foreach ($dir as $dir) {
+            if ($language && is_file($dir . $templateName . '.' . $language . $emailExt)) {
+                $templateName .= '.' . $language . $emailExt;
+                return $dir . $templateName;
+            } elseif (is_file($dir . $templateName . $emailExt)) {
+                $templateName .= $emailExt;
+                return $dir . $templateName;
             }
         }
         return null;
-    } // function _checkFilename
+    }
 
-    /**
-     * Valide Email by regular expression
-     * @param string $sEmail email address
-     * @return boolean TRUE if email is valid
-     */
-    protected function _validEmail($sEmail) {
-        return preg_match('/^[a-z][a-z_0-9.-]+@([a-z0-9-]+\.)+[a-z]{2,4}$/i', $sEmail);
-    } // function valid_email
+    protected function _validEmail(string $email): int|false {
+        return preg_match('/^[a-z][a-z_0-9.-]+@([a-z0-9-]+\.)+[a-z]{2,4}$/i', $email);
+    }
 
-    /**
-     * Check file name
-     * @param string $sSrc Source text
-     * @param string $sCode Encoding key
-     * @return string Result text
-     */
-    protected function _recodingText($sSrc, $sCode) {
-        $sTmp = '';
-        if ($this->oConfig->get($sCode)) {
-            @list($sFromC, $sToC) = explode('=>', $this->oConfig->get($sCode), 2);
-            $sToC = trim($sToC);
-            $sCharset = $sToC ? $sToC : $this->oConfig->get('CHARSET');
-            if (!preg_match('/\/\/\w+$/', $sCharset)) {
-                $sCharset .= '//IGNORE';
+    protected function _recodingText(string $src, string $code): string {
+        $tmp = '';
+        if ($this->config->get($code)) {
+            [$fromC, $toC] = array_pad(explode('=>', (string)$this->config->get($code), 2), 2, '');
+            $toC = trim($toC);
+            $charset = $toC ? $toC : (string)$this->config->get('CHARSET');
+            if (!preg_match('/\/\/\w+$/', $charset)) {
+                $charset .= '//IGNORE';
             }
-            $sTmp = iconv(trim($sFromC), $sCharset , $sSrc);
+            $tmp = iconv(trim($fromC), $charset, $src);
         }
-        return empty($sTmp) ? $sSrc : $sTmp;
-    } // function _recodingText
+        return empty($tmp) ? $src : $tmp;
+    }
 
-} // class \fan\core\service\email
-?>
+}

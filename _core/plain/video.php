@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\plain;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\plain;
 //use fan\project\exception\error500 as fatalException;
 /**
  * Base access for plain files (uploaded to the server) class
@@ -30,5 +34,4 @@ class video extends db_file
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\service\plain\video
-?>
+}

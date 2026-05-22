@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\loader;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\loader;
 /**
  * Base abstract loader block
  *
@@ -17,5 +21,4 @@
  */
 abstract class base extends \fan\core\block\loader\base
 {
-} // class \fan\project\block\loader\base
-?>
+}

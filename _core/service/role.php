@@ -1,4 +1,9 @@
-<?php namespace fan\core\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service;
+use fan\core\base\expression_evaluator;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Description of Role
@@ -20,103 +25,97 @@ class role extends \fan\core\base\service\single
     /**
      * Key for mark common User space
      */
-    const COMMON_KEY = '_common_';
+    public const COMMON_KEY = '_common_';
 
     /**
      * @var \fan\core\service\user Current User
      */
-    private $oCurrentUser;
+    private ?object $currentUser = null;
 
     /**
      * Static Roles of current user:
-     *   array('role1' => 'expire_date_1', 'role2' => 'expire_date_2', ...);
+     *   ['role1' => 'expire_date_1', 'role2' => 'expire_date_2', ...];
      * @var array
      */
-    private $aStaticRoles;
+    private ?array $staticRoles = null;
 
     /**
      * Session Roles (without user's link), "_common_" OR by User space:
-     *   array(
-     *       '_common_'     => array('role1' => 'expire_date_1', 'role2' => 'expire_date_2', ...),
-     *       'user_space_1' => array('role3' => 'expire_date_3', 'role4' => 'expire_date_4', ...),
-     *       'user_space_2' => array('role5' => 'expire_date_5', 'role6' => 'expire_date_6', ...),
+     *   [
+     *       '_common_'     => ['role1' => 'expire_date_1', 'role2' => 'expire_date_2', ...],
+     *       'user_space_1' => ['role3' => 'expire_date_3', 'role4' => 'expire_date_4', ...],
+     *       'user_space_2' => ['role5' => 'expire_date_5', 'role6' => 'expire_date_6', ...],
      *       ...
-     *   );
+     *   ];
      * @var array
      */
-    private $aSessionRoles;
+    private ?array $sessionRoles = null;
 
     /**
      * Limits of Session Roles with Fix Qtt access:
-     *   array(
-     *       'role1' => array(
+     *   [
+     *       'role1' => [
      *           'qtt' => (int)'qtt_1',
      *           'urn' => (str)'regexp_1',
-     *           'main_request' => array((str)'regexp_2', ...),
-     *           'add_request'  => array((str)'regexp_3', ...),
-     *           'both_request' => array((str)'regexp_4', ...),
-     *       ),
-     *       'role2' => array(
+     *           'main_request' => [(str)'regexp_2', ...],
+     *           'add_request'  => [(str)'regexp_3', ...],
+     *           'both_request' => [(str)'regexp_4', ...],
+     *       ],
+     *       'role2' => [
      *           'qtt' => (int)'qtt_2',
      *           'urn' => (str)'regexp_5',
-     *           'main_request' => array((str)'regexp_6', ...),
-     *           'add_request'  => array((str)'regexp_7', ...),
-     *           'both_request' => array((str)'regexp_8', ...),
-     *       ),
+     *           'main_request' => [(str)'regexp_6', ...],
+     *           'add_request'  => [(str)'regexp_7', ...],
+     *           'both_request' => [(str)'regexp_8', ...],
+     *       ],
      *       ...
-     *   );
+     *   ];
      * @var array
      */
-    private $aFixQttRoles;
+    private ?array $fixQttRoles = null;
 
     /**
-     * All current (merged) Roles: simple array('role1', 'role2', ...);
+     * All current (merged) Roles: simple ['role1', 'role2', ...];
      * @var array
      */
-    private $aAllRoles = array();
+    private array $allRoles = [];
 
     /**
      * Current User Space
      * @var string
      */
-    protected $sUserSpace;
+    protected ?string $userSpace = null;
 
-    /**
-     * Service's constructor
-     */
     protected function __construct()
     {
         parent::__construct();
 
         // Define Current User and his (static) roles
-        $this->oCurrentUser = $this->oConfig->get('CHECK_LOGOUT', true) ?
+        $this->currentUser = $this->config->get('CHECK_LOGOUT', true) ?
                 \fan\project\service\user::checkLogout() :
                 \fan\project\service\user::getCurrent();
-        $this->sUserSpace = $this->_getUserSpace();
+        $this->userSpace = $this->_getUserSpace();
         $this->_setStaticRoles();
 
         // Define Session roles
-        $oSes = \fan\project\service\session::instance('role', 'system');
-        $this->aSessionRoles =& $oSes->getByLink('session',       array());
-        $this->aFixQttRoles  =& $oSes->getByLink('fix_qtt_roles', array());
+        $ses = $this->containerService('session', 'role', 'system');
+        $this->sessionRoles =& $ses->getByLink('session',       []);
+        $this->fixQttRoles  =& $ses->getByLink('fix_qtt_roles', []);
         $this->_removeSessionExpired();
 
         // Make subscribing
-        $this->_subscribeForService('user',        'currentUser', array($this, 'onCurrentUserSet'));
-        $this->_subscribeForService('user',        'changeRoles', array($this, 'onUserRolesChange'));
-        $this->_subscribeForService('user',        'logoutUser',  array($this, 'onLogoutUser'));
-        $this->_subscribeForService('application', 'setAppName',  array($this, 'onAppChange'));
+        $this->_subscribeForService('user',        'currentUser', [$this, 'onCurrentUserSet']);
+        $this->_subscribeForService('user',        'changeRoles', [$this, 'onUserRolesChange']);
+        $this->_subscribeForService('user',        'logoutUser',  [$this, 'onLogoutUser']);
+        $this->_subscribeForService('application', 'setAppName',  [$this, 'onAppChange']);
 
 
         $this->_setCurrentRoles(true);
-    } // function __construct
+    }
 
-    /**
-     * Service's destructor
-     */
     public function __destruct() {
-        foreach ($this->aFixQttRoles as $k => &$v) {
-            if($v['qtt'] > 0) {
+        foreach ((array)$this->fixQttRoles as $k => &$v) {
+            if ($v['qtt'] > 0) {
                 if (true) { //ToDo: Check corresponding of all transfers to conditions
                     $v['qtt']--;
                 }
@@ -124,413 +123,302 @@ class role extends \fan\core\base\service\single
                 $this->killSessionRoles($k);
             }
         }
-    } // function __destruct
+    }
 
     // ======== Static methods ======== \\
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Get all Roles
-     * @return array
-     */
-    public function getRoles()
+    public function getRoles(): array
     {
-        return $this->aAllRoles;
-    } // function getRoles
+        return $this->allRoles;
+    }
 
-    /**
-     * Set new session Role/s
-     * @param mixed $mNewRoles array/string of new roles
-     * @param number|string $mExpiredTime - live time of setted role (in second)
-     * @param boolean $bInUserSpace - Set Role In User Space OR "_common_"
-     * @return array User Roles
-     */
-    public function setSessionRoles($mNewRoles, $mExpiredTime = null, $bInUserSpace = true)
+    public function setSessionRoles(mixed $newRoles, int|float|string|null $expiredTime = null, bool $inUserSpace = true): static
     {
-        $sKey = $bInUserSpace ? $this->_getUserSpace() : self::COMMON_KEY;
-        $sVal = $this->_defineExpiredDate($mExpiredTime);
-        if (!is_null($sVal) && strcmp($sVal, date('Y-m-d H:i:s')) <= 0) {
-            $this->killSessionRoles($mNewRoles, $bInUserSpace ? 1 : 2);
+        $key = $inUserSpace ? $this->_getUserSpace() : self::COMMON_KEY;
+        $val = $this->_defineExpiredDate($expiredTime);
+        if (!is_null($val) && strcmp($val, date('Y-m-d H:i:s')) <= 0) {
+            $this->killSessionRoles($newRoles, $inUserSpace ? 1 : 2);
             return $this;
         }
 
-        if (!isset($this->aSessionRoles[$sKey])) {
-            $this->aSessionRoles[$sKey] = array();
+        if (!isset($this->sessionRoles[$key])) {
+            $this->sessionRoles[$key] = [];
         }
-        $bChanged = false;
-        foreach ($this->_convValToArray($mNewRoles) as $v) {
-            $v = trim($v);
-            $bChanged = $bChanged || !array_key_exists($v, $this->aSessionRoles[$sKey]) || $this->aSessionRoles[$sKey][$v] != $sVal;
-            $this->aSessionRoles[$sKey][$v] = $sVal;
+        $changed = false;
+        foreach ($this->_convValToArray($newRoles) as $v) {
+            $v = trim((string)$v);
+            $changed = $changed || !array_key_exists($v, $this->sessionRoles[$key]) || (bool)$this->sessionRoles[$key][$v] !== (bool)$val;
+            $this->sessionRoles[$key][$v] = $val;
         }
 
-        if ($bChanged) {
+        if ($changed) {
             $this->_setCurrentRoles(true);
         }
         return $this;
-    } // function setSessionRoles
+    }
 
-    /**
-     * Kill session Role(s)
-     * @param string|array $mKillRoles array/string of killed roles
-     * @param integer $iDestination 0 - everywhere; 1 - in User-Space; 2 - in "_common_"; 3 - in User-Space and in "_common_"
-     * @return array Session Roles
-     */
-    public function killSessionRoles($mKillRoles = null, $iDestination = 3)
+    public function killSessionRoles(string|array|null $killRoles = null, int $destination = 3): static
     {
-        $bChanged = false;
-        if (empty($mKillRoles)) {
-            $this->aSessionRoles = array();
-            $this->aFixQttRoles  = array();
-            $bChanged = true;
+        $changed = false;
+        if (empty($killRoles)) {
+            $this->sessionRoles = [];
+            $this->fixQttRoles  = [];
+            $changed = true;
         } else {
-            foreach ($this->_convValToArray($mKillRoles) as $v0) {
-                $sRole = trim($v0);
-                if(!empty($sRole)) {
-                    foreach ($this->aSessionRoles as &$v1) {
-                        if(array_key_exists($sRole, $v1)) {
-                            unset($v1[$sRole]);
-                            $bChanged = true;
+            foreach ($this->_convValToArray($killRoles) as $v0) {
+                $role = trim((string)$v0);
+                if (!empty($role)) {
+                    foreach ($this->sessionRoles as &$v1) {
+                        if (array_key_exists($role, $v1)) {
+                            unset($v1[$role]);
+                            $changed = true;
                         }
                     }
-                    if(array_key_exists($sRole, $this->aFixQttRoles)) {
-                        unset($this->aFixQttRoles[$sRole]);
+                    if (array_key_exists($role, $this->fixQttRoles)) {
+                        unset($this->fixQttRoles[$role]);
                     }
                 }
             }
         }
 
-        if ($bChanged) {
+        if ($changed) {
             $this->_setCurrentRoles(true);
         }
         return $this;
-    } // function killSessionRoles
+    }
 
-    /**
-     * Get session Roles
-     * @return array User Roles
-     */
-    public function getSessionRoles()
+    public function getSessionRoles(): ?array
     {
-        return $this->aSessionRoles;
-    } // function getSessionRoles
+        return $this->sessionRoles;
+    }
 
-    /**
-     * Set role for fixed quantity of requsts to site
-     * @param mixed $mNewRoles array/string of new roles
-     * @param number $nQtt - quantity of requsts
-     * @param number $nExpiredTime - live time of setted role in second
-     * @return array User Roles
-     */
-    public function setFixQttRoles($mNewRoles, $nQtt = 1, $aRules = array(), $nExpiredTime = null)
+    public function setFixQttRoles(mixed $newRoles, int|float $qtt = 1, array $rules = [], int|float|null $expiredTime = null): static
     {
-        $aRoles = array();
-        foreach ($this->_convValToArray($mNewRoles) as $v) {
-            $v = trim($v);
-            if(!empty($v)) {
-                $this->aFixQttRoles[$v] = array(
-                    'qtt'          => $nQtt,
-                    'urn'          => isset($aRules['urn'])          ? $aRules['urn']          : null,
-                    'main_request' => isset($aRules['main_request']) ? $aRules['main_request'] : null,
-                    'add_request'  => isset($aRules['add_request'])  ? $aRules['add_request']  : null,
-                    'both_request' => isset($aRules['both_request']) ? $aRules['both_request'] : null,
-                );
-                $aRoles[] = $v;
+        $roles = [];
+        foreach ($this->_convValToArray($newRoles) as $v) {
+            $v = trim((string)$v);
+            if (!empty($v)) {
+                $this->fixQttRoles[$v] = [
+                    'qtt'          => $qtt,
+                    'urn'          => isset($rules['urn'])          ? $rules['urn']          : null,
+                    'main_request' => isset($rules['main_request']) ? $rules['main_request'] : null,
+                    'add_request'  => isset($rules['add_request'])  ? $rules['add_request']  : null,
+                    'both_request' => isset($rules['both_request']) ? $rules['both_request'] : null,
+                ];
+                $roles[] = $v;
             }
         }
-        return $this->setSessionRoles($aRoles, $nExpiredTime, true);
-    } // function setFixQttRoles
+        return $this->setSessionRoles($roles, $expiredTime, true);
+    }
 
 
 
-    /**
-     * Get Current User
-     * @return \fan\core\service\user
-     */
-    public function getCurrentUser()
+    public function getCurrentUser(): ?\fan\core\service\user
     {
-        return $this->oCurrentUser;
-    } // function getCurrentUser
+        return $this->currentUser;
+    }
 
-    /**
-     * Set new static Role/s
-     * @param mixed $mNewRoles array/string of new roles
-     * @param number $mExpiredTime - live time of setted role (in second) OR Expired date as string
-     * @return \fan\core\service\user
-     */
-    public function setStaticRoles($mNewRoles, $mExpiredTime = null)
+    public function setStaticRoles(mixed $newRoles, int|float|null $expiredTime = null): ?\fan\core\service\user
     {
-        $oUser = $this->getCurrentUser();
-        if (!empty($oUser) && !empty($mNewRoles)) {
-            $aRoles = array();
-            $sDate  = $this->_defineExpiredDate($mExpiredTime);
-            foreach ($this->_convValToArray($mNewRoles, 'Incorrect value of static role') as $v) {
-                $aRoles[$v] = $sDate;
+        $user = $this->getCurrentUser();
+        if (!empty($user) && !empty($newRoles)) {
+            $roles = [];
+            $date  = $this->_defineExpiredDate($expiredTime);
+            foreach ($this->_convValToArray($newRoles, 'Incorrect value of static role') as $v) {
+                $roles[$v] = $date;
             }
-            $oUser->setRoles($aRoles);
+            $user->setRoles($roles);
         }
-        return $oUser;
-    } // function setStaticRoles
+        return $user;
+    }
 
-    /**
-     * Get static Roles of current User
-     * @return array User Roles
-     */
-    public function getStaticRoles()
+    public function getStaticRoles(): ?array
     {
-        return $this->aStaticRoles;
-    } // function getStaticRoles
+        return $this->staticRoles;
+    }
 
-    /**
-     * Check roles. Roles as logic string
-     * @param string $sRolesRule Roles which need check
-     * @return bolean True if user have Roles to get this object
-     */
-    public function check($sRolesRule)
+    public function check(mixed $rolesRule): bool
     {
-        if (empty($sRolesRule)) {
+        if (empty($rolesRule)) {
             return true;
         }
-        if (!is_string($sRolesRule)) {
-            \fan\project\service\error::instance()->error_message(var_export($sRolesRule, false), 'Role is not string');
-            return false;
-        }
-        $bRet = false;
-        $sR0  = preg_replace('/\w+/i', "\$this->isRole('\${0}')", $sRolesRule);
-        $sR1  = preg_replace(array('/\&+/','/\|+/'), array('&&','||'), $sR0);
-
-        ob_start();
-        eval('$bRet=' . $sR1 . ';');
-        $sOut = ob_get_contents();
-        ob_end_clean();
-
-        if ($sOut) {
-            \fan\project\service\error::instance()->error_message($sRolesRule, 'Incorrect role set');
+        if (!is_string($rolesRule)) {
+            $this->containerService('error')->logErrorMessage(var_export($rolesRule, false), 'Role is not string');
             return false;
         }
 
-        return $bRet;
-    } // function check
+        try {
+            return (bool)expression_evaluator::evaluate($rolesRule, fn($role) => $this->isRole($role));
+        } catch (\InvalidArgumentException $e) {
+            $this->containerService('error')->logErrorMessage($rolesRule, 'Incorrect role set');
+            return false;
+        }
+    }
 
-    /**
-     * Check - is exist role with defined name
-     * @param string $sRole Roles which need check
-     * @return bolean True if user have Roles to get this object
-     */
-    public function isRole($sRole)
+    public function isRole(string $role): bool
     {
-        return in_array($sRole, $this->aAllRoles);
-    } // function isRole
+        return in_array($role, $this->allRoles);
+    }
 
-    /**
-     * Subscribe for event - Set Current User
-     * @param \fan\core\service\user $oUser
-     */
-    public function onCurrentUserSet(\fan\core\service\user $oUser)
+    public function onCurrentUserSet(\fan\core\service\user $user): void
     {
-        if ($this->getCurrentUser() !== $oUser) {
-            $this->oCurrentUser = $oUser;
+        if ($this->getCurrentUser() !== $user) {
+            $this->currentUser = $user;
             $this->_setStaticRoles();
             $this->_setCurrentRoles(true);
         }
-    } // function onCurrentUserSet
+    }
 
-    /**
-     * Subscribe for event - Change Static role of Current User
-     * @param \fan\core\service\user $oUser
-     */
-    public function onUserRolesChange(\fan\core\service\user $oUser)
+    public function onUserRolesChange(\fan\core\service\user $user): void
     {
-        if ($this->getCurrentUser() === $oUser) {
+        if ($this->getCurrentUser() === $user) {
             $this->_setStaticRoles();
             $this->_setCurrentRoles(true);
         }
-    } // function onUserRolesChange
+    }
 
-    /**
-     * Subscribe for event - Logout User
-     */
-    public function onLogoutUser()
+    public function onLogoutUser(): void
     {
-        $this->oCurrentUser = null;
+        $this->currentUser = null;
         $this->_setStaticRoles();
         $this->_setCurrentRoles(true);
-    } // function onLogoutUser
+    }
 
-    /**
-     * Subscribe for event - Application i changed
-     * @param string $sAppName
-     */
-    public function onAppChange($sAppName)
+    public function onAppChange(string $appName): void
     {
         $this->_setCurrentRoles();
-    } // function onAppChange
+    }
 
     // ======== Private/Protected methods ======== \\
 
     /**
-     * Convert value to array
-     * @param mixed $mVal
-     * @param string $sExceptionMessage
-     * @return array
      * @throws fatalException
      */
-    protected function _convValToArray($mVal, $sExceptionMessage = null)
+    protected function _convValToArray(mixed $val, ?string $exceptionMessage = null): array
     {
-        if (empty($mVal)) {
-            return array();
+        if (empty($val)) {
+            return [];
         }
-        if (is_string($mVal)) {
-            return array($mVal);
+        if (is_string($val)) {
+            return [$val];
         }
-        if (is_array($mVal)) {
-            return $mVal;
+        if (is_array($val)) {
+            return $val;
         }
-        if (is_object($mVal)) {
-            if (method_exists($mVal, 'toArray')) {
-                return $mVal->toArray();
+        if (is_object($val)) {
+            if (method_exists($val, 'toArray')) {
+                return $val->toArray();
             }
-            if (method_exists($mVal, '__toString')) {
-                return array($mVal->__toString());
+            if (method_exists($val, '__toString')) {
+                return [$val->__toString()];
             }
         }
-        if (!empty($sExceptionMessage)) {
-            throw new fatalException($this, $sExceptionMessage);
+        if (!empty($exceptionMessage)) {
+            throw new fatalException($this, $exceptionMessage);
         }
-        return array();
-    } // function _convValToArray
+        return [];
+    }
 
-    /**
-     * Set All Current Roles
-     * @param type $bForce
-     * @return \fan\core\service\role
-     */
-    protected function _setCurrentRoles($bForce = false)
+    protected function _setCurrentRoles(bool $force = false): static
     {
-        $sUserSpace = $this->_getUserSpace();
-        if ($this->sUserSpace != $sUserSpace || $bForce) {
-            $this->sUserSpace = $sUserSpace;
+        $userSpace = $this->_getUserSpace();
+        if ((string)$this->userSpace !== (string)$userSpace || $force) {
+            $this->userSpace = $userSpace;
 
-            $aTmp = array_merge(
-                isset($this->aSessionRoles[self::COMMON_KEY])  ? $this->aSessionRoles[self::COMMON_KEY]  : array(),
-                isset($this->aSessionRoles[$sUserSpace]) ? $this->aSessionRoles[$sUserSpace] : array(),
-                empty($this->aStaticRoles) ? array() : $this->aStaticRoles
+            $tmp = array_merge(
+                isset($this->sessionRoles[self::COMMON_KEY])  ? $this->sessionRoles[self::COMMON_KEY]  : [],
+                isset($this->sessionRoles[$userSpace]) ? $this->sessionRoles[$userSpace] : [],
+                empty($this->staticRoles) ? [] : $this->staticRoles
             );
-            $aAllRoles = array();
-            foreach ($aTmp as $k => $v) {
-                $aAllRoles[] = (string)$k;
+            $allRoles = [];
+            foreach ($tmp as $k => $v) {
+                $allRoles[] = (string)$k;
             }
 
-            $bChanged  = array_diff($this->aAllRoles, $aAllRoles) || array_diff($aAllRoles, $this->aAllRoles);
-            $this->aAllRoles = $aAllRoles;
-            if ($bChanged) {
-                $this->_broadcastMessage('rolesChanged', $aAllRoles);
+            $changed  = array_diff($this->allRoles, $allRoles) || array_diff($allRoles, $this->allRoles);
+            $this->allRoles = $allRoles;
+            if ($changed) {
+                $this->_broadcastMessage('rolesChanged', $allRoles);
             }
         }
         return $this;
-    } // function _setCurrentRoles
+    }
 
-    /**
-     * Set Static Roles
-     * @return \fan\core\service\role
-     */
-    protected function _setStaticRoles()
+    protected function _setStaticRoles(): static
     {
-        if (empty($this->oCurrentUser)) {
-            $this->aStaticRoles = array();
+        if (empty($this->currentUser)) {
+            $this->staticRoles = [];
         } else {
-            $this->aStaticRoles = $this->oCurrentUser->getRoles();
+            $this->staticRoles = $this->currentUser->getRoles();
             $this->_removeStaticExpired();
         }
         return $this;
-    } // function _setStaticRoles
+    }
 
-    /**
-     * Remove expired Static roles
-     * @return \fan\core\service\role
-     */
-    protected function _removeStaticExpired()
+    protected function _removeStaticExpired(): static
     {
-        if (!empty($this->aStaticRoles)) {
-            $aRemoved = $this->_checkRoleDate($this->aStaticRoles);
-            if (!empty($aRemoved)) {
-                $this->getCurrentUser()->removeRole($aRemoved);
+        if (!empty($this->staticRoles)) {
+            $removed = $this->_checkRoleDate($this->staticRoles);
+            if (!empty($removed)) {
+                $this->getCurrentUser()->removeRole($removed);
             }
         }
         return $this;
-    } // function _removeStaticExpired
+    }
 
-    /**
-     * Remove expired Session roles
-     * @return \fan\core\service\role
-     */
-    protected function _removeSessionExpired()
+    protected function _removeSessionExpired(): static
     {
-        $aRemoved = array();
-        foreach ($this->aSessionRoles as &$v0) {
-            $aRemoved = array_merge($aRemoved, $this->_checkRoleDate($v0));
+        $removed = [];
+        foreach ($this->sessionRoles as &$v0) {
+            $removed = array_merge($removed, $this->_checkRoleDate($v0));
         }
 
-        foreach ($aRemoved as $v1) {
-            if (isset($this->aFixQttRoles[$v1])) {
-                foreach ($this->aSessionRoles as $v2) {
+        foreach ($removed as $v1) {
+            if (isset($this->fixQttRoles[$v1])) {
+                foreach ($this->sessionRoles as $v2) {
                     if (isset($v2[$v1])) {
                         continue 2;
                     }
                 }
-                unset($this->aFixQttRoles[$v1]);
+                unset($this->fixQttRoles[$v1]);
             }
         }
         return $this;
-    } // function _removeSessionExpired
+    }
 
-    /**
-     * Check Expire Date of Roles
-     * @param array $aRoles
-     * @return array
-     */
-    protected function _checkRoleDate(&$aRoles)
+    protected function _checkRoleDate(array &$roles): array
     {
-        $aRemoved = array();
-        $sCurDate = date('Y-m-d H:i:s');
-        foreach ($aRoles as $sRole => $sExpire) {
-            if (!is_null($sExpire) && strcmp($sExpire, $sCurDate) <= 0) {
-                $aRemoved[] = $sRole;
-                unset($aRoles[$sRole]);
+        $removed = [];
+        $curDate = date('Y-m-d H:i:s');
+        foreach ($roles as $role => $expire) {
+            if (!is_null($expire) && strcmp($expire, $curDate) <= 0) {
+                $removed[] = $role;
+                unset($roles[$role]);
             }
         }
-        return $aRemoved;
-    } // function _checkRoleDate
+        return $removed;
+    }
 
-    /**
-     * Get User Space
-     * @return string
-     */
-    protected function _getUserSpace()
+    protected function _getUserSpace(): string
     {
         return \fan\project\service\user::getCurrentSpace();
-    } // function _getUserSpace
+    }
 
-    /**
-     * Define Expired Date-Time
-     * @param number|string $mExpiredTime - live time of setted role (in second)
-     * @return string
-     */
-    protected function _defineExpiredDate($mExpiredTime)
+    protected function _defineExpiredDate(int|float|string|null $expiredTime): ?string
     {
-        if (is_null($mExpiredTime)) {
+        if (is_null($expiredTime)) {
             return null;
         }
-        if (is_numeric($mExpiredTime)) {
-            return \fan\project\service\date::instance(date('Y-m-d H:i:s'), 'mysql')->shiftDate($mExpiredTime);
+        if (is_numeric($expiredTime)) {
+            return \fan\project\service\date::instance(date('Y-m-d H:i:s'), 'mysql')->shiftDate($expiredTime);
         }
-        return \fan\project\service\date::instance(date($mExpiredTime))->get('mysql');
-    } // function _defineExpiredDate
+        return \fan\project\service\date::instance(date($expiredTime))->get('mysql');
+    }
 
     // ======== The magic methods ======== \\
 
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\service\role
-?>
+}

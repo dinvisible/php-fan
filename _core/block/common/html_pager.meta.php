@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Play list meta
  *
@@ -14,29 +17,28 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-return array(
+return [
     /**
      * Meta data for curent carcass block
      */
-    'own' => array(
+    'own' => [
         'tplType' => 'references',
 
-        'qttLimit' => array(
+        'qttLimit' => [
             'startEnd' => 2,
             'middle'   => 5,
-        ),
+        ],
 
-        'cache' => array(
+        'cache' => [
             'mode' => 1,
-        ),
+        ],
 
         // quantifier params
-        'quantifier' => array(
+        'quantifier' => [
             'allow'  => false,
             'form'   => 'form/pager_quantifier',
             'label'  => 'Elements per page',
             'values' => '20,30,50,100', // comma separated values
-        ),
-    ),
-);
-?>
+        ],
+    ],
+];

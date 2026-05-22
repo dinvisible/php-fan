@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\form\validator;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\form\validator;
 /**
  * Uri class of validators
  *
@@ -17,35 +21,21 @@
 class uri extends base
 {
 
-    /**
-     * Check up a value is e-mail address
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function isEmail($mValue, $aData)
+    public function isEmail(mixed $value, array $data): bool
     {
-        return filter_var($mValue, FILTER_VALIDATE_EMAIL) !== false;
-    } // function isEmail
+        return filter_var($value, FILTER_VALIDATE_EMAIL) !== false;
+    }
 
-    /**
-     * Check URI
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function isUri($mValue, $aData)
+    public function isUri(mixed $value, array $data): bool
     {
-        if ($aData['is_path']) {
-            $mResult = filter_var($mValue, FILTER_FLAG_PATH_REQUIRED);
-        } elseif ($aData['is_query']) {
-            $mResult = filter_var($mValue, FILTER_FLAG_QUERY_REQUIRED);
+        if ($data['is_path']) {
+            $result = filter_var($value, FILTER_FLAG_PATH_REQUIRED);
+        } elseif ($data['is_query']) {
+            $result = filter_var($value, FILTER_FLAG_QUERY_REQUIRED);
         } else {
-            $mResult = filter_var($mValue, FILTER_VALIDATE_URL);
+            $result = filter_var($value, FILTER_VALIDATE_URL);
         }
-        return $mResult !== false;
-    } // function isUri
+        return $result !== false;
+    }
 
-} // class \fan\core\service\form\validator\uri
-?>
+}

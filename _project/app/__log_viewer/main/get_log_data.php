@@ -1,4 +1,8 @@
-<?php namespace fan\app\__log_viewer\main;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__log_viewer\main;
 /**
  * Get log data block
  *
@@ -17,85 +21,81 @@
 class get_log_data extends \fan\project\block\loader\base
 {
 
-    /**
-     * Init block
-     */
-    public function init()
+    public function init(): void
     {
-        $aData = $this->getData();
-        $aJson = array();
+        $data = $this->getData();
+        $json = [];
 
-        list($sDate, $sNum) = explode_alt('_', $aData['date'], 2);
-        $bIsUnique = $aData['gr_idt'];
+        list($date, $num) = explode_alt('_', $data['date'], 2);
+        $isUnique = $data['gr_idt'];
 
-        $nPageQtt = $nCurPage = 1;
-        $oParser = service('log')->getLogParser($aData['vr'], $aData['date']);
-        if ($oParser->isData()) {
+        $pageQtt = $curPage = 1;
+        $parser = service('log')->getLogParser($data['vr'], $data['date']);
+        if ($parser->isData()) {
             do {
-                if (@$aData['del'] && role('allow_delete')) {
-                    $oParser->deleteRows($aData['del'], $bIsUnique);
-                    if (!$oParser->isData()) {
-                        $aJson['oper'] = 'redraw';
+                if (!empty($data['del']) && role('allow_delete')) {
+                    $parser->deleteRows($data['del'], $isUnique);
+                    if (!$parser->isData()) {
+                        $json['oper'] = 'redraw';
                         break;
                     }
-                    $aData['redraw'] = 1;
+                    $data['redraw'] = 1;
                 }
 
-                $nTotalQtt = $oParser->getQtt($bIsUnique);
-                $nElmPerPage = $this->getMeta('elmPerPage', 10);
-                $nPageQtt = ceil($nTotalQtt / $nElmPerPage);
-                if ($nPageQtt < 1) {
-                    $nPageQtt = 1;
+                $totalQtt = $parser->getQtt($isUnique);
+                $elmPerPage = $this->getMeta('elmPerPage', 10);
+                $pageQtt = ceil($totalQtt / $elmPerPage);
+                if ($pageQtt < 1) {
+                    $pageQtt = 1;
                 }
-                $nCurPage = @$aData['curPage'] ? $aData['curPage'] : 1;
-                if ($nCurPage < 1) {
-                    $nCurPage = 1;
-                } elseif ($nCurPage > $nPageQtt) {
-                    $nCurPage = $nPageQtt;
+                $curPage = !empty($data['curPage']) ? $data['curPage'] : 1;
+                if ($curPage < 1) {
+                    $curPage = 1;
+                } elseif ($curPage > $pageQtt) {
+                    $curPage = $pageQtt;
                 }
 
 
-                if (@$aData['redraw']) {
-                    $nOffset = ($nCurPage - 1) * $nElmPerPage;
-                    $nQtt    = $nElmPerPage;
-                    $aJson['oper'] = 'redraw';
+                if (!empty($data['redraw'])) {
+                    $offset = ($curPage - 1) * $elmPerPage;
+                    $qtt    = $elmPerPage;
+                    $json['oper'] = 'redraw';
                 } else {
-                    $nAfterLast = $oParser->checkAfterLast(@$aData['lastRecId'], $bIsUnique);
-                    if (is_null($nAfterLast)) {
-                        $aJson['oper'] = 'none';
+                    $afterLast = $parser->checkAfterLast($data['lastRecId'] ?? null, $isUnique);
+                    if (is_null($afterLast)) {
+                        $json['oper'] = 'none';
                         break;
                     }
-                    if ($nAfterLast >= $nCurPage * $nElmPerPage) {
-                        $aJson['oper'] = 'page_only';
+                    if ($afterLast >= $curPage * $elmPerPage) {
+                        $json['oper'] = 'page_only';
                         break;
                     }
-                    if ($nAfterLast) {
-                        $nOffset = $nAfterLast;
-                        $nQtt    = $nElmPerPage - ($nAfterLast) % $nElmPerPage; // ToDo: Check do not skip any elements
-                        $aJson['oper'] = 'add';
+                    if ($afterLast) {
+                        $offset = $afterLast;
+                        $qtt    = $elmPerPage - ($afterLast) % $elmPerPage; // ToDo: Check do not skip any elements
+                        $json['oper'] = 'add';
                     } else {
-                        $nOffset = 0;
-                        $nQtt    = $nElmPerPage;
-                        $aJson['oper'] = 'redraw';
-                        $nCurPage = 1;
+                        $offset = 0;
+                        $qtt    = $elmPerPage;
+                        $json['oper'] = 'redraw';
+                        $curPage = 1;
                     }
                 }
-                $aRecords = $oParser->getDataArr($nOffset, $nQtt, $bIsUnique);
-                if ($aRecords) {
-                    $aJson['records'] = $aRecords;
+                $records = $parser->getDataArr($offset, $qtt, $isUnique);
+                if ($records) {
+                    $json['records'] = $records;
                 }
             } while (false);
         }
 
-        $aJson['curPage'] = $nCurPage;
-        $aJson['pageQtt'] = $nPageQtt;
+        $json['curPage'] = $curPage;
+        $json['pageQtt'] = $pageQtt;
 
-        $aJson['vr']      = $aData['vr'];
-        $aJson['curDate'] = dateM2L($sDate);
-        $aJson['date']    = $aData['date'];
+        $json['vr']      = $data['vr'];
+        $json['curDate'] = dateM2L($date);
+        $json['date']    = $data['date'];
 
-        $this->setJson($aJson);
+        $this->setJson($json);
         $this->setText('ok');
     }
-} // class \fan\app\__log_viewer\main\get_log_data
-?>
+}

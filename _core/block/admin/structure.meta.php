@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Block admin structure meta-data
  *
@@ -14,9 +17,8 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.01.002 (01.05.2013)
  */
-return array(
-    'own' => array(
+return [
+    'own' => [
         'notUseTemplate' => true,
-    ),
-);
-?>
+    ],
+];

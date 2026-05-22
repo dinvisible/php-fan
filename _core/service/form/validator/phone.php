@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\form\validator;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\form\validator;
 /**
  * Phone class of validators
  *
@@ -16,29 +20,24 @@
  */
 class phone extends base
 {
-    /**
-     * Rule phone is correct
-     * @return bool
-     */
-    public function isUkrainianPhone($mValue)
+    public function isUkrainianPhone(mixed $value): bool
     {
-        $sPhone = preg_replace('/\D+/', '', $mValue);
-        if (strlen($sPhone) == 9) {
-            $sPhone = '380' . $sPhone;
-        } elseif (strlen($sPhone) == 10) {
-            $sPhone = '38' . $sPhone;
-        } elseif (strlen($sPhone) != 12) {
+        $phone = preg_replace('/\D+/', '', (string)$value);
+        if (strlen($phone) === 9) {
+            $phone = '380' . $phone;
+        } elseif (strlen($phone) === 10) {
+            $phone = '38' . $phone;
+        } elseif (strlen($phone) !== 12) {
             return false;
         }
-        if (preg_match('/^380\d{9}$/', $sPhone)) {
-            $sPhone = '+' . $sPhone;
+        if (preg_match('/^380\d{9}$/', $phone)) {
+            $phone = '+' . $phone;
             return true;
         }
        return false;
-    } // function phone_is_correct
+    }
 
 
 
 
-} // class \fan\core\service\form\validator\phone
-?>
+}

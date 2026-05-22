@@ -1,4 +1,8 @@
-<?php namespace fan\core\plain;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\plain;
 use fan\project\exception\plain\fatal as fatalException;
 /**
  * Class of controller for show image, nail, etc
@@ -18,259 +22,206 @@ use fan\project\exception\plain\fatal as fatalException;
  */
 class image extends db_file
 {
-    /**
-     * @var integer - Width
-     */
-    protected $nWidth;
+    protected int|float|null $width = null;
 
-    /**
-     * @var integer - Height
-     */
-    protected $nHeight;
+    protected int|float|null $height = null;
 
     /**
      * Path to directory with QuickNail
      * @var string
      */
-    protected $sNailDir = null;
+    protected ?string $nailDir = null;
 
     /**
      * Image type
      * @var string
      */
-    protected $sImageType = null;
+    protected ?string $imageType = null;
 
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Get File of Image
-     * @return array|string
-     */
-    public function getImage()
+    public function getImage(): array|string
     {
-        $this->sImageType = 'image';
+        $this->imageType = 'image';
         return $this->getFile();
-    } // function getImage
+    }
 
-    /**
-     * Get Nail of Image
-     * @return array|string
-     */
-    public function getNail()
+    public function getNail(): array|string
     {
-        $this->sImageType = 'nail';
+        $this->imageType = 'nail';
         return $this->_prepareNail()->_init()->_getContent();
-    } // function getNail
+    }
 
-    /**
-     * Get Adm Nail of Image
-     * @return array|string
-     */
-    public function getAdmNail()
+    public function getAdmNail(): array|string
     {
-        $this->sImageType = 'adm_nail';
+        $this->imageType = 'adm_nail';
         return $this->_prepareNail()->_init()->_getContent();
-    } // function getAdmNail
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Set properties file output: mId, mPos, sApp, sErrMsg
-     */
-    protected function _prepareNail()
+    protected function _prepareNail(): static
     {
         $this->_prepare();
 
-        if (!empty($this->mId)) {
-            list($this->nWidth, $this->nHeight) = $this->_getNailSize();
-            if (empty($this->nWidth) && empty($this->nHeight)) {
+        if (!empty($this->id)) {
+            list($this->width, $this->height) = $this->_getNailSize();
+            if (empty($this->width) && empty($this->height)) {
                 throw new fatalException($this, 'There isn\'t point width or height of nail.');
             } else {
-                $sDirMask = $this->oConfig->get('nail_dir', '{TEMP}/nail');
-                $this->sNailDir = $this->_getNailDir($sDirMask, false);
+                $dirMask = (string)$this->config->get('nail_dir', '{TEMP}/nail');
+                $this->nailDir = $this->_getNailDir($dirMask, false);
             }
         }
         return $this;
-    } // function _prepareNail
+    }
 
-    /**
-     * Get Nail Size
-     * @return array
-     */
-    protected function _getNailSize()
+    protected function _getNailSize(): array
     {
-        if ($this->sImageType == 'adm_nail') {
-            return array(60, 60);
+        if ($this->imageType === 'adm_nail') {
+            return [60, 60];
         }
-        $oSR = \fan\project\service\request::instance();
-        return array($oSR->get('w', 'GPA'), $oSR->get('h', 'GPA'));
-    } // function _getNailSize
+        $sr = $this->containerService('request');
+        $width = $sr->get('w', 'GPA');
+        $height = $sr->get('h', 'GPA');
+        return [
+            is_numeric($width) ? $width + 0 : null,
+            is_numeric($height) ? $height + 0 : null,
+        ];
+    }
 
-    /**
-     * Get file data
-     * file data or null - if the file is not valid
-     * @param boolean $bIdIsEncrypt
-     * @return array|null
-     */
-    protected function _getFileData($bIdIsEncrypt = null)
+    protected function _getFileData($idIsEncrypt = null): ?array
     {
-        $aFileData = $this->sImageType == 'image' ? parent::_getFileData($bIdIsEncrypt) : $this->_getNailFileData($bIdIsEncrypt);
-        if ($this->sImageType == 'adm_nail' && empty($aFileData)) {
-            $aFileData = $this->_getStubFileData();
+        $fileData = $this->imageType === 'image' ? parent::_getFileData($idIsEncrypt) : $this->_getNailFileData(is_null($idIsEncrypt) ? null : (bool)$idIsEncrypt);
+        if ($this->imageType === 'adm_nail' && empty($fileData)) {
+            $fileData = $this->_getStubFileData();
         }
-        return $aFileData;
-    } // function _getFileData
+        return $fileData;
+    }
 
-    /**
-     * Get file data of nail
-     * file data or null - if the file is not valid
-     * @param boolean $bIdIsEncrypt
-     * @return array|null
-     */
-    protected function _getNailFileData($bIdIsEncrypt = null)
+    protected function _getNailFileData(?bool $idIsEncrypt = null): ?array
     {
-        $aMainData = parent::_getFileData($bIdIsEncrypt);
+        $mainData = parent::_getFileData($idIsEncrypt);
 
-        $bIsSize = !empty($this->nWidth) || !empty($this->nHeight);
-        if ($bIsSize && !empty($this->sNailDir)) {
-            list($oCache, $sCacheKey, $aData) = $this->_getCacheData($aMainData);
-            if (!empty($aData) && is_file($aData['filePath'])) {
-                $this->sPlainContent = $aData['content'];
-                return $aData;
+        $isSize = !empty($this->width) || !empty($this->height);
+        if ($isSize && !empty($this->nailDir)) {
+            list($cache, $cacheKey, $data) = $this->_getCacheData($mainData);
+            if (!empty($data) && is_file($data['filePath'])) {
+                $this->plainContent = $data['content'];
+                return $data;
             }
         }
 
-        if (!empty($aMainData)) {
-            if ($bIsSize) {
-                $aResultData = $this->_getNailData($aMainData);
-                if (!empty($aResultData['filePath'])) {
-                    $oCache->set($sCacheKey, $aResultData);
+        if (!empty($mainData)) {
+            if ($isSize) {
+                $resultData = $this->_getNailData($mainData);
+                if (!empty($resultData['filePath'])) {
+                    $cache->set($cacheKey, $resultData);
                 }
-                $this->sPlainContent = $aResultData['content'];
+                $this->plainContent = $resultData['content'];
             } else {
-                $aResultData = $aMainData;
+                $resultData = $mainData;
             }
-            return $aResultData;
+            return $resultData;
         }
-        if (!empty($aData)) {
-            $oCache->delete($sCacheKey);
+        if (!empty($data)) {
+            $cache->delete($cacheKey);
         }
         return null;
-    } // function _getNailFileData
+    }
 
-    /**
-     * Get stub of nail for admin
-     * file data or null - if the file is not valid
-     * @return array|null
-     */
-    protected function _getStubFileData()
+    protected function _getStubFileData(): array
     {
-        $sNailStub = \bootstrap::parsePath($this->oConfig->get('nail_stub', '{PROJECT}/data/image/empty_nail.gif'));
-        if (!empty($sNailStub) && is_readable($sNailStub)) {
-            $aImgData = getimagesize($sNailStub);
-            if (!empty($aImgData)) {
-                $aPathInfo = pathinfo($sNailStub);
-                return array(
-                    'filePath' => $sNailStub,
+        $nailStub = \bootstrap::parsePath((string)$this->config->get('nail_stub', '{PROJECT}/data/image/empty_nail.gif'));
+        if (!empty($nailStub) && is_readable($nailStub)) {
+            $imgData = getimagesize($nailStub);
+            if (!empty($imgData)) {
+                $pathInfo = pathinfo($nailStub);
+                return [
+                    'filePath' => $nailStub,
                     'content' => null,
-                    'headers' => array(
-                        'contentType' => $aImgData['mime'],
-                        'filename'    => $aPathInfo['basename'],
-                        'length'      => filesize($sNailStub),
+                    'headers' => [
+                        'contentType' => $imgData['mime'],
+                        'filename'    => $pathInfo['basename'],
+                        'length'      => filesize($nailStub),
                         'legthRange'  => 'bytes',
-                        'modified'    => filemtime($sNailStub),
+                        'modified'    => filemtime($nailStub),
                         'cacheLimit'  => 300,
-                    )
-                );
+                    ]
+                ];
             }
         }
-        trigger_error('Incorrect path to admin-stab file "' . $sNailStub . '"', E_USER_WARNING);
-        return null;
-    } // function _getStubFileData
+        throw new \RuntimeException('Incorrect path to admin-stab file "' . $nailStub . '"');
+    }
 
-    /**
-     * Get Directory for save Nail
-     * @param string $sDirMask
-     * @return - array file data, null - if the file is not valid
-     */
-    protected function _getNailDir($sDirMask, $bIsException = false)
+    protected function _getNailDir(string $dirMask, $isException = false): ?string
     {
-        $sNailDir = empty($sDirMask) ? null : rtrim(\bootstrap::parsePath($sDirMask), '/\\');
+        $nailDir = empty($dirMask) ? null : rtrim(\bootstrap::parsePath($dirMask), '/\\');
 
-        if (!empty($sNailDir)) {
-            if (is_file($sNailDir)) {
-                throw new fatalException($this, 'Incorrect path for nail. Is file there "' . $sNailDir . '"');
-            } elseif (!is_dir($sNailDir)) {
-                if (!mkdir($sNailDir, 0744, true)) {
-                    if ($bIsException) {
-                        throw new fatalException($this, 'Can\'t create directory "' . $sNailDir . '"');
+        if (!empty($nailDir)) {
+            if (is_file($nailDir)) {
+                throw new fatalException($this, 'Incorrect path for nail. Is file there "' . $nailDir . '"');
+            } elseif (!is_dir($nailDir)) {
+                if (!mkdir($nailDir, 0744, true)) {
+                    if ($isException) {
+                        throw new fatalException($this, 'Can\'t create directory "' . $nailDir . '"');
                     }
-                    $sNailDir = null;
+                    $nailDir = null;
                 }
-            } elseif (!is_writable($sNailDir)) {
-                if ($bIsException) {
-                    throw new fatalException($this, 'Directory "' . $sNailDir . '" isn\'t writable');
+            } elseif (!is_writable($nailDir)) {
+                if ($isException) {
+                    throw new fatalException($this, 'Directory "' . $nailDir . '" isn\'t writable');
                 }
-                $sNailDir = null;
+                $nailDir = null;
             }
         }
 
-        return $sNailDir;
-    } // function _getNailDir
+        return $nailDir;
+    }
 
-    /**
-     * Get Cache Data
-     * @return array
-     */
-    protected function _getCacheData($aMainData)
+    protected function _getCacheData($mainData): array
     {
-        $oCache = \fan\project\service\cache::instance('img_nail');
-        /* @var $oCache \fan\core\service\cache */
+        $cache = $this->containerService('cache', 'img_nail');
+        /* @var $cache \fan\core\service\cache */
 
-        $sCacheKey = $this->mId;
-        if (!empty($this->nWidth)) {
-            $sCacheKey .= 'w' . $this->nWidth;
+        $cacheKey = (string)$this->id;
+        if (!empty($this->width)) {
+            $cacheKey .= 'w' . $this->width;
         }
-        if (!empty($this->nHeight)) {
-            $sCacheKey .= 'h' . $this->nHeight;
-        }
-
-        $aData = $oCache->get($sCacheKey);
-        if ($aMainData['headers']['modified'] != $aData['headers']['modified']) {
-            $aData = null;
+        if (!empty($this->height)) {
+            $cacheKey .= 'h' . $this->height;
         }
 
-        return array($oCache, $sCacheKey, $aData);
-    } // function _getCacheData
+        $data = $cache->get($cacheKey);
+        if ((string)$mainData['headers']['modified'] !== (string)$data['headers']['modified']) {
+            $data = null;
+        }
 
-    /**
-     * Get Nail Data
-     * @param array $aMainData
-     * @return array
-     */
-    protected function _getNailData($aMainData)
+        return [$cache, $cacheKey, $data];
+    }
+
+    protected function _getNailData(array $mainData): array
     {
-        $oImg = \fan\project\service\image_modify::instance($aMainData['filePath']);
-        $oImg->scal($this->nWidth, $this->nHeight);
-        $aImgData = $oImg->getImageInfo(300, empty($this->sNailDir));
+        $img = \fan\project\service\image_modify::instance($mainData['filePath']);
+        $img->scal($this->width, $this->height);
+        $imgData = $img->getImageInfo(300, empty($this->nailDir));
 
-        if (!empty($this->sNailDir)) {
-            $sNailPath = $this->sNailDir . '/' . $this->mId . '_w' . $this->nWidth . '_h'. $this->nHeight . '.' . $oImg->getType();
-            $oImg->saveAsNew($sNailPath);
+        if (!empty($this->nailDir)) {
+            $nailPath = $this->nailDir . '/' . $this->id . '_w' . $this->width . '_h'. $this->height . '.' . $img->getType();
+            $img->saveAsNew($nailPath);
         } else {
-            $sNailPath = null;
+            $nailPath = null;
         }
 
-        return array(
-            'filePath' => $sNailPath,
-            'content'  => empty($this->sNailDir) ? $aImgData['content'] : null,
-            'headers'  => array_merge($aImgData['headers'], array(
-                'filename' => 'nail_' . $aMainData['headers']['filename'],
-                'modified' => $aMainData['headers']['modified'],
-            ))
-        );
-    } // function _getNailData
+        return [
+            'filePath' => $nailPath,
+            'content'  => empty($this->nailDir) ? $imgData['content'] : null,
+            'headers'  => array_merge($imgData['headers'], [
+                'filename' => 'nail_' . $mainData['headers']['filename'],
+                'modified' => $mainData['headers']['modified'],
+            ])
+        ];
+    }
 
-} // class \fan\core\plain\image
-?>
+}

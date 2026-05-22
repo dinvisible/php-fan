@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\admin;
 /**
  * Admin upload image file class for loader block
  *
@@ -17,300 +21,236 @@
 class upload_image extends base
 {
 
-    /**
-     * @var array Image param array
-     */
-    protected $aImage = array();
+    protected ?array $image = [];
 
-    /**
-     * @var string Error message
-     */
-    protected $sError = '';
+    protected string $error = '';
 
-    /**
-     * @var string Namespace of image
-     */
-    protected $sFileNs = null;
+    protected ?string $fileNs = null;
 
-    /**
-     * Block constructor
-     * @param string $sBlockName Block Name
-     * @param \core\service\tab $oTab
-     */
-    public function finishConstruct($oContainer, $aContainerMeta, $bAllowSetEmbedded = true)
+    public function finishConstruct(?\fan\core\block\base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
     {
-        parent::finishConstruct($oContainer, $aContainerMeta, $bAllowSetEmbedded);
-        $this->aImage = service('request')->get('image', 'F');
-        if ($this->aImage['error'] == UPLOAD_ERR_NO_FILE) {
-            $this->aImage = null;
-        } elseif ($this->aImage['error'] == UPLOAD_ERR_PARTIAL) {
-            $this->aImage = null;
-            $this->sError = 'File was broken!';
-        } elseif ($this->aImage['error'] == UPLOAD_ERR_INI_SIZE || $this->aImage['error'] == UPLOAD_ERR_FORM_SIZE) {
-            $this->aImage = null;
-            $this->sError = 'Incorrect file size (there is limit ' . ini_get('upload_max_filesize') . ')!';
-        } elseif (!$this->aImage['tmp_name'] || $this->aImage['error']) {
-            $this->aImage = null;
+        parent::finishConstruct($container, $containerMeta, $allowSetEmbedded);
+        $this->image = $this->containerService('request')->get('image', 'F');
+        if (!is_array($this->image)) {
+            $this->image = null;
+            return;
+        }
+        $uploadError = (int)$this->image['error'];
+        if ($uploadError === UPLOAD_ERR_NO_FILE) {
+            $this->image = null;
+        } elseif ($uploadError === UPLOAD_ERR_PARTIAL) {
+            $this->image = null;
+            $this->error = 'File was broken!';
+        } elseif ($uploadError === UPLOAD_ERR_INI_SIZE || $uploadError === UPLOAD_ERR_FORM_SIZE) {
+            $this->image = null;
+            $this->error = 'Incorrect file size (there is limit ' . ini_get('upload_max_filesize') . ')!';
+        } elseif (!$this->image['tmp_name'] || $this->image['error']) {
+            $this->image = null;
         } else {
-            $par = getimagesize($this->aImage['tmp_name']);
+            $par = getimagesize((string)$this->image['tmp_name']);
             if (!$par) {
-                $this->aImage = null;
-                $this->sError = 'It isn\'t image!';
+                $this->image = null;
+                $this->error = 'It isn\'t image!';
             }
         }
-        if (!$this->sError && $this->aImage && $this->getMeta('max_size')) {
-            $par = getimagesize($this->aImage['tmp_name']);
-            $w = $this->getMeta(array('max_size', 'width'));
-            $h = $this->getMeta(array('max_size', 'height'));
+        if (!$this->error && $this->image && $this->getMeta('max_size')) {
+            $par = getimagesize((string)$this->image['tmp_name']);
+            $w = $this->getMeta(['max_size', 'width']);
+            $h = $this->getMeta(['max_size', 'height']);
+            $w = is_null($w) ? null : (int)$w;
+            $h = is_null($h) ? null : (int)$h;
 
-            $nColor = $this->getMeta('b_color', 0XFFFFFF);
-            $oImg = service('image_modify', $this->aImage['tmp_name']);
+            $color = $this->getMeta('b_color', 0XFFFFFF);
+            $img = service('image_modify', (string)$this->image['tmp_name']);
             if ($par[0] > $w || $par[1] > $h) {
-                $oImg->scal($w, $h, $this->getMeta('mode', 1), $nColor);
+                $img->scal($w, $h, (int)$this->getMeta('mode', 1), is_array($color) ? $color : (int)$color);
             } elseif ($this->getMeta('allow_relocate', false)) {
-                $oImg->relocate($w, $h, $nColor);
+                $img->relocate($w, $h, is_array($color) ? $color : (int)$color);
             }
-            $sMarkerMode = $this->getMeta(array('water_mark', 'mode'));
-            $nOpacity = $this->getMeta(array('water_mark', 'opacity'), 10);
-            if ($sMarkerMode) {
-                $oImg->markering($sMarkerMode, $nOpacity);
+            $markerMode = $this->getMeta(['water_mark', 'mode']);
+            $opacity = $this->getMeta(['water_mark', 'opacity'], 10);
+            if ($markerMode) {
+                $img->markering((string)$markerMode, (int)$opacity);
             }
-            $oImg->saveAndReplace(null);
+            $img->saveAndReplace(null);
         }
-    } // function __construct
+    }
 
-    /**
-     * Init output block data
-     */
-    public function init()
+    public function init(): void
     {
-        service('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
+        $this->containerService('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
 
-        if($this->sError) {
-            $this->setText($this->sError);
+        if ($this->error) {
+            $this->setText($this->error);
             return;
         }
 
-        $aData = $this->getData();
-        $aMain = $this->getMeta('main_table');
-        if(!isset($aMain['img_id'])) {
-            $aMain['img_id'] = 'id_file_data';
+        $data = $this->getData();
+        $main = $this->getMeta('main_table');
+        if (!isset($main['img_id'])) {
+            $main['img_id'] = 'id_file_data';
         }
-        $aLink = $this->getMeta('link_table');
+        $link = $this->getMeta('link_table');
 
-        $oMainRow = null;
-        if (!$this->checkMainTableId($oMainRow, $aData, $aMain, $aLink)) {
+        $mainRow = null;
+        if (!$this->checkMainTableId($mainRow, $data, $main, $link)) {
             $this->setText('Incorrect main table ID');
             return;
         }
 
-        if ($aLink) {
-            if (!$this->checkLinkTableId($oLinkRow, $aData, $aMain, $aLink)) {
+        if ($link) {
+            if (!$this->checkLinkTableId($linkRow, $data, $main, $link)) {
                 $this->setText('Incorrect link table ID');
                 return;
             }
         } else {
-            $oLinkRow = null;
+            $linkRow = null;
         }
 
-        $oImg = $this->_getRow($this->_getEttImageName(), @$aData['imgId']);
-        if ($aData['op'] == 'dl' && !empty($aData['imgId'])) { // Operation: Delete
-            $this->operationDeleteImage($aData, $oMainRow, $oLinkRow, $oImg, $aMain, $aLink);
-        } elseif ($aData['op'] == 'ul' && $this->aImage) { // Operation: Upload
-            $this->operationUploadImage($aData, $oMainRow, $oLinkRow, $oImg, $aMain, $aLink);
-        } elseif ($aData['op'] == 'sa' && !empty($aData['imgId'])) { // Operation: Set attributes
-            $this->operationSetAttributes($aData, $oImg);
+        $img = $this->getRow($this->getEttImageName(), $data['imgId'] ?? null);
+        if ((string)$data['op'] === 'dl' && !empty($data['imgId'])) { // Operation: Delete
+            $this->operationDeleteImage($data, $mainRow, $linkRow, $img, $main, $link);
+        } elseif ((string)$data['op'] === 'ul' && $this->image) { // Operation: Upload
+            $this->operationUploadImage($data, $mainRow, $linkRow, $img, $main, $link);
+        } elseif ((string)$data['op'] === 'sa' && !empty($data['imgId'])) { // Operation: Set attributes
+            $this->operationSetAttributes($data, $img);
         }
 
-        $this->setJson(array(
-            'data'    => empty($aData['line']) ?
-                    $this->getImageOneData($oMainRow, $aMain, $aLink):
-                    $this->getImageLineData($aData, $aLink),
-            'refresh' => $aData['op'] != 'ad' && $aData['op'] != 'sa',
-            'op'      => $aData['op'],
-        ));
+        $this->setJson([
+            'data'    => empty($data['line']) ?
+                    $this->getImageOneData($mainRow, $main, $link):
+                    $this->getImageLineData($data, $link),
+            'refresh' => (string)$data['op'] !== 'ad' && (string)$data['op'] !== 'sa',
+            'op'      => $data['op'],
+        ]);
 
         $this->setText('ok');
-    } // function init
+    }
 
-    /**
-     * Operation: Delete Image
-     * @param array $aData
-     * @param \fan\core\base\model\row $oMainRow
-     * @param \fan\core\base\model\row $oLinkRow
-     * @param \fan\core\base\model\spec_file\image\row $oImg
-     * @param array $aMain
-     * @param array $aLink
-     */
-    public function operationDeleteImage(&$aData, $oMainRow, $oLinkRow, $oImg, $aMain, $aLink)
+    public function operationDeleteImage(array &$data, \fan\core\base\model\row $mainRow, ?\fan\core\base\model\row $linkRow, \fan\core\base\model\spec_file\image\row $img, array $main, ?array $link): void
     {
-        if ($oImg->checkIsLoad()) {
-            if ($aLink) {
-                $oLinkRow->delete();
-                $oLinkRow->getEntity()->getConnection()->commit();
+        if ($img->checkIsLoad()) {
+            if ($link) {
+                $linkRow->delete();
+                $linkRow->getEntity()->getConnection()->commit();
             } else {
-                $oMainRow->setFields(array($aMain['img_id'] => null), true);
-                $oMainRow->getEntity()->getConnection()->commit();
+                $mainRow->setFields([$main['img_id'] => null], true);
+                $mainRow->getEntity()->getConnection()->commit();
             }
-            $oImg->delete($this->_getEttImageName(), $aData['imgId']);
+            $img->delete($this->getEttImageName(), $data['imgId']);
         }
-    } // function operationDeleteImage
+    }
 
-    /**
-     * Operation: Upload Image
-     * @param array $aData
-     * @param \fan\core\base\model\row $oMainRow
-     * @param \fan\core\base\model\row $oLinkRow
-     * @param \fan\core\base\model\spec_file\image\row $oImg
-     * @param array $aMain
-     * @param array $aLink
-     */
-    public function operationUploadImage(&$aData, $oMainRow, $oLinkRow, $oImg, $aMain, $aLink)
+    public function operationUploadImage(array &$data, \fan\core\base\model\row $mainRow, ?\fan\core\base\model\row $linkRow, \fan\core\base\model\spec_file\image\row $img, array $main, ?array $link): void
     {
-        $oReq = service('request');
-        $oImg->setFormFile('image', array(), $oReq->get('description', 'P', ''), $oReq->get('alt_txt', 'P', ''));
-        if ($oImg->checkIsLoad() && !@$aData['imgId']) {
-            $oImg->getEntity()->getConnection()->commit();
-            if ($aLink) {
-                $oLinkRow->setFields(array($aLink['main_id'] => $aData['mId'], $aLink['img_id'] => $oImg->getId()), true);
+        $req = $this->containerService('request');
+        $img->setFormFile('image', [], $req->get('description', 'P', ''), $req->get('alt_txt', 'P', ''));
+        if ($img->checkIsLoad() && empty($data['imgId'])) {
+            $img->getEntity()->getConnection()->commit();
+            if ($link) {
+                $linkRow->setFields([$link['main_id'] => $data['id'], $link['img_id'] => $img->getId()], true);
             } else {
-                $oMainRow->setFields(array($aMain['img_id'] => $oImg->getId()), true);
+                $mainRow->setFields([$main['img_id'] => $img->getId()], true);
             }
         }
-    } // function operationUploadImage
+    }
 
-    /**
-     * Operation: Set Attributes
-     * @param array $aData
-     * @param \fan\core\base\model\row $oLinkRow
-     * @param \fan\core\base\model\spec_file\image\row $oImg
-     * @param array $aMain
-     * @param array $aLink
-     */
-    public function operationSetAttributes(&$aData, $oImg)
+    public function operationSetAttributes(array &$data, \fan\core\base\model\spec_file\image\row $img): void
     {
-        if ($oImg->checkIsLoad()) {
-            $oImg->setFields(array('alt' => $aData['alt']), true);
-            $oImg->getEntityFile()->setFields(array('description' => $aData['description']), true);
+        if ($img->checkIsLoad()) {
+            $img->setFields(['alt' => $data['alt']], true);
+            $img->getEntityFile()->setFields(['description' => $data['description']], true);
         } else {
-            $aData['op'] = null;
+            $data['op'] = null;
         }
-    } // function operationSetAttributes
+    }
 
-    /**
-     * Check Main Table Id
-     */
-    public function checkMainTableId(&$oMainRow, &$aData, $aMain, $aLink)
+    public function checkMainTableId(mixed &$mainRow, array &$data, array $main, mixed $link): bool
     {
-        $oMainRow = $this->_getRow($aMain['entity'], @$aData['mId']);
-        if (@$aData['imgId'] && !$aLink) {
-            $sMethod = 'get_' . $aMain['img_id'];
-            return $oMainRow->$sMethod(null, true) == $aData['imgId'];
+        $mainRow = $this->getRow((string)$main['entity'], $data['id'] ?? null);
+        if (!empty($data['imgId']) && !$link) {
+            $method = 'get_' . $main['img_id'];
+            return (string)$mainRow->$method(null, true) === (string)$data['imgId'];
         }
-        return $oMainRow->checkIsLoad();
-    } // function checkMainTableId
+        return $mainRow->checkIsLoad();
+    }
 
-    /**
-     * Check Link Table Id
-     */
-    public function checkLinkTableId(&$oLinkRow, &$aData, $aMain, $aLink)
+    public function checkLinkTableId(mixed &$linkRow, array &$data, array $main, array $link): bool
     {
-        if (!@$aData['imgId']) {
-            $oLinkRow = $this->_getRow($aLink['entity']);
+        if (empty($data['imgId'])) {
+            $linkRow = $this->getRow((string)$link['entity']);
             return true;
         } else {
-            $oLinkRow = $this->_getRow($aLink['entity'], array($aLink['main_id'] => $aData['mId'], $aLink['img_id'] => $aData['imgId']));
-            return $oLinkRow->checkIsLoad();
+            $linkRow = $this->getRow((string)$link['entity'], [$link['main_id'] => $data['id'], $link['img_id'] => $data['imgId']]);
+            return $linkRow->checkIsLoad();
         }
-    } // function checkLinkTableId
+    }
 
-    /**
-     * Get Image Line Data
-     */
-    public function getImageLineData($aData, $aLink)
+    public function getImageLineData(array $data, array $link): array
     {
-        $aRet = array();
+        $ret = [];
         $i = 0;
-        $aLstId = $this->_getEntity($aLink['entity'])->getRowsetByParam(array($aLink['main_id'] => $aData['mId']))->toArray();
-        foreach ($aLstId as $v) {
-            $aRet[$i] = $this->getImageData($v[$aLink['img_id']]);
+        $lstId = $this->getEntity((string)$link['entity'])->getRowsetByParam([$link['main_id'] => $data['id']])->toArray();
+        foreach ($lstId as $v) {
+            $ret[$i] = $this->getImageData($v[$link['img_id']]);
             if (isset($v['order_num'])) {
-                $aRet[$i]['order_num'] = $v['order_num'];
+                $ret[$i]['order_num'] = $v['order_num'];
             }
             $i++;
         }
-        return $aRet;
-    } // function getImageLineData
+        return $ret;
+    }
 
-    /**
-     * Get Image Data
-     */
-    public function getImageOneData($oMainRow, $aMain, $aLink)
+    public function getImageOneData(\fan\core\base\model\row $mainRow, array $main, mixed $link): ?array
     {
-        if ($aLink) {
-            $aLstId = $this->_getEntity($aLink['entity'])->getRowsetByParam($aLink['main_id'])->getColumn($aLink['img_id']);
-            return $this->getImageData(@$aLstId[0]);
+        if ($link) {
+            $lstId = $this->getEntity((string)$link['entity'])->getRowsetByParam($link['main_id'])->getColumn($link['img_id']);
+            return $this->getImageData($lstId[0] ?? null);
         } else {
-            $sMethod = 'get_' . $aMain['img_id'];
-            return $this->getImageData($oMainRow->$sMethod());
+            $method = 'get_' . $main['img_id'];
+            return $this->getImageData($mainRow->$method());
         }
-    } // function getImageOneData
+    }
 
-    /**
-     * Get Image Data
-     */
-    public function getImageData($imgId)
+    public function getImageData(mixed $imgId): ?array
     {
         if (!$imgId) {
             return null;
         }
-        $oImg = $this->_getRow($this->_getEttImageName(), $imgId);
-        if (!$oImg->checkIsLoad()) {
+        $img = $this->getRow($this->getEttImageName(), $imgId);
+        if (!$img->checkIsLoad()) {
             return null;
         }
-        return $oImg->getImageData();
-    } // function getImageData
+        return $img->getImageData();
+    }
 
     /**
-     * Get Row By Connection
-     * @param sring $sEttName
-     * @param mixed $mId
-     * @return \fan\core\base\model\row
+     * @param mixed $id Unique identifier used to locate the target item.
      */
-    private function _getRow($sEttName, $mId = null)
+    private function getRow(string $ettName, mixed $id = null): \fan\core\base\model\row
     {
-        $oRow = gr($sEttName);
-        $sCon = $this->getMeta('connection');
-        if ($sCon) {
-            $oRow->setConnection($sCon);
+        $row = gr($ettName);
+        $con = $this->getMeta('connection');
+        if ($con) {
+            $row->setConnection($con);
         }
-        $oRow->loadById($mId);
-        return $oRow;
-    } // function _getRow
+        $row->loadById($id);
+        return $row;
+    }
 
-    /**
-     * Get Entity By Connection
-     * @param sring $sEttName
-     * @return \fan\core\base\model\entity
-     */
-    private function _getEntity($sEttName)
+    private function getEntity(string $ettName): \fan\core\base\model\entity
     {
-        $mConnection = $this->getMeta('connection');
-        return empty($mConnection) ? ge($sEttName) : ge($sEttName, 1)->setConnection($mConnection);
-    } // function getAggrByCon
+        $connection = $this->getMeta('connection');
+        return empty($connection) ? ge($ettName) : ge($ettName, 1)->setConnection($connection);
+    }
 
-    /**
-     * Get Suffix of namespace of file entity
-     * @return string
-     */
-    private function _getEttImageName()
+    private function getEttImageName(): string
     {
-        if (is_null($this->sFileNs)) {
-            $this->sFileNs = service('entity')->getFileNsSuffix() . 'image';
+        if (is_null($this->fileNs)) {
+            $this->fileNs = $this->containerService('entity')->getFileNsSuffix() . 'image';
         }
-        return $this->sFileNs;
-    } // function _getEttImageName
+        return $this->fileNs;
+    }
 
 
-} // class \fan\core\block\admin\upload_image
-?>
+}

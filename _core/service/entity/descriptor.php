@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\entity;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\entity;
 /**
  * Description of descriptor
  *
@@ -16,69 +20,43 @@
  */
 abstract class descriptor
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * Description object
      * @var \fan\core\service\entity\description
      */
-    protected $oDescription = null;
+    protected ?object $description = null;
     /**
      * Connection to database
      * @var \fan\core\service\database
      */
-    protected $oConnection = null;
+    protected ?object $connection = null;
 
     /**
      * Table Name
      * @var string
      */
-    protected $sTableName = null;
+    protected ?string $tableName = null;
 
-    public function __construct(\fan\core\service\entity\description $oDescription)
+    public function __construct(\fan\core\service\entity\description $description)
     {
-        $this->oDescription = $oDescription;
-        $this->oConnection  = $oDescription->getEntity()->getConnection();
-        $this->sTableName   = $oDescription->getTableName();
-    } // function __construct
+        $this->description = $description;
+        $this->connection  = $description->getEntity()->getConnection();
+        $this->tableName   = $description->getTableName();
+    }
 
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Return 2x array with description of fields, like:
-     * column_name => (type, length, default, collation, attribute, null, auto_increment, comment, mime_type)
-     */
-    abstract public function getFields();
-    /**
-     * Return Primery Key - name of field(s): strig (if one field) OR array (if several fields)
-     */
-    abstract public function getPrimeryKey();
-    /**
-     * Return 2x array with description of Keys, like:
-     * key_name => (type, fields)
-     */
-    abstract public function getKeys();
-    /**
-     * Return 2x array with description of Relations, like:
-     * number => (name, field, ref_db, ref_table, ref_field, on_delete, on_update)
-     */
-    abstract public function getRelations();
-    /**
-     * Return string with Engine of Table
-     */
-    abstract public function getEngine();
-    /**
-     * Return string with Create Time of Table
-     */
-    abstract public function getCreateTime();
-    /**
-     * Return string with Table Collation
-     */
-    abstract public function getTableCollation();
-    /**
-     * Return string with comment OR null if comment doesn't exist
-     */
-    abstract public function getComment();
+    abstract public function getFields(): array;
+    abstract public function getPrimeryKey(): string|array|null;
+    abstract public function getKeys(): array;
+    abstract public function getRelations(): array;
+    abstract public function getEngine(): mixed;
+    abstract public function getCreateTime(): mixed;
+    abstract public function getTableCollation(): mixed;
+    abstract public function getComment(): mixed;
     // ======== Private/Protected methods ======== \\
-} // class \fan\core\service\entity\descriptor
-?>
+}

@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 /**
  * Description of reflector
  *
@@ -16,88 +19,63 @@
  */
 class reflector extends \fan\core\base\service\single
 {
-    /**
-     * @var array List of Reflection classes
-     */
-    private $aReflection = array();
-    /**
-     * @var array Chains of parent classes
-     */
-    private $aParentChain = array();
+    private array $reflection = [];
+    private array $parentChain = [];
 
-    /**
-     * Set new Reflection
-     * @param string $sClassName
-     * @return \fan\core\service\reflector
-     */
-    public function setReflection(&$sClassName)
+    public function setReflection(mixed &$className): static
     {
-        if (is_object($sClassName)) {
-            $sClassName = get_class($sClassName);
+        if (is_object($className)) {
+            $className = get_class($className);
         }
-        if (isset($this->aReflection[$sClassName])) {
+        $className = (string)$className;
+        if (isset($this->reflection[$className])) {
             return $this;
         }
 
-        $aParentChain = array();
-        $oReflection  = new \ReflectionClass($sClassName);
-        while (!empty($oReflection)) {
-            $sTmpName = $oReflection->getName();
-            if (isset($this->aReflection[$sTmpName])) {
-                $aParentChain = array_merge($aParentChain, $this->aParentChain[$sTmpName]);
+        $parentChain = [];
+        $reflection  = new \ReflectionClass($className);
+        while (!empty($reflection)) {
+            $tmpName = $reflection->getName();
+            if (isset($this->reflection[$tmpName])) {
+                $parentChain = array_merge($parentChain, $this->parentChain[$tmpName]);
                 break;
             }
 
-            $aParentChain[$sTmpName]      = $oReflection;
-            $this->aReflection[$sTmpName] = $oReflection;
+            $parentChain[$tmpName]      = $reflection;
+            $this->reflection[$tmpName] = $reflection;
 
-            $oReflection = $oReflection->getParentClass();
+            $reflection = $reflection->getParentClass();
         }
 
-        foreach (array_keys($aParentChain) as $k) {
-            if (isset($this->aParentChain[$k])) {
+        foreach (array_keys($parentChain) as $k) {
+            if (isset($this->parentChain[$k])) {
                 break;
             }
-            $this->aParentChain[$k] = $aParentChain;
-            array_shift($aParentChain);
+            $this->parentChain[$k] = $parentChain;
+            array_shift($parentChain);
         }
         return $this;
     }
 
-    /**
-     * Get Reflection of Class
-     * @return \ReflectionClass
-     */
-    public function getReflection($sClassName)
+    public function getReflection(object|string $className): \ReflectionClass
     {
-        $this->setReflection($sClassName);
-        return $this->aReflection[$sClassName];
+        $this->setReflection($className);
+        return $this->reflection[$className];
     }
 
-    /**
-     * Get Parent Chain of Class
-     * Start - current class; End - the oldest parent
-     * @return array
-     */
-    public function getParentChain($sClassName)
+    public function getParentChain(object|string $className): array
     {
-        $this->setReflection($sClassName);
-        return $this->aParentChain[$sClassName];
+        $this->setReflection($className);
+        return $this->parentChain[$className];
     }
 
-    /**
-     * Get File Paths of Parent Chain
-     * Start - current class; End - the oldest parent
-     * @return array
-     */
-    public function getParentPaths($sClassName)
+    public function getParentPaths(object|string $className): array
     {
-        $aPaths = array();
-        $aChain = $this->getParentChain($sClassName);
-        foreach ($aChain as $k => $v) {
-            $aPaths[$k] = $v->getFileName();
+        $paths = [];
+        $chain = $this->getParentChain($className);
+        foreach ($chain as $k => $v) {
+            $paths[$k] = $v->getFileName();
         }
-        return $aPaths;
+        return $paths;
     }
-} // class \fan\core\service\reflector
-?>
+}

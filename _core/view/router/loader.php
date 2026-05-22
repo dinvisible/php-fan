@@ -1,4 +1,7 @@
-<?php namespace fan\core\view\router;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view\router;
 /**
  * View router of Block for Loader-type
  *
@@ -23,128 +26,88 @@ class loader extends \fan\core\view\router
      * JSON-keeper
      * @var \fan\core\view\keeper\loader\json
      */
-    static protected $oJson = null;
+    protected static ?\fan\core\view\keeper\loader\json $json = null;
     /**
      * TEXT-keeper
      * @var \fan\core\view\keeper\loader\text
      */
-    static protected $oText = null;
+    protected static ?\fan\core\view\keeper\loader\text $text = null;
 
     /**
      * Routers array
      * @var array
      */
-    protected $aKeepers = array(
+    protected array $keepers = [
         'json' => null,
         'html' => null,
         'text' => null,
-    );
+    ];
     /**
      * Default Routers Key
      * @var string
      */
-    protected $sDefaultKey = 'html';
+    protected ?string $defaultKey = 'html';
 
     // ======== Main Interface methods ======== \\
-    /**
-     * Set special or default view data
-     * @param string $sKey
-     * @param mixed $mValue
-     * @return \fan\core\view\router
-     */
-    public function set($sKey, $mValue)
+    public function set(mixed $key, mixed $value): static
     {
-        if ($sKey == 'text') {
-            $this->_getTextKeeper()->set($sKey, $mValue);
+        if ((string)$key === 'text') {
+            $this->_getTextKeeper()->set($key, $value);
         } else {
-            parent::set($sKey, $mValue);
+            parent::set($key, $value);
         }
         return $this;
-    } // function set
+    }
 
-    /**
-     * Get JSON-keeper
-     * @param string|array $mKey
-     * @param mixed $mDefault
-     * @param boolean $bLogError
-     * @return mixed
-     */
-    public function getJson($mKey = null, $mDefault = null, $bLogError = true)
+    public function getJson(string|array|null $key = null, mixed $default = null, bool $logError = true): mixed
     {
-        return $this->_getJsonKeeper()->get($mKey, $mDefault, $bLogError);
-    } // function getJson
+        return $this->_getJsonKeeper()->get($key, $default, $logError);
+    }
 
-    /**
-     * Set JSON-keeper
-     * @param string|number $mKey
-     * @param mixed $mValue
-     * @param boolean $bRewriteExisting - rewrite exists value
-     * @return \fan\core\view\router\loader
-     */
-    public function setJson($mKey, $mValue, $bRewriteExisting = true)
+    public function setJson(string|int|float $key, mixed $value, bool $rewriteExisting = true): static
     {
-        $this->_getJsonKeeper()->set($mKey, $mValue, $bRewriteExisting, false);
+        $this->_getJsonKeeper()->set($key, $value, $rewriteExisting, false);
         return $this;
-    } // function setJson
-    /**
-     * Get Text-data
-     * @return type
-     */
-    public function getText()
+    }
+    public function getText(): string
     {
         return $this->_getTextKeeper()->__toString();
-    } // function getText
+    }
 
-    /**
-     * Set Text-data
-     * @param mixed $mValue
-     * @param integer $iPosition
-     * @return \fan\core\view\router\loader
-     */
-    public function setText($mValue, $iPosition = 1)
+    public function setText(mixed $value, int $position = 1): static
     {
-        $this->_getTextKeeper()->set($iPosition, $mValue);
+        $this->_getTextKeeper()->set($position, $value);
         return $this;
-    } // function setText
+    }
 
-    /**
-     * Is Allowed Full Rewrite data
-     * @param \fan\core\view\keeper $oKeeper
-     * @return boolean
-     */
-    public function isFullRewrite(\fan\core\view\keeper $oKeeper)
+    public function isFullRewrite(\fan\core\view\keeper $keeper): bool
     {
-        foreach ($this->aKeepers as $k => $v) {
-            if ($v === $oKeeper) {
-                return $k != 'html';
+        foreach ($this->keepers as $k => $v) {
+            if ($v === $keeper) {
+                return (string)$k !== 'html';
             }
         }
         return false;
     }
 
     // ======== Private/Protected methods ======== \\
-    /**
-     *
-     * @return \fan\core\view\keeper\loader\json
-     */
-    protected function _getJsonKeeper()
+    protected function _getJsonKeeper(): \fan\core\view\keeper\loader\json
     {
-        if (empty(self::$oJson)) {
-            self::$oJson = new \fan\project\view\keeper\loader\json($this);
+        if (empty(self::$json)) {
+            self::$json = new \fan\project\view\keeper\loader\json($this);
         } else {
-            self::$oJson->addRouter($this);
+            self::$json->addRouter($this);
         }
-        return self::$oJson;
-    } // function _getJsonKeeper
+        return self::$json;
+    }
 
-    protected function _getTextKeeper()
+    protected function _getTextKeeper(): \fan\core\view\keeper\loader\text
     {
-        if (empty(self::$oText)) {
-            self::$oText = new \fan\project\view\keeper\loader\text($this);
+        if (empty(self::$text)) {
+            self::$text = new \fan\project\view\keeper\loader\text($this);
         } else {
-            self::$oText->addRouter($this);
+            self::$text->addRouter($this);
         }
-        return self::$oText;
-    } // function _getJsonKeeper
-} // class \fan\core\view\router\loader
-?>
+        return self::$text;
+    }
+}

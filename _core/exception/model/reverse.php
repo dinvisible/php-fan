@@ -1,4 +1,8 @@
-<?php namespace fan\core\exception\model;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\exception\model;
 /**
  * Exception a fatal error
  *
@@ -19,39 +23,22 @@ class reverse extends \fan\core\exception\base
     /**
      * @var \fan\core\base\model\entity
      */
-    protected $oEntity = null;
+    protected ?object $entity = null;
 
-    /**
-     * Exception's constructor
-     * @param \fan\core\base\model\entity $oEntity
-     * @param string $sLogErrMsg
-     * @param error $nCode Error Code
-     * @param \Exception $oPrevious Previous Exception
-     */
-    public function __construct(\fan\core\base\model\entity $oEntity, $sLogErrMsg, $nCode = null, $oPrevious = null)
+    public function __construct(\fan\core\base\model\entity $entity, string $logErrMsg, ?int $code = null, ?\Throwable $previous = null)
     {
-        $this->oEntity = $oEntity;
-        parent::__construct($sLogErrMsg, $nCode, $oPrevious);
+        $this->entity = $entity;
+        parent::__construct($logErrMsg, $code, $previous);
     }
 
-    /**
-     * Get Entity
-     * @return \fan\core\base\model\entity
-     */
-    public function getEntity()
+    public function getEntity(): \fan\core\base\model\entity
     {
-        return $this->oEntity;
-    } // function getEntity
+        return $this->entity;
+    }
 
-    /**
-     * Get operation for Db (rollback) when exception occured
-     * @param string $sDbOper
-     * @return null|string
-     */
-    protected function _defineDbOper($sDbOper = 'nothing')
+    protected function _defineDbOper(?string $dbOper = 'nothing'): ?string
     {
-        return parent::_defineDbOper($sDbOper);
-    } // function _defineDbOper
+        return parent::_defineDbOper($dbOper);
+    }
 
-} // class \fan\core\exception\model\reverse
-?>
+}

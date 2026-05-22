@@ -1,4 +1,7 @@
-<?php namespace fan\core\view\parser;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view\parser;
 /**
  * View parser Loader-type
  *
@@ -17,77 +20,54 @@
 class loader extends \fan\core\view\parser
 {
     // ======== Static methods ======== \\
-    /**
-     * Get View-Format
-     * @return string
-     */
-    final static public function getFormat() {
+    final static public function getFormat(): string {
         return 'loader';
-    } // function getFormat
+    }
 
-    /**
-     * Get View-Router for block
-     * @param \fan\core\block\base $oBlock
-     * @return \fan\core\view\router\simple
-     */
-    static public function getRouter(\fan\core\block\base $oBlock) {
-        return new \fan\project\view\router\loader($oBlock);
-    } // function getRouter
+    static public function getRouter(\fan\core\block\base $block): \fan\core\view\router\loader {
+        return new \fan\project\view\router\loader($block);
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Get Final Content Code
-     * @return string
-     */
-    public function getFinalContent()
+    public function getFinalContent(): mixed
     {
-        if (method_exists($this->oMainBlock, 'getDataLoader')) {
-            $oLoader = $this->oMainBlock->getDataLoader();
+        if (method_exists($this->mainBlock, 'getDataLoader')) {
+            $loader = $this->mainBlock->getDataLoader();
         } else {
-            require_once \bootstrap::parsePath('{CORE_DIR}/../libraries/dataLoader/winWrapperDataLoader.php');
-            $oLoader = new \winWrapperDataLoader();
+            $loader = new \fan\project\adapter\data_loader();
         }
-        $oLoader->setJson($this->aResult['json'], true);
-        $oLoader->setText($this->aResult['text'], true);
-        $oLoader->setHtml($this->aResult['html'], true);
-        $sResult = $oLoader->send(false);
+        $loader->setJson($this->result['json'], true);
+        $loader->setText($this->result['text'], true);
+        $loader->setHtml($this->result['html'], true);
+        $result = $loader->send(false);
 
-        $this->_setHeaders($sResult, $oLoader->getContentType(array(), false, false), false);
-        return $sResult;
-    } // function getFinalContent
+        $this->_setHeaders($result, $loader->getContentType([], false, false), false);
+        return $result;
+    }
 
-    /**
-     * Get Final Content Code
-     * @return string
-     */
-    public function getResultData(\fan\core\block\base $oBlock)
+    public function getResultData(\fan\core\block\base $block): array
     {
-        $oViewRouter = $oBlock->getView();
-        $aTplResult  = $this->_getTplResult($oBlock);
-        return array(
-            'json' => $oViewRouter->getJson(),
-            'html' => end($aTplResult),
-            'text' => $oViewRouter->getText(),
-        );
-    } // function getResultData
+        $viewRouter = $block->getView();
+        $tplResult  = $this->_getTplResult($block);
+        return [
+            'json' => $viewRouter->getJson(),
+            'html' => end($tplResult),
+            'text' => $viewRouter->getText(),
+        ];
+    }
 
     // ======== Protected methods ======== \\
-    /**
-     * Get Final Content Code
-     * @return string
-     */
-    public function _getTplResult(\fan\core\block\base $oBlock)
+    public function _getTplResult(\fan\core\block\base $block): array
     {
-        $aTplVar = $oBlock->getView()->html->toArray();
+        $tplVar = $block->getView()->html->toArray();
 
-        foreach ($oBlock->getEmbeddedBlocks() as $oEmbeddedBlock) {
-            $aTmp = $this->_getTplResult($oEmbeddedBlock);
-            $aTplVar[key($aTmp)] = reset($aTmp);
+        foreach ($block->getEmbeddedBlocks() as $embeddedBlock) {
+            $tmp = $this->_getTplResult($embeddedBlock);
+            $tplVar[key($tmp)] = reset($tmp);
         }
 
-        return array($oBlock->getBlockName() => $this->_parseTemplate($oBlock, $aTplVar));
-    } // function _getTplResult
-} // class \fan\core\view\parser\loader
-?>
+        return [$block->getBlockName() => $this->_parseTemplate($block, $tplVar)];
+    }
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\form\validator;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\form\validator;
 /**
  * Common class of validators
  *
@@ -17,16 +21,9 @@
 class common extends base
 {
 
-    /**
-     * Check up if a value is not empty
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function isRequired($mValue, $aData)
+    public function isRequired(mixed $value, array $data): bool
     {
-        return $mValue != '';
-    } // function isRequired
+        return is_array($value) ? $value !== [] : (string)$value !== '';
+    }
 
-} // class \fan\core\service\form\validator\common
-?>
+}

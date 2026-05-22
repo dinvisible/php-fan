@@ -1,4 +1,8 @@
-<?php namespace fan\core\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service;
 /**
  * debug manager service
  *
@@ -19,84 +23,67 @@ class debug extends \fan\core\base\service\single {
     /**
      * @var \fan\core\service\tab
      */
-    protected $oTab;
+    protected ?object $tab = null;
     /**
      * @var HTML-code of blocks
      */
-    protected $aBlockCode;
+    protected ?array $blockCode = null;
 
-    protected function __construct($bAllowIni = true)
+    protected function __construct(bool $allowIni = true)
     {
-        parent::__construct($bAllowIni);
+        parent::__construct($allowIni);
 
-        $this->oTab = \fan\project\service\tab::instance();
-        $this->oConfig['ENABLED'] = $this->isEnabled() && preg_match($this->getConfig('DEBUG_IP', '/^127\.0\.0\.1$/'), @$_SERVER['SERVER_ADDR']);
-    } // function __construct
+        $this->tab = $this->containerService('tab');
+        $this->config['ENABLED'] = $this->isEnabled() && preg_match((string)$this->getConfig('DEBUG_IP', '/^127\.0\.0\.1$/'), (string)($_SERVER['SERVER_ADDR'] ?? ''));
+    }
 
-    /**
-     * Set external files (css and js)
-     */
-    public function setExtFiles($oRoot, $nMode)
+    public function setExtFiles(object $root, bool $mode): void
     {
         if ($this->isEnabled()) {
-            if (method_exists($oRoot, 'setExternalCss')) {
-                $oRoot->setExternalCss($this->getConfig('CSS_CONTROL',  '/__debug_trace/css/debug_control.css'));
-                if ($nMode) {
-                    $oRoot->setExternalCss($this->getConfig('CSS_DEBUG0',  '/__debug_trace/css/debAcug_common.css'));
-                    $oRoot->setExternalCss($this->getConfig('CSS_DEBUG1',  '/__debug_trace/css/debug_mode1.css'));
+            if (method_exists($root, 'setExternalCss')) {
+                    $root->setExternalCss((string)$this->getConfig('CSS_CONTROL',  '/__debug_trace/css/debug_control.css'));
+                if ($mode) {
+                    $root->setExternalCss((string)$this->getConfig('CSS_DEBUG0',  '/__debug_trace/css/debAcug_common.css'));
+                    $root->setExternalCss((string)$this->getConfig('CSS_DEBUG1',  '/__debug_trace/css/debug_mode1.css'));
                 }
             }
-            if (method_exists($oRoot, 'setExternalJs')) {
-                $oRoot->setExternalJs($this->getConfig('JS_WRAPPER', '/js/js-wrapper.js'));
-                $oRoot->setExternalJs($this->getConfig('JS_FILE',    '/__debug_trace/js/debug_trace.js'));
-                $oRoot->setExternalJs('/js/debug.js');
+            if (method_exists($root, 'setExternalJs')) {
+                $root->setExternalJs((string)$this->getConfig('JS_WRAPPER', '/js/js-wrapper.js'));
+                $root->setExternalJs((string)$this->getConfig('JS_FILE',    '/__debug_trace/js/debug_trace.js'));
+                $root->setExternalJs('/js/debug.js');
             }
-            if (method_exists($oRoot, 'setEmbedJs')) {
-                $oRoot->setEmbedJs('debug_trace.init(' . $nMode . ');');
-                $oRoot->setEmbedJs('basicBroadcaster.prototype.config.DebugMode = true', 'head', -1);
+            if (method_exists($root, 'setEmbedJs')) {
+                $root->setEmbedJs('debug_trace.init(' . $mode . ');');
+                $root->setEmbedJs('basicBroadcaster.prototype.config.DebugMode = true', 'head', -1);
             }
         }
-    } // function setExtFiles
+    }
 
-    /**
-     * Set external files (css and js)
-     */
-    public function setBlockCode($sName, $sCode)
+    public function setBlockCode(string $name, string $code): void
     {
-        $this->aBlockCode[$sName] = $sCode;
-    } // function setBlockCode
+        $this->blockCode[$name] = $code;
+    }
 
-    /**
-     * Wrap html-code
-     * @param string $sCode
-     * @param \fan\core\block\base $oBlock
-     * @return string
-     */
-    public function wrapHtmlCode($sCode, $oBlock)
+    public function wrapHtmlCode(string $code, \fan\core\block\base $block): string
     {
         if (!$this->isEnabled()) {
-            return $sCode;
+            return $code;
         }
-        $sIntColor = $oBlock->getBlockName() == 'main' ? $this->getConfig('BORDER_MAIN', '#6600FF') : $this->getConfig('BORDER_INT', '#7F7971');
+        $intColor = $block->getBlockName() === 'main' ? $this->getConfig('BORDER_MAIN', '#6600FF') : $this->getConfig('BORDER_INT', '#7F7971');
 
-        $sCode = '<div><div style="background-color: ' . $sIntColor . '; color: ' . $this->getConfig('HEAD_TEXT', '#D6D1CA') . ';" class="debug_header"><b>' . $oBlock->getMeta('initOrder', $this->oTab->getDefaultInitNum()) . ':</b> ' . $oBlock->getBlockName() . '</div>' . $this->_getBlockDetail($oBlock) . '</div>' . $sCode;
+        $code = '<div><div style="background-color: ' . $intColor . '; color: ' . $this->getConfig('HEAD_TEXT', '#D6D1CA') . ';" class="debug_header"><b>' . $block->getMeta('initOrder', $this->tab->getDefaultInitNum()) . ':</b> ' . $block->getBlockName() . '</div>' . $this->_getBlockDetail($block) . '</div>' . $code;
 
-        $sCode = '<div class="debug_block">' . $sCode . '</div>';
+        $code = '<div class="debug_block">' . $code . '</div>';
 
-        return $sCode;
-    } // function wrapHtmlCode
+        return $code;
+    }
 
-    /**
-     * Wrap html-code
-     * @param block_html_root_base $oRoot
-     * @return string
-     */
-    public function getSecondDebugCode($sBlockInfo, $sTitle)
+    public function getSecondDebugCode(string $blockInfo, string $title): string
     {
         return '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
-<title>' . $sTitle . '</title>
+<title>' . $title . '</title>
 <style type="text/css">
 <!--/*--><![CDATA[/*><!--*/
 @import url(/css/main.css);
@@ -116,229 +103,178 @@ debug_trace.init(2);
 </script>
 </head><body>
 <div id="debug2"><div>
-<ul class="debug2_list">' . $sBlockInfo . '</ul>
+<ul class="debug2_list">' . $blockInfo . '</ul>
 </div></div>
 </body></html>';
-    } // function getSecondDebugCode
+    }
 
-    /**
-     * Get block description for second debug mode
-     * @param \fan\core\block\base $oBlock
-     * @return string
-     */
-    public function getSecondDebugRow($oBlock, $aIncl, $isView)
+    public function getSecondDebugRow(\fan\core\block\base $block, string $incl, bool $isView): string
     {
-        $sName = $oBlock->getBlockName();
-        $sRet = '<li class="debug2_row"><span class="debug2_label"><b>' . $oBlock->getMeta('initOrder', $this->oTab->getDefaultInitNum()) . ':</b> ' . $sName . '</span>';
-        $sRet .= '<div class="debug2_button debug_info_but">info</div>' . $this->_getBlockDetail($oBlock);
+        $name = $block->getBlockName();
+        $ret = '<li class="debug2_row"><span class="debug2_label"><b>' . $block->getMeta('initOrder', $this->tab->getDefaultInitNum()) . ':</b> ' . $name . '</span>';
+        $ret .= '<div class="debug2_button debug_info_but">info</div>' . $this->_getBlockDetail($block);
 
-        if (isset($this->aBlockCode[$sName])) {
-            $sBlockCode = htmlspecialchars($this->aBlockCode[$sName]);
-            $sBlockCode = str_replace(array('[[[[div]]]]', '[[[[/div]]]]'), array('<div class="debug2_incl">', '</div>'), $sBlockCode);
+        if (isset($this->blockCode[$name])) {
+            $blockCode = htmlspecialchars($this->blockCode[$name]);
+            $blockCode = str_replace(['[[[[div]]]]', '[[[[/div]]]]'], ['<div class="debug2_incl">', '</div>'], $blockCode);
         } else {
-            $sBlockCode = '';
+            $blockCode = '';
         }
-        $sRet .= '<div class="debug2_button debug_html_but">html</div><div class="debug_html">' . str_replace("\n", "<br />\n", $sBlockCode) . '</div>';
+        $ret .= '<div class="debug2_button debug_html_but">html</div><div class="debug_html">' . str_replace("\n", "<br />\n", $blockCode) . '</div>';
         if ($isView) {
-            if (isset($this->aBlockCode[$sName])) {
-                $sBlockCode = $this->aBlockCode[$sName];
-                $sBlockCode = str_replace(array('[[[[div]]]]', '[[[[/div]]]]'), array('<div class="debug2_incl">', '</div>'), $sBlockCode);
-                $sBlockCode = preg_replace('/\<script([^>]+\/\>|[^<]+\<\/script\>)/i', '[JavaScript]', $sBlockCode);
+            if (isset($this->blockCode[$name])) {
+                $blockCode = $this->blockCode[$name];
+                $blockCode = str_replace(['[[[[div]]]]', '[[[[/div]]]]'], ['<div class="debug2_incl">', '</div>'], $blockCode);
+                $blockCode = preg_replace('/\<script([^>]+\/\>|[^<]+\<\/script\>)/i', '[JavaScript]', $blockCode);
             } else {
-                $sBlockCode = '';
+                $blockCode = '';
             }
-            $sRet .= '<div class="debug2_button debug_view_but">view</div><div class="debug_view">' . $sBlockCode . '</div>';
+            $ret .= '<div class="debug2_button debug_view_but">view</div><div class="debug_view">' . $blockCode . '</div>';
         }
 
-        if ($aIncl) {
-            $sRet .= '<ul class="debug2_list">';
-            foreach ($aIncl as $v) {
-                $sRet .= $v;
+        if ($incl) {
+            $ret .= '<ul class="debug2_list">';
+            foreach ($incl as $v) {
+                $ret .= $v;
             }
-            $sRet .= '<li class="debug2_clear">&nbsp;</li></ul>';
+            $ret .= '<li class="debug2_clear">&nbsp;</li></ul>';
         }
 
-        return $sRet . '</li>';
-    } // function getSecondDebugRow
+        return $ret . '</li>';
+    }
 
 
 
-    /**
-     * Get block description
-     * @param \fan\core\block\base $oBlock
-     * @return string
-     */
-    protected function _getBlockDetail($oBlock)
+    protected function _getBlockDetail(\fan\core\block\base $block): string
     {
-        $aRefl = array(
-            new \ReflectionClass($oBlock)
-        );
+        $refl = [
+            new \ReflectionClass($block)
+        ];
 
-        $aDebug = $oBlock->getDebugInfo();
-        $sCode = '';
-        $sCode .= $this->_getFileInfo('php-file', $aRefl[0]->getFileName());
-        $sCode .= $this->_getFileInfo('meta-file', $aDebug['metaFile']);
-        $sCode .= $this->_getFileInfo('tpl-file', $aDebug['templateFile']);
+        $debug = $block->getDebugInfo();
+        $code = '';
+        $code .= $this->_getFileInfo('php-file', (string)$refl[0]->getFileName());
+        $code .= $this->_getFileInfo('meta-file', (string)$debug['metaFile']);
+        $code .= $this->_getFileInfo('tpl-file', (string)$debug['templateFile']);
 
         for ($i = 1; $i <= 10; $i++) {
-            $aRefl[$i] = $aRefl[$i-1]->getParentClass();
-            if(!$aRefl[$i]) {
-                unset($aRefl[$i]);
+            $refl[$i] = $refl[$i-1]->getParentClass();
+            if (!$refl[$i]) {
+                unset($refl[$i]);
                 break;
             }
         }
-        $sCode .= '<div class="debug_parents">List of parents: <ul>';
-        foreach ($aRefl as $k => $v) {
-            $sCode .= $this->_getParentInfo($v, $k != 0);
+        $code .= '<div class="debug_parents">List of parents: <ul>';
+        foreach ($refl as $k => $v) {
+            $code .= $this->_getParentInfo($v, $k !== 0);
         }
-        $sCode .= '</ul></div>';
+        $code .= '</ul></div>';
 
-        $sCode .= $this->_getMetaData('Result merged META-data',  $aDebug['meta'], null);
-        $sCode .= $this->_getMetaData('Container META-data',      $aDebug['containerMeta'], $aDebug['meta']);
-        $sCode .= $this->_getMetaData('Block file META-data',     $this->_reduceMetaArray($aDebug['fileMeta']),   $aDebug['meta']);
-        $sCode .= $this->_getMetaData('Parent classes META-data', $this->_reduceMetaArray($aDebug['parentMeta']), $aDebug['meta']);
-        $sCode .= $this->_getMetaData('Folder META-data',         $aDebug['folderMeta'], $aDebug['meta']);
+        $code .= $this->_getMetaData('Result merged META-data',  $debug['meta'], null);
+        $code .= $this->_getMetaData('Container META-data',      $debug['containerMeta'], $debug['meta']);
+        $code .= $this->_getMetaData('Block file META-data',     $this->_reduceMetaArray($debug['fileMeta']),   $debug['meta']);
+        $code .= $this->_getMetaData('Parent classes META-data', $this->_reduceMetaArray($debug['parentMeta']), $debug['meta']);
+        $code .= $this->_getMetaData('Folder META-data',         $debug['folderMeta'], $debug['meta']);
 
 
-        return '<div class="debug_detail">' . $sCode . '</div>';
-    } // function _getBlockDetail
+        return '<div class="debug_detail">' . $code . '</div>';
+    }
 
-    /**
-     * Reduce meta array
-     * @param array $aMeta
-     * @return array
-     */
-    protected function _reduceMetaArray($aMeta)
+    protected function _reduceMetaArray(array $meta): array
     {
-        foreach (adduceToArray($aMeta) as $k => $v) {
-            if ($k != 'common' && $k != 'own') {
-                unset($aMeta[$k]);
+        foreach (adduceToArray($meta) as $k => $v) {
+            if ($k !== 'common' && $k !== 'own') {
+                unset($meta[$k]);
             }
         }
 
-        return $aMeta;
-    } // function _reduceMetaArray
+        return $meta;
+    }
 
     /**
-     * Get data about file
-     * @param string $sLabel
-     * @param string $sFile
-     * @return string
+     * @param string $file File path or file descriptor handled by the operation.
      */
-    protected function _getFileInfo($sLabel, $sFile)
+    protected function _getFileInfo(string $label, string $file): string
     {
-        $sFile = $sFile ? $this->_correctPath($sFile) . '<b>' . basename($sFile) . '</b> &nbsp;' : '<b class="debug_darkred">NONE</b>';
-        return '<div class="debug_row"><label>' . $sLabel . ':</label><span>' . $sFile . '</span></div>';
-    } // function getFileInfo
+        $file = $file ? $this->_correctPath($file) . '<b>' . basename($file) . '</b> &nbsp;' : '<b class="debug_darkred">NONE</b>';
+        return '<div class="debug_row"><label>' . $label . ':</label><span>' . $file . '</span></div>';
+    }
 
-    /**
-     * Get data about file
-     * @param ReflectionClass $oRefl
-     * @return string
-     */
-    protected function _getParentInfo($oRefl, $bIsParent)
+    protected function _getParentInfo(\ReflectionClass $refl, bool $isParent): string
     {
-        if ($bIsParent) {
-            $sRet = $bIsParent ? '-&gt; ' : '';
-            $sRet .= '<i class="debug_parent_class">' . $oRefl->getName() . '</i>';
+        if ($isParent) {
+            $ret = $isParent ? '-&gt; ' : '';
+            $ret .= '<i class="debug_parent_class">' . $refl->getName() . '</i>';
 
-            $sFile = $oRefl->getFileName();
-            $sRet .= '<div>';
-            $sRet .= '<span>' . $this->_correctPath($sFile) . '<b>' . basename($sFile) . '</b> &nbsp;</span>';
-            $sFile = substr($sFile, 0, -4) . '.meta.php';
-            if (is_file($sFile)) {
-                $sRet .= '<span>' . $this->_correctPath($sFile) . '<b>' . basename($sFile) . '</b> &nbsp;</span>';
+            $file = (string)$refl->getFileName();
+            $ret .= '<div>';
+            $ret .= '<span>' . $this->_correctPath($file) . '<b>' . basename($file) . '</b> &nbsp;</span>';
+            $file = substr($file, 0, -4) . '.meta.php';
+            if (is_file($file)) {
+                $ret .= '<span>' . $this->_correctPath($file) . '<b>' . basename($file) . '</b> &nbsp;</span>';
             }
-            $sRet .= '</div>';
+            $ret .= '</div>';
         } else {
-            $sRet = '<i>' . $oRefl->getName() . '</i>';
+            $ret = '<i>' . $refl->getName() . '</i>';
         }
-        return '<li>' . $sRet . '</li>';
-    } // function getParentInfo
+        return '<li>' . $ret . '</li>';
+    }
 
-    /**
-     * Get meta - data
-     * @param string $sLabel
-     * @param array $aMeta
-     * @param array $aResultMeta
-     * @return string
-     */
-    protected function _getMetaData($sLabel, $aMeta, $aResultMeta)
+    protected function _getMetaData(string $label, array $meta, mixed $resultMeta): string
     {
-        if (!is_null($aResultMeta) && (!$aMeta || $aMeta == array('common' => array(), 'own' => array()) || $aMeta == array('common' => array()) || $aMeta == array('own' => array()))) {
-            return '<div class="debug_meta"><div class="debug_meta_none">' . $sLabel . '</div></div>';
+        if (!is_null($resultMeta) && (!$meta || $meta === ['common' => [], 'own' => []] || $meta === ['common' => []] || $meta === ['own' => []])) {
+            return '<div class="debug_meta"><div class="debug_meta_none">' . $label . '</div></div>';
         }
-        return '<div class="debug_meta' . (is_null($aResultMeta) ? ' debug_result_meta' : '') . '" title="Important! There are data has been formed after &quot;init-operation&quot;"><div class="debug_meta_label">' . $sLabel . ':</div><div class="debug_array">' . $this->_showMetaArray($aMeta, $aResultMeta, array()) . '</div></div>';
-    } // function _getMetaData
+        return '<div class="debug_meta' . (is_null($resultMeta) ? ' debug_result_meta' : '') . '" title="Important! There are data has been formed after &quot;init-operation&quot;"><div class="debug_meta_label">' . $label . ':</div><div class="debug_array">' . $this->_showMetaArray($meta, $resultMeta, []) . '</div></div>';
+    }
 
-    /**
-     * Show meta-array
-     * @param array $aMeta
-     * @param array $aResultMeta
-     * @param array $aKeys
-     * @return string
-     */
-    protected function _showMetaArray($aMeta, $aResultMeta, $aKeys)
+    protected function _showMetaArray(array $meta, mixed $resultMeta, array $keys): string
     {
-        if (empty($aMeta)) {
-            return 'array()';
+        if (empty($meta)) {
+            return '[]';
         }
-        $sRet = 'array(<ul>';
-        foreach ($aMeta as $k => $v) {
-            $sRet .= '<li' . (!is_null($aResultMeta) && !is_array($v) && $this->_checkRedefine($aResultMeta, $aKeys, $k, $v) ? ' class="debug_redefined"' : '') . '><span class="debug_array_key">' . htmlspecialchars($k) . '</span> =&gt; ';
+        $ret = '[<ul>';
+        foreach ($meta as $k => $v) {
+            $ret .= '<li' . (!is_null($resultMeta) && !is_array($v) && $this->_checkRedefine($resultMeta, $keys, $k, $v) ? ' class="debug_redefined"' : '') . '><span class="debug_array_key">' . htmlspecialchars((string)$k) . '</span> =&gt; ';
             if (is_null($v)) {
-                $sRet .= 'NULL';
+                $ret .= 'NULL';
             } elseif (is_scalar($v)) {
                 if (is_bool($v)) {
                     $v = $v ? 'true' : 'false';
                 } elseif (is_string($v) && !is_numeric($v)) {
                     $v = '"' . str_replace('"', '\\"', $v) . '"';
                 }
-                $sRet .= '<span class="debug_array_val">' . htmlspecialchars($v) . '</span>';
+                $ret .= '<span class="debug_array_val">' . htmlspecialchars((string)$v) . '</span>';
             } elseif (is_array($v)) {
-                $sRet .= $this->_showMetaArray($v, $aResultMeta, array_merge($aKeys, array($k)));
+                $ret .= $this->_showMetaArray($v, $resultMeta, array_merge($keys, [$k]));
             } elseif (is_object($v)) {
-                $sRet .= '<span class="debug_array_instance">Instance of <b>' . get_class($v) . '</b> class</span>';
+                $ret .= '<span class="debug_array_instance">Instance of <b>' . get_class($v) . '</b> class</span>';
             } else {
-                $sRet .= var_export($v, true);
+                $ret .= var_export($v, true);
             }
-            $sRet .= '</li>';
+            $ret .= '</li>';
         }
-        return $sRet . '</ul>)';
-    } // function _showMetaArray
+        return $ret . '</ul>]';
+    }
 
-    /**
-     * Show meta-array
-     * @param array $aResultMeta
-     * @param array $aKeys
-     * @param mixed $key
-     * @param mixed $val
-     * @return boolean
-     */
-    protected function _checkRedefine($aResultMeta, $aKeys, $key, $val)
+    protected function _checkRedefine(mixed $resultMeta, array $keys, int|string $key, mixed $val): bool
     {
-        $aKeys[] = $key;
-        array_shift($aKeys);
-        foreach ($aKeys as $v) {
-            if (is_array($aResultMeta) && !array_key_exists($v, $aResultMeta)) {
+        $keys[] = $key;
+        array_shift($keys);
+        foreach ($keys as $v) {
+            if (is_array($resultMeta) && !array_key_exists($v, $resultMeta)) {
                 return true;
             }
-            $aResultMeta = $aResultMeta[$v];
+            $resultMeta = $resultMeta[$v];
         }
-        return $aResultMeta != $val;
-    } // function _checkRedefine
+        return $resultMeta !== $val;
+    }
 
-    /**
-     * Correct path
-     * @param string $sPath
-     * @return string
-     */
-    protected function _correctPath($sPath)
+    protected function _correctPath(string $path): string
     {
-        $sSysSeparator = defined('DIR_SEPARATOR') ? DIR_SEPARATOR : '/';
-        $sPath = dirname($sPath) . DIRECTORY_SEPARATOR;
-        return str_replace($sSysSeparator, DIRECTORY_SEPARATOR, $sPath);
-    } // function _correctPath
+        $sysSeparator = defined('DIR_SEPARATOR') ? DIR_SEPARATOR : '/';
+        $path = dirname($path) . DIRECTORY_SEPARATOR;
+        return str_replace($sysSeparator, DIRECTORY_SEPARATOR, $path);
+    }
 
-} // class \fan\core\service\debug
-?>
+}

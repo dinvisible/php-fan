@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Meta data of header main block
  *
@@ -14,22 +17,21 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.005 (12.02.2015)
  */
-return array(
-    'own' => array(
-        'embeddedBlocks' => array(
+return [
+    'own' => [
+        'embeddedBlocks' => [
             'nav' => 'design/nav',
-        ),
+        ],
 
-        'externalJS' => array(
-            'head' => array(
+        'externalJS' => [
+            'head' => [
                 '/js/js-wrapper.js',
                 '/js/load-wrapper.js',
                 '~/log_ctrl.js',
                 //'/js/debug.js',
-            ),
-        ),
+            ],
+        ],
 
         'initOrder' => 1200,
-    ),
-);
-?>
+    ],
+];

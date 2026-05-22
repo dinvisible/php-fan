@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\matcher\item;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\matcher\item;
 /**
  * Description of item
  *
@@ -20,210 +23,186 @@ abstract class base implements \ArrayAccess, \Iterator
      * Current Index of Iterator
      * @var integer
      */
-    protected $iIndex = 0;
+    protected int $index = 0;
 
     /**
      * Allowed property
      * @var array
      */
-    protected $aData = array(
-    );
+    protected array $data = [
+    ];
     /**
      * Variable property
      * @var array
      */
-    protected $aVariable = array(
-    );
+    protected array $variable = [
+    ];
 
     /**
      * Facade of service
      * @var \fan\core\service\matcher\item
      */
-    protected $oItem = null;
+    protected ?object $item = null;
 
     /**
      * Facade of service
      * @var fan\core\base\service
      */
-    protected $oFacade = null;
+    protected ?object $facade = null;
 
-    /**
-     * Make matcher data
-     * @param \fan\core\service\matcher\item $oItem
-     */
-    public function __construct(\fan\core\service\matcher\item $oItem)
+    public function __construct(\fan\core\service\matcher\item $item)
     {
-        $this->oItem = $oItem;
+        $this->item = $item;
     }
 
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
 
-    public function __set($sKey, $value)
+    /**
+     * Handles dynamic property writes for this current component.
+     *
+     * @param mixed $value Value that should be applied or transformed.
+     */
+    public function __set(string $key, mixed $value): void
     {
-        return $this->set($sKey, $value);
+        $this->set((string)$key, $value);
     }
 
-    public function __get($sKey)
+    /**
+     * Handles dynamic property reads for this current component.
+     */
+    public function __get(string $key): mixed
     {
-        return $this->get($sKey);
+        return $this->get((string)$key);
     }
 
     // ======== Required Interface methods ======== \\
 
-    public function offsetSet($sKey, $mValue)
+    /**
+     * @param mixed $value Value that should be applied or transformed.
+     */
+    public function offsetSet(mixed $key, mixed $value): void
     {
-        return $this->set($sKey, $mValue);
+        $this->set((string)$key, $value);
     }
 
-    public function offsetGet($sKey)
+    public function offsetGet(mixed $key): mixed
     {
-        return $this->get($sKey);
+        return $this->get((string)$key);
     }
 
-    public function offsetExists($sKey)
+    public function offsetExists(mixed $key): bool
     {
-        $this->_checkKey($sKey);
-        return !empty($this->aData[$sKey]);
+        $key = (string)$key;
+        $this->_checkKey($key);
+        return !empty($this->data[$key]);
     }
 
-    public function offsetUnset($sKey)
+    public function offsetUnset(mixed $key): void
     {
-        $this->_checkKey($sKey);
+        $key = (string)$key;
+        $this->_checkKey($key);
         $this->_makeException('Isn\'t allowed unset subproperty of item of matcher.');
     }
 
-    public function rewind()
+    public function rewind(): void
     {
-        $this->iIndex = 0;
+        $this->index = 0;
     }
 
-    public function current()
+    public function current(): mixed
     {
-        return $this->valid() ? $this->aData[$this->_getCurrentKey()] : null;
+        return $this->valid() ? $this->data[$this->_getCurrentKey()] : null;
     }
 
-    public function key()
+    public function key(): int
     {
-        return $this->iIndex;
+        return $this->index;
     }
 
-    public function next()
+    public function next(): void
     {
-        ++$this->iIndex;
+        ++$this->index;
     }
 
-    public function valid()
+    public function valid(): bool
     {
         return !is_null($this->_getCurrentKey());
     }
     // ======== Main Interface methods ======== \\
 
     /**
-     * Set data by keys
-     * @param string $sKey
-     * @param mixed $mValue
-     * @return \fan\core\service\matcher\item\base
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function set($sKey, $mValue)
+    public function set(string $key, mixed $value): static
     {
-        $sMethod = $this->_checkKey($sKey, 'set');
-        if(!is_null($this->aData[$sKey]) && !in_array($sKey, $this->aVariable)) {
-            trigger_error('Error. Try to change existing property.', E_USER_WARNING);
-        } elseif(method_exists($this, $sMethod)) {
-            $this->$sMethod($sKey, $mValue);
+        $method = $this->_checkKey($key, 'set');
+        if (!is_null($this->data[$key]) && !in_array($key, $this->variable)) {
+            throw new \LogicException('Error. Try to change existing property.');
+        } elseif (method_exists($this, $method)) {
+            $this->$method($key, $value);
         } else {
-            $this->aData[$sKey] = $mValue;
+            $this->data[$key] = $value;
         }
         return $this;
     }
 
-    /**
-     * Get data by keys
-     * @param string $sKey
-     * @return mixed
-     */
-    public function get($sKey)
+    public function get(string $key): mixed
     {
-        $sMethod = $this->_checkKey($sKey, 'get');
-        return method_exists($this, $sMethod) ? $this->$sMethod() : $this->aData[$sKey];
+        $method = $this->_checkKey($key, 'get');
+        return method_exists($this, $method) ? $this->$method() : $this->data[$key];
     }
 
-    /**
-     * Gets All Data as array
-     * @return array
-     */
-    public function toArray()
+    public function toArray(): array
     {
-        return $this->aData;
-    } // function toArray
+        return $this->data;
+    }
 
-    /**
-     * Set Facade
-     * @param fan\core\service\matcher $oFacade
-     * @return \fan\core\service\matcher\item\base
-     */
-    public function setFacade(\fan\core\service\matcher $oFacade)
+    public function setFacade(\fan\core\service\matcher $facade): static
     {
-        $this->oFacade = $oFacade;
+        $this->facade = $facade;
         return $this;
-    } // function setFacade
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Check Data Key
-     * @param string $sKey
-     * @param string $sMethod
-     * @return string
-     */
-    protected function _checkKey($sKey, $sMethod = '')
+    protected function _checkKey(string $key, string $method = ''): string
     {
-        if (!array_key_exists($sKey, $this->aData)) {
-            $this->_makeException('Invalid key "' . $sKey . '" while accessing the item property of matcher.');
+        if (!array_key_exists($key, $this->data)) {
+            $this->_makeException('Invalid key "' . $key . '" while accessing the item property of matcher.');
         }
-        if (!empty($sMethod)) {
-            foreach (explode('_', $sKey) as $v) {
-                $sMethod .= ucfirst($v);
+        if (!empty($method)) {
+            foreach (explode('_', $key) as $v) {
+                $method .= ucfirst($v);
             }
         }
-        return $sMethod;
+        return $method;
     }
 
-    /**
-     * Get Current Key
-     * @return string
-     */
-    protected function _getCurrentKey()
+    protected function _getCurrentKey(): ?string
     {
-        $aKeys = array_keys($this->aData);
-        return isset($aKeys[$this->iIndex]) ? $aKeys[$this->iIndex] : null;
+        $keys = array_keys($this->data);
+        return isset($keys[$this->index]) ? $keys[$this->index] : null;
     }
 
     /**
-     * Make Exception
-     * @param string $sErrMsg
      * @throws \fan\project\exception\service\fatal
      * @throws \fan\project\exception\fatal
      */
-    protected function _makeException($sErrMsg)
+    protected function _makeException(string $errMsg): never
     {
-        if ($this->oFacade) {
-            throw new \fan\project\exception\service\fatal($this->oFacade, $sErrMsg);
+        if ($this->facade) {
+            throw new \fan\project\exception\service\fatal($this->facade, $errMsg);
         }
-        throw new \fan\project\exception\fatal($sErrMsg);
+        throw new \fan\project\exception\fatal($errMsg);
     }
 
     /**
-     * Get Config row of Matcher
-     * @param type $mKey
-     * @param type $mDefault
-     * @return type
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    public function _getConfig($mKey, $mDefault = null)
+    public function _getConfig(mixed $key, mixed $default = null): mixed
     {
-        return $this->oFacade->getConfig()->get($mKey, $mDefault);
-    } // function _getConfig
+        return $this->facade->getConfig()->get($key, $default);
+    }
 
-} // class \fan\core\service\matcher\item\base
-?>
+}

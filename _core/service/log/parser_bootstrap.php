@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\log;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\log;
 /**
  * Parser of log bootstrap-file
  *
@@ -20,44 +23,41 @@ class parser_bootstrap extends parser_base
      * Key of dir by bootstrap
      * @var string
      */
-    protected $sLogDirKey = 'bootstrap_log';
+    protected ?string $logDirKey = 'bootstrap_log';
 
     /**
      * Key of dir by Apache
      * @var string
      */
-    protected $sGlobalLogDirKey = 'apache_log';
+    protected string $globalLogDirKey = 'apache_log';
 
     /**
      * Type of record is available
      * @var boolean
      */
-    protected $bIsType = false;
+    protected bool $isType = false;
 
     /**
      * Data is serialized
      * @var boolean
      */
-    protected $bIsSerialized = false;
+    protected bool $isSerialized = false;
 
-    /**
-     * setFilePath
-     */
-    public function setFilePath($sVariety, $sFile)
+    public function setFilePath(string $variety, string $file): void
     {
-        $sSrcLogFile  = \bootstrap::getGlobalPath($this->sGlobalLogDirKey) . '/error_' . substr($sFile, 0, 10) . '.log';
-        $sDestLogFile = \bootstrap::getGlobalPath($this->sLogDirKey) . '/' . $sFile . '.log';
-        if (is_file($sSrcLogFile) && (!is_file($sDestLogFile) || is_writable($sDestLogFile))) {
-            if (preg_match_all("/\[\S+\s+(\d{2}\:\d{2}\:\d{2})\](.*?)(?=\[\S+\s+(\d{2}\:\d{2}\:\d{2})\]|$)/s", file_get_contents($sSrcLogFile), $aMatches)) {
-                foreach ($aMatches[1] as $k => $v) {
-                    $sRow = $v . "\t" . addcslashes(preg_replace("/\s*(\n*\r+|\r*\n+)+\s*/s", "\n", trim($aMatches[2][$k])), "\\\t\r\n\0") . "\n";
-                    error_log($sRow, 3, $sDestLogFile);
+        $file = (string)$file;
+        $srcLogFile  = \bootstrap::getGlobalPath($this->globalLogDirKey) . '/error_' . substr($file, 0, 10) . '.log';
+        $destLogFile = \bootstrap::getGlobalPath($this->logDirKey) . '/' . $file . '.log';
+        if (is_file($srcLogFile) && (!is_file($destLogFile) || is_writable($destLogFile))) {
+            if (preg_match_all("/\[\S+\s+(\d{2}\:\d{2}\:\d{2})\](.*?)(?=\[\S+\s+(\d{2}\:\d{2}\:\d{2})\]|$)/s", (string)file_get_contents($srcLogFile), $matches)) {
+                foreach ($matches[1] as $k => $v) {
+                    $row = $v . "\t" . addcslashes((string)preg_replace("/\s*(\n*\r+|\r*\n+)+\s*/s", "\n", trim($matches[2][$k])), "\\\t\r\n\0") . "\n";
+                    error_log($row, 3, $destLogFile);
                 }
-                unlink($sSrcLogFile);
+                unlink($srcLogFile);
             }
         }
-        parent::setFilePath($sVariety, $sFile);
-    } // function setFilePath
+        parent::setFilePath($variety, $file);
+    }
 
-} // class \fan\core\service\log\parser_bootstrap
-?>
+}

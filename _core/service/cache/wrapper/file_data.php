@@ -1,4 +1,7 @@
-<?php namespace core\service\cache\wrapper;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\cache\wrapper;
 /**
  * Cache for save data of file class
  *
@@ -17,129 +20,112 @@
 
 class file_data
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * Row ID
      * @var integer
      */
-    protected $nId;
+    protected int|float|null $id = null;
     /**
      * Is Encrypted ID
      * @var boolean
      */
-    protected $bIdIsEncrypt;
+    protected ?bool $idIsEncrypt = null;
     /**
      * Database row
-     * @var \core\base\model\file_data\row
+     * @var \fan\core\base\model\file_data\row
      */
-    protected $oRow = null;
+    protected ?object $row = null;
     /**
      * Data
      * @var array
      */
-    protected $aData = null;
+    protected ?array $data = null;
     /**
      * Cache
-     * @var \core\service\cache
+     * @var \fan\core\service\cache
      */
-    protected $oCache = null;
+    protected ?object $cache = null;
 
-    /**
-     * Constructor of Plain controller file_data
-     * @param \core\base\model\file_data\row|integer $mRowData
-     */
-    public function __construct($mRowData, $bIdIsEncrypt = null)
+    public function __construct(int|\fan\core\base\model\file_data\row $rowData, ?bool $idIsEncrypt = null)
     {
-        if (is_integer($mRowData)) {
-            $this->nId          = $mRowData;
-            $this->bIdIsEncrypt = $bIdIsEncrypt;
-        } elseif (is_object($mRowData) && $mRowData instanceof \core\base\model\file_data\row) {
-            $this->oRow = $mRowData;
-            $this->nId  = $mRowData->getId();
+        if (is_integer($rowData)) {
+            $this->id          = $rowData;
+            $this->idIsEncrypt = is_null($idIsEncrypt) ? null : (bool)$idIsEncrypt;
+        } elseif (is_object($rowData) && $rowData instanceof \fan\core\base\model\file_data\row) {
+            $this->row = $rowData;
+            $this->id  = $rowData->getId();
         } else {
-            throw new \project\exception\error500('Incorrect call of \core\service\cache\wrapper\file_data');
+            throw new \fan\project\exception\error500('Incorrect call of \fan\core\service\cache\wrapper\file_data');
         }
-    } // function __construct
+    }
 
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Get file data
-     * file data or null - if the file is not valid
-     * @return array|null
-     */
-    public function getFileData()
+    public function getFileData(): ?array
     {
-        while (empty($this->aData)) {
-            $this->aData  = $this->_getCache()->get($this->nId);
-            if (!empty($this->aData)) { // && $this->aData['fileDate'] == filemtime($this->aData['filePath']) && $this->aData['headers']['length'] == filesize($this->aData['filePath'])
+        while (empty($this->data)) {
+            $this->data  = $this->_getCache()->get((string)$this->id);
+            if (!empty($this->data)) { // && $this->data['fileDate'] == filemtime($this->data['filePath']) && $this->data['headers']['length'] == filesize($this->data['filePath'])
                 break;
             }
 
             $this->reset();
         }
-        return $this->aData;
-    } // function getFileData
+        return $this->data;
+    }
 
-    public function reset()
+    public function reset(): bool
     {
-        $oRow = $this->_getRow();
+        $row = $this->_getRow();
 
-        if ($oRow) {
-            if (!$oRow->checkAccess()) {
+        if ($row) {
+            if (!$row->checkAccess()) {
                 // ToDo: Additional operation there
                 return false;
             } else {
-                $sFilePath = \bootstrap::parsePath($oRow->getFilePath());
-                $this->aData = array(
-                    'filePath' => $sFilePath,
-                    'fileDate' => filemtime($sFilePath),
-                    'rowData'  => $oRow->toArray(),
-                );
+                $filePath = \bootstrap::parsePath($row->getFilePath());
+                $this->data = [
+                    'filePath' => $filePath,
+                    'fileDate' => filemtime($filePath),
+                    'rowData'  => $row->toArray(),
+                ];
                 // ToDo: Save cache only if file do not need to check access
-                $this->_getCache()->set($this->nId, $this->aData, true);
+                $this->_getCache()->set((string)$this->id, $this->data, true);
             }
         }
         return true;
-    } // function getFileData
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Get Entity entity_file_data
-     * Return NULL if the file is not valid
-     * @return \core\model\file_data\row|null
-     */
-    protected function _getRow()
+    protected function _getRow(): ?\fan\core\base\model\file_data\row
     {
-        if (is_null($this->oRow)) {
-            $this->oRow = gr(service('entity')->getFileNsSuffix() . 'file_data');
-            if (is_null($this->bIdIsEncrypt)) {
-                $this->oRow->loadById($this->nId, false); // !is_numeric($this->mId)
-                if (!$this->oRow->checkIsLoad()) {
-                    $this->oRow->loadById($this->nId, true);
+        if (is_null($this->row)) {
+            $this->row = gr($this->containerService('entity')->getFileNsSuffix() . 'file_data');
+            if (is_null($this->idIsEncrypt)) {
+                $this->row->loadById($this->id, false); // !is_numeric($this->id)
+                if (!$this->row->checkIsLoad()) {
+                    $this->row->loadById($this->id, true);
                 }
             } else {
-                $this->oRow->loadById($this->nId, $this->bIdIsEncrypt);
+                $this->row->loadById($this->id, $this->idIsEncrypt);
             }
         }
-        return $this->oRow->checkIsLoad() ? $this->oRow : null;
-    } // function _getRow
+        return $this->row->checkIsLoad() ? $this->row : null;
+    }
 
-    /**
-     * Get Entity entity_file_data
-     * @return \core\model\file_data\row|null
-     */
-    protected function _getCache()
+    protected function _getCache(): \fan\core\service\cache
     {
-        if (is_null($this->oCache)) {
-            $this->oCache = \project\service\cache::instance('file_store');
+        if (is_null($this->cache)) {
+            $this->cache = $this->containerService('cache', 'file_store');
         }
-        return $this->oCache;
-    } // function _getCache
+        return $this->cache;
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
 
-} // class \core\service\cache\wrapper\file_data
-?>
+}

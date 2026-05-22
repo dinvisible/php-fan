@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Class of cli handler
@@ -17,26 +20,18 @@ use fan\project\exception\service\fatal as fatalException;
  */
 class cli extends \fan\core\base\service\single
 {
-    /**
-     * Service tab constructor
-     * @param boolean $bAllowIni
-     */
-    protected function __construct($bAllowIni = true)
+    protected function __construct(bool $allowIni = true)
     {
-        parent::__construct($bAllowIni);
-        $this->oMatcher = \fan\project\service\matcher::instance();
-    } // function __construct
+        parent::__construct($allowIni);
+        $this->matcher = \fan\project\service\matcher::instance();
+    }
 
     // ======== Static methods ======== \\
 
-    /**
-     * Get Final Content
-     * @return string|array
-     */
-    public static function getContent($sControllerClass, $sMethod)
+    public static function getContent(string $controllerClass, string $method): mixed
     {
-        $oInstance = \fan\project\service\cli::instance();
-        return $oInstance->_setController($sControllerClass)->_getFinalContent($sMethod);
+        $instance = \fan\project\service\cli::instance();
+        return $instance->_setController($controllerClass)->_getFinalContent($method);
     }
 
     // ======== Main Interface methods ======== \\
@@ -44,46 +39,40 @@ class cli extends \fan\core\base\service\single
     // ======== Private/Protected methods ======== \\
 
     /**
-     * Get Final Content
-     * @return string|array
      * @throws fatalException
      */
-    protected function _getFinalContent($sMethod)
+    protected function _getFinalContent(string $method): mixed
     {
-        if (empty($this->oController)) {
+        if (empty($this->controller)) {
             throw new fatalException($this, 'Engine for CLI content isn\'t set.');
         }
-        if (!method_exists($this->oController, $sMethod)) {
-            throw new fatalException($this, 'Engine of CLI content don\'t have method "' . $sMethod . '".');
+        if (!method_exists($this->controller, $method)) {
+            throw new fatalException($this, 'Engine of CLI content don\'t have method "' . $method . '".');
         }
-        $mResult = $this->oController->$sMethod();
-        return $mResult;
-    } // function _getFinalContent
+        $result = $this->controller->$method();
+        return $result;
+    }
 
     /**
-     * Set Engine for plain output
-     * @param string $sController
-     * @return \fan\core\service\plain
      * @throws fatalException
      */
-    protected function _setController($sController)
+    protected function _setController(string $controller): static
     {
-        $sController = ltrim($sController, '\\');
-        $sController = (substr($sController, 0, 12) == 'fan\project\\' ? '\\' : '\fan\project\cli\\') . $sController;
-        if (!class_exists($sController)) {
-            throw new fatalException($this, 'Can\'t find class "' . $sController . '" for CLI content.');
+        $controller = ltrim($controller, '\\');
+        $controller = (substr($controller, 0, 12) === 'fan\project\\' ? '\\' : '\fan\project\cli\\') . $controller;
+        if (!class_exists($controller)) {
+            throw new fatalException($this, 'Can\'t find class "' . $controller . '" for CLI content.');
         }
-        $this->oController = new $sController($this);
-        if (method_exists($this->oController, 'setConfig')) {
-            $oConfig = \fan\core\service\config::instance('cli')->getControllerConfig($this->oController);
-            $this->oController->setConfig($oConfig);
+        $this->controller = new $controller($this);
+        if (method_exists($this->controller, 'setConfig')) {
+            $config = \fan\core\service\config::instance('cli')->getControllerConfig($this->controller);
+            $this->controller->setConfig($config);
         }
         return $this;
-    } // function _setController
+    }
 
     // ======== The magic methods ======== \\
 
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\service\cli
-?>
+}

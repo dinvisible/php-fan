@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\common;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\common;
 /**
  * Pager quantifier class
  *
@@ -16,93 +20,77 @@
  */
 class html_pager_quantifier extends \fan\core\block\common\html_pager_quantifier
 {
-    /**
-     * Init
-     */
-    public function init()
+    public function init(): void
     {
-        $aQuantifierParams = array();
+        $quantifierParams = [];
         foreach ($_GET as $k => $v) {
-            if ($k != 'pager_quantifier') {
-                $aQuantifierParams[$k] = $v;
+            if ((string)$k !== 'pager_quantifier') {
+                $quantifierParams[$k] = $v;
             }
         }
-        $this->_setViewVar('_quantifier_params', $aQuantifierParams);
+        $this->_setViewVar('_quantifier_params', $quantifierParams);
 
         $this->parseForm();
-    } // function init
+    }
 
 
-    /**
-     * get the form elements' values from HTTP request
-     *
-     */
-    protected function getFieldValuesFromRequest()
+    protected function getFieldValuesFromRequest(): void
     {
         parent::getFieldValuesFromRequest();
 
-        $oForm = $this->getForm();
-        if (!$oForm->getFieldValue('pager_quantifier')) {
-            $oForm->setFieldValue('pager_quantifier', $this->_getQuantifier());
+        $form = $this->getForm();
+        if (!$form->getFieldValue('pager_quantifier')) {
+            $form->setFieldValue('pager_quantifier', $this->getQuantifier());
         }
-    } // function getFieldValuesFromRequest
+    }
 
-    public function onSubmit()
+    public function onSubmit(): void
     {
-        $sKey = $this->getMeta('sessionKey');
+        $key = $this->getMeta('sessionKey');
 
-        if ($sKey) {
-            $sPagerQuantifier = $this->_getQuantifier(true);
+        if ($key) {
+            $pagerQuantifier = $this->getQuantifier(true);
 
-            if ($sPagerQuantifier) {
-                $this->_getPagerSession()->set($sKey, $sPagerQuantifier);
+            if ($pagerQuantifier) {
+                $this->getPagerSession()->set($key, $pagerQuantifier);
             }
         }
-    } // function onSubmit
+    }
 
-    /**
-     * Returns session object
-     * @return service_session
-     */
-    private function _getPagerSession()
+    private function getPagerSession(): object
     {
         static $session = null;
 
         if (is_null($session)) {
-            $session = service_session::custom_instance('pager');
+            $session = $this->containerService('session', 'pager', 'custom');
         }
 
         return $session;
-    } // function _getPagerSession
+    }
 
-    /**
-     * Returns quantifier value from session or default value
-     * @return integer
-     */
-    private function _getQuantifier($getFromRequest = false)
+    private function getQuantifier($getFromRequest = false): mixed
     {
-        $iQuantifier = null;
-        $defaultValue = $this->getFormMeta(array('fields', 'pager_quantifier', 'default_value'));
+        $quantifier = null;
+        $defaultValue = $this->getFormMeta(['fields', 'pager_quantifier', 'default_value']);
 
-        $sKey = $this->getMeta('sessionKey');
-        if ($sKey) {
+        $key = $this->getMeta('sessionKey');
+        if ($key) {
             if ($getFromRequest) {
-                $iQuantifier = service('request')->get('pager_quantifier', 'GP');
+                $quantifier = $this->containerService('request')->get('pager_quantifier', 'GP');
             }
 
-            if (empty($iQuantifier)) {
-                $iQuantifier = $this->_getPagerSession()->get($sKey, $iQuantifier);
+            if (empty($quantifier)) {
+                $quantifier = $this->getPagerSession()->get($key, $quantifier);
             }
 
-            $aValues = $this->trimDataRecursive(explode(',', $this->getMeta('quantifier_values')), array('trim_data' => true));
+            $values = $this->trimDataRecursive(explode(',', $this->getMeta('quantifier_values')), ['trim_data' => true]);
 
-            if (!in_array($iQuantifier, $aValues)) {
-                $iQuantifier = $defaultValue;
+            if (!in_array($quantifier, $values)) {
+                $quantifier = $defaultValue;
             }
         }
 
-        return $iQuantifier ? $iQuantifier : $defaultValue;
-    } // function _getQuantifier
+        return $quantifier ? $quantifier : $defaultValue;
+    }
 
-} // class \fan\project\block\common\html_pager_quantifier
-?>
+}

@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Main Load-runner of PHP-FAN files
  *
@@ -16,78 +19,73 @@
  */
 class bootstrap
 {
-    const MIN_PHP_VERSION = '5.3.0';
+    public const MIN_PHP_VERSION = '8.0.0';
 
-    const PHP_FAN_VERSION = '5.1.001';
+    public const PHP_FAN_VERSION = '5.1.001';
 
     /**
      * Flag - is Load-runner already init
      * @var boolean
      */
-    private static $bIsInit = false;
+    private static bool $isInit = false;
 
     /**
      * Flag - is CLI
      * @var boolean
      */
-    private static $bIsCli = false;
+    private static bool $isCli = false;
 
     /**
      * Bootstrap configuration
      * @var array
      */
-    private static $aConfig = array();
+    private static array $config = [];
 
     /**
      * Replacement path elements
      * @var array
      */
-    private static $aReplacement = array();
+    private static array $replacement = [];
 
     /**
      * Path to Error-log file
      * @var string
      */
-    private static $sLogDir = '{CORE_DIR}/../logs/bootstrap_log/';
+    private static string $logDir = '{CORE_DIR}/../logs/bootstrap_log/';
 
     /**
      * Configurator of PHP parameters
      * @var object
      */
-    private static $oInitializer;
+    private static ?object $initializer = null;
 
     /**
      * File Loader - also set autoload filles
      * @var object
      */
-    private static $oLoader;
+    private static ?object $loader = null;
 
     /**
      * Runner processing request
      * @var object
      */
-    private static $oRunner;
+    private static ?object $runner = null;
 
     /**
      * @var number Process ID
      */
-    private static $nPID = null;
+    private static ?string $pid = null;
 
-    /**
-     * Init bootstrap
-     * @param string $sIniPath
-     * @return bool
-     */
-    public static function init($sIniPath = null)
+    public static function init(?string $iniPath = null): bool
     {
         if (version_compare(PHP_VERSION, self::MIN_PHP_VERSION) < 0) {
             die('PHP-FAN can\'t work with version less than "' . self::MIN_PHP_VERSION . '". Actually your version is "' . PHP_VERSION . '".');
         }
-        if (self::$bIsInit) {
+        if (self::$isInit) {
             return false;
         }
-        self::$bIsInit = true;
-        self::$bIsCli  = self::$bIsCli ||  strtolower(php_sapi_name()) == 'cli';
+        self::$isInit = true;
+        self::$isCli  = self::$isCli || strtolower(php_sapi_name()) === 'cli';
 
         // Define base const
         define('CORE_DIR', __DIR__);
@@ -95,17 +93,22 @@ class bootstrap
             define('PROJECT_DIR', realpath(CORE_DIR . '/../_project'));
         }
         if (!defined('BASE_DIR')) {
-            $sDocRoot = getenv('DOCUMENT_ROOT');
-            if (empty($sDocRoot)) {
-                $sDocRoot = isset($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] : dirname($_SERVER['SCRIPT_FILENAME']);
+            $docRoot = getenv('DOCUMENT_ROOT');
+            if (empty($docRoot)) {
+                $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] : dirname($_SERVER['SCRIPT_FILENAME']);
             }
-            define('BASE_DIR', $sDocRoot);
+            define('BASE_DIR', (string)$docRoot);
         }
-        self::$aReplacement =array(
+        self::$replacement =[
             '{BASE_DIR}'    => BASE_DIR,
             '{CORE_DIR}'    => CORE_DIR,
             '{PROJECT_DIR}' => PROJECT_DIR,
-        );
+        ];
+
+        $composerAutoload = dirname(CORE_DIR) . '/vendor/autoload.php';
+        if (is_readable($composerAutoload)) {
+            require_once $composerAutoload;
+        }
 
         // Include additional functions
         require_once CORE_DIR . '/functions.php';
@@ -114,209 +117,142 @@ class bootstrap
         }
 
         // Load and preparse bootstrap configuration
-        self::_setConfig($sIniPath);
+        self::_setConfig($iniPath);
 
         if (!defined('ADMIN_EMAIL')) {
-            define('ADMIN_EMAIL', self::$aConfig['bootstrap']['admin_email']);
+            define('ADMIN_EMAIL', self::$config['bootstrap']['admin_email']);
         }
 
         // Set initial error handler
         self::_setErrorHandler();
 
         // Perform the preparation procedures
-        self::$oInitializer = self::_defineObj('initializer', '\fan\core\bootstrap\initializer', '{CORE_DIR}/bootstrap/initializer.php');
-        self::$oLoader      = self::_defineObj('loader',      '\fan\core\bootstrap\loader',      '{CORE_DIR}/bootstrap/loader.php');
-        self::$oInitializer->initAfterLoader();
-        self::$oRunner      = self::_defineObj('runner',      '\fan\core\bootstrap\runner',      '{CORE_DIR}/bootstrap/runner.php');
+        self::$initializer = self::_defineObj('initializer', '\fan\core\bootstrap\initializer', '{CORE_DIR}/bootstrap/initializer.php');
+        self::$loader      = self::_defineObj('loader',      '\fan\core\bootstrap\loader',      '{CORE_DIR}/bootstrap/loader.php');
+        self::$initializer->initAfterLoader();
+        self::$runner      = self::_defineObj('runner',      '\fan\core\bootstrap\runner',      '{CORE_DIR}/bootstrap/runner.php');
 
         return true;
-    } // function init
+    }
 
-    /**
-     * Run process to execute
-     * @param string $sIniPath
-     * @param boolean $bIsEcho allow to output data
-     * @return mixed Output data
-     */
-    public static function run($sIniPath = null, $bIsEcho = true)
+    public static function run(?string $iniPath = null, bool $isEcho = true): mixed
     {
-        self::init($sIniPath);
-        return self::getRunner()->run($bIsEcho);
-    } // function run
+        self::init($iniPath);
+        return self::getRunner()->run($isEcho);
+    }
 
-    /**
-     * Run process to execute from CLI
-     * @param string $sClassName
-     * @param string $sMethodName
-     * @return mixed Output data
-     */
-    public static function runCli($sClassName, $sMethodName = 'init')
+    public static function runCli(string $className, string $methodName = 'init'): mixed
     {
-        if (php_sapi_name() != 'cli') {
+        if (php_sapi_name() !== 'cli') {
             die('This script can be run in CLI mode only');
         }
-        self::$bIsCli = true;
-        return self::getRunner()->runCli($sClassName, $sMethodName);
-    } // function run
+        self::$isCli = true;
+        return self::getRunner()->runCli($className, $methodName);
+    }
 
-    /**
-     * Get initializer
-     * @return \fan\core\bootstrap\initializer
-     */
-    public static function getInitializer()
+    public static function getInitializer(): \fan\core\bootstrap\initializer
     {
-        if (empty(self::$oInitializer)) {
+        if (empty(self::$initializer)) {
             self::init();
         }
-        return self::$oInitializer;
-    } // function getLoader
+        return self::$initializer;
+    }
 
-    /**
-     * Get loader
-     * @return \fan\core\bootstrap\loader
-     */
-    public static function getLoader()
+    public static function getLoader(): \fan\core\bootstrap\loader
     {
-        if (empty(self::$oLoader)) {
+        if (empty(self::$loader)) {
             self::init();
         }
-        return self::$oLoader;
-    } // function getLoader
+        return self::$loader;
+    }
 
-    /**
-     * Get loader
-     * @return \fan\core\bootstrap\runner
-     */
-    public static function getRunner()
+    public static function getRunner(): \fan\core\bootstrap\runner
     {
-        if (empty(self::$oRunner)) {
+        if (empty(self::$runner)) {
             self::init();
         }
-        return self::$oRunner;
-    } // function getRunner
+        return self::$runner;
+    }
+
+    public static function getConfigCache(): array
+    {
+        return isset(self::$config['config_cache']) ? self::$config['config_cache'] : [];
+    }
+
+    public static function loadClass(string $class, bool $makeAlias = true): mixed
+    {
+        return self::getLoader()->loadClass($class, $makeAlias);
+    }
 
     /**
-     * Get parameters of Config-Cache
-     * @return array
+     * @param string $file File path or file descriptor handled by the operation.
      */
-    public static function getConfigCache()
+    public static function loadFile(string $file, int $handleError = 0, int $way = 0): mixed
     {
-        return isset(self::$aConfig['config_cache']) ? self::$aConfig['config_cache'] : array();
-    } // function getConfigCache
+        return self::getLoader()->loadFile($file, $handleError, $way);
+    }
 
     /**
-     * Load Class by name (with namespace)
-     * Return true if class is loaded
-     * @param string $sClass
-     * @param boolean $bMakeAlias - allow to make alias in project namespace from core namespace
-     * @return boolean
+     * Transforms path between supported representations.
      */
-    public static function loadClass($sClass, $bMakeAlias = true)
+    public static function parsePath(string $path): string
     {
-        return self::getLoader()->loadClass($sClass, $bMakeAlias);
-    } // function loadClass
+        return self::getLoader()->parsePath($path);
+    }
 
-    /**
-     * Load File by path to file
-     * Return data from file
-     * @param string $sFile
-     * @param integer $iHandleError Flag of handling error: 0 - do nothing, 1 - set warning, 2 - make Exception
-     * @param integer $iWay Way of loading: 0 - include, 1 - include_once, 2 - require, 3 - require_onse
-     * @return mixed
-     */
-    public static function loadFile($sFile, $iHandleError = 0, $iWay = 0)
+    public static function getGlobalPath($key, $altPath = null): ?string
     {
-        return self::getLoader()->loadFile($sFile, $iHandleError, $iWay);
-    } // function loadFile
+        $paths = self::$config['bootstrap']['global_path'];
+        $path  = empty($paths[$key]) ? $altPath : $paths[$key];
+        return empty($path) ? null : self::_fillPlaceholder($path);
+    }
 
-    /**
-     * Parse Path
-     * Replace placeholders in $sPath to real Data
-     * @param string $sPath
-     * @return string
-     */
-    public static function parsePath($sPath)
+    public static function handleError(int|float $errNo, string $errMsg, ?string $fileName = null, int|float|null $lineNum = null, $errContext = null): ?bool
     {
-        return self::getLoader()->parsePath($sPath);
-    } // function parsePath
+        if ($errNo === E_DEPRECATED || $errNo === E_USER_DEPRECATED) {
+            return true;
+        }
+        self::logError('Error No ' . $errNo . ': ' . $errMsg . ' in ' . $fileName . ' on line ' . $lineNum . '. Context: ' . var_export($errContext, true));
+        return null;
+    }
 
-    /**
-     * Load File by path to file
-     * Return data from file
-     * @param string $sLogPath
-     * @return string
-     */
-    public static function getGlobalPath($sKey, $sAltPath = null)
+    public static function logError(string $message): void
     {
-        $aPaths = self::$aConfig['bootstrap']['global_path'];
-        $sPath  = empty($aPaths[$sKey]) ? $sAltPath : $aPaths[$sKey];
-        return empty($sPath) ? null : self::_fillPlaceholder($sPath);
-    } // function parsePath
-
-    /**
-     * Error handler
-     * @param numeric $nErrNo
-     * @param string $sErrMsg
-     * @param string $sFileName
-     * @param numeric $nLineNum
-     */
-    public static function handleError($nErrNo, $sErrMsg, $sFileName, $nLineNum, $aErrContext)
-    {
-        self::logError('Error No ' . $nErrNo . ': ' . $sErrMsg . ' in ' . $sFileName . ' on line ' . $nLineNum . '. Context: ' . var_export($aErrContext, true));
-    } // function handleError
-
-    /**
-     * Error log
-     * @param string $sMessage
-     */
-    public static function logError($sMessage)
-    {
-        if (!empty($sMessage)) {
-            $sLogPath = self::$sLogDir;
-            if (@is_dir($sLogPath) && @is_writable($sLogPath)) {
-                $sLogPath .= '/' . date('Y-m-d') . '_000.log';
-                if (!file_exists($sLogPath) || @is_writable($sLogPath)) {
-                    $sRow = date('H:i:s') . "\t" . addcslashes($sMessage, "\\\t\r\n\0") . "\n";
-                    error_log($sRow, 3, $sLogPath);
+        if (!empty($message)) {
+            $logPath = self::$logDir;
+            if (is_dir($logPath) && is_writable($logPath)) {
+                $logPath .= '/' . date('Y-m-d') . '_000.log';
+                if (!file_exists($logPath) || is_writable($logPath)) {
+                    $row = date('H:i:s') . "\t" . addcslashes($message, "\\\t\r\n\0") . "\n";
+                    error_log($row, 3, $logPath);
                     return;
                 }
             }
-            error_log($sMessage, 0);
+            error_log($message, 0);
         }
-    } // function logError
+    }
 
-    /**
-     * Get process ID
-     * @return number
-     */
-    public static function getPid()
+    public static function getPid(): string
     {
-        if (!self::$nPID) {
-            self::$nPID = uniqid();
+        if (!self::$pid) {
+            self::$pid = uniqid();
         }
-        return self::$nPID;
-    } // function getPid
+        return self::$pid;
+    }
 
-    /**
-     * Return true when script is run from CLI
-     * @return boolean
-     */
-    public static function isCli()
+    public static function isCli(): bool
     {
-        return self::$bIsCli;
-    } // function isCli
+        return self::$isCli;
+    }
 
-    /**
-     * Set Bootstrap Config
-     * @param string $sIniPath
-     */
-    protected static function _setConfig($sIniPath)
+    protected static function _setConfig(mixed $iniPath): void
     {
-        if (is_null($sIniPath)) {
-            $sIniPath = PROJECT_DIR . '/conf/bootstrap.ini';
+        if (is_null($iniPath)) {
+            $iniPath = PROJECT_DIR . '/conf/bootstrap.ini';
         }
-        self::$aConfig = file_exists($sIniPath) ? parse_ini_file($sIniPath, true) : array();
-        foreach (self::$aConfig as &$v1) {
+        $config = file_exists((string)$iniPath) ? parse_ini_file((string)$iniPath, true) : [];
+        self::$config = is_array($config) ? $config : [];
+        foreach (self::$config as &$v1) {
             foreach ($v1 as $k => $v2) {
                 if (strpos($k, '.')) {
                     unset($v1[$k]);
@@ -325,52 +261,36 @@ class bootstrap
                 }
             }
         }
-    } // function _setConfig
+    }
 
-    /**
-     * Set Simple Error Handler of Bootstrap
-     */
-    protected static function _setErrorHandler()
+    protected static function _setErrorHandler(): void
     {
-        self::$sLogDir = self::getGlobalPath('bootstrap_log', self::$sLogDir);
+        self::$logDir = self::getGlobalPath('bootstrap_log', self::$logDir);
 
         if (!ini_get('date.timezone')) {
             ini_set('date.timezone', 'Europe/Helsinki');
         }
-        set_error_handler(array(__CLASS__, 'handleError'));
-    } // function _setErrorHandler
+        set_error_handler([__CLASS__, 'handleError']);
+    }
 
 
-    /**
-     * Replace Placeholder in the path
-     * @param string $sPath
-     * @return object
-     */
-    protected static function _fillPlaceholder($sPath)
+    protected static function _fillPlaceholder(string $path): string
     {
-        foreach (self::$aReplacement as $k => $v) {
-            $sPath = str_replace($k, $v, $sPath);
+        foreach (self::$replacement as $k => $v) {
+            $path = str_replace((string)$k, (string)$v, $path);
         }
-        return $sPath;
-    } // function _fillPlaceholder
+        return $path;
+    }
 
-    /**
-     * Define Object
-     * @param string $sKey
-     * @param string $sClass - Default value
-     * @param string $sPath - Default value
-     * @return object
-     */
-    protected static function _defineObj($sKey, $sClass, $sPath)
+    protected static function _defineObj(string $key, string $class, string $path): object
     {
-        if (isset(self::$aConfig[$sKey])) {
-            $aConf  = self::$aConfig[$sKey];
-            $sClass = empty($aConf['class']) ? $sClass : $aConf['class'];
-            $sPath  = empty($aConf['path'])  ? $sPath  : $aConf['path'];
+        if (isset(self::$config[$key])) {
+            $conf  = self::$config[$key];
+            $class = empty($conf['class']) ? $class : (string)$conf['class'];
+            $path  = empty($conf['path'])  ? $path  : (string)$conf['path'];
         }
-        require_once self::_fillPlaceholder($sPath);
-        return new $sClass(isset($aConf['ini']) ? $aConf['ini'] : null);
-    } // function _defineObj
+        require_once self::_fillPlaceholder($path);
+        return new $class(isset($conf['ini']) ? $conf['ini'] : null);
+    }
 
-} // class \bootstrap
-?>
+}

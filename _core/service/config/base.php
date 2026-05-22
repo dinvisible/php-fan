@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\config;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\config;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Description of base
@@ -21,69 +25,54 @@ abstract class base
      * Facade of service
      * @var \fan\core\service\config
      */
-    protected $oFacade = null;
+    protected ?object $facade = null;
+    /**
+     * Source directory with configuration files.
+     * @var string
+     */
+    protected string $sourceDir = '';
     /**
      * File extention
      * @var string
      */
-    protected $sFileExtention = '';
+    protected string $fileExtention = '';
 
-    /**
-     * Set Facade
-     * @param \fan\core\service\config $oFacade
-     */
-    public function setFacade(\fan\core\service\config $oFacade)
+    public function setFacade(\fan\core\service\config $facade): static
     {
-        if (empty($this->oFacade)) {
-            $this->oFacade = $oFacade;
+        if (empty($this->facade)) {
+            $this->facade = $facade;
         }
         return $this;
-    } // function setFacade
+    }
 
-    public function getFilePath($sFileName, $bCheckExist = true)
+    public function getFilePath(string $fileName, bool $checkExist = true): ?string
     {
-        $sFilePath = $this->sSourceDir . $sFileName . (empty($this->sFileExtention) ? '' : '.' . $this->sFileExtention);
-        if (file_exists($sFilePath)) {
-            return $sFilePath;
+        $filePath = $this->sourceDir . $fileName . (empty($this->fileExtention) ? '' : '.' . $this->fileExtention);
+        if (file_exists($filePath)) {
+            return $filePath;
         }
-        if ($bCheckExist) {
-            throw new fatalException($this->oFacade, 'Configuration file "' . $sFilePath . '" is not found!');
+        if ($checkExist) {
+            throw new fatalException($this->facade, 'Configuration file "' . $filePath . '" is not found!');
         }
         return null;
-    } // function getFilePath
+    }
 
-    /**
-     * Load Source data as array
-     * @param string $sFilePath ini-file path
-     * @return array parsed data
-     */
-    public function loadFile($sFilePath)
+    public function loadFile(?string $filePath): array
     {
-        if (file_exists($sFilePath)) {
-            return $this->_loadSourceData($sFilePath);
+        if ($filePath !== null && file_exists($filePath)) {
+            return $this->_loadSourceData($filePath);
         }
-        return array();
-    } // function loadFile
+        return [];
+    }
 
-    /**
-     * Set Source Directory path
-     * @param string $sSourceDir
-     * @return \fan\core\service\config\base
-     */
-    public function setDirPath($sSourceDir)
+    public function setDirPath(string $sourceDir): static
     {
-        $this->sSourceDir = rtrim($sSourceDir, '/\\') . '/';
+        $this->sourceDir = rtrim($sourceDir, '/\\') . '/';
         return $this;
-    } // function setDirPath
+    }
 
-    /**
-     * Load Source Data
-     * @param string $sSrcFilePath
-     * @return array
-     */
-    protected function _loadSourceData($sSrcFilePath)
+    protected function _loadSourceData(string $srcFilePath): array
     {
-        return array();
-    } // function _loadSourceData
-} // class \fan\core\service\config\base
-?>
+        return [];
+    }
+}

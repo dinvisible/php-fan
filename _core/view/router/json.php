@@ -1,4 +1,7 @@
-<?php namespace fan\core\view\router;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view\router;
 /**
  * View router of JSON-block
  *
@@ -20,27 +23,17 @@ class json extends \fan\core\view\router\simple
      * Use Base64
      * @var boolean
      */
-    protected $bUseBase64 = false;
+    protected bool $useBase64 = false;
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Set flag of Use Base-64 for JSON-data
-     * @param boolean $bUseBase64
-     * @return \fan\core\view\router\json
-     */
-    public function useBase64($bUseBase64 = true)
+    public function useBase64(bool $useBase64 = true): static
     {
-        $this->bUseBase64 = $bUseBase64;
+        $this->useBase64 = $useBase64;
         return $this;
-    } // function useBase64
-    /**
-     * Get flag of Use Base-64
-     * @return boolean
-     */
-    public function isUseBase64()
+    }
+    public function isUseBase64(): bool
     {
-        return $this->bUseBase64;
-    } // function isUseBase64
+        return $this->useBase64;
+    }
 
- } // class \fan\core\view\router\json
-?>
+ }

@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\admin;
 /**
  * Class admin index block
  *
@@ -16,5 +20,4 @@
  */
 class index extends \fan\core\block\admin\index
 {
-} // class \fan\project\block\admin\index
-?>
+}

@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\matcher\item;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\matcher\item;
 /**
  * Separated URI data
  *
@@ -29,14 +32,18 @@ class cli extends base
      * Allowed property
      * @var array
      */
-    protected $aData = array(
+    protected array $data = [
         'file' => null,
         'path' => null,
         'argv' => null,
-    );
+    ];
 
-    public function __toString() {
-        return $this->aData['path'] . '/' . $this->aData['file'] . (empty($this->aData['argv']) ? '' : ' ' . implode(' ', $this->aData['argv']));
+    /**
+     * Implements PHP magic behavior for this current component.
+     *
+     * @return string String representation of the matched CLI request.
+     */
+    public function __toString(): string {
+        return (string)$this->data['path'] . '/' . (string)$this->data['file'] . (empty($this->data['argv']) ? '' : ' ' . implode(' ', $this->data['argv']));
     }
-} // class \fan\core\service\matcher\item\cli
-?>
+}

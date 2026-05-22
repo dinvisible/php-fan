@@ -1,4 +1,7 @@
-<?php namespace fan\core\base\model\spec_file;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\base\model\spec_file;
 /**
  * Row of special files
  *
@@ -21,116 +24,73 @@ abstract class row extends \fan\core\base\model\row
      * Entity File Data
      * @var \fan\core\base\model\file_data\row
      */
-    protected $oEntityFile = null;
+    protected ?object $entityFile = null;
 
-    /**
-     * Delete file
-     */
-    public function delete()
+    public function delete(): bool
     {
-        $oFile = $this->getEntityFile();
-        if (parent::delete()) {
-            $oFile->delete();
+        $file = $this->getEntityFile();
+        $deleted = parent::delete();
+        if ($deleted) {
+            $file->delete();
         }
+        return $deleted;
     }
 
-    /**
-     * This method will be run after entity record is deleted
-     * @param mixed $mDelId - deleted ID
-     */
-    protected function runAfterDelete($mDelId)
+    protected function runAfterDelete(mixed $delId): void
     {
         $this->getEntityFile()->delete();
     }
 
-    /**
-     * Get entity_file
-     * @return entity_file_data
-     */
-    public function getEntityFile()
+    public function getEntityFile(): \fan\core\base\model\file_data\row
     {
-        if (!$this->oEntityFile) {
-            $sNs = get_ns_name($this, 2);
-            $this->oEntityFile = gr('\\' . $sNs . '\file_data');
-            $this->oEntityFile->getEntity()->setConnection($this->getEntity()->getConnection()->getConnectionName());
-            $this->oEntityFile->setAllowLoadInfo(false);
-            $this->oEntityFile->loadById($this->getId(false));
+        if (!$this->entityFile) {
+            $ns = get_ns_name($this, 2);
+            $this->entityFile = gr('\\' . $ns . '\file_data');
+            $this->entityFile->getEntity()->setConnection($this->getEntity()->getConnection()->getConnectionName());
+            $this->entityFile->setAllowLoadInfo(false);
+            $this->entityFile->loadById($this->getId(false));
         }
-        return $this->oEntityFile;
-    }// function getEntityFile
+        return $this->entityFile;
+    }
 
-    /**
-     * Get is deleted
-     * @return boolean true - if file is deleted
-     */
-    protected function get_is_deleted()
+    protected function get_is_deleted(): mixed
     {
         return $this->getEntityFile()->get_is_deleted();
-    }// function get_is_deleted
+    }
 
-    /**
-     * Get source name
-     * @return string
-     */
-    public function get_src_name()
+    public function get_src_name(): mixed
     {
         return $this->getEntityFile()->get_src_name();
-    }// function get_src_name
+    }
 
 
     // ======== Set/get access ======== \\
 
-    /**
-     * Set access type
-     * @param string $sKey type key
-     * @param boolean $bSave save this entitty
-     */
-    public function setAccessType($sKey, $bSave = true)
+    public function setAccessType(string $key, bool $save = true): void
     {
-        $this->getEntityFile()->setAccessType($sKey, $bSave);
-        if($bSave) {
+        $this->getEntityFile()->setAccessType($key, $save);
+        if ($save) {
             $this->save();
         }
-    }// function setAccessType
+    }
 
-    /**
-     * Set personal access
-     * @param string $sMembType   - Member Type: owner/guest
-     * @param string $sExpireDate - Expire access data
-     * @param number $nAccessQtt  - Max quantity of access
-     * @param number $nMemrId     - Memeber Id (NR. By defaulf current member)
-     */
-    public function setPersonalAccess($sMembType = 'owner', $sExpireDate = null, $nAccessQtt = -1, $nMemrId = 0)
+    public function setPersonalAccess(string $membType = 'owner', ?string $expireDate = null, int|float $accessQtt = -1, int|float $memrId = 0): void
     {
-        $this->getEntityFile()->setPersonalAccess($sMembType, $sExpireDate, $nAccessQtt, $nMemrId);
-    }// function setPersonalAccess
+        $this->getEntityFile()->setPersonalAccess($membType, $expireDate, $accessQtt, $memrId);
+    }
 
-    /**
-     * Remove personal access
-     * @param string $nRemoveType - Remove Type: 0 - remove all; 1 -  remove all but not owner; 2 - remove pointed member; 3 -  remove all but not pointed member
-     * @param number $nMembId     - Memeber Id (Required for type: 2 and 3)
-     */
-    public function removePersonalAccess($nRemoveType = 1, $nMembId = null)
+    public function removePersonalAccess(int $removeType = 1, int|float|null $membId = null): void
     {
-        $this->getEntityFile()->removePersonalAccess($nRemoveType, $nMembId);
-    }// function removePersonalAccess
+        $this->getEntityFile()->removePersonalAccess($removeType, $membId);
+    }
 
-    /**
-     * Check access for read file
-     * @return boolean true - if access enable
-     */
-    public function checkAccess()
+    public function checkAccess(): bool
     {
         return $this->getEntityFile()->checkAccess();
-    }// function checkAccess
+    }
 
-    /**
-     * Chech Is current member Owner
-     * @return boolean true - if member is owner
-     */
-    public function checkIsOwner()
+    public function checkIsOwner(): bool
     {
         return $this->getEntityFile()->checkIsOwner();
-    }// function checkIsOwner
-} // class \fan\core\base\model\spec_file\entity
-?>
+    }
+}

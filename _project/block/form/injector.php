@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\form;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\form;
 /**
  * Form for send data to server block abstract
  *
@@ -17,35 +21,23 @@
  */
 abstract class injector extends \fan\core\block\form\usual
 {
-    /**
-     * Validate form. You need run (!) this method in your init method
-     *
-     * Returned values:
-     *  - null  - validation wasn't done
-     *  - true  - validation was correct
-     *  - false - validation wasn't correct
-     * @param boolean $bParceEmpty allow parse if form is empty
-     * @param boolean $bParsingCondition (null - parse by Meta-condition, true - always parse, false - don't parse )
-     * @param boolean $bAllowTransfer allow Transfer after submit
-     * @return boolean
-     */
-    protected function _parseForm($bParceEmpty = true, $bParsingCondition = null, $bAllowTransfer = null)
+    protected function _parseForm($parceEmpty = true, $parsingCondition = null, $allowTransfer = null): bool
     {
-        $sIdForm = $this->getMeta(array('form', 'form_id'));
-        $oRoot   = $this->_getBlock('root');
+        $idForm = $this->getMeta(['form', 'form_id']);
+        $root   = $this->_getBlock('root');
         $isUseJs = false;
 
-        $aFields = $this->getFormMeta('fields');
-        if (!empty($aFields)) {
-            foreach ($aFields as $key => $aField) {
-                if (!empty($aField['fill_empty'])) {
+        $fields = $this->getFormMeta('fields');
+        if (!empty($fields)) {
+            foreach ($fields as $key => $field) {
+                if (!empty($field['fill_empty'])) {
                     // prepare embedded JS init
-                    $oRoot->setEmbedJs(
+                    $root->setEmbedJs(
                         sprintf(
                             'new triggerEmpty("%s", "%s", "%s");',
-                            $sIdForm,
+                            $idForm,
                             $key,
-                            str_replace(array('"', "\n"), array('&quot;', '\n'), $aField['fill_empty'])
+                            str_replace(['"', "\n"], ['&quot;', '\n'], $field['fill_empty'])
                         ),
                         'head',
                         -1
@@ -55,11 +47,10 @@ abstract class injector extends \fan\core\block\form\usual
             }
         }
         if ($isUseJs) {
-            $oRoot->setExternalJs('/js/js-wrapper.js');
-            $oRoot->setExternalJs('/js/extra/trigger_empty.js');
+            $root->setExternalJs('/js/js-wrapper.js');
+            $root->setExternalJs('/js/extra/trigger_empty.js');
         }
 
-        return parent::_parseForm($bParceEmpty, $bParsingCondition, $bAllowTransfer);
+        return parent::_parseForm($parceEmpty, $parsingCondition, $allowTransfer);
     }
-} // class \fan\project\block\form\injector
-?>
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\entity\descriptor;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\entity\descriptor;
 /**
  * Description of descriptor
  *
@@ -20,86 +24,71 @@ abstract class mysql extends \fan\core\service\entity\descriptor
      * Info about fields
      * @var string
      */
-    protected $aSrcFields = array();
+    protected array $srcFields = [];
     /**
      * Info about keys
      * @var string
      */
-    protected $aSrcKeys = array();
+    protected array $srcKeys = [];
 
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Return Primery Key - name of field(s): strig (if one field) OR array (if several fields)
-     * @return string|array
-     */
-    public function getPrimeryKey()
+    public function getPrimeryKey(): string|array|null
     {
         foreach ($this->getKeys() as $k0 => $v0) {
-            if (strtoupper($k0) == 'PRIMARY') {
-                $aPrimary = array_keys($v0['fields']);
-                return count($aPrimary) == 1 ? $aPrimary[0] : $aPrimary;
+            if (strtoupper((string)$k0) === 'PRIMARY') {
+                $primary = array_keys($v0['fields']);
+                return count($primary) === 1 ? $primary[0] : $primary;
             }
         }
         return null;
-    } // function getPrimeryKey
+    }
 
-    /**
-     * Return 2x array with description of Keys, like:
-     * key_name => (type, fields)
-     * @return array
-     */
-    public function getKeys()
+    public function getKeys(): array
     {
-        $aResult = array();
+        $result = [];
         foreach ($this->_getKeys() as $v) {
-            if (!isset($aResult[$v['Key_name']])) {
-                $aResult[$v['Key_name']] = array(
+            if (!isset($result[$v['Key_name']])) {
+                $result[$v['Key_name']] = [
                     'type'    => $v['Index_type'],
                     'unique'  => !$v['Non_unique'],
                     'packed'  => $v['Packed'],
                     'comment' => $v['Index_comment'],
-                    'fields'  => array(),
-                );
+                    'fields'  => [],
+                ];
             }
-            $aResult[$v['Key_name']]['fields'][$v['Column_name']] = array(
+            $result[$v['Key_name']]['fields'][$v['Column_name']] = [
                 'order'       => $v['Seq_in_index'],
                 'subPart'     => isset($v['Sub_part']) ? $v['Sub_part'] : null,
                 'collation'   => $v['Collation'],
-                'null'        => strtoupper($v['Null']) == 'YES',
+                'null'        => strtoupper((string)$v['Null']) === 'YES',
                 'cardinality' => isset($v['Cardinality']) ? $v['Cardinality'] : null,
-            );
+            ];
         }
-        return $aResult;
-    } // function getKeys
+        return $result;
+    }
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Reset Default Value
-     * @param array $aField
-     * @return \fan\core\service\entity\descriptor
-     */
-    protected function _resetDefaultVal(&$aField)
+    protected function _resetDefaultVal(array &$field): static
     {
-        if (is_null($aField['default']) && !$aField['null']) {
-            if (in_array($aField['type'], array('tinyint', 'smallint', 'mediumint', 'int', 'bigint', 'decimal', 'float', 'double', 'real', 'bit', 'boolean', 'serial', 'timestamp', 'year'))) {
-                $aField['default'] = 0;
-            } elseif (in_array($aField['type'], array('char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext', 'binary', 'varbinary', 'tinyblob', 'mediumblob', 'blob', 'longblob'))) {
-                $aField['default'] = 0;
+        if (is_null($field['default']) && !$field['null']) {
+            if (in_array($field['type'], ['tinyint', 'smallint', 'mediumint', 'int', 'bigint', 'decimal', 'float', 'double', 'real', 'bit', 'boolean', 'serial', 'timestamp', 'year'])) {
+                $field['default'] = 0;
+            } elseif (in_array($field['type'], ['char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext', 'binary', 'varbinary', 'tinyblob', 'mediumblob', 'blob', 'longblob'])) {
+                $field['default'] = 0;
             }
         }
         return $this;
-    } // function _resetDefaultVal
+    }
 
-    protected function _getKeys()
+    protected function _getKeys(): array
     {
-        if (empty($this->aSrcKeys)) {
-            $this->aSrcKeys = $this->oConnection->execute('SHOW KEYS FROM `' . $this->sTableName . '`');
+        if (empty($this->srcKeys)) {
+            $this->srcKeys = $this->connection->execute('SHOW KEYS FROM `' . $this->tableName . '`');
         }
-        return $this->aSrcKeys;
-    } // function _getKeys
+        return $this->srcKeys;
+    }
 
-} // class \fan\core\service\entity\descriptor\mysql
-?>
+}

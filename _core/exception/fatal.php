@@ -1,4 +1,8 @@
-<?php namespace fan\core\exception;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\exception;
 /**
  * Exception a fatal error. This exception must be caught in bootstrap
  *
@@ -16,28 +20,19 @@
  */
 class fatal extends base
 {
-    /**
-     * Exception's constructor
-     * @param string $sLogErrMsg Log error message
-     * @param string $sShowErrMsg User error message if file doesn't exist
-     * @param string $sErrorFile File path for output User error message
-     * @param numeric $nCode Error Code
-     * @param \Exception $oPrevious Previous Exception
-     */
-    public function __construct($sLogErrMsg, $sShowErrMsg = '', $sErrorFile = '', $nCode = E_USER_ERROR, $oPrevious = null)
+    public function __construct(string $logErrMsg, string $showErrMsg = '', string $errorFile = '', int $code = E_USER_ERROR, ?\Throwable $previous = null)
     {
         if (!headers_sent()) {
             header('HTTP/1.1 500 Internal Server Error');
         }
 
-        $this->sShowErrMsg = $sShowErrMsg;
-        if($sErrorFile) {
-            $this->sShowErrFile = $sErrorFile;
+        $this->showErrMsg = $showErrMsg;
+        if ($errorFile) {
+            $this->showErrFile = $errorFile;
         }
 
-        parent::__construct($sShowErrMsg, $nCode, $oPrevious);
+        parent::__construct($showErrMsg, $code, $previous);
 
-        $this->_logByPhp('Fatal error (http://' . @$_SERVER['HTTP_HOST'] . @$_SERVER['REQUEST_URI'] . '). ' . $sLogErrMsg);
+        $this->_logByPhp('Fatal error (http://' . ($_SERVER['HTTP_HOST'] ?? '') . ($_SERVER['REQUEST_URI'] ?? '') . '). ' . $logErrMsg);
     }
-} // class \fan\core\exception\fatal
-?>
+}

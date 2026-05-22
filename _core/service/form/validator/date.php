@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\form\validator;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\form\validator;
 /**
  * Date class of validators
  *
@@ -17,26 +21,18 @@
 class date extends base
 {
 
-    /**
-     * Check up if a value is a date and is in given interval
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function isDate($mValue, $aData)
+    public function isDate(mixed $value, array $data): bool
     {
-        $mValue = str_replace(',', '.', $mValue);
+        $value = str_replace(',', '.', $value);
 
-        $oDate = \fan\project\service\date::instance($mValue);
-        /* @var $oDate \fan\core\service\date */
-        if (!$oDate->isValid()) {
+        $dateService = \fan\project\service\date::instance((string)$value);
+        /* @var $dateService \fan\core\service\date */
+        if (!$dateService->isValid()) {
             return false;
         }
 
-        $sDate = $oDate->get('mysql');
-        return (!isset($aData['min_value']) || $sDate >= $aData['min_value']) && (!isset($aData['max_value']) || $sDate <= $aData['max_value']);
-    } // function isDate
+        $date = $dateService->get('mysql');
+        return (!isset($data['min_value']) || $date >= $data['min_value']) && (!isset($data['max_value']) || $date <= $data['max_value']);
+    }
 
-} // class \fan\core\service\form\validator\date
-?>
+}

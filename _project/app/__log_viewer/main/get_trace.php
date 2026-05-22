@@ -1,4 +1,8 @@
-<?php namespace fan\app\__log_viewer\main;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__log_viewer\main;
 /**
  * index block
  *
@@ -17,23 +21,22 @@
 class get_trace extends \fan\project\block\loader\base
 {
 
-    public function init()
+    public function init(): void
     {
-        $aData = $this->getData();
-        $aJson = array();
+        $data = $this->getData();
+        $json = [];
 
-        $oParser = service('log')->getLogParser($aData['vr'], $aData['date']);
-        $aTrace  = $oParser->getTrace($aData['idRecord']);
+        $parser = service('log')->getLogParser($data['vr'], $data['date']);
+        $trace  = $parser->getTrace($data['idRecord']);
 
-        if ($aTrace) {
-            $aJson['trace'] = $aTrace;
+        if ($trace) {
+            $json['trace'] = $trace;
         }
 
-        $aJson['idHtml'] = $aData['idHtml'];
+        $json['idHtml'] = $data['idHtml'];
 
-        $this->setJson($aJson);
+        $this->setJson($json);
         $this->setText('ok');
     }
 
-} // class \fan\app\__log_viewer\main\get_trace
-?>
+}

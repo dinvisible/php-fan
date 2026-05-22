@@ -1,4 +1,8 @@
-<?php namespace fan\core\exception;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\exception;
 /**
  * Exception base class
  *
@@ -17,181 +21,138 @@
  */
 abstract class base extends \Exception
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * File to show the error for the user
      * @var string
      */
-    protected $sShowErrFile = null;
+    protected ?string $showErrFile = null;
 
     /**
      * Public error message for the user
      * @var string
      */
-    protected $sShowErrMsg = '';
+    protected string $showErrMsg = '';
 
     /**
      * Public error message for the user
      * @var string
      */
-    protected $sLogErrMsg = '';
+    protected string $logErrMsg = '';
 
     /**
      * Operation with DB when exception occured
      * Possible values: 'rollback', 'commit' or NULL
      * @var string
      */
-    private $sDbOper = null;
+    private ?string $dbOper = null;
 
     /**
      * Vars are excluded for Logging
      * @var array
      */
-    protected $aExcludeLogVars = array(
-        'aExcludeLogVars',
+    protected array $excludeLogVars = [
+        'excludeLogVars',
         'message',
         'file',
         'line',
         'xdebug_message',
-    );
+    ];
 
-    /**
-     * Exception's constructor
-     * @param string $sLogErrMsg Error message for log
-     * @param numeric $nCode Error Code
-     * @param \Exception $oPrevious Previous Exception
-     */
-    public function __construct($sLogErrMsg, $nCode = E_USER_ERROR, $oPrevious = null)
+    public function __construct(string $logErrMsg, int $code = E_USER_ERROR, ?\Throwable $previous = null)
     {
-        $this->sLogErrMsg = $sLogErrMsg;
-        if (empty($this->sShowErrMsg)) {
-            $this->sShowErrMsg = 'Please visit the site later.';
+        $this->logErrMsg = $logErrMsg;
+        if (empty($this->showErrMsg)) {
+            $this->showErrMsg = 'Please visit the site later.';
         }
-        if (empty($this->sShowErrFile)) {
-            $this->sShowErrFile = 'error_500';
-        }
-
-        $this->sDbOper = $this->_defineDbOper();
-        if (!empty($this->sDbOper) && class_exists('\fan\core\service\database', false)) {
-            \fan\project\service\database::fixAll($this->sDbOper);
+        if (empty($this->showErrFile)) {
+            $this->showErrFile = 'error_500';
         }
 
-        if (!empty($oPrevious) && $oPrevious instanceof \Exception) {
-            parent::__construct((string)$sLogErrMsg, $nCode, $oPrevious);
+        $this->dbOper = $this->_defineDbOper();
+        if (!empty($this->dbOper) && class_exists('\fan\core\service\database', false)) {
+            \fan\project\service\database::fixAll($this->dbOper);
+        }
+
+        if (!empty($previous) && $previous instanceof \Exception) {
+            parent::__construct((string)$logErrMsg, (int)$code, $previous);
         } else {
-            parent::__construct((string)$sLogErrMsg, $nCode);
+            parent::__construct((string)$logErrMsg, (int)$code);
         }
-    } // function __construct
+    }
 
-    /**
-     * Get Error File
-     * @return string
-     */
-    public function getErrorFile()
+    public function getErrorFile(): string
     {
-        return $this->sShowErrFile;
-    } // function getErrorFile
+        return $this->showErrFile;
+    }
 
-    /**
-     * Get error-message for log
-     * @return string
-     */
-    public function getMessageForLog()
+    public function getMessageForLog(): string
     {
-        return $this->sLogErrMsg;
-    } // function getErrorMessage
+        return $this->logErrMsg;
+    }
 
-    /**
-     * Get error-message for show
-     * @return string
-     */
-    public function getMessageForShow()
+    public function getMessageForShow(): string
     {
-        return $this->sShowErrMsg;
-    } // function getMessageForShow
+        return $this->showErrMsg;
+    }
 
-    /**
-     * Get Database Operation
-     * @return string
-     */
-    public function getDbOper()
+    public function getDbOper(): ?string
     {
-        return $this->sDbOper;
-    } // function getDbOper
+        return $this->dbOper;
+    }
 
-    /**
-     * Make property of Exception for logging them
-     * @return string
-     */
-    public function getLogVars()
+    public function getLogVars(): string
     {
-        $aVars = array();
-        $aTmp  = get_object_vars($this);
-        foreach ($aTmp as $k => $v) {
-            if (in_array($k, $this->aExcludeLogVars)) {
+        $vars = [];
+        $tmp  = get_object_vars($this);
+        foreach ($tmp as $k => $v) {
+            if (in_array($k, $this->excludeLogVars)) {
                 continue;
             } elseif (is_scalar($v)) {
-                $aVars[$k] = $v;
+                $vars[$k] = $v;
             } elseif (is_null($v)) {
-                $aVars[$k] = 'NULL';
+                $vars[$k] = 'NULL';
             } elseif (is_array($v)) {
-                $aVars[$k] = 'array[' . count($v) . ']';
+                $vars[$k] = 'array[' . count($v) . ']';
             } elseif (is_object($v)) {
-                $aVars[$k] = 'object of "' . get_class($v) . '"';
+                $vars[$k] = 'object of "' . get_class($v) . '"';
             } else {
-                $aVars[$k] = strval($v);
+                $vars[$k] = strval($v);
             }
         }
-        return var_export($aVars, true);
-    } // function getLogVars
+        return var_export($vars, true);
+    }
 
-    /**
-     * Log error by php
-     * @param string $sErrMsg Logged error message
-     * @param string $bExceptPos Fix or not exceptin position
-     * @return \fan\core\exception\base
-     */
-    protected function _logByPhp($sErrMsg, $bExceptPos = true)
+    protected function _logByPhp(string $errMsg, bool $exceptPos = true): static
     {
-        if($bExceptPos) {
-            $sErrMsg .= ' Error at the ' . str_replace('\\', '/', $this->file) . ', line ' . $this->line;
+        if ($exceptPos) {
+            $errMsg .= ' Error at the ' . str_replace('\\', '/', $this->file) . ', line ' . $this->line;
         }
-        \bootstrap::logError($sErrMsg);
+        \bootstrap::logError($errMsg);
         return $this;
-    } // function _logByPhp
+    }
 
-    /**
-     * Log error by service
-     * @param string $sErrMsg Logged error message
-     * @param string $sErrTitle Error title
-     * @param string $sNote
-     * @return \fan\core\exception\base
-     */
-    protected function _logByService($sErrMsg, $sErrTitle = '', $sNote = '')
+    protected function _logByService(string $errMsg, string $errTitle = '', string $note = ''): static
     {
-        if (!$sNote) {
-            $sNote = service('request')->getInfoString();
+        if (!$note) {
+            $note = self::staticContainerService('request')->getInfoString();
             if (!empty($_POST)) {
-                $sNote .= "\nPOST = " . var_export($_POST, true);
+                $note .= "\nPOST = " . var_export($_POST, true);
             }
         }
-        service('error')->logExceptionMessage($sErrMsg, $sErrTitle ? $sErrTitle : 'Log exception', $sNote);
+        $this->containerService('error')->logExceptionMessage($errMsg, $errTitle ? $errTitle : 'Log exception', $note);
         return $this;
-    } // function _logByService
+    }
 
-    /**
-     * Get operation for Db (rollback, commit or nothing) when exception occured
-     * @param string $sDbOper
-     * @return null|string
-     */
-    protected function _defineDbOper($sDbOper = null)
+    protected function _defineDbOper(?string $dbOper = null): ?string
     {
-        if (in_array($sDbOper, array('rollback', 'commit'))) {
-            return (string)$sDbOper;
-        } elseif (!empty($sDbOper) && $sDbOper != 'nothing') {
-            trigger_error('Incorret DB-operation name for Ecxeption ' . get_class($this), E_USER_WARNING);
+        if (in_array($dbOper, ['rollback', 'commit'])) {
+            return (string)$dbOper;
+        } elseif (!empty($dbOper) && (string)$dbOper !== 'nothing') {
+            throw new \InvalidArgumentException('Incorret DB-operation name for Ecxeption ' . get_class($this));
         }
         return null;
-    } // function _defineDbOper
+    }
 
-} // class \fan\core\exception\base
-?>
+}

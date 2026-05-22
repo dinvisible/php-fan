@@ -1,17 +1,17 @@
-<?php namespace fan\project\cli\timer;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\cli\timer;
 /**
  * Timer send packet of error email
  * @version 05.02.007 (31.08.2015)
  */
 class error_email extends \fan\core\base\timer_program
 {
-    /**
-     * send Email
-     */
-    public function sendPacketEmais()
+    public function sendPacketEmais(): void
     {
-        service('error')->sendPacketEmais();
-    } // function sendPacketEmais
+        $this->containerService('error')->sendPacketEmais();
+    }
 
-} // class \fan\project\cli\timer\error_email
-?>
+}

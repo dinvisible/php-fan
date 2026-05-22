@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\form\validator;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\form\validator;
 /**
  * Number class of validators
  *
@@ -17,152 +21,97 @@
 class number extends base
 {
 
-    /**
-     * Check up if a value is a integer number
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function isInt($mValue, $aData)
+    public function isInt(mixed $value, array $data): bool
     {
-        if (!preg_match('/^\-?\d+$/', $mValue)) {
+        if (!preg_match('/^\-?\d+$/', $value)) {
             return false;
         }
-        if (isset($aData['min_value']) && $mValue < $aData['min_value']) {
+        if (isset($data['min_value']) && $value < $data['min_value']) {
             return false;
         }
-        if (isset($aData['max_value']) && $mValue > $aData['max_value']) {
+        if (isset($data['max_value']) && $value > $data['max_value']) {
             return false;
         }
         return true;
-    } // function isInt
+    }
 
-    /**
-     * Check up if a value is a real number
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function isFloat($mValue, $aData)
+    public function isFloat(mixed $value, array $data): bool
     {
-        $mValue = str_replace(',', '.', $mValue);
-        if (!is_numeric($mValue)) {
+        $value = str_replace(',', '.', $value);
+        if (!is_numeric($value)) {
             return false;
         }
-        if (isset($aData['min_value']) && $mValue < $aData['min_value'] - 0.000001) {
+        if (isset($data['min_value']) && $value < $data['min_value'] - 0.000001) {
             return false;
         }
-        if (isset($aData['max_value']) && $mValue > $aData['max_value'] + 0.000001) {
+        if (isset($data['max_value']) && $value > $data['max_value'] + 0.000001) {
             return false;
         }
         return true;
-    } // function isFloat
+    }
 
-    /**
-     * Check up if a value is equal to compare field
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function equalTo($mValue, $aData)
+    public function equalTo(mixed $value, array $data): bool
     {
-        $mValue2 = null;
-        if (!empty($aData['compare_field'])) {
-            $mValue2 = $this->oFacade->getFieldValue($aData['compare_field']);
+        $value2 = null;
+        if (!empty($data['compare_field'])) {
+            $value2 = $this->facade->getFieldValue($data['compare_field']);
         }
-        return $mValue == $mValue2;
-    } // function equalTo
+        return (string)$value === (string)$value2;
+    }
 
-    /**
-     * Check up if a value is not equal to compare field
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function notEqualTo($mValue, $aData)
+    public function notEqualTo(mixed $value, array $data): bool
     {
-        $mValue2 = null;
-        if (isset($aData['compare_field'])) {
-            $mValue2 = array_val($this->aFieldValue, $aData['compare_field']);
+        $value2 = null;
+        if (isset($data['compare_field'])) {
+            $value2 = array_val($this->fieldValue, $data['compare_field']);
         }
-        return $mValue != $mValue2;
-    } // function notEqualTo
+        return (string)$value !== (string)$value2;
+    }
 
-    /**
-     * Check up if a value is greater then compare field
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function greaterThan($mValue, $aData)
+    public function greaterThan(mixed $value, array $data): bool
     {
-        $mValue2 = null;
-        if (isset($aData['compare_field'])) {
-            $mValue2 = array_val($this->aFieldValue, $aData['compare_field']);
+        $value2 = null;
+        if (isset($data['compare_field'])) {
+            $value2 = array_val($this->fieldValue, $data['compare_field']);
         }
-        if (isset($aData['data_type']) && ($aData['data_type'] == 'DATE' || $aData['data_type'] == 'DATETIME')) {
-            $mValue  = \fan\project\service\date::instance($mValue)->get('mysql');
-            $mValue2 = \fan\project\service\date::instance($mValue2)->get('mysql');
+        $dataType = (string)($data['data_type'] ?? '');
+        if ($dataType === 'DATE' || $dataType === 'DATETIME') {
+            $value  = \fan\project\service\date::instance((string)$value)->get('mysql');
+            $value2 = \fan\project\service\date::instance((string)$value2)->get('mysql');
         }
-        return $mValue > $mValue2;
-    } // function greaterThan
+        return $value > $value2;
+    }
 
-    /**
-     * Check up if a value is lesser then compare field
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function lesserThan($mValue, $aData)
+    public function lesserThan(mixed $value, array $data): bool
     {
-        $mValue2 = null;
-        if (isset($aData['compare_field'])) {
-            $mValue2 = array_val($this->aFieldValue, $aData['compare_field']);
+        $value2 = null;
+        if (isset($data['compare_field'])) {
+            $value2 = array_val($this->fieldValue, $data['compare_field']);
         }
-        if (isset($aData['data_type']) && ($aData['data_type'] == 'DATE' || $aData['data_type'] == 'DATETIME')) {
-            $mValue  = \fan\project\service\date::instance($mValue)->get('mysql');
-            $mValue2 = \fan\project\service\date::instance($mValue2)->get('mysql');
+        $dataType = (string)($data['data_type'] ?? '');
+        if ($dataType === 'DATE' || $dataType === 'DATETIME') {
+            $value  = \fan\project\service\date::instance((string)$value)->get('mysql');
+            $value2 = \fan\project\service\date::instance((string)$value2)->get('mysql');
         }
-        return $mValue < $mValue2;
-    } // function lesserThan
+        return $value < $value2;
+    }
 
-    /**
-     * Check up if a value is greater or equal to compare field
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function greaterOrEqualTo($mValue, $aData)
+    public function greaterOrEqualTo(mixed $value, array $data): bool
     {
-        $mValue2 = null;
-        if (isset($aData['compare_field'])) {
-            $mValue2 = array_val($this->aFieldValue, $aData['compare_field']);
+        $value2 = null;
+        if (isset($data['compare_field'])) {
+            $value2 = array_val($this->fieldValue, $data['compare_field']);
         }
-        return $mValue >= $mValue2;
-    } // function greaterOrEqualTo
+        return $value >= $value2;
+    }
 
-    /**
-     * Check up if a value is lesser or equal to compare field
-     *
-     * @param mixed $mValue
-     * @param array $aData
-     * @return bool
-     */
-    public function lesserOrEqualTo($mValue, $aData)
+    public function lesserOrEqualTo(mixed $value, array $data): bool
     {
-        $mValue2 = null;
-        if (isset($aData['compare_field'])) {
-            $mValue2 = array_val($this->aFieldValue, $aData['compare_field']);
+        $value2 = null;
+        if (isset($data['compare_field'])) {
+            $value2 = array_val($this->fieldValue, $data['compare_field']);
         }
-        return $mValue <= $mValue2;
-    } // function lesserOrEqualTo
+        return $value <= $value2;
+    }
 
-} // class \fan\core\service\form\validator\number
-?>
+}

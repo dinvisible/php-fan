@@ -1,4 +1,7 @@
-<?php namespace fan\core\base\model\file_data;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\base\model\file_data;
 /**
  * Entity of file data
  *
@@ -16,5 +19,4 @@
  */
 abstract class entity extends \fan\core\base\model\entity
 {
-} // class \fan\core\base\model\file_data\entity
-?>
+}

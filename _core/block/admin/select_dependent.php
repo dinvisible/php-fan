@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\admin;
 /**
  * Block admin select dependent
  *
@@ -16,48 +20,31 @@
  */
 class select_dependent extends base
 {
-    /**
-     * Block constructor
-     * @param string $sBlockName Block Name
-     * @param \core\service\tab $oTab
-     * /
-    public function __construct($oTab, $sBasicFilePatch)
+    public function init(): void
     {
-        parent::__construct($oTab, $sBasicFilePatch);
-    } // function __construct */
+        $this->containerService('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
 
-    /**
-     * Init output block data
-     */
-    public function init()
-    {
-        service('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
+        $data = $this->getData();
 
-        $aData = $this->getData();
-
-        $sMethod = 'do_' . $aData['op'];
-        $this->setJson(array(
-            'op'   => $aData['op'],
-            'data' => $this->$sMethod($aData['data'])
-        ));
+        $method = 'do_' . $data['op'];
+        $this->setJson([
+            'op'   => $data['op'],
+            'data' => $this->$method($data['data'])
+        ]);
 
         $this->setText('ok');
-    } // function init
+    }
 
 
-    /**
-     * Load data for next list of dependet selects
-     */
-    public function do_load_next_list($aData)
+    public function do_load_next_list(mixed $data): array
     {
-        $nLevel = $aData['level'];
-        $aMeta = $this->getMeta(array('level_data', $nLevel));
-        return array(
-            'hash'  => ge($aMeta['entity'])->getRowsetByParam(array($aMeta['param_key'] => $aData['cval']))->getArrayHash($aMeta['key'], $aMeta['val']),
-            'level' => $nLevel,
-            'cval'  => $aData['cval'],
-        );
-    } // function do_load_next_list
+        $level = $data['level'];
+        $meta = $this->getMeta(['level_data', $level]);
+        return [
+            'hash'  => ge((string)$meta['entity'])->getRowsetByParam([$meta['param_key'] => $data['cval']])->getArrayHash($meta['key'], $meta['val']),
+            'level' => $level,
+            'cval'  => $data['cval'],
+        ];
+    }
 
-} // class \fan\core\block\admin\select_dependent
-?>
+}

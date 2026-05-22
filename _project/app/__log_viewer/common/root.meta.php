@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Meta data of viewer_root
  *
@@ -14,11 +17,10 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.005 (12.02.2015)
  */
-return array(
-    'own' => array(
-        'externalCss' => array(
-            'style' => array('/css/main.css'),
-        ),
-    ),
-);
-?>
+return [
+    'own' => [
+        'externalCss' => [
+            'style' => ['/css/main.css'],
+        ],
+    ],
+];

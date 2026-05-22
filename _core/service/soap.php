@@ -1,4 +1,8 @@
-<?php namespace fan\core\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service;
 /**
  * SOAP operation service
  *
@@ -19,278 +23,214 @@ class soap extends \fan\core\base\service\multi
     /**
      * @var SoapClient
      */
-    private $oSoapObj;
+    private ?object $soapObj = null;
     /**
      * @var \SoapFault
      */
-    private $oSoapFault;
-    /**
-     * @var boolean - enable/disable error-logging
-     */
-    private $bLogEnabled;
+    private ?object $soapFault = null;
+    private ?bool $logEnabled = null;
 
     /**
      * Soap Headers
      * @var array
      */
-    private $aSoapHeaders = array();
+    private array $soapHeaders = [];
 
-    /**
-     * Service's constructor
-     */
-    protected function __construct($bLogEnabled)
+    protected function __construct(bool $logEnabled)
     {
         parent::__construct(false);
-        $bEnableCache = $this->oConfig['CACHE_ENABLED'] ? 1 : 0;
-        ini_set('soap.wsdl_cache_enabled', $bEnableCache);
-        if ($bEnableCache) {
-            if ($this->oConfig['CACHE_DIR']) {
-                ini_set('soap.wsdl_cache_dir', $this->oConfig['CACHE_DIR']);
+        $enableCache = $this->config['CACHE_ENABLED'] ? 1 : 0;
+        ini_set('soap.wsdl_cache_enabled', $enableCache);
+        if ($enableCache) {
+            if ($this->config['CACHE_DIR']) {
+                ini_set('soap.wsdl_cache_dir', $this->config['CACHE_DIR']);
             }
-            if ($this->oConfig['CACHE_TTL']) {
-                ini_set('soap.wsdl_cache_ttl', $this->oConfig['CACHE_TTL']);
+            if ($this->config['CACHE_TTL']) {
+                ini_set('soap.wsdl_cache_ttl', $this->config['CACHE_TTL']);
             }
         }
-        if ($this->oConfig['TRACE_ENABLED']) {
-            $this->oConfig['PARAM']['trace'] = 1;
+        if ($this->config['TRACE_ENABLED']) {
+            $this->config['PARAM']['trace'] = 1;
         }
-        $this->bLogEnabled = $bLogEnabled;
-    } // function __construct
+        $this->logEnabled = (bool)$logEnabled;
+    }
+
+    public static function instance(string $wsdlFile, ?array $param = null, bool $logEnabled = true): static
+    {
+        $instance = new self((bool)$logEnabled);
+        $instance->_initSoapObj($wsdlFile, $param);
+        return $instance;
+    }
 
     /**
-     * Get Service's instance of current service
-     * @param string $sWsdlFile wsdl-file name
-     * @param array $aParam parameter to create SOAP
-     * @return \core\service\soap
+     * @param mixed $options Optional settings that refine the operation behavior.
      */
-    public static function instance($sWsdlFile, $aParam = null, $bLogEnabled = true)
+    public function call(mixed $funcName, mixed $arguments = [], mixed $options = null): mixed
     {
-        $oInstance = new self($bLogEnabled);
-        $oInstance->_initSoapObj($sWsdlFile, $aParam);
-        return $oInstance;
-    } // function instance
-
-    /**
-     * Init Path to image and check exist file
-     * @param string $sFuncName SOAP function name
-     * @param array $aArguments SOAP function arguments
-     * @param array $aOptions SOAP options
-     * @return object - Soap object if operation is successful
-     */
-    public function call($sFuncName, $aArguments = array(), $aOptions = null)
-    {
-        if (!is_object($this->oSoapObj)) {
+        if (!is_object($this->soapObj)) {
             $this->_makeServiceException('Soap Object is not set');
         }
-        if (!is_string($sFuncName)) {
-            $this->_makeServiceException('Error! Function name is not string there: (' . gettype($sFuncName) . ') "' . strval($sFuncName) . '"');
+        if (!is_string($funcName)) {
+            $this->_makeServiceException('Error! Function name is not string there: (' . gettype($funcName) . ') "' . strval($funcName) . '"');
         }
 
-        $oErr = service('error');
-        /* @var $oErr \fan\core\service\error */
-        if (!is_array($aArguments)) {
-            $oErr->logErrorMessage('Error! Arguments is not array there: (' . gettype($aArguments) . ') "' . strval($aArguments) . '"', 'SOAP: incorrect arguments.', null, true);
-            $aArguments = array();
+        $errorService = $this->containerService('error');
+        /* @var $errorService \fan\core\service\error */
+        if (!is_array($arguments)) {
+            $errorService->logErrorMessage('Error! Arguments is not array there: (' . gettype($arguments) . ') "' . strval($arguments) . '"', 'SOAP: incorrect arguments.', null, true);
+            $arguments = [];
         }
-        if (!is_null($aOptions) && !is_array($aOptions)) {
-            $oErr->logErrorMessage('Error! Options is not array there: (' . gettype($aOptions) . ') "' . strval($aOptions) . '"', 'SOAP: incorrect options.', null, true);
-            $aOptions = array();
+        if (!is_null($options) && !is_array($options)) {
+            $errorService->logErrorMessage('Error! Options is not array there: (' . gettype($options) . ') "' . strval($options) . '"', 'SOAP: incorrect options.', null, true);
+            $options = [];
         }
         try {
-            $this->oSoapFault   = null;
-            $aSoapHeaders       = $this->aSoapHeaders;
-            $this->aSoapHeaders = array();
-            $oErr->setErrorBuffering();
-            $mRet = $this->oSoapObj->__soapCall($sFuncName, $aArguments, $aOptions, empty($aSoapHeaders) ? null : $aSoapHeaders);
-            $aErr = $oErr->offErrorBuffering();
-            if ($aErr) {
-                $aLastErr = end($aErr);
-                $oErr->logErrorMessage($aLastErr['sys_err_message'], 'Soap call error', 'SOAP method: ' . $sFuncName, true);
+            $this->soapFault   = null;
+            $soapHeaders       = $this->soapHeaders;
+            $this->soapHeaders = [];
+            $errorService->setErrorBuffering();
+            $ret = $this->soapObj->__soapCall($funcName, $arguments, $options, empty($soapHeaders) ? null : $soapHeaders);
+            $err = $errorService->offErrorBuffering();
+            if ($err) {
+                $lastErr = end($err);
+                $errorService->logErrorMessage($lastErr['sys_err_message'], 'Soap call error', 'SOAP method: ' . $funcName, true);
             }
-            return $mRet;
-        } catch (\SoapFault $oSoapErr) {
-            $this->oSoapFault = $oSoapErr;
-            if ($this->bLogEnabled) {
-                $oErr->logSoapError($oSoapErr);
+            return $ret;
+        } catch (\SoapFault $soapErr) {
+            $this->soapFault = $soapErr;
+            if ($this->logEnabled) {
+                $errorService->logSoapError($soapErr);
             }
             return null;
         }
-    } // function call
+    }
 
-    /**
-     * Set SOAP header
-     * @param string $sNameSpace SOAP name-space
-     * @param array $sName SOAP name of key
-     * @param array $mData SOAP header data
-     */
-    public function setHeader($sNameSpace, $sName, $mData = null)
+    public function setHeader(string $nameSpace, array $name, ?array $data = null): void
     {
-        $this->aSoapHeaders[] = new \SoapHeader($sNameSpace, $sName, $mData);
-    } // function setHeader
+        $this->soapHeaders[] = new \SoapHeader($nameSpace, $name, $data);
+    }
 
 
-    /**
-     * Set SOAP var
-     * @param array $mData header data
-     * @param array $aVarParam
-     * @param array $aLevels
-     * @return mixed
-     */
-    public function setSoapVar($mData, $aVarParam = array(), $aLevels = array(0))
+    public function setSoapVar(array $data, array $varParam = [], array $levels = [0]): mixed
     {
-        sort($aLevels);
-        return $this->_setSoapVarRecursive($mData, $aVarParam, $aLevels, 0);
-    } // function setSoapVar
+        sort($levels);
+        return $this->_setSoapVarRecursive($data, $varParam, $levels, 0);
+    }
 
-    /**
-     * Allow Logging of SOAP-error
-     * @param boolean $bLogEnabled
-     */
-    public function allowErrLogging($bLogEnabled)
+    public function allowErrLogging(bool $logEnabled): void
     {
-        $this->bLogEnabled = !empty($bLogEnabled);
-    } // function allowErrLogging
+        $this->logEnabled = !empty($logEnabled);
+    }
 
-    /**
-     * Check is SOAP error;
-     * @return boolean - true if error occurred
-     */
-    public function isError()
+    public function isError(): bool
     {
-        return !is_null($this->oSoapFault);
-    } // function isError
+        return !is_null($this->soapFault);
+    }
 
-    /**
-     * Get object of SoapFault;
-     * @return \SoapFault
-     */
-    public function getSoapFault()
+    public function getSoapFault(): ?\SoapFault
     {
-        return $this->oSoapFault;
-    } // function getSoapFault
+        return $this->soapFault;
+    }
 
-    /**
-     * Get debug info.
-     */
-    public function getDebugInfo()
+    public function getDebugInfo(): ?string
     {
-        if (!$this->oSoapObj) {
+        if (!$this->soapObj) {
             return null;
-        } else if (!$this->oConfig['TRACE_ENABLED']) {
+        } else if (!$this->config['TRACE_ENABLED']) {
             return '';
         }
 
-        $sMsg  = '<fieldset class="soap_log"><legend>Sent Request DATA</legend>';
-        $sMsg .= '<fieldset><legend>Headers</legend><div>' . trim($this->oSoapObj->__getLastRequestHeaders()) . '</div></fieldset>';
-        $sMsg .= '<fieldset><legend>Request</legend><pre>' . $this->_format4log($this->oSoapObj->__getLastRequest()) . '</pre></fieldset>';
-        $sMsg .= '</fieldset>';
+        $msg  = '<fieldset class="soap_log"><legend>Sent Request DATA</legend>';
+        $msg .= '<fieldset><legend>Headers</legend><div>' . trim((string)$this->soapObj->__getLastRequestHeaders()) . '</div></fieldset>';
+        $msg .= '<fieldset><legend>Request</legend><pre>' . $this->_format4log((string)$this->soapObj->__getLastRequest()) . '</pre></fieldset>';
+        $msg .= '</fieldset>';
 
-        $sMsg .= '<fieldset class="soap_log"><legend>Received Response DATA</legend>';
-        $sMsg .= '<fieldset><legend>Headers</legend><div>' . trim($this->oSoapObj->__getLastResponseHeaders()) . '</div></fieldset>';
-        $sMsg .= '<fieldset><legend>Response</legend><pre>' . $this->_format4log($this->oSoapObj->__getLastResponse()) . '</pre></fieldset>';
-        $sMsg .= '</fieldset>';
-        return $sMsg;
-    } // function getDebugInfo
+        $msg .= '<fieldset class="soap_log"><legend>Received Response DATA</legend>';
+        $msg .= '<fieldset><legend>Headers</legend><div>' . trim((string)$this->soapObj->__getLastResponseHeaders()) . '</div></fieldset>';
+        $msg .= '<fieldset><legend>Response</legend><pre>' . $this->_format4log((string)$this->soapObj->__getLastResponse()) . '</pre></fieldset>';
+        $msg .= '</fieldset>';
+        return $msg;
+    }
 
-    /**
-     * Init SOAP Connect
-     * @param string $sWsdlFile wsdl-file name
-     * @param array $aParam parameter to create SOAP
-     * @return \core\service\soap
-     */
-    protected function _initSoapObj($sWsdlFile, $aParam = null)
+    protected function _initSoapObj(string $wsdlFile, mixed $param = null): ?\SoapClient
     {
-        $bIsURL = preg_match('/^https?:\/\//', $sWsdlFile);
-        $sWsdlFile_Full = $bIsURL ? $sWsdlFile : \bootstrap::parsePath($this->oConfig['WSDL_DIR']) . $sWsdlFile;
+        $isURL = (bool)preg_match('/^https?:\/\//', $wsdlFile);
+        $wsdlFile_Full = $isURL ? $wsdlFile : \bootstrap::parsePath((string)$this->config['WSDL_DIR']) . $wsdlFile;
 
-        if (isset($this->oConfig['PARAM'])) {
-            if (!is_array($aParam)) {
-                $aParam = array();
+        if (isset($this->config['PARAM'])) {
+            if (!is_array($param)) {
+                $param = [];
             }
-            foreach ($this->oConfig['PARAM'] as $k => $v) {
-                if (!array_key_exists($k, $aParam)) {
-                    $aParam[$k] = $v;
+            foreach ($this->config['PARAM'] as $k => $v) {
+                if (!array_key_exists($k, $param)) {
+                    $param[$k] = $v;
                 }
             }
         }
 
         if ($this->getConfig('BLOCK_SSL_VERIFY', false)) {
-            if (!is_array($aParam)) {
-                $aParam = array();
+            if (!is_array($param)) {
+                $param = [];
             }
-            $aParam['stream_context'] = stream_context_create(array(
-                'ssl' => array(
+            $param['stream_context'] = stream_context_create([
+                'ssl' => [
                     'verify_peer'      => false,
                     'verify_peer_name' => false,
-                ))
+                ]]
             );
         }
 
-        if ($bIsURL || file_exists($sWsdlFile_Full)) {
+        if ($isURL || file_exists($wsdlFile_Full)) {
             try {
-                if (isset($aParam['soap_version'])) {
-                    if (is_numeric($aParam['soap_version'])) {
-                        $aParam['soap_version'] = (int)$aParam['soap_version'];
+                if (isset($param['soap_version'])) {
+                    if (is_numeric($param['soap_version'])) {
+                        $param['soap_version'] = (int)$param['soap_version'];
                     } else {
-                        $aConst = get_defined_constants();
-                        $aParam['soap_version'] = $aConst[array_val($aParam, 'soap_version')];
+                        $const = get_defined_constants();
+                        $param['soap_version'] = $const[array_val($param, 'soap_version')];
                     }
                 }
-                $this->oSoapObj = $aParam && is_array($aParam) ? new \SoapClient($sWsdlFile_Full, $aParam) : new \SoapClient($sWsdlFile_Full);
-                return $this->oSoapObj;
-            } catch (\SoapFault $oErr) {
-                $this->oSoapFault = $oErr;
-                service('error')->logSoapError($oErr);
-                return;
+                $this->soapObj = $param && is_array($param) ? new \SoapClient($wsdlFile_Full, $param) : new \SoapClient($wsdlFile_Full);
+                return $this->soapObj;
+            } catch (\SoapFault $err) {
+                $this->soapFault = $err;
+                $this->containerService('error')->logSoapError($err);
+                return null;
             }
         } else {
-            service('error')->logErrorMessage('Error. WSDL-file "' . $sWsdlFile_Full . '" isn\'t exist.');
-            return;
+            $this->containerService('error')->logErrorMessage('Error. WSDL-file "' . $wsdlFile_Full . '" isn\'t exist.');
+            return null;
         }
-    } // function _initSoapObj
+    }
 
-    /**
-     * Set SOAP var recursive
-     * @param array $mData
-     * @param array $aVarParam
-     * @param array $aLevels
-     * @param integer $iCurrentLevel
-     * @return mixed
-     */
-    protected function _setSoapVarRecursive($mData, $aVarParam, $aLevels, $iCurrentLevel)
+    protected function _setSoapVarRecursive(mixed $data, array $varParam, array $levels, int $currentLevel): mixed
     {
-        if (is_array($mData)) {
-            foreach ($mData as &$v) {
-                $v = $this->_setSoapVarRecursive($v, $aVarParam, $aLevels, $iCurrentLevel + 1);
+        if (is_array($data)) {
+            foreach ($data as &$v) {
+                $v = $this->_setSoapVarRecursive($v, $varParam, $levels, $currentLevel + 1);
             }
         }
-        if (in_array($iCurrentLevel, $aLevels) && !is_scalar($mData)) {
-            $mData = new \SoapVar(
-                $mData,
+        if (in_array($currentLevel, $levels) && !is_scalar($data)) {
+            $data = new \SoapVar(
+                $data,
                 SOAP_ENC_OBJECT,
-                array_val($aVarParam, 'type_name'),
-                array_val($aVarParam, 'type_namespace'),
-                array_val($aVarParam, 'node_name'),
-                array_val($aVarParam, 'node_namespace')
+                array_val($varParam, 'type_name'),
+                array_val($varParam, 'type_namespace'),
+                array_val($varParam, 'node_name'),
+                array_val($varParam, 'node_namespace')
             );
         }
-        return $mData;
-    } // function _setSoapVarRecursive
+        return $data;
+    }
 
-    /**
-     * Format XML-code
-     * @param string $sXml
-     * @return string
-     */
-    protected function _format4log($sXml)
+    protected function _format4log(string $xml): string
     {
-        if ($sXml == '') {
+        if ($xml === '') {
             return '';
         }
-        $oXml = new \DOMDocument();
-        $oXml->loadXML($sXml);
-        $oXml->formatOutput = true;
-        return htmlspecialchars($oXml->saveXML());
-    } // function _format4log
-} // class \fan\core\service\soap
-?>
+        $xml = new \DOMDocument();
+        $xml->loadXML($xml);
+        $xml->formatOutput = true;
+        return htmlspecialchars((string)$xml->saveXML());
+    }
+}

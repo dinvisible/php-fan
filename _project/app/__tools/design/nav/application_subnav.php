@@ -1,49 +1,39 @@
-<?php namespace fan\app\__tools\design;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__tools\design;
 /**
  * application_subnav block for tools
  * @version 05.02.006 (20.04.2015)
  */
 class application_subnav extends \fan\project\block\common\simple
 {
-    /**
-     * @var array Nav
-     */
-    protected $aNav = array();
+    protected array $nav = [];
 
-    /**
-     * @var string Current element
-     */
-    protected $sCurrent = null;
+    protected ?string $current = null;
 
-    /**
-     * Init block
-     */
-    public function init()
+    public function init(): void
     {
-        $oReq = $this->getRequest();
-        $sMainKey = implode('/', $oReq->getAll('M'));
-        $this->sCurrent = $oReq->get(0, 'A');
+        $req = $this->getRequest();
+        $mainKey = implode('/', $req->getAll('M'));
+        $this->current = $req->get(0, 'A');
 
-        $aConf = service('config')->get('application');
-        foreach ($aConf['APPLICATIONS'] as $k => $v) {
-            $this->aNav[$k] = array(
-                'url'  => $this->oTab->getURI('~/' . $sMainKey . '/' . $k . '.html', 'link', null, null),
+        $conf = $this->containerService('config')->get('application');
+        foreach ($conf['APPLICATIONS'] as $k => $v) {
+            $this->nav[$k] = [
+                'url'  => $this->tab->getURI('~/' . $mainKey . '/' . $k . '.html', 'link', null, null),
                 'name' => 'APP <b>' . $k . '</b>',
-            );
+            ];
         }
 
-        $this->view->aNav    = $this->aNav;
-        $this->view->sCurrent = $this->sCurrent;
+        $this->view->nav    = $this->nav;
+        $this->view->current = $this->current;
     }
 
-    /**
-     * Get current name
-     * @return string
-     */
-    public function getCurrentName()
+    public function getCurrentName(): ?string
     {
-        return @$this->aNav[$this->sCurrent]['name'];
+        return $this->nav[$this->current]['name'] ?? null;
     }
 
-} // class \fan\app\__tools\design\application_subnav
-?>
+}

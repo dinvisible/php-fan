@@ -1,4 +1,8 @@
-<?php namespace fan\core\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 
 /**
@@ -21,303 +25,203 @@ class image_draw extends image_modify
 
 // =========================== Main Convert functions ============================ \\
 
-    /**
-     * Setting Image Background
-     * @param integer|string|array $mBgrColor - color of background
-     * @return \fan\core\service\image_draw
-     */
-    public function setBackground($mBgrColor = 0xFFFFFF)
+    public function setBackground(int|string|array $bgrColor = 0xFFFFFF): static
     {
-        imagefilledrectangle($this->oImage, 0, 0, $this->nSourceWidth, $this->nSourceHeight, $this->adaptColor($mBgrColor));
+        imagefilledrectangle($this->image, 0, 0, (int)$this->sourceWidth, (int)$this->sourceHeight, $this->adaptColor($bgrColor));
         return $this;
-    } // function setBackground
+    }
 
-    /**
-     * Drawing the text in rectangle
-     * @param string $sString
-     * @param array $aCoord
-     * @param numeric $nFontNumber
-     * @param integer|string|array $mFntColor
-     * @param string $sTxtAlign
-     * @param string $sVertAlign
-     * @return \fan\core\service\image_draw
-     */
-    public function drawText($sString, $aCoord, $nFontNumber = 1, $mFntColor = 0x000000, $sTxtAlign = 'left', $sVertAlign = 'top')
+    public function drawText(string $string, array $coord, int|float $fontNumber = 1, int|string|array $fntColor = 0x000000, string $txtAlign = 'left', string $vertAlign = 'top'): static
     {
+        $fontNumber = (int)$fontNumber;
+
         //Calculating of top y coordinate for text
-        if ($sVertAlign == 'top') {
-            $top = $this->_getCoord($aCoord, 'top');
-        } elseif ($sVertAlign == 'middle') {
-            $top = ceil(($this->nSourceHeight - imagefontheight($nFontNumber) - $this->_getCoordDiff($aCoord, 'bottom', 'top')) / 2);
-        } elseif ($sVertAlign == 'bottom') {
-            $top = $this->nSourceHeight - ($this->_getCoord($aCoord, 'bottom') + imagefontheight($nFontNumber));
+        if ($vertAlign === 'top') {
+            $top = $this->_getCoord($coord, 'top');
+        } elseif ($vertAlign === 'middle') {
+            $top = ceil(($this->sourceHeight - imagefontheight($fontNumber) - $this->_getCoordDiff($coord, 'bottom', 'top')) / 2);
+        } elseif ($vertAlign === 'bottom') {
+            $top = $this->sourceHeight - ($this->_getCoord($coord, 'bottom') + imagefontheight($fontNumber));
         }
         //Calculating of left x coordinate for text
-        if ($sTxtAlign == 'left') {
-            $left = $this->_getCoord($aCoord, 'left');
-        } elseif ($sTxtAlign == 'center') {
-            $left = ceil(($this->nSourceWidth - imagefontwidth($nFontNumber) * strlen($sString) - $this->_getCoordDiff($aCoord, 'right', 'left')) / 2);
-        } elseif ($sTxtAlign == 'right') {
-            $left = $this->nSourceWidth - ($this->_getCoord($aCoord, 'right') + imagefontwidth($nFontNumber) * strlen($sString));
+        if ($txtAlign === 'left') {
+            $left = $this->_getCoord($coord, 'left');
+        } elseif ($txtAlign === 'center') {
+            $left = ceil(($this->sourceWidth - imagefontwidth($fontNumber) * strlen($string) - $this->_getCoordDiff($coord, 'right', 'left')) / 2);
+        } elseif ($txtAlign === 'right') {
+            $left = $this->sourceWidth - ($this->_getCoord($coord, 'right') + imagefontwidth($fontNumber) * strlen($string));
         }
 
-        imagestring($this->oImage, $nFontNumber, $left, $top, $sString, $this->adaptColor($mFntColor));
+        imagestring($this->image, $fontNumber, (int)$left, (int)$top, $string, $this->adaptColor($fntColor));
         return $this;
-    } // function drawText
+    }
 
-    /**
-     * Drawing the text by using ttf font file in rectangle
-     * @param string $sString
-     * @param array $aCoord : 'left', 'right', 'top', 'bottom', 'height', 'angle'
-     * @param string $sFontFile
-     * @param integer|string|array $mFntColor
-     * @param string $sTxtAlign
-     * @param string $sVertAlign
-     * @param array $aInfo
-     * @return \fan\core\service\image_draw
-     */
-    public function drawTextTtf($sString, $aCoord, $sFontFile = '', $mFntColor = 0X000000, $sTxtAlign = 'left', $sVertAlign = 'top',  $aInfo = array('linespacing' => 1))
+    public function drawTextTtf(string $string, array $coord, string $fontFile = '', int|string|array $fntColor = 0X000000, string $txtAlign = 'left', string $vertAlign = 'top',  array $info = ['linespacing' => 1]): static
     {
-        if (!$sFontFile) {
-            $sFontFile = $this->get_config('FONT_FILE', 'arial.ttf');
+        if (!$fontFile) {
+            $fontFile = (string)$this->get_config('FONT_FILE', 'arial.ttf');
         }
-        $sFontFile = \bootstrap::parsePath($this->getConfig('FONT_PATH', '{PROJECT}/data/font/')) . $sFontFile;
+        $fontFile = (string)\bootstrap::parsePath((string)$this->getConfig('FONT_PATH', '{PROJECT}/data/font/')) . $fontFile;
 
-        $iFontHeight = isset($aCoord['height']) ? $aCoord['height'] : $this->nSourceHeight - $this->_getCoordDiff($aCoord, 'bottom', 'top')/2;
-        $aStringSize = imageftbbox($iFontHeight, 0, $sFontFile, $sString, $aInfo);
-        $iStrWidth  = $aStringSize[4];
-        $iStrHeight = -$aStringSize[5];
+        $fontHeight = (int)(isset($coord['height']) ? $coord['height'] : $this->sourceHeight - $this->_getCoordDiff($coord, 'bottom', 'top') / 2);
+        $stringSize = imageftbbox($fontHeight, 0, $fontFile, $string, $info);
+        $strWidth  = $stringSize[4];
+        $strHeight = -$stringSize[5];
 
         //calculating of top y coordinate for text
-        if ($sVertAlign == 'top') {
-            $nTop = $this->_getCoord($aCoord, 'top');
-        } elseif ($sVertAlign == 'middle') {
-            $nTop = ceil(($this->nSourceHeight - $iStrHeight - $this->_getCoordDiff($aCoord, 'bottom', 'top')) / 2);
-        } elseif ($sVertAlign == 'bottom') {
-            $nTop = $this->nSourceHeight - ($this->_getCoord($aCoord, 'bottom') + $iStrHeight);
+        if ($vertAlign === 'top') {
+            $top = $this->_getCoord($coord, 'top');
+        } elseif ($vertAlign === 'middle') {
+            $top = ceil(($this->sourceHeight - $strHeight - $this->_getCoordDiff($coord, 'bottom', 'top')) / 2);
+        } elseif ($vertAlign === 'bottom') {
+            $top = $this->sourceHeight - ($this->_getCoord($coord, 'bottom') + $strHeight);
         }
         //calculating of left x coordinate for text
-        if ($sTxtAlign == 'left') {
-            $nLeft = $this->_getCoord($aCoord, 'left');
-        } elseif ($sTxtAlign == 'center') {
-            $nLeft = ceil(($this->nSourceWidth - $iStrWidth - $this->_getCoordDiff($aCoord, 'right', 'left')) / 2);
-        } elseif ($sTxtAlign == 'right') {
-            $nLeft = $this->nSourceWidth - ($this->_getCoord($aCoord, 'right') + $iStrWidth);
+        if ($txtAlign === 'left') {
+            $left = $this->_getCoord($coord, 'left');
+        } elseif ($txtAlign === 'center') {
+            $left = ceil(($this->sourceWidth - $strWidth - $this->_getCoordDiff($coord, 'right', 'left')) / 2);
+        } elseif ($txtAlign === 'right') {
+            $left = $this->sourceWidth - ($this->_getCoord($coord, 'right') + $strWidth);
         }
 
-        imagettftext($this->oImage, $iFontHeight, array_val($aCoord, 'angle', 0), $nLeft, $nTop + $iFontHeight, $this->adaptColor($mFntColor), $sFontFile, $sString);
+        imagettftext($this->image, $fontHeight, (float)array_val($coord, 'angle', 0), (int)$left, (int)($top + $fontHeight), $this->adaptColor($fntColor), $fontFile, $string);
         return $this;
-    } // function drawTextTtf
+    }
 
-   /**
-     * Drawing rectangle
-     * @param array $aCoord - array of coordinates
-     *   "left" - X-coordinate of left top corner
-     *   "top" - Y-coordinate of left top corner
-     *   "right" - X-coordinate of right bottom corner
-     *   "bottom" - Y-coordinate of right bottom corner
-     * @param integer|string|array|null $mBrdColor - border color
-     * @param integer|string|array|null $mBgrColor - background color
-     * @return \fan\core\service\image_draw
-     */
-    public function rectangle($aCoord, $mBrdColor = 0x000000, $mBgrColor = 0xFFFFFF)
+    public function rectangle(array $coord, int|string|array|null $brdColor = 0x000000, int|string|array|null $bgrColor = 0xFFFFFF): static
     {
-        if (empty($aCoord)) {
-            $aCoord = array(
+        if (empty($coord)) {
+            $coord = [
                 'left'   => 0,
                 'right'  => 1,
                 'top'    => 0,
                 'bottom' => 1,
                 'angle'  => 0,
                 'height' => 0,
-            );
+            ];
         }
-        if (!is_null($mBrdColor)) {
-            imagerectangle($this->oImage, $aCoord['left'], $aCoord['top'], $this->nWidth - $aCoord['right'], $this->nHeight - $aCoord['bottom'], $this->adaptColor($mBrdColor));
+        if (!is_null($brdColor)) {
+            imagerectangle($this->image, (int)$coord['left'], (int)$coord['top'], (int)($this->width - $coord['right']), (int)($this->height - $coord['bottom']), $this->adaptColor($brdColor));
         }
-        if (!is_null($mBgrColor)) {
-            imagefilledrectangle($this->oImage, $aCoord['left'], $aCoord['top'], $this->nWidth - $aCoord['right'], $this->nHeight - $aCoord['bottom'], $this->adaptColor($mBgrColor));
-        }
-        return $this;
-    } // function rectangle
-
-    /**
-     * Drawing polygon
-     * @param array $aCoord is an array containing the x and y co-ordinates of the polygons vertices consecutively.
-     * @param integer|string|array|null $mBrdColor - border color
-     * @param integer|string|array|null $mBgrColor - background color - it can be a scalar value or an array
-     * @return \fan\core\service\image_draw
-     */
-    public function polygon($aCoord, $mBrdColor = 0x000000, $mBgrColor = 0XFFFFFF)
-    {
-        if (!is_null($mBrdColor)) {
-            imagepolygon($this->oImage, $aCoord, count($aCoord) / 2, $this->adaptColor($mBrdColor));
-        }
-        if (!is_null($mBgrColor)) {
-            imagefilledpolygon($this->oImage, $aCoord, count($aCoord) / 2, $this->adaptColor($mBgrColor));
+        if (!is_null($bgrColor)) {
+            imagefilledrectangle($this->image, (int)$coord['left'], (int)$coord['top'], (int)($this->width - $coord['right']), (int)($this->height - $coord['bottom']), $this->adaptColor($bgrColor));
         }
         return $this;
-    } // function polygon
+    }
 
-   /**
-     * Drawing ellipse
-     * @param array $aCoord - array of coordinates
-     *   "centerX" - X-coordinate of left top corner
-     *   "centerY" - Y-coordinate of left top corner
-     *   "width" - X-coordinate of right bottom corner
-     *   "height" - Y-coordinate of right bottom corner
-     * @param integer|string|array|null $mBrdColor - border color
-     * @param integer|string|array|null $mBgrColor - background color
-     * @return \fan\core\service\image_draw
-     */
-    public function ellipse($aCoord, $mBrdColor = 0x000000, $mBgrColor = 0XFFFFFF)
+    public function polygon(array $coord, int|string|array|null $brdColor = 0x000000, int|string|array|null $bgrColor = 0XFFFFFF): static
     {
-        if (!is_null($mBrdColor)) {
+        $points = array_map(static fn($value): int => (int)round((float)$value), $coord);
+        $pointCount = (int)(count($points) / 2);
+
+        if (!is_null($brdColor)) {
+            imagepolygon($this->image, $points, $pointCount, $this->adaptColor($brdColor));
+        }
+        if (!is_null($bgrColor)) {
+            imagefilledpolygon($this->image, $points, $pointCount, $this->adaptColor($bgrColor));
+        }
+        return $this;
+    }
+
+    public function ellipse(array $coord, int|string|array|null $brdColor = 0x000000, int|string|array|null $bgrColor = 0XFFFFFF): static
+    {
+        if (!is_null($brdColor)) {
             imageellipse(
-                    $this->oImage,
-                    $aCoord['centerX'],
-                    $aCoord['centerY'],
-                    $aCoord['width'],
-                    $aCoord['height'],
-                    $this->adaptColor($mBrdColor)
+                    $this->image,
+                    (int)$coord['centerX'],
+                    (int)$coord['centerY'],
+                    (int)$coord['width'],
+                    (int)$coord['height'],
+                    $this->adaptColor($brdColor)
             );
         }
-        if (!is_null($mBgrColor)) {
+        if (!is_null($bgrColor)) {
             imagefilledellipse(
-                    $this->oImage,
-                    $aCoord['centerX'],
-                    $aCoord['centerY'],
-                    $aCoord['width'],
-                    $aCoord['height'],
-                    $this->adaptColor($mBgrColor)
+                    $this->image,
+                    (int)$coord['centerX'],
+                    (int)$coord['centerY'],
+                    (int)$coord['width'],
+                    (int)$coord['height'],
+                    $this->adaptColor($bgrColor)
             );
         }
         return $this;
-    } // function ellipse
+    }
 
-    /**
-     * Drawing ellipse sector
-     * @param array $aCoord - array of coordinates
-     *   "centerX" - X-coordinate of left top corner
-     *   "centerY" - Y-coordinate of left top corner
-     *   "width"   - X-coordinate of right bottom corner
-     *   "height"  - Y-coordinate of right bottom corner
-     * @param integer|string|array|null $mBrdColor - border color
-     * @param integer|string|array|null $mBgrColor - background color
-     * @return \fan\core\service\image_draw
-     */
-    public function ellipseSector($aCoord, $mBrdColor = 0x000000, $mBgrColor = 0XFFFFFF)
+    public function ellipseSector(array $coord, int|string|array|null $brdColor = 0x000000, int|string|array|null $bgrColor = 0XFFFFFF): static
     {
-        if (!is_null($mBrdColor)) {
+        if (!is_null($brdColor)) {
             imagearc(
-                    $this->oImage,
-                    $aCoord['centerX'],
-                    $aCoord['centerY'],
-                    $aCoord['width'],
-                    $aCoord['height'],
-                    $aCoord['startAngle'],
-                    $aCoord['endAngle'],
-                    $this->adaptColor($mBrdColor)
+                    $this->image,
+                    (int)$coord['centerX'],
+                    (int)$coord['centerY'],
+                    (int)$coord['width'],
+                    (int)$coord['height'],
+                    (int)$coord['startAngle'],
+                    (int)$coord['endAngle'],
+                    $this->adaptColor($brdColor)
             );
         }
-        if (!is_null($mBgrColor)) {
+        if (!is_null($bgrColor)) {
             imagefilledarc(
-                    $this->oImage,
-                    $aCoord['centerX'],
-                    $aCoord['centerY'],
-                    $aCoord['width'],
-                    $aCoord['height'],
-                    $aCoord['startAngle'],
-                    $aCoord['endAngle'],
-                    $this->adaptColor($mBgrColor),
+                    $this->image,
+                    (int)$coord['centerX'],
+                    (int)$coord['centerY'],
+                    (int)$coord['width'],
+                    (int)$coord['height'],
+                    (int)$coord['startAngle'],
+                    (int)$coord['endAngle'],
+                    $this->adaptColor($bgrColor),
                     IMG_ARC_PIE
             );
         }
         return $this;
-    } // function ellipseSector
+    }
 
 
 
-    /**
-     * Drawing line
-     * @param array $aCoord - array of coordinates
-     *   "left"   - X-coordinate of left top corner
-     *   "top"    - Y-coordinate of left top corner
-     *   "right"  - X-coordinate of right bottom corner
-     *   "bottom" - Y-coordinate of right bottom corner
-     * @param integer|string|array $mBrdColor - color of axis line
-     * @return \fan\core\service\image_draw
-     */
-    public function line($aCoord, $mBrdColor = 0X000000)
+    public function line(array $coord, int|string|array $brdColor = 0X000000): static
     {
         imageline(
-                $this->oImage,
-                array_val($aCoord, 'left', 0),
-                array_val($aCoord, 'top', 0),
-                $this->nWidth  - array_val($aCoord, 'right',  0),
-                $this->nHeight - array_val($aCoord, 'bottom', 0),
-                $this->adaptColor($mBrdColor)
+                $this->image,
+                (int)array_val($coord, 'left', 0),
+                (int)array_val($coord, 'top', 0),
+                (int)($this->width - array_val($coord, 'right', 0)),
+                (int)($this->height - array_val($coord, 'bottom', 0)),
+                $this->adaptColor($brdColor)
         );
         return $this;
-    } // function line
+    }
 
-    /**
-     * Drawing Vertical right line
-     * @param array $aCoord - array of coordinates
-     *   "left" or "right" - X-coordinate of line
-     *   "top"    - Y-coordinate of top corner
-     *   "bottom" - Y-coordinate of bottom corner
-     * @param integer|string|array $mBrdColor - color of axis line
-     * @return \fan\core\service\image_draw
-     */
-    public function lineVertical($aCoord, $mBrdColor = 0X000000)
+    public function lineVertical(array $coord, int|string|array $brdColor = 0X000000): static
     {
-        if (!isset($aCoord['left'])) {
-            $aCoord['left'] = isset($aCoord['right']) ? $this->nWidth - $aCoord['right'] : 0;
+        if (!isset($coord['left'])) {
+            $coord['left'] = isset($coord['right']) ? $this->width - $coord['right'] : 0;
         }
-        $aCoord['right'] = $this->nWidth - $aCoord['left'];
-        return $this->line($aCoord, $mBrdColor);
-    } // function lineVertical
+        $coord['right'] = $this->width - $coord['left'];
+        return $this->line($coord, $brdColor);
+    }
 
-    /**
-     * Drawing vertical bottom line
-     * @param array $aCoord - array of coordinates
-     *   "top" or "bottom" - Y-coordinate of line
-     *   "left" - X-coordinate of left bottom corner
-     *   "right" - X-coordinate of right bottom corner
-     * @param integer|string|array $mBrdColor - color of axis line
-     * @return \fan\core\service\image_draw
-     */
-    public function lineHorizontal($aCoord, $mBrdColor = 0X000000)
+    public function lineHorizontal(array $coord, int|string|array $brdColor = 0X000000): static
     {
-        if (!isset($aCoord['top'])) {
-            $aCoord['top'] = isset($aCoord['bottom']) ? $this->nHeight - $aCoord['bottom'] : 0;
+        if (!isset($coord['top'])) {
+            $coord['top'] = isset($coord['bottom']) ? $this->height - $coord['bottom'] : 0;
         }
-        $aCoord['bottom'] = $this->nHeight - $aCoord['top'];
-        return $this->line($aCoord, $mBrdColor);
-    } // function line
+        $coord['bottom'] = $this->height - $coord['top'];
+        return $this->line($coord, $brdColor);
+    }
 
-    /**
-     * Getting Font Width in pixels
-     * @param numeric $nFontNumber
-     * @return numeric
-     */
-    public function getFontWidth($nFontNumber)
+    public function getFontWidth(int|float $fontNumber): int
     {
-        return imagefontwidth($nFontNumber);
-    } // function getFontWidth
+        return imagefontwidth((int)$fontNumber);
+    }
 
-    /**
-     * Getting Font Heigth in pixels
-     * @param numeric $nFontNumber
-     * @return numeric
-     */
-    public function getFontHeigth($nFontNumber)
+    public function getFontHeigth(int|float $fontNumber): int
     {
-        return imagefontheight($nFontNumber);
-    } // function getFontHeigth
+        return imagefontheight((int)$fontNumber);
+    }
 
 // ========================= Private methods ============================ \\
 
-} // class \fan\core\service\image_draw
-?>
+}

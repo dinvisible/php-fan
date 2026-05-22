@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Base abstract class for all parts of install
  *
@@ -16,99 +19,77 @@
  */
 abstract class base
 {
-    /**
-     * @var array
-     */
-    protected static $aInstances = array();
+    protected static array $instances = [];
     /**
      * Global static data for localise teplates
      * @var array
      */
-    protected static $aLocale = null;
+    protected static ?array $locale = null;
     /**
      * View-data for template
      * @var array
      */
-    protected $aView = array();
+    protected array $view = [];
 
     public function __construct()
     {
         $this->_setLocale();
-    } // function __construct
+    }
     // ======== Static methods ======== \\
-    /**
-     * Run test class
-     * @param string $sMethod
-     * @return boolean
-     */
-    public static function run($sMethod = 'runCheck')
+    public static function run(string $method = 'runCheck'): mixed
     {
-        $sClass = function_exists('get_called_class') ? get_called_class() : 'check_configuration';
-        if (!isset(self::$aInstances[$sClass])) {
-            self::$aInstances[$sClass] = new $sClass();
+        $class = function_exists('get_called_class') ? get_called_class() : 'check_configuration';
+        if (!isset(self::$instances[$class])) {
+            self::$instances[$class] = new $class();
         }
-        return self::$aInstances[$sClass]->$sMethod();
-    } // function run
+        return self::$instances[$class]->$method();
+    }
     // ======== Main Interface methods ======== \\
     // ======== Private/Protected methods ======== \\
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
-    /**
-     * Set Locale
-     * @param boolean $bForse
-     * @return base
-     */
-    public function _setLocale($bForse = false)
+    public function _setLocale(bool $forse = false): static
     {
-        if (is_null(self::$aLocale) || $bForse) {
+        if (is_null(self::$locale) || $forse) {
 
-            $aLng = explode(',', $_SERVER['HTTP_ACCEPT_LANGUAGE']);
-            if (!empty($aLng)) {
-                $nWeight  = 0;
-                $aMatches = array();
-                foreach ($aLng as $v) {
-                    preg_match('/(\w{2})(?:\-\w{2})?(?:\;q\=([\d\.]+))?/', $v, $aMatches);
-                    $nTmp = empty($aMatches[2]) ? 1 : floatval($aMatches[2]);
-                    if ($nTmp > $nWeight && file_exists('locale/' . $aMatches[1] . '.php')) {
-                        $sLocale = $aMatches[1];
-                        $nWeight = $nTmp;
+            $lng = explode(',', $_SERVER['HTTP_ACCEPT_LANGUAGE']);
+            if (!empty($lng)) {
+                $weight  = 0;
+                $matches = [];
+                foreach ($lng as $v) {
+                    preg_match('/(\w{2})(?:\-\w{2})?(?:\;q\=([\d\.]+))?/', $v, $matches);
+                    $tmp = empty($matches[2]) ? 1 : floatval($matches[2]);
+                    if ($tmp > $weight && file_exists(__DIR__ . '/../locale/' . $matches[1] . '.php')) {
+                        $locale = $matches[1];
+                        $weight = $tmp;
                     }
                 }
             }
 
-            if (empty($sLocale)) {
-                $sLocale = 'en';
+            if (empty($locale)) {
+                $locale = 'en';
             }
 
-            self::$aLocale = include('locale/' . $sLocale . '.php');
+            self::$locale = \fan\project\adapter\php_array_file::load(__DIR__ . '/../locale/' . $locale . '.php', []);
         }
         return $this;
-    } // function _setLocale
-    /**
-     * Parse and output Template
-     * @param string $sTplName
-     * @return \fan\install\base
-     */
-    public function _parseTemplate($sTplName)
+    }
+    public function _parseTemplate(string $tplName): static
     {
-        extract($this->aView);
+        extract($this->view);
 
-        ob_start();
-        include 'tpl/' . $sTplName . '.php';
-        $sContent = ob_get_contents();
-        ob_end_clean();
+        $content = \fan\project\adapter\php_template_file::render(__DIR__ . '/../tpl/' . $tplName . '.php', $this->view);
 
-        $aMatches = array();
-        preg_match_all('/\{\#[A-Z_]+\}/', $sContent, $aMatches);
-        foreach ($aMatches[0] as $v) {
-            $sKey = substr($v, 2, -1);
-            if (isset(self::$aLocale[$sKey])) {
-                $sContent = str_replace($v, self::$aLocale[$sKey], $sContent);
+        $matches = [];
+        preg_match_all('/\{\#[A-Z_]+\}/', $content, $matches);
+        foreach ($matches[0] as $v) {
+            $key = substr($v, 2, -1);
+            if (isset(self::$locale[$key])) {
+                $content = str_replace($v, self::$locale[$key], $content);
             }
         }
 
-        echo $sContent;
+        echo $content;
         return $this;
-    } // function _setLocale
-} // class \fan\install\base
-?>
+    }
+}

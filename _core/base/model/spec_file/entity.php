@@ -1,4 +1,7 @@
-<?php namespace fan\core\base\model\spec_file;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\base\model\spec_file;
 /**
  * Entity of special files
  *
@@ -17,5 +20,4 @@
  */
 abstract class entity extends \fan\core\base\model\entity
 {
-} // class \fan\core\base\model\spec_file\entity
-?>
+}

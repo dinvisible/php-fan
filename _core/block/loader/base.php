@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\loader;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\loader;
 /**
  * Base abstract loader block
  *
@@ -17,116 +21,79 @@
  */
 abstract class base extends \fan\core\block\base
 {
-    /**
-     * @var array Getted Data from loader
-     */
-    private $aGetData = array();
-    /**
-     * @var boolean Is set Getted Data
-     */
-    private $bIsGetData = false;
+    private array $getData = [];
+    private bool $isGetData = false;
 
     /**
-     * @var \winWrapperDataLoader
+     * @var \fan\core\adapter\data_loader
      */
-    private $oLoader = null;
+    private ?object $loader = null;
 
-    /**
-     * Finish Construction of block
-     * @param \fan\core\block\base $oContainer
-     * @param array $aContainerMeta
-     * @param boolean $bAllowSetEmbedded
-     */
-    public function finishConstruct($oContainer = null, $aContainerMeta = array(), $bAllowSetEmbedded = true)
+    public function finishConstruct(?\fan\core\block\base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
     {
-        parent::finishConstruct($oContainer, $aContainerMeta, $bAllowSetEmbedded);
+        parent::finishConstruct($container, $containerMeta, $allowSetEmbedded);
 
-        $mJson = $this->getMeta('json');
-        if(!empty($mJson)) {
-            $this->setJson($mJson);
+        $json = $this->getMeta('json');
+        if (!empty($json)) {
+            $this->setJson($json);
         }
 
-        $sText = $this->getMeta('text');
-        if(!empty($sText)) {
-            $this->setText($sText);
+        $text = $this->getMeta('text');
+        if (!empty($text)) {
+            $this->setText($text);
         }
 
-    } // function finishConstruct
+    }
 
-    /**
-     * Get loader data
-     */
-    public function getData()
+    public function getData(): array
     {
-        if (!$this->bIsGetData) {
-            $oEngine = $this->getDataLoader();
-            if ($oEngine) {
-                $this->aGetData   = $oEngine->getData();
-                $this->bIsGetData = true;
+        if (!$this->isGetData) {
+            $engine = $this->getDataLoader();
+            if ($engine) {
+                $this->getData   = (array)$engine->getData();
+                $this->isGetData = true;
             }
         }
-        return $this->aGetData;
-    }// function getData
+        return $this->getData;
+    }
 
-    /**
-     * Get data loader
-     */
-    public function getDataLoader()
+    public function getDataLoader(): object
     {
-        if (!$this->oLoader) {
-            require_once \bootstrap::parsePath('{CORE_DIR}/../libraries/dataLoader/winWrapperDataLoader.php');
-            $this->oLoader = new \winWrapperDataLoader();
+        if (!$this->loader) {
+            $this->loader = new \fan\project\adapter\data_loader();
         }
-        return $this->oLoader;
-    }// function getDataLoader
+        return $this->loader;
+    }
 
-    /**
-     * Set object data
-     */
-    public function setJson($aJson, $bMerge = true)
+    public function setJson(mixed $json, bool $merge = true): static
     {
-        $aJson = adduceToArray($aJson);
-        if ($bMerge) {
-            $aJson = array_merge_recursive_alt(adduceToArray($this->view->json), $aJson);
+        $json = adduceToArray($json);
+        if ($merge) {
+            $json = array_merge_recursive_alt(adduceToArray($this->view->json), $json);
         }
-        $this->view->json = $aJson;
+        $this->view->json = $json;
         return $this;
-    }// function setJson
+    }
 
-    /**
-     * Set HTML-text data
-     */
-    public function setHtml($sHtml, $bMerge = true)
+    public function setHtml(mixed $html, bool $merge = true): static
     {
-        $this->view->html = $bMerge ? $this->view->html . $sHtml : $sHtml;
+        $this->view->html = $merge ? (string)$this->view->html . (string)$html : (string)$html;
         return $this;
-    }// function setHtml
+    }
 
-    /**
-     * Set text data
-     * @param string $sText text to send
-     */
-    public function setText($sText, $bMerge = true)
+    public function setText(string $text, bool $merge = true): static
     {
-        $this->view->text = $bMerge ? $this->view->text . $sText : $sText;
+        $this->view->text = $merge ? (string)$this->view->text . $text : $text;
         return $this;
-    }// function setText
+    }
 
-    /**
-     * Check Run Init: true if cache isn't used or "alwaysInit" in meta
-     * @return boolean
-     */
-    public function checkRunInit()
+    public function checkRunInit(): bool
     {
         return true;
-    } // function checkRunInit
+    }
 
-    /**
-     * Get loader data
-     */
-    public function getOutcome()
+    public function getOutcome(): array
     {
         return $this->view->toArray();
-    }// function getOutcome
-} // class \fan\core\block\loader\base
-?>
+    }
+}

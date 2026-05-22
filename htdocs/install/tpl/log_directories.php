@@ -1,8 +1,8 @@
-<section class="test">
+<?php declare(strict_types=1); ?><section class="test">
     <h3>{#CHECK_LOG_DIRECTORIES}</h3>
 
     <ul class="log_dir_list">
-        <?php foreach ($aLogDir as $k => $v) : ?>
+        <?php foreach ($logDir as $k => $v) : ?>
             <li>
                 <img src="image/<?php echo $v['writable'] ? 'correct' : 'incorrect' ; ?>.gif" />
                 <b><?php echo $k; ?>-log-dir:</b>

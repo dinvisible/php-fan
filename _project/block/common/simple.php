@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\common;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\common;
 /**
  * Base abstract simple block
  *
@@ -17,5 +21,4 @@
  */
 abstract class simple extends \fan\core\block\common\simple
 {
-} // class \fan\project\block\common\simple
-?>
+}

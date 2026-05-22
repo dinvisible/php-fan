@@ -1,4 +1,8 @@
-<?php namespace fan\core\plain;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\plain;
 /**
  * Respond for request of obfuscate CSS or JS-file
  *
@@ -17,66 +21,51 @@
 
 class obfuscator
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * Handler object
      * @var \fan\core\service\plain
      */
-    protected $oHandler;
+    protected ?object $handler = null;
     /**
      * Plain config object
      * @var \fan\core\service\obfuscator
      */
-    protected $oObfuscator;
+    protected ?object $obfuscator = null;
 
-    /**
-     * Constructor of Plain controller obfuscator
-     * @param boolean $bAllowIni
-     */
-    public function __construct(\fan\core\service\plain $oHandler, $sKey)
+    public function __construct(\fan\core\service\plain $handler, $key)
     {
-        $this->oHandler = $oHandler;
+        $this->handler = $handler;
 
-        $aHandle = $oHandler->getHandleData();
-        $this->oObfuscator = service('obfuscator', $aHandle['mReqKey']);
-    } // function __construct
+        $handle = $handler->getHandleData();
+        $this->obfuscator = service('obfuscator', (string)$handle['reqKey']);
+    }
 
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Get CSS-content
-     * @return array|string
-     */
-    public function getCss()
+    public function getCss(): string|false
     {
         return $this->_getContent();
     } // getCss
-    /**
-     * Get JS-content
-     * @return array|string
-     */
-    public function getJs()
+    public function getJs(): string|false
     {
         return $this->_getContent();
     } // getJs
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Get content OR content outputer
-     * @return array|string
-     */
-    protected function _getContent()
+    protected function _getContent(): string|false
     {
-        $sName = service('request')->get(1, 'A');
-        $sContent = $this->oObfuscator->getFileData($sName);
-        $aHeaders = $this->oObfuscator->getHeaders($sName, strlen($sContent));
-        $this->oHandler->setHeaders($aHeaders);
-        return $sContent;
-    } // function _getContent
+        $name = (string)$this->containerService('request')->get(1, 'A');
+        $content = $this->obfuscator->getFileData($name);
+        $headers = $this->obfuscator->getHeaders($name, strlen((string)$content));
+        $this->handler->setHeaders($headers);
+        return $content;
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\plain\obfuscator
-?>
+}

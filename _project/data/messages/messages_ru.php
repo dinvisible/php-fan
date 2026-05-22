@@ -1,8 +1,11 @@
 <?php
+
+declare(strict_types=1);
+
 /*
  * Short messages array for language "ru"
  */
-return array (
+return [
   'BUTTON_SEND_EMAIL' => 'Отправить email',
   'BUTTON_SUBMIT' => 'Отправить',
   'BUTTON_UPLOAD' => 'Загрузить',
@@ -25,5 +28,4 @@ return array (
   'NOTE_UPLOAD_FILE_LIMIT' => 'Размер прикрепляемого файла не должен превышать {video-size}Kb.',
   'OTHER_TEST' => 'Проверка',
   'OTHER_TEST_TAG' => 'Проверка {b}жирного текста{/b}',
-);
-?>
+];

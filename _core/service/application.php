@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Application service
@@ -17,96 +20,67 @@ use fan\project\exception\service\fatal as fatalException;
  */
 class application extends \fan\core\base\service\single
 {
-    /**
-     * @var string Current applicatin name
-     */
-    private $sName = null;
+    private ?string $name = null;
 
     /**
      * Used Application Names
      * @var array
      */
-    protected $aUsedNames = null;
+    protected ?array $usedNames = null;
 
-    /**
-     * Service tab constructor
-     * @param boolean $bAllowIni
-     */
-    protected function __construct($bAllowIni = true)
+    protected function __construct(bool $allowIni = true)
     {
-        parent::__construct($bAllowIni);
-        $aSysApp = array('__log_viewer', '__tools');
-        $aUsedNames = $this->getConfig('used_names', $aSysApp);
-        if (empty($aUsedNames)) {
+        parent::__construct($allowIni);
+        $sysApp = ['__log_viewer', '__tools'];
+        $usedNames = $this->getConfig('used_names', $sysApp);
+        if (empty($usedNames)) {
             throw new fatalException($this, 'Used application names isn\'t set.');
         }
-        $this->aUsedNames = adduceToArray($aUsedNames);
-        foreach ($aSysApp as $v) {
-            if (!in_array($v, $this->aUsedNames)) {
-                $this->aUsedNames[] = $v;
+        $this->usedNames = adduceToArray($usedNames);
+        foreach ($sysApp as $v) {
+            if (!in_array($v, $this->usedNames)) {
+                $this->usedNames[] = $v;
             }
         }
-    } // function __construct
+    }
 
-    /**
-     * Set Application name
-     * @param type $sName
-     * @return \fan\core\service\application
-     */
-    public function setAppName($sName)
+    public function setAppName(string $name): static
     {
-        if (empty($sName)) {
+        if (empty($name)) {
             throw new fatalException($this, 'Application name can\'t be empty.');
-        } elseif (in_array($sName, $this->aUsedNames)) {
-            if ($this->sName != $sName) {
-                $this->sName = $sName;
-                $this->_broadcastMessage('setAppName', $sName);
+        } elseif (in_array($name, $this->usedNames)) {
+            if ((string)$this->name !== (string)$name) {
+                $this->name = $name;
+                $this->_broadcastMessage('setAppName', $name);
                 \bootstrap::getLoader()->defineNewApp($this);
             }
         } else {
-            trigger_error('Unknown application name "' . $sName . '".', E_USER_WARNING);
+            throw new fatalException($this, 'Unknown application name "' . $name . '".');
         }
         return $this;
     }
 
-    /**
-     * Get Application name
-     * @return string
-     */
-    public function getAppName()
+    public function getAppName(): string
     {
-        if (empty($this->sName)) {
-            trigger_error('Get Application Name while it isn\'t defined.', E_USER_NOTICE);
+        if (empty($this->name)) {
+            throw new fatalException($this, 'Get Application Name while it isn\'t defined.');
         }
-        return $this->sName;
+        return $this->name;
     }
 
-    /**
-     * Get Default Application name
-     * @return string
-     */
-    public function getDefaultAppName()
+    public function getDefaultAppName(): mixed
     {
-        $aUsedApp = $this->getConfig('used_app', array());
-        return $this->getConfig('default_app', reset($aUsedApp));
+        $usedApp = $this->getConfig('used_app', []);
+        return $this->getConfig('default_app', reset($usedApp));
     }
 
-    /**
-     * Get project name
-     * @return string
-     */
-    public function getProjectName()
+    public function getProjectName(): mixed
     {
         return $this->getConfig('PROJECT_NAME', 'Name of project is not set');
-    } // function getProjectName
+    }
 
-    /**
-     * Get Core Version of PHP-FAN
-     * @return string
-     */
-    public function getCoreVersion()
+    public function getCoreVersion(): string
     {
         return 'PHP-FAN 05.02.011 (2015-10-03)';
-    } // function getCoreVersion
-} // class \fan\core\service\application
-?>
+    }
+}

@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\cache;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\cache;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * ADOdb wrapper for template engine
@@ -21,128 +24,135 @@ class file extends base
      * Path to File Data
      * @var string
      */
-    private $sFileData = null;
+    private ?string $fileData = null;
     /**
      * Path to File Meta
      * @var string
      */
-    private $sFileMeta = null;
+    private ?string $fileMeta = null;
 
-    /**
-     * Method for load data from cache
-     * Must define property $this->mData and $this->aMetaData
-     */
-    protected function _loadData($bLoadMetaOnly)
+    protected function _loadData(bool $loadMetaOnly): bool
     {
-        list($sFileData, $sFileMeta) = $this->_getFilePath();
-        if (!file_exists($sFileMeta)) {
+        list($fileData, $fileMeta) = $this->_getFilePath();
+        if (!file_exists($fileMeta)) {
             return false;
         }
 
-        $aMetaData       = $this->_unserialize($this->_readFile($sFileMeta));
-        $this->aMetaData = is_null($aMetaData) ? array() : $aMetaData;
-        if (is_null($aMetaData) || !$this->_checkActual($aMetaData) || !file_exists($sFileData) || $bLoadMetaOnly) {
+        $metaRaw        = $this->_readFile($fileMeta);
+        $isLegacyMeta   = !$this->_isJsonPayload($metaRaw);
+        $metaData       = $this->_decodePayload($metaRaw, 'Cache meta decode error');
+        $this->metaData = is_array($metaData) ? $metaData : [];
+        if (!is_array($metaData) || !$this->_checkActual($metaData) || !file_exists($fileData) || $loadMetaOnly) {
             return false;
         }
 
-        if ($this->aMetaData['data_type'] == 'null') {
-            $this->mData = null;
+        $dataType     = $this->metaData['data_type'] ?? null;
+        $isLegacyData = false;
+        if ($dataType === 'null') {
+            $this->data = null;
         } else {
-            $sData       = $this->_readFile($sFileData);
-            $this->mData = $this->aMetaData['data_type'] == 'string' ? $mData : $this->_unserialize($sData);
+            $data = $this->_readFile($fileData);
+            if ($dataType === 'string') {
+                $this->data = $data;
+            } else {
+                $isLegacyData = !$this->_isJsonPayload($data);
+                $this->data   = $this->_decodePayload($data, 'Cache data decode error');
+                if (is_null($this->data)) {
+                    return false;
+                }
+            }
+        }
+
+        $canMigrate = !$this->_hasUnsupportedJsonValue($this->metaData)
+            && !$this->_hasUnsupportedJsonValue($this->data);
+        if (($isLegacyMeta || $isLegacyData) && $canMigrate) {
+            $this->_saveData();
         }
         return true;
     }
 
-    /**
-     * Method for save data to cache
-     * Must define property $this->mData and $this->aMetaData
-     */
-    protected function _saveData()
+    protected function _saveData(): static
     {
-        list($sFileData, $sFileMeta) = $this->_getFilePath();
-        $this->_checkWritable($sFileMeta, 'meta');
-        $this->_checkWritable($sFileData, 'data');
+        list($fileData, $fileMeta) = $this->_getFilePath();
+        $this->_checkWritable($fileMeta, 'meta');
+        $this->_checkWritable($fileData, 'data');
 
-        file_put_contents($sFileMeta, serialize($this->aMetaData), LOCK_EX);
-        if ($this->aMetaData['data_type'] == 'string') {
-            file_put_contents($sFileData, $this->mData, LOCK_EX);
-        } elseif ($this->aMetaData['data_type'] != 'null') {
-            file_put_contents($sFileData, serialize($this->mData), LOCK_EX);
+        $dataType = $this->metaData['data_type'] ?? 'null';
+        file_put_contents($fileMeta, $this->_encodePayload($this->metaData), LOCK_EX);
+        if ($dataType === 'string') {
+            file_put_contents($fileData, $this->data, LOCK_EX);
+        } elseif ($dataType !== 'null') {
+            file_put_contents($fileData, $this->_encodePayload($this->data), LOCK_EX);
         }
         return $this;
     }
 
-    /**
-     * Delete cached data
-     */
-    protected function _deleteData()
+    protected function _deleteData(): static
     {
-        list($sFileData, $sFileMeta) = $this->_getFilePath();
-        if (file_exists($sFileMeta)) {
-            unlink($sFileMeta);
+        list($fileData, $fileMeta) = $this->_getFilePath();
+        if (file_exists($fileMeta)) {
+            unlink($fileMeta);
         }
-        if (file_exists($sFileData)) {
-            unlink($sFileData);
+        if (file_exists($fileData)) {
+            unlink($fileData);
         }
         parent::_deleteData();
         return $this;
     }
 
-    protected function _getFilePath()
+    protected function _getFilePath(): array
     {
-        if (empty($this->sFileData) || empty($this->sFileMeta)) {
-            if (empty($this->oConfig['BASE_DIR'])) {
-                throw new fatalException($this->oFacade, 'Base cache doesn\'t set for "' . $this->sType . '".');
+        if (empty($this->fileData) || empty($this->fileMeta)) {
+            if (empty($this->config['BASE_DIR'])) {
+                throw new fatalException($this->facade, 'Base cache doesn\'t set for "' . $this->type . '".');
             }
-            $sPath = rtrim(\bootstrap::parsePath($this->oConfig['BASE_DIR']), '/\\');
-            if (!empty($this->sExtraPath)) {
-                $sPath .= '/' . trim($this->sExtraPath, '/\\');
+            $path = rtrim(\bootstrap::parsePath((string)$this->config['BASE_DIR']), '/\\');
+            if (!empty($this->extraPath)) {
+                $path .= '/' . trim($this->extraPath, '/\\');
             }
-            if (!is_dir($sPath)) {
-                $nDirMode = empty($this->oConfig['DIR_MODE']) ? 0777 : $this->oConfig['DIR_MODE'];
-                if (!mkdir($sPath, $nDirMode, true)) {
-                    throw new fatalException($this->oFacade, 'Can\'t create cache directory for "' . $this->sType . '".');
+            if (!is_dir($path)) {
+                $dirMode = empty($this->config['DIR_MODE']) ? 0777 : (int)$this->config['DIR_MODE'];
+                if (!mkdir($path, $dirMode, true)) {
+                    throw new fatalException($this->facade, 'Can\'t create cache directory for "' . $this->type . '".');
                 }
-            } elseif (!is_writable($sPath)) {
-                throw new fatalException($this->oFacade, 'Cache directory for "' . $this->sType . '" isn\'t writable.');
+            } elseif (!is_writable($path)) {
+                throw new fatalException($this->facade, 'Cache directory for "' . $this->type . '" isn\'t writable.');
             }
 
-            if (empty($this->oConfig['CODE_FILE_NAME'])) {
-                $sFileName = $this->sKey;
-                if (!preg_match('/^[a-z0-9\-_\(\)\!\.]+$/i', $sFileName) || substr($sFileName, -5) == '.meta') {
-                    throw new fatalException($this->oFacade, 'Cache key "' . $this->sKey . '" can\'t be used for name of cache file.');
+            if (empty($this->config['CODE_FILE_NAME'])) {
+                $fileName = $this->key;
+                if (!preg_match('/^[a-z0-9\-_\(\)\!\.]+$/i', $fileName) || substr($fileName, -5) === '.meta') {
+                    throw new fatalException($this->facade, 'Cache key "' . $this->key . '" can\'t be used for name of cache file.');
                 }
             } else {
-                $sFileName = md5($this->sKey);
+                $fileName = md5($this->key);
             }
 
-            $sFileExt = isset($this->oConfig['FILE_EXT']) ? $this->oConfig['FILE_EXT'] : 'cache';
+            $fileExt = isset($this->config['FILE_EXT']) ? (string)$this->config['FILE_EXT'] : 'cache';
 
-            $this->sFileData = $sPath . '/' . $sFileName . (empty($sFileExt) ? '' : '.' . $sFileExt);
-            $this->sFileMeta = $sPath . '/' . $sFileName . '.meta';
+            $this->fileData = $path . '/' . $fileName . (empty($fileExt) ? '' : '.' . $fileExt);
+            $this->fileMeta = $path . '/' . $fileName . '.meta';
         }
-        return array(
-            $this->sFileData,
-            $this->sFileMeta,
-        );
+        return [
+            $this->fileData,
+            $this->fileMeta,
+        ];
     }
 
-    protected function _checkWritable($sFilePath, $sType)
+    protected function _checkWritable(string $filePath, string $type): void
     {
-        if (is_file($sFilePath) && !is_writable($sFilePath)) {
-            throw new fatalException($this->oFacade, 'Cache ' . $sType . '-file "' . $sFilePath . '" isn\'t writable.');
+        if (is_file($filePath) && !is_writable($filePath)) {
+            throw new fatalException($this->facade, 'Cache ' . $type . '-file "' . $filePath . '" isn\'t writable.');
         }
     }
 
-    protected function _readFile($sFilePath)
+    protected function _readFile(string $filePath): string
     {
-        $mResult = file_get_contents($sFilePath);
-        if ($mResult === false) {
-            throw new fatalException($this->oFacade, 'Cache file "' . $sFilePath . '" isn\'t readable.');
+        $result = file_get_contents($filePath);
+        if ($result === false) {
+            throw new fatalException($this->facade, 'Cache file "' . $filePath . '" isn\'t readable.');
         }
-        return $mResult;
+        return $result;
     }
 
-} // class \fan\core\service\cache\file
-?>
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\admin;
 /**
  * Block admin form pattern
  *
@@ -16,12 +20,8 @@
  */
 class form_pattern extends \fan\core\block\loader\base
 {
-    /**
-     * Init output block data
-     */
-    public function init()
+    public function init(): void
     {
         $this->setText('ok');
-    } // function init
-} // class \fan\core\block\admin\form_pattern
-?>
+    }
+}

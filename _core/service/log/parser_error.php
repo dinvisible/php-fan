@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\log;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\log;
 /**
  * Parser of log error-file
  *
@@ -16,5 +19,4 @@
  */
 class parser_error extends parser_base
 {
-} // class \fan\core\service\log\parser_error
-?>
+}

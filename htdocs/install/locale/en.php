@@ -1,5 +1,8 @@
 <?php
-return array(
+
+declare(strict_types=1);
+
+return [
     'CHECK_BASIC_PARAMETERS' => 'Check basic parameters',
     'CHECK_PHP_VER' => 'Check php-version',
     'INCORRECT_PHP_VER' => 'Work is not possible. Incorrect PHP version',
@@ -40,5 +43,4 @@ return array(
     'YOUR_PHP_FAN' => 'Your PHP-FAN',
     'SEE_LOG_VIEWER' => 'If while your project works occur errors - they all will be stored in the logs. To view the logs use a special program "viewer"',
     'DO_NOT_FORGET_REMOVE_INSTALL' => 'Do not forget to delete the directory "install" after set the Project',
-);
-?>
+];

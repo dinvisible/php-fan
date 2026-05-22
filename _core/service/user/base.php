@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\user;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\user;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Basic class engine of user-data
@@ -28,32 +32,32 @@ use fan\project\exception\service\fatal as fatalException;
  * @method string getStatus()
  * @method string getJoinDate()
  * @method string getVisitDate()
- * @method \fan\core\service\user setLogin()     setLogin(string $sLogin)
- * @method \fan\core\service\user setNickName()  setNickName(string $sNickName)
- * @method \fan\core\service\user setFirstName() setFirstName(string $sFirstName)
- * @method \fan\core\service\user setLastName()  setLastName(string $sLastName)
- * @method \fan\core\service\user setTitle()     setTitle(string $sTitle)
- * @method \fan\core\service\user setGender()    setGender(string $sGender)
- * @method \fan\core\service\user setEmail()     setEmail(string $sEmail)
- * @method \fan\core\service\user setPhone()     setPhone(string $sPhone)
- * @method \fan\core\service\user setLocale()    setLocale(string $sLocale)
- * @method \fan\core\service\user setAddress()   setAddress(string|array $aAddress)
- * @method \fan\core\service\user setStatus()    setStatus(string $sStatus)
+ * @method \fan\core\service\user setLogin()     setLogin(string $login)
+ * @method \fan\core\service\user setNickName()  setNickName(string $nickName)
+ * @method \fan\core\service\user setFirstName() setFirstName(string $firstName)
+ * @method \fan\core\service\user setLastName()  setLastName(string $lastName)
+ * @method \fan\core\service\user setTitle()     setTitle(string $title)
+ * @method \fan\core\service\user setGender()    setGender(string $gender)
+ * @method \fan\core\service\user setEmail()     setEmail(string $email)
+ * @method \fan\core\service\user setPhone()     setPhone(string $phone)
+ * @method \fan\core\service\user setLocale()    setLocale(string $locale)
+ * @method \fan\core\service\user setAddress()   setAddress(string|array $address)
+ * @method \fan\core\service\user setStatus()    setStatus(string $status)
  * @method string getPassword()
  */
-abstract class base implements \Serializable
+abstract class base
 {
     /**
      * Service User
      * @var \fan\core\service\user
      */
-    protected $oFacade;
+    protected ?object $facade = null;
 
     /**
      * Row of config
      * @var \fan\core\service\config\row
      */
-    protected $oConfig;
+    protected ?object $config = null;
 
     /**
      * Full data of user. Used keys:
@@ -77,12 +81,9 @@ abstract class base implements \Serializable
      *  "!" - required parameter
      * @var array
      */
-    protected $aData = array();
+    protected array $data = [];
 
-    /**
-     * @var mixed
-     */
-    protected $mIdentifyer = null;
+    protected mixed $identifyer = null;
 
     /**
      * Flag shows is user valid:
@@ -90,272 +91,181 @@ abstract class base implements \Serializable
      *  - for exists user TRUE if check one of identifier and password;
      * @var boolean
      */
-    protected $bIsValid = false;
+    protected bool $isValid = false;
     /**
      * This flag is TRUE if user created as new and isn't saved yet
      * @var boolean
      */
-    protected $bIsNew = true;
+    protected bool $isNew = true;
     /**
      * This array contain modified data
      * @var array
      */
-    protected $aChanged = array();
+    protected array $changed = [];
 
-    /**
-     * Constructor of user engine
-     * @param mixed $mIdentifyer
-     */
-    public function __construct($mIdentifyer)
+    public function __construct(mixed $identifyer)
     {
-        $this->mIdentifyer = $mIdentifyer;
-    } // function __construct
+        $this->identifyer = $identifyer;
+    }
 
     // ======== Static methods ======== \\
 
     // ======== Main Interface methods ======== \\
-    /**
-     * Convert text of password to text of hash
-     * @param string $sPassword
-     * @return string
-     */
-    abstract public function makePasswordHash($sPassword);
+    abstract public function makePasswordHash(string $password): string;
 
-    /**
-     * Set Facade
-     * @param \fan\core\service\user $oFacade
-     */
-    public function setFacade(\fan\core\service\user $oFacade)
+    public function setFacade(\fan\core\service\user $facade): static
     {
-        if (empty($this->oFacade)) {
-            $this->oFacade = $oFacade;
+        if (empty($this->facade)) {
+            $this->facade = $facade;
         }
         return $this;
-    } // function setFacade
+    }
 
-    /**
-     * Set Config
-     * @param \fan\core\service\config\row $oConfig
-     */
-    public function setConfig(\fan\core\service\config\row $oConfig)
+    public function setConfig(\fan\core\service\config\row $config): static
     {
-        if (empty($this->oConfig)) {
-            if (empty($oConfig)) {
-                throw new fatalException($this->oFacade, 'User Engine has empty config!');
+        if (empty($this->config)) {
+            if (empty($config)) {
+                throw new fatalException($this->facade, 'User Engine has empty config!');
             }
-            $this->oConfig = $oConfig;
+            $this->config = $config;
 /*
-            if (empty($this->aData)) {
-                $aIdent = adduceToArray($this->oConfig['IDENTIFYERS']);
-                if (count($aIdent) == 1) {
-                    $this->aData[$aIdent[0]] = $this->mIdentifyer;
+            if (empty($this->data)) {
+                $ident = adduceToArray($this->config['IDENTIFYERS']);
+                if (count($ident) == 1) {
+                    $this->data[$ident[0]] = $this->identifyer;
                 }
             }
  */
         }
         return $this;
-    } // function setConfig
+    }
 
     // --- Getters method --- \\
 
-    /**
-     * Get Id
-     * @return mixed
-     */
-    public function getId()
+    public function getId(): mixed
     {
-        return array_val($this->aData, 'id', $this->mIdentifyer);
-    } // function getId
+        return array_val($this->data, 'id', $this->identifyer);
+    }
 
-    /**
-     * Get Full User Name (with title OR not)
-     * @param boolean $bWithTitle
-     * @return string
-     */
-    public function getFullName($bWithTitle = true)
+    public function getFullName(bool $withTitle = true): string
     {
-        $sResult  = $bWithTitle ? $this->getTitle() . ' ' : '';
-        $sResult .= $this->getFirstName();
-        $sResult .= ' ' . $this->getPatronymic();
-        $sResult  = trim($sResult);
-        $sResult .= ' ' . $this->getLastName();
-        return trim($sResult);
-    } // function getFullName
+        $result  = $withTitle ? $this->getTitle() . ' ' : '';
+        $result .= $this->getFirstName();
+        $result .= ' ' . $this->getPatronymic();
+        $result  = trim($result);
+        $result .= ' ' . $this->getLastName();
+        return trim($result);
+    }
 
-    /**
-     * Get User Roles
-     * @param boolean $bForce
-     * @return array
-     */
-    public function getRoles($bForce = false)
+    public function getRoles(bool $force = false): array
     {
-        return ($this->bIsValid || $bForce) && isset($this->aData['roles']) ? $this->aData['roles'] : array();
-    } // function getRoles
+        return ($this->isValid || $force) && isset($this->data['roles']) ? $this->data['roles'] : [];
+    }
 
-    /**
-     * Get All user data
-     * @return array|object
-     */
-    public function getAllData()
+    public function getAllData(): array
     {
-        $aResult = $this->aData;
+        $result = $this->data;
         foreach ($this->_getKeyList() as $k) {
-            if (!array_key_exists($k, $aResult)) {
-                $aResult[$k] = null;
+            if (!array_key_exists($k, $result)) {
+                $result[$k] = null;
             }
         }
-        return $aResult;
-    } // function getAllData
+        return $result;
+    }
 
     // --- Setters method --- \\
-    /**
-     * Set Visit Date as string in format "Y-m-d"
-     * @param string $sDate
-     * @return \fan\core\service\user
-     */
-    public function setVisitDate($sDate = null)
+    public function setVisitDate(mixed $date = null): ?\fan\core\service\user
     {
-        if (is_null($sDate)) {
-            $sDate = date('Y-m-d');
+        if (is_null($date)) {
+            $date = date('Y-m-d');
         }
-        if (!isset($this->aData['visit_date']) || $this->aData['visit_date'] != $sDate) {
-            $this->aData['visit_date'] = $this->aChanged['visit_date'] = $sDate;
+        if (!isset($this->data['visit_date']) || (string)$this->data['visit_date'] !== (string)$date) {
+            $this->data['visit_date'] = $this->changed['visit_date'] = $date;
         }
-        return $this->oFacade;
-    } // function setVisitDate
+        return $this->facade;
+    }
 
     // --- Verifying/manipulation method --- \\
-    /**
-     * Set Password
-     * @param string $sPassword
-     * @return \fan\core\service\user
-     */
-    public function setPassword($sPassword)
+    public function setPassword(string $password): ?\fan\core\service\user
     {
-        $sHash = $this->makePasswordHash($sPassword);
-        if (!isset($this->aData['password']) || $this->aData['password'] != $sHash) {
-            $this->aData['password'] = $this->aChanged['password'] = $sHash;
+        $hash = $this->makePasswordHash($password);
+        if (!isset($this->data['password']) || (string)$this->data['password'] !== $hash) {
+            $this->data['password'] = $this->changed['password'] = $hash;
         }
-        $this->bIsValid = true;
-        return $this->oFacade;
-    } // function setPassword
+        $this->isValid = true;
+        return $this->facade;
+    }
 
-    /**
-     * Check Password
-     * @param string $sPassword
-     * @return boolean
-     */
-    public function checkPassword($sPassword)
+    public function checkPassword(string $password): bool
     {
-        $sHash = $this->makePasswordHash($sPassword);
-        $this->bIsValid = !empty($this->aData['password']) && $this->aData['password'] == $sHash;
+        $hash = $this->makePasswordHash($password);
+        $this->isValid = !empty($this->data['password']) && (string)$this->data['password'] === $hash;
 
         // Log Error Authentication if it is allowed
-        if (!$this->bIsValid && $this->oConfig['LOG_ERR_AUTH']) {
-            if (empty($this->aData)) {
-                $sErrMsg = 'Data for "' . $this->mIdentifyer . '" isn\'t present.';
-                $sNote   = '';
+        if (!$this->isValid && $this->config['LOG_ERR_AUTH']) {
+            if (empty($this->data)) {
+                $errMsg = 'Data for "' . $this->identifyer . '" isn\'t present.';
+                $note   = '';
             } else {
-                $sErrMsg = 'Error password for "' . $this->mIdentifyer . '".';
-                $sNote   = 'Hash: ' . $sHash . "\n" . 'NS: ' . $this->oFacade->getUserSpace();
+                $errMsg = 'Error password for "' . $this->identifyer . '".';
+                $note   = 'Hash: ' . $hash . "\n" . 'NS: ' . $this->facade->getUserSpace();
             }
-            $sErrMsg .= "\nTime: " . date('Y-m-d H:i:s') . "\nClient IP: " . $_SERVER['REMOTE_ADDR'];
-            service('error')->logErrorMessage($sErrMsg, 'Error authentication', $sNote);
+            $errMsg .= "\nTime: " . date('Y-m-d H:i:s') . "\nClient IP: " . ($_SERVER['REMOTE_ADDR'] ?? '');
+            $this->facade->getContainerService('error')->logErrorMessage($errMsg, 'Error authentication', $note);
         }
 
-        return $this->bIsValid;
-    } // function checkPassword
+        return $this->isValid;
+    }
 
-    /**
-     * Load User data
-     * @return \fan\core\service\user
-     */
-    public function load()
+    public function load(): ?\fan\core\service\user
     {
-        $this->bIsValid = false;
+        $this->isValid = false;
         if ($this->_loadData()) {
-            $this->bIsNew   = false;
-            $this->aChanged = array();
+            $this->isNew   = false;
+            $this->changed = [];
         }
-        return $this->oFacade;
-    } // function load
-    /**
-     * Logout User
-     * @return \fan\core\service\user
-     */
-    public function logout()
+        return $this->facade;
+    }
+    public function logout(): ?\fan\core\service\user
     {
-        return $this->oFacade;
-    } // function logout
+        return $this->facade;
+    }
 
-    /**
-     * Save User data
-     * @return \fan\core\service\user
-     */
-    public function save()
+    public function save(): ?\fan\core\service\user
     {
-        if ($this->bIsNew) {
-            $this->aData['join_date'] = $this->aChanged['join_date'] = date('Y-m-d H:i:s');
+        if ($this->isNew) {
+            $this->data['join_date'] = $this->changed['join_date'] = date('Y-m-d H:i:s');
         }
 
         if ($this->isChanged() && $this->_validateForSave() && $this->_saveData()) {
-            $this->bIsNew   = false;
-            $this->aChanged = array();
+            $this->isNew   = false;
+            $this->changed = [];
         }
-        return $this->oFacade;
-    } // function save
+        return $this->facade;
+    }
 
-    /**
-     * Get flag: is User-data valid
-     * @return boolean
-     */
-    public function isValid()
+    public function isValid(): bool
     {
-        return $this->bIsValid;
-    } // function isValid
-    /**
-     * Get flag: is New User
-     * @return boolean
-     */
-    public function isNew()
+        return $this->isValid;
+    }
+    public function isNew(): bool
     {
-        return $this->bIsNew;
-    } // function isNew
-    /**
-     * Get flag: is User-data valid
-     * @return boolean
-     */
-    public function isChanged()
+        return $this->isNew;
+    }
+    public function isChanged(): bool
     {
-        return !empty($this->aChanged);
-    } // function isChanged
+        return !empty($this->changed);
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Save User Data and return TRUE if success
-     * Method must set property $this->aData
-     * @return boolean
-     */
-    abstract protected function _loadData();
-    /**
-     * Save User Data and return TRUE if success
-     * @return boolean
-     */
-    abstract protected function _saveData();
-    /**
-     * Validate User Data before saving
-     * @return boolean
-     */
-    abstract protected function _validateForSave();
+    abstract protected function _loadData(): bool;
+    abstract protected function _saveData(): bool;
+    abstract protected function _validateForSave(): bool;
 
-    /**
-     * Get List of Keys
-     * @return array
-     */
-    protected function _getKeyList()
+    protected function _getKeyList(): array
     {
-        return array(
+        return [
             'id',
             'password',
             'login',
@@ -373,89 +283,100 @@ abstract class base implements \Serializable
             'roles',
             'join_date',
             'visit_date',
-        );
-    } // function _getKeyList
+        ];
+    }
 
-    /**
-     * Set any data
-     * @param string $sKey
-     * @param mixed $mVal
-     * @return \fan\core\service\user
-     */
-    protected function _set($sKey, $mVal)
+    protected function _set(string $key, mixed $val): ?\fan\core\service\user
     {
-        if (!isset($this->aData[$sKey]) && !is_null($mVal) || array_val($this->aData, $sKey) != $mVal) {
-            $this->aChanged[$sKey] = $mVal;
+        if ((!isset($this->data[$key]) && !is_null($val)) || array_val($this->data, $key) !== $val) {
+            $this->changed[$key] = $val;
         }
-        $this->aData[$sKey] = $mVal;
-        return $this->oFacade;
-    } // function _set
-    /**
-     * Get any data
-     * @param string $sKey
-     * @return mixed
-     */
-    protected function _get($sKey)
+        $this->data[$key] = $val;
+        return $this->facade;
+    }
+    protected function _get(string $key): mixed
     {
-        return isset($this->aData[$sKey]) ? $this->aData[$sKey] : null;
-    } // function _get
+        return isset($this->data[$key]) ? $this->data[$key] : null;
+    }
 
-    /**
-     * Convert Camel Case string to format "separated by _"
-     * @param string $sStr
-     * @return string
-     */
-    protected function _convCamelCase($sStr)
+    protected function _convCamelCase(string $str): string
     {
-        return strtolower(implode('_', preg_split('/(?<=\\w)(?=[A-Z])/', $sStr)));
-    } // function _convCamelCase
+        $parts = preg_split('/(?<=\\w)(?=[A-Z])/', $str);
+        return strtolower(implode('_', is_array($parts) ? $parts : [$str]));
+    }
 
     // ======== The magic methods ======== \\
 
     /**
-     * Call set/get methods for control of data
-     * @param string $sMethod
-     * @param array $aArgs
-     * @return mixed
      * @throws fatalException
      */
-    public function __call($sMethod, $aArgs)
+    public function __call(string $method, array $args): mixed
     {
-        $sKey = $this->_convCamelCase(substr($sMethod, 3));
-        if(substr($sMethod, 0, 3) == 'set') {
-            return $this->_set($sKey, isset($aArgs[0]) ? $aArgs[0] : null);
-        } elseif (substr($sMethod, 0, 3) == 'get') {
-            return $this->_get($sKey);
+        $method = (string)$method;
+        $key = $this->_convCamelCase(substr($method, 3));
+        if (substr($method, 0, 3) === 'set') {
+            return $this->_set($key, isset($args[0]) ? $args[0] : null);
+        } elseif (substr($method, 0, 3) === 'get') {
+            return $this->_get($key);
         }
-        throw new fatalException($this->oFacade, 'Incorrect call of User Engine!');
-    } // function __call
+        throw new fatalException($this->facade, 'Incorrect call of User Engine!');
+    }
 
     // ======== Required Interface methods ======== \\
 
-    public function serialize()
+    public function serialize(): string
     {
-        return serialize(array(
-            'flags' => array(
-                'valid'   => $this->bIsValid,
-                'new'     => $this->bIsNew,
-                'changed' => $this->aChanged,
-            ),
-            'identifyer' => $this->mIdentifyer,
-            'main'       => serialize($this->aData),
-        ));
+        return \fan\core\adapter\safe_serializer::encodePhpSnapshot($this->__serialize());
     }
 
-    public function unserialize($sData)
+    public function __serialize(): array
     {
-        $aData = unserialize($sData);
-
-        $this->bIsValid = $aData['flags']['valid'];
-        $this->bIsNew   = $aData['flags']['new'];
-        $this->aChanged = $aData['flags']['changed'];
-
-        $this->mIdentifyer = $aData['identifyer'];
-        $this->aData       = unserialize($aData['main']);
+        return [
+            'flags' => [
+                'valid'   => $this->isValid,
+                'new'     => $this->isNew,
+                'changed' => $this->changed,
+            ],
+            'identifyer' => $this->identifyer,
+            'data'       => $this->data,
+        ];
     }
 
-} // class \fan\core\service\user\base
-?>
+    public function unserialize(string $data): void
+    {
+        $data = \fan\core\adapter\safe_serializer::decodePhpSnapshot((string)$data, []);
+        if (!is_array($data)) {
+            throw new \UnexpectedValueException('User data snapshot must decode to an array.');
+        }
+
+        $this->__unserialize($data);
+    }
+
+    public function __unserialize(array $data): void
+    {
+        $this->isValid = $data['flags']['valid'];
+        $this->isNew   = $data['flags']['new'];
+        $this->changed = $data['flags']['changed'];
+
+        $this->identifyer = $data['identifyer'];
+        $this->data       = $this->restoreNestedData($data['data'] ?? $data['main'] ?? null);
+    }
+
+    private function restoreNestedData(mixed $data): array
+    {
+        if (is_array($data)) {
+            return $data;
+        }
+
+        if (is_string($data)) {
+            $data = \fan\core\adapter\safe_serializer::decodePhpSnapshot($data, []);
+        }
+
+        if (!is_array($data)) {
+            throw new \UnexpectedValueException('User nested data snapshot must decode to an array.');
+        }
+
+        return $data;
+    }
+
+}

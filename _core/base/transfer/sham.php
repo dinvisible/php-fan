@@ -1,4 +1,8 @@
-<?php namespace fan\core\base\transfer;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\base\transfer;
 /**
  * Sham transfer (do not change current URL)
  *
@@ -16,16 +20,9 @@
  */
 class sham extends \fan\core\base\transfer
 {
-    /**
-     * Transfer's constructor
-     * @param string $sNewUrn New Transfer's URL
-     * @param string $sNewQueryString New Query String
-     * @param string $sDbOper Database Operation (commit, rollback)
-     */
-    public function __construct($sNewUrn, $sNewQueryString = null, $sDbOper = null)
+    public function __construct(string $newUrn, ?string $newQueryString = null, ?string $dbOper = null)
     {
-        $this->sTransferType = 'sham';
-        parent::__construct($sNewUrn, $sNewQueryString, $sDbOper);
+        $this->transferType = 'sham';
+        parent::__construct($newUrn, $newQueryString, $dbOper);
     }
-} // class \fan\core\base\transfer\sham
-?>
+}

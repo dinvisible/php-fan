@@ -1,4 +1,7 @@
-<?php namespace fan\core\view\parser;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view\parser;
 /**
  * View parser HTML-type
  *
@@ -19,68 +22,49 @@ class debug2 extends \fan\core\view\parser
     /**
      * @var \fan\core\service\debug Root block
      */
-    protected $oDebug;
+    protected ?object $debug = null;
 
-    /**
-     * View meta constructor
-     * @param fan\core\block\base $oBlock
-     */
-    public function __construct(\fan\core\block\base $oMainBlock)
+    public function __construct(\fan\core\block\base $mainBlock)
     {
-        parent::__construct($oMainBlock);
-        $this->oDebug = \fan\project\service\debug::instance();
-    } // function __construct
+        parent::__construct($mainBlock);
+        $this->debug = \fan\project\service\debug::instance();
+    }
 
     // ======== Static methods ======== \\
     /**
-     * Get View-Format is disabled for this view
      * @throws \fan\project\exception\error500
      */
-    final static public function getFormat() {
+    final static public function getFormat(): string {
         throw new \fan\project\exception\error500('Class "\fan\core\view\parser\debug2" can\'t be use for define View-type');
-    } // function getFormat
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Get Final Content Code
-     * @return string
-     */
-    public function getResultData(\fan\core\block\base $oBlock)
+    public function getResultData(\fan\core\block\base $block): array
     {
-        $sBlockInfo = $this->_getInternalResultData($oBlock, false);
-        return array(
-            $oBlock->getBlockName() => $this->oDebug->getSecondDebugCode(
-                    $sBlockInfo, method_exists($oBlock, 'getTitle') ?
-                    $oBlock->getTitle() :
+        $blockInfo = $this->_getInternalResultData($block, false);
+        return [
+            $block->getBlockName() => $this->debug->getSecondDebugCode(
+                    $blockInfo, method_exists($block, 'getTitle') ?
+                    $block->getTitle() :
                     'Debug Info'
                 )
-            );
-    } // function getResultData
+            ];
+    }
 
     // ======== Protected methods ======== \\
-    /**
-     * Get Internal Result Data
-     * @return array
-     */
-    public function _getInternalResultData(\fan\core\block\base $oBlock, $isView)
+    public function _getInternalResultData(\fan\core\block\base $block, $isView): string
     {
-        $aIncl = array();
-        foreach ($oBlock->getEmbeddedBlocks() as $oEmbeddedBlock) {
-            $aIncl[] = $this->_getInternalResultData($oEmbeddedBlock, true);
+        $incl = [];
+        foreach ($block->getEmbeddedBlocks() as $embeddedBlock) {
+            $incl[] = $this->_getInternalResultData($embeddedBlock, true);
         }
 
-        return $this->oDebug->getSecondDebugRow($oBlock, $aIncl, $isView);
-    } // function _getInternalResultData
-    /**
-     * Set Response Headers
-     * @param type $sResult
-     * @return \fan\core\view\parser
-     */
-    protected function _setHeaders($sResult, $sContentType = 'text/html', $sEncoding = null)
+        return $this->debug->getSecondDebugRow($block, $incl, $isView);
+    }
+    protected function _setHeaders($result, $contentType = 'text/html', $encoding = null): \fan\core\service\header
     {
-        return parent::_setHeaders($sResult, $sContentType, $sEncoding);
-    } // function _setHeaders
-} // class \fan\core\view\parser\debug2
-?>
+        return parent::_setHeaders($result, $contentType, $encoding);
+    }
+}

@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\captcha\text_generator;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\captcha\text_generator;
 /**
  * Siple text geterator for captcha
  *
@@ -16,36 +19,29 @@
  */
 class simple extends \fan\core\service\captcha\base
 {
-    /**
-     * Make New text fo captcha
-     * @param int $iLength
-     * @param string $sType
-     * @return \fan\core\service\captcha
-     */
-    public function makeNewText($iLength, $sType)
+    public function makeNewText(int $length, string $type): string
     {
-        $sResult = '';
-        if ($sType == 'char') {
-            $aConsonant = array(
+        $result = '';
+        if ($type === 'char') {
+            $consonant = [
                 'B', 'C', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'X', 'Z', 'TR', 'CR', 'FR', 'DR', 'WR', 'PR', 'TH', 'CH', 'PH', 'ST', 'SL', 'CL'
-            );
-            $aVowel     = array(
+            ];
+            $vowel     = [
                 'A', 'E', 'I', 'O', 'U', 'Y', 'AE', 'OU', 'IO', 'EA', 'OU', 'IA', 'AI'
-            );
+            ];
 
-            $iCcnt = count($aConsonant) - 1;
-            $iVcnt = count($aVowel) - 1;
-            for ($i = 0; $i < $iLength / 2; $i++) {
-                $sResult .= $aConsonant[mt_rand(0, $iCcnt)] . $aVowel[mt_rand(0, $iVcnt)];
+            $ccnt = count($consonant) - 1;
+            $vcnt = count($vowel) - 1;
+            for ($i = 0; $i < $length / 2; $i++) {
+                $result .= $consonant[mt_rand(0, $ccnt)] . $vowel[mt_rand(0, $vcnt)];
             }
         } else {
-            for ($i = 0; $i < $iLength; $i++) {
-                $sResult .= mt_rand($i == 0 ? 1 : 0, 9);
+            for ($i = 0; $i < $length; $i++) {
+                $result .= mt_rand($i === 0 ? 1 : 0, 9);
             }
         }
 
-        return substr($sResult, 0, $iLength);
-    } // function makeNewText
+        return substr($result, 0, $length);
+    }
 
-} // class \fan\core\service\captcha\text_generator\simple
-?>
+}

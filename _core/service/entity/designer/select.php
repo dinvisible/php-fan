@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\entity\designer;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\entity\designer;
 /**
  * Designer of SQL-request SELECT
  *
@@ -20,15 +24,15 @@ class select extends \fan\core\service\entity\designer
      * SQL-request parts
      * @var string
      */
-    protected $aQueryParts = array(
+    protected array $queryParts = [
         'operAndFields'   => null,
         'fromTable'       => null,
-        'joinTables'      => array(),
-        'whereCondition'  => array(),
+        'joinTables'      => [],
+        'whereCondition'  => [],
         'groupBy'         => null,
-        'havingCondition' => array(),
+        'havingCondition' => [],
         'orderBy'         => null,
-    );
+    ];
 
 
     // ======== Static methods ======== \\
@@ -37,33 +41,22 @@ class select extends \fan\core\service\entity\designer
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Set parts of SQL-requests by parameters
-     * @param mixed $mParam
-     * @param string $sOrderBy
-     * @return \fan\core\service\entity\designer\select
-     */
-    public function setSelectByParam($mParam, $sOrderBy = null)
+    public function setSelectByParam(mixed $param, ?string $orderBy = null): static
     {
         $this->setMainSqlParts();
-        $this->aQueryParts['whereCondition'] = $this->makeWhere($mParam, false);
-        $this->aQueryParts['orderBy']        = $sOrderBy;
-        $this->aSrcParam = $mParam;
+        $this->queryParts['whereCondition'] = $this->makeWhere($param, false);
+        $this->queryParts['orderBy']        = $orderBy;
+        $this->srcParam = $param;
         return $this;
-    } // function setSelectByParam
+    }
 
-    /**
-     * Set parts: operAndFields, fromTable
-     * @return \fan\core\service\entity\designer\select
-     */
-    public function setMainSqlParts()
+    public function setMainSqlParts(): static
     {
-        $this->aQueryParts['operAndFields']  = 'SELECT *';
-        $this->aQueryParts['fromTable']      = 'FROM `' . $this->getEntity()->getTableName() . '`';
+        $this->queryParts['operAndFields']  = 'SELECT *';
+        $this->queryParts['fromTable']      = 'FROM `' . $this->getEntity()->getTableName() . '`';
         return $this;
-    } // function setMainSqlParts
+    }
 
     // ======== Private/Protected methods ======== \\
 
-} // class \fan\core\service\entity\designer\select
-?>
+}

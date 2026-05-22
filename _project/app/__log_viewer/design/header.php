@@ -1,4 +1,8 @@
-<?php namespace fan\app\__log_viewer\design;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__log_viewer\design;
 /**
  * header_main block
  *
@@ -16,64 +20,63 @@
  */
 class header extends \fan\project\block\base
 {
-    public function init()
+    public function init(): void
     {
-        $aEmbeded = $this->getEmbeddedBlocks();
-        $aVrts    = $aEmbeded['nav']->getVarieties();
-        $sCurDate = date('Y-m-d');
-        $aDates   = array();
+        $embeded = $this->getEmbeddedBlocks();
+        $vrts    = $embeded['nav']->getVarieties();
+        $curDate = date('Y-m-d');
+        $dates   = [];
 
-        foreach ($aVrts as $k) {
-            $aDates[$k] = array();
+        foreach ($vrts as $k) {
+            $dates[$k] = [];
 
-            $sPath = $k == 'bootstrap' ? \bootstrap::getGlobalPath('bootstrap_log') : \bootstrap::parsePath(service('log')->getConfig(array('LOG_DIR', $k)));
+            $path = (string)$k === 'bootstrap' ? \bootstrap::getGlobalPath('bootstrap_log') : \bootstrap::parsePath(service('log')->getConfig(['LOG_DIR', $k]));
 
-            $this->setFileList($aDates[$k], $sPath, '/^(\d{4}\-\d{2}\-\d{2})\_(\d{3})\.log$/');
+            $this->setFileList($dates[$k], $path, '/^(\d{4}\-\d{2}\-\d{2})\_(\d{3})\.log$/');
 
-            if (!isset($aDates[$k][$sCurDate])) {
-                $aDates[$k][$sCurDate] = array('000');
+            if (!isset($dates[$k][$curDate])) {
+                $dates[$k][$curDate] = ['000'];
             }
         }
-        $this->setFileList($aDates['bootstrap'], \bootstrap::getGlobalPath('apache_log'), '/^error_(\d{4}\-\d{2}\-\d{2})\.log$/');
+        $this->setFileList($dates['bootstrap'], \bootstrap::getGlobalPath('apache_log'), '/^error_(\d{4}\-\d{2}\-\d{2})\.log$/');
 
-        reset($aDates);
-        $sFirstKey = key($aDates);
-        $bIsDelete = role('allow_delete');
+        reset($dates);
+        $firstKey = key($dates);
+        $isDelete = role('allow_delete');
 
-        $this->_setViewVar('aCurSel', array($sCurDate,  $aDates[$sFirstKey][$sCurDate][0]));
-        $this->_setViewVar('aDate', $aDates[$sFirstKey]);
-        $this->_setViewVar('isDelete', $bIsDelete);
+        $this->_setViewVar('aCurSel', [$curDate,  $dates[$firstKey][$curDate][0]]);
+        $this->_setViewVar('aDate', $dates[$firstKey]);
+        $this->_setViewVar('isDelete', $isDelete);
 
-        $oSes = service('session');
-        $sJS  = service('json')->encode($aDates);
-        $sJS .= ',\'' . $sCurDate . '\'';
-        $sJS .= ',' . ($bIsDelete ? 1 : 0);
-        $sJS .= ',\'' . $oSes->getSessionName() . '=' . $oSes->getSessionId() . '\'';
-        $this->_getBlock('root')->setEmbedJs('logCtrl.init(' . $sJS . ');');
-    } // function init
+        $ses = $this->containerService('session');
+        $js  = $this->containerService('json')->encode($dates);
+        $js .= ',\'' . $curDate . '\'';
+        $js .= ',' . ($isDelete ? 1 : 0);
+        $js .= ',\'' . $ses->getSessionName() . '=' . $ses->getSessionId() . '\'';
+        $this->_getBlock('root')->setEmbedJs('logCtrl.init(' . $js . ');');
+    }
 
-    public function setFileList(&$aDt, $sPath, $sRegexp)
+    public function setFileList(&$dt, $path, $regexp): void
     {
-        if (is_dir($sPath)) {
-            $aFiles = scandir($sPath);
-            foreach ($aFiles as $v) {
-                if(preg_match($sRegexp, $v, $aMatches)) {
-                    $sDate = $aMatches[1];
-                    if (!isset($aDt[$sDate])) {
-                        $aDt[$sDate] = array();
+        if (is_dir($path)) {
+            $files = scandir($path);
+            foreach ($files as $v) {
+                if (preg_match($regexp, $v, $matches)) {
+                    $date = $matches[1];
+                    if (!isset($dt[$date])) {
+                        $dt[$date] = [];
                     }
-                    if (isset($aMatches[2])) {
-                        $aDt[$sDate][] = $aMatches[2];
-                    } elseif (!isset($aDt[$sDate])) {
-                        $aDt[$sDate] = array('000');
+                    if (isset($matches[2])) {
+                        $dt[$date][] = $matches[2];
+                    } elseif (!isset($dt[$date])) {
+                        $dt[$date] = ['000'];
                     }
-                    sort($aDt[$sDate]);
+                    sort($dt[$date]);
                 }
             }
         } else {
-            trigger_error('Directory <b>' . $sPath . '</b> isn\'t found.', E_USER_WARNING);
+            throw new \RuntimeException('Directory <b>' . $path . '</b> isn\'t found.');
         }
-        ksort($aDt);
-    } // function setFileList
-} // class \fan\app\__log_viewer\design\header
-?>
+        ksort($dt);
+    }
+}

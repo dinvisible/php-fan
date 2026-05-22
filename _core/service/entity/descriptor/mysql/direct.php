@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\entity\descriptor\mysql;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\entity\descriptor\mysql;
 
 /**
  * Get table description by SQL-requests: "DESCRIBE table", "SHOW KEYS FROM table", "SHOW CREATE TABLE table",
@@ -21,171 +25,140 @@ class direct extends \fan\core\service\entity\descriptor\mysql
      * SQL-request for create table
      * @var string
      */
-    protected $sCreateTable = '';
+    protected string $createTable = '';
 
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Check - is Table exists in DB
-     * @return boolean
-     */
-    public function isTableExists()
+    public function isTableExists(): bool
     {
-        $aTmp = $this->oConnection->execute('SHOW  TABLES LIKE \'' . $this->sTableName . '\'');
-        return !empty($aTmp);
-    } // function isTableExists
-    /**
-     * Return 2x array with description of fields, like:
-     * column_name => (type, length, default, collation, attribute, null, auto_increment, comment, mime_type)
-     * @return array
-     */
-    public function getFields()
+        $tmp = $this->connection->execute('SHOW  TABLES LIKE \'' . $this->tableName . '\'');
+        return !empty($tmp);
+    }
+    public function getFields(): array
     {
-        $aResult = array();
+        $result = [];
         foreach ($this->_getFields() as $v) {
-            $aMatches = array();
-            preg_match('/^(\w+)\s*(?:\((.*)\)\s*(.*))?$/', $v['Type'], $aMatches);
-            $aField = array(
-                'type'           => strtolower($aMatches[1]),
-                'length'         => isset($aMatches[2]) ? $aMatches[2] : null,
+            $matches = [];
+            preg_match('/^(\w+)\s*(?:\((.*)\)\s*(.*))?$/', (string)$v['Type'], $matches);
+            $field = [
+                'type'           => strtolower($matches[1]),
+                'length'         => isset($matches[2]) ? $matches[2] : null,
                 'default'        => empty($v['Default']) ? null : $v['Default'],
                 'collation'      => null,
                 'charset'        => null,
-                'attribute'      => isset($aMatches[3]) ? $aMatches[3] : null,
-                'null'           => strtoupper($v['Null']) == 'YES',
-                'auto_increment' => strpos($v['Extra'], 'auto_increment') !== false,
+                'attribute'      => isset($matches[3]) ? $matches[3] : null,
+                'null'           => strtoupper((string)$v['Null']) === 'YES',
+                'auto_increment' => strpos((string)$v['Extra'], 'auto_increment') !== false,
                 'comment'        => null,
                 //'mime_type'      => null,
-            );
+            ];
 
-            $this->_resetDefaultVal($aField);
+            $this->_resetDefaultVal($field);
 
             // Field name
-            $sPattern = '^\s*\`' . preg_replace('/\W/u', '\\\\$0', $v['Field']) . '\`';
+            $pattern = '^\s*\`' . preg_replace('/\W/u', '\\\\$0', (string)$v['Field']) . '\`';
             // Field type
-            $sPattern .= '\s+\w+(?:\(.*?\))?';
+            $pattern .= '\s+\w+(?:\(.*?\))?';
             // Character set / Collate
-            $sPattern .= '\s*(?:CHARACTER\s+SET\s+(\w+))?\s*(?:COLLATE\s+(\w+))?';
+            $pattern .= '\s*(?:CHARACTER\s+SET\s+(\w+))?\s*(?:COLLATE\s+(\w+))?';
             // Comment
-            $sPattern .= '.*?(?:COMMENT\s+\'(.+)\')?\,?$';
+            $pattern .= '.*?(?:COMMENT\s+\'(.+)\')?\,?$';
 
-            if(preg_match('/' . $sPattern . '/imu', $this->_getCreateTable(), $aMatches)) {
-                $aField['comment'] = empty($aMatches[3]) ? null : $aMatches[3];
-                if (!empty($aMatches[1]) || !empty($aMatches[2])) {
-                    $aField['collation']  = implode(' ', array(strval($aMatches[1]), strval($aMatches[2])));
+            if (preg_match('/' . $pattern . '/imu', $this->_getCreateTable(), $matches)) {
+                $field['comment'] = empty($matches[3]) ? null : $matches[3];
+                if (!empty($matches[1]) || !empty($matches[2])) {
+                    $field['collation']  = implode(' ', [strval($matches[1]), strval($matches[2])]);
                 }
             }
-            $aResult[$v['Field']] = $aField;
+            $result[(string)$v['Field']] = $field;
         }
 
         foreach ($this->getKeys() as $k0 => $v0) {
             foreach ($v0['fields'] as $k1 => $v1) {
-                $aResult[$k1]['keys'][] = $k0;
+                $result[$k1]['keys'][] = $k0;
             }
         }
-        return $aResult;
-    } // function getFields
+        return $result;
+    }
 
-    /**
-     * Return 2x array with description of Relations, like:
-     * number => (name, field, ref_db, ref_table, ref_field, on_delete, on_update)
-     * @return array
-     */
-    public function getRelations()
+    public function getRelations(): array
     {
-        $aResult = array();
+        $result = [];
 
         // Constraint name
-        $sPattern = '^\s*CONSTRAINT\s+\`([^\`]+)\`';
+        $pattern = '^\s*CONSTRAINT\s+\`([^\`]+)\`';
         // Foreign key
-        $sPattern .= '\s+FOREIGN\s+KEY\s+\(\`([^\`]+)\`\)';
+        $pattern .= '\s+FOREIGN\s+KEY\s+\(\`([^\`]+)\`\)';
         // References
-        $sPattern .= '\s+REFERENCES\s+(?:\`([^\`]+)\`\.)?\`([^\`]+)\`\s*\(\`([^\`]+)\`\)';
+        $pattern .= '\s+REFERENCES\s+(?:\`([^\`]+)\`\.)?\`([^\`]+)\`\s*\(\`([^\`]+)\`\)';
         // Delete
-        $sPattern .= '(?:\s+ON\s+DELETE\s+(CASCADE|SET\sNULL|NO\sACTION|RESTRICT))?';
+        $pattern .= '(?:\s+ON\s+DELETE\s+(CASCADE|SET\sNULL|NO\sACTION|RESTRICT))?';
         // Update
-        $sPattern .= '(?:\s+ON\s+UPDATE\s+(CASCADE|SET\sNULL|NO\sACTION|RESTRICT))?';
-        $sPattern .= '\,?\s*$';
+        $pattern .= '(?:\s+ON\s+UPDATE\s+(CASCADE|SET\sNULL|NO\sACTION|RESTRICT))?';
+        $pattern .= '\,?\s*$';
 
-        $sCreateTable = $this->_getCreateTable();
-        $aMatches = null;
-        if(preg_match_all('/' . $sPattern . '/imu', $sCreateTable, $aMatches)) {
-            foreach ($aMatches[0] as $k => $v) {
-                $aResult[] = array(
-                    'name'      => $aMatches[1][$k],
-                    'field'     => $aMatches[2][$k],
-                    'ref_db'    => empty($aMatches[3][$k]) ? null : $aMatches[3][$k],
-                    'ref_table' => $aMatches[4][$k],
-                    'ref_field' => $aMatches[5][$k],
-                    'on_delete' => empty($aMatches[6][$k]) ? 'restrict' : strtolower($aMatches[6][$k]),
-                    'on_update' => empty($aMatches[7][$k]) ? 'restrict' : strtolower($aMatches[7][$k]),
-                );
+        $createTable = $this->_getCreateTable();
+        $matches = null;
+        if (preg_match_all('/' . $pattern . '/imu', $createTable, $matches)) {
+            foreach ($matches[0] as $k => $v) {
+                $result[] = [
+                    'name'      => $matches[1][$k],
+                    'field'     => $matches[2][$k],
+                    'ref_db'    => empty($matches[3][$k]) ? null : $matches[3][$k],
+                    'ref_table' => $matches[4][$k],
+                    'ref_field' => $matches[5][$k],
+                    'on_delete' => empty($matches[6][$k]) ? 'restrict' : strtolower($matches[6][$k]),
+                    'on_update' => empty($matches[7][$k]) ? 'restrict' : strtolower($matches[7][$k]),
+                ];
             }
         }
-        return $aResult;
-    } // function getRelations
+        return $result;
+    }
 
 
-    /**
-     * Return string with Engine of Table
-     * @return string
-     */
-    public function getEngine()
+    public function getEngine(): mixed
     {
-        $sCreateTable = $this->_getCreateTable();
+        $createTable = $this->_getCreateTable();
         return null; // ToDo: this
-    } // function getEngine
-    /**
-     * Return string with Create Time of Table
-     * @return string
-     */
-    public function getCreateTime()
+    }
+    public function getCreateTime(): mixed
     {
-        $sCreateTable = $this->_getCreateTable();
+        $createTable = $this->_getCreateTable();
         return null; // ToDo: this
-    } // function getTableCollation
-    /**
-     * Return string with Table Collation
-     * @return string
-     */
-    public function getTableCollation()
+    }
+    public function getTableCollation(): mixed
     {
-        $sCreateTable = $this->_getCreateTable();
+        $createTable = $this->_getCreateTable();
         return null; // ToDo: this
-    } // function getTableCollation
-    /**
-     * Return string with comment OR null if comment doesn't exist
-     * @return null
-     */
-    public function getComment()
+    }
+    public function getComment(): string
     {
-        $sResult = '';
-        $aMatches = null;
-        if(preg_match('/\sCOMMENT\=\'(.+?)\'/iu', $this->_getCreateTable(), $aMatches)) {
-            $sResult = $aMatches[1];
+        $result = '';
+        $matches = null;
+        if (preg_match('/\sCOMMENT\=\'(.+?)\'/iu', $this->_getCreateTable(), $matches)) {
+            $result = $matches[1];
         }
-        return $sResult;
-    } // function getComment
+        return $result;
+    }
 
     // ======== Private/Protected methods ======== \\
-    protected function _getFields()
+    protected function _getFields(): array
     {
-        if (empty($this->aSrcFields)) {
-            $this->aSrcFields = $this->oConnection->execute('DESCRIBE `' . $this->sTableName . '`');
+        if (empty($this->srcFields)) {
+            $this->srcFields = $this->connection->execute('DESCRIBE `' . $this->tableName . '`');
         }
-        return $this->aSrcFields;
-    } // function _getFields
+        return $this->srcFields;
+    }
 
-    protected function _getCreateTable()
+    protected function _getCreateTable(): string
     {
-        if (empty($this->sCreateTable)) {
-            $aTmp = $this->oConnection->execute('SHOW CREATE TABLE `' . $this->sTableName . '`');
-            $this->sCreateTable = $aTmp[0]['Create Table'];
+        if (empty($this->createTable)) {
+            $tmp = $this->connection->execute('SHOW CREATE TABLE `' . $this->tableName . '`');
+            $this->createTable = (string)$tmp[0]['Create Table'];
         }
-        return $this->sCreateTable;
-    } // function _getCreateTable
+        return $this->createTable;
+    }
 
-} // class \fan\core\service\entity\descriptor\mysql\direct
-?>
+}

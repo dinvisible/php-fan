@@ -1,4 +1,8 @@
-<?php namespace fan\core\base\meta;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\base\meta;
 /**
  * Class for get delayed meta-data, after make block
  *
@@ -16,40 +20,20 @@
  */
 class delayed
 {
-    /**
-     * @var mixed Called object or Class name
-     */
-    protected $mObj;
-    /**
-     * @var string Metod name
-     */
-    protected $sMethod;
-    /**
-     * @var array Arguments of called method
-     */
-    protected $aArguments;
+    protected mixed $obj = null;
+    protected ?string $method = null;
+    protected ?array $arguments = null;
 
-    /**
-     * Delayed meta constructor
-     * @param mixed  $mObj
-     * @param string $sMethod
-     * @param mixed  $mArguments
-     */
-    public function __construct($mObj, $sMethod, $mArguments)
+    public function __construct(object|string $obj, string $method, mixed $arguments)
     {
-        $this->mObj       = $mObj;
-        $this->sMethod    = $sMethod;
-        $this->aArguments = is_null($mArguments) ? array() : (is_array($mArguments) ? $mArguments : array($mArguments));
-    } // function __construct
+        $this->obj       = $obj;
+        $this->method    = $method;
+        $this->arguments = is_null($arguments) ? [] : (is_array($arguments) ? $arguments : [$arguments]);
+    }
 
-    /**
-     * Get Dynamic Meta Value
-     * @return mixed
-     */
-    public function getValue()
+    public function getValue(): mixed
     {
-        return call_user_func_array(array($this->mObj, $this->sMethod), $this->aArguments);
-    } // function getValue
+        return call_user_func_array([$this->obj, $this->method], $this->arguments);
+    }
 
-} // class \fan\core\base\meta\delayed
-?>
+}

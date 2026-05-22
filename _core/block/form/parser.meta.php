@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Example of meta file for block
  * Note:
@@ -17,15 +20,15 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-return array(
+return [
     /**
      * Meta data for curent form block
      */
-    'own' => array(
+    'own' => [
         /**
          * form parameters
          */
-        'form' => array(
+        'form' => [
             'request_type'    => 'P',
             'csrf_protection' => 8,
 
@@ -34,11 +37,10 @@ return array(
 
             'not_role' => false,
 
-        ), //'form'
+        ], //'form'
 
-        'cache' => array(
+        'cache' => [
             'mode'     => 2,
-        ),
-    ),
-);
-?>
+        ],
+    ],
+];

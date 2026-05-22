@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\matcher\item;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\matcher\item;
 /**
  * Separated URI data
  *
@@ -29,7 +32,7 @@ class uri extends base
      * Allowed property
      * @var array
      */
-    protected $aData = array(
+    protected array $data = [
         'scheme'   => null,
         'host'     => null,
         'user'     => null,
@@ -38,11 +41,15 @@ class uri extends base
         'query'    => null,
         'fragment' => null,
         'full'     => null,
-    );
+    ];
 
-    public function __toString() {
-        return $this->aData['full'];
-        //return $this->aData['path'] . (empty($this->aData['query']) ? '' : '?' . $this->aData['query']);
+    /**
+     * Implements PHP magic behavior for this current component.
+     *
+     * @return string String representation of the matched URI.
+     */
+    public function __toString(): string {
+        return (string)$this->data['full'];
+        //return $this->data['path'] . (empty($this->data['query']) ? '' : '?' . $this->data['query']);
     }
-} // class \fan\core\service\matcher\item\uri
-?>
+}

@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Block admin data  meta-data
  *
@@ -14,12 +17,11 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.01.002 (01.05.2013)
  */
-return array(
-    'own' => array(
-        'json' => array (
+return [
+    'own' => [
+        'json' => [
             'type' => 'form',
-        ),
+        ],
         'default_tpl' => substr(__FILE__, 0, -8) . 'tpl',
-    ),
-);
-?>
+    ],
+];

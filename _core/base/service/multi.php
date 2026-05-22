@@ -1,4 +1,8 @@
-<?php namespace fan\core\base\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\base\service;
 /**
  * Base abstract service
  *
@@ -19,31 +23,22 @@ abstract class multi extends \fan\core\base\service
 {
     // ======== Static methods ======== \\
 
-    /**
-     * Reset flag of enabled for all instances
-     * Redefine this function in children and set argument there - list os instances
-     */
-    public static function resetEnabledAll()
+    public static function resetEnabledAll(): void
     {
         foreach (func_get_arg(0) as $v) {
             $v->resetEnabled();
         }
-    } // function resetEnabledAll
+    }
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Is singleton
-     * @return boolean
-     */
-    final public function isSingleton()
+    final public function isSingleton(): bool
     {
         return false;
-    } // function isSingleton
+    }
 
     // ======== Private/Protected methods ======== \\
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\base\service\multi
-?>
+}

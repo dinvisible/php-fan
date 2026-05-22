@@ -1,4 +1,8 @@
-<?php namespace fan\app\__log_viewer\main;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__log_viewer\main;
 /**
  * index block
  *
@@ -16,15 +20,12 @@
  */
 class index extends \fan\project\block\common\simple
 {
-    /**
-     * Init block
-     */
-    public function init()
+    public function init(): void
     {
         if (!role('log_access')) {
-            //$oUser = service('user', array('anonymous', 'logs_by_config'));
-            $oUser = getUser('anonymous', 'logs_by_config');
-            $oUser->setCurrent();
+            //$user = service('user', ['anonymous', 'logs_by_config']);
+            $user = getUser('anonymous', 'logs_by_config');
+            $user->setCurrent();
             if (!role('log_access')) {
                 transfer_int('~/request_password.html');
             }
@@ -32,5 +33,4 @@ class index extends \fan\project\block\common\simple
         $this->view->isDelete = role('allow_delete');
     } // init
 
-} // class \fan\app\__log_viewer\main\index
-?>
+}

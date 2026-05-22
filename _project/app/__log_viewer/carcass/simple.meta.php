@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Meta data of empty carcass
  *
@@ -14,19 +17,18 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.005 (12.02.2015)
  */
-return array(
-    'own' => array(
-        'embeddedBlocks' => array(
+return [
+    'own' => [
+        'embeddedBlocks' => [
             'main'   => '{MAIN}',
             'footer' => 'design/footer',
-        ),
+        ],
 
-        'externalCss' => array(
-            'style' => array('~/layout.css'),
-        ),
+        'externalCss' => [
+            'style' => ['~/layout.css'],
+        ],
 
         'template' => '/simple.tpl',
 
-    ),
-);
-?>
+    ],
+];

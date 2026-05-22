@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\database;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\database;
 /**
  *
  *
@@ -15,241 +19,138 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class mysqlImproved extends base
+class mysqlPdo extends base
 {
     // ======== Main Interface methods ======== \\
-    /**
-     * Restore closed database connection
-     * @param array $aParam
-     * @param boolean $bMakeException Make Exception if connection impossible
-     * @return type
-     */
-    public function reconnect($aParam, $bMakeException = true)
+    public function reconnect(array $param, bool $makeException = true): mixed
     {
-    } // function reconnect
+    }
 
-    /**
-     * Close connection
-     */
-    public function connectionClose()
+    public function connectionClose(): static
     {
         return $this;
-    } // function connectionClose
+    }
 
-    /**
-     * Execute SQL query
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @param integer $iResultType
-     * @return object Result set
-     */
-    public function execute($sSql, $aParam = null, $iResultType = null)
+    public function execute(string $sql, ?array $param = null, ?int $resultType = null): mixed
     {
-        return $mResult;
-    } // function execute
+        return $result;
+    }
 
-    /**
-     * Start Transaction
-     * @return mixed
-     */
-    public function startTransaction()
+    public function startTransaction(): mixed
     {
         return $this->execute('START TRANSACTION');
-    } // function startTransaction
+    }
 
-    /**
-     * Set SavePoint
-     * @param string $sSavePoint
-     * @return mixed
-     */
-    public function setSavePoint($sSavePoint)
+    public function setSavePoint(string $savePoint): mixed
     {
-        return $this->execute('SAVEPOINT ?', $sSavePoint);
-    } // function setSavePoint
+        return $this->execute('SAVEPOINT ?', [$savePoint]);
+    }
 
-    /**
-     * Commit Transaction
-     * @return mixed
-     */
-    public function commit()
+    public function commit(): mixed
     {
         return $this->execute('COMMIT');
-    } // function commit
+    }
 
-    /**
-     * Rollback Transaction
-     * @param string $sSavePoint
-     * @return mixed
-     */
-    public function rollback($sSavePoint = null)
+    public function rollback(?string $savePoint = null): mixed
     {
-        return empty($sSavePoint) ? $this->execute('ROLLBACK') : $this->execute('ROLLBACK TO SAVEPOINT ?', $sSavePoint);
-    } // function rollback
+        return empty($savePoint) ? $this->execute('ROLLBACK') : $this->execute('ROLLBACK TO SAVEPOINT ?', [$savePoint]);
+    }
 
-    /**
-     * Get last insert id
-     * @return int Id
-     */
-    public function getInsertId()
+    public function getInsertId(): mixed
     {
         if (empty($this->lConnent)) {
             return null;
         }
-        $aResult = $this->execute('SELECT LAST_INSERT_ID() AS id', null, MYSQL_ASSOC);
-        return $aResult[0]['id'];
-    } // function getInsertId
+        $result = $this->execute('SELECT LAST_INSERT_ID() AS id', null, MYSQL_ASSOC);
+        return $result[0]['id'];
+    }
 
-    /**
-     * Get one value
-     * @param string $sSql SQL query
-     * @param string $sFieldName Field Name
-     * @param array $aParam Input parameters
-     * @return mixed
-     */
-    public function getOne($sSql, $sFieldName, $aParam = null)
+    public function getOne(string $sql, string $fieldName, ?array $param = null): mixed
     {
-        $aResult = $this->execute($sSql, $aParam, MYSQL_ASSOC);
-        return empty($aResult) ? null : $aResult[0][$sFieldName];
-    } // function getOne
+        $result = $this->execute($sql, $param, MYSQL_ASSOC);
+        return empty($result) ? null : $result[0][$fieldName];
+    }
 
-    /**
-     * Get row
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @param integer $iResultType
-     * @return object Result set
-     */
-    public function getRow($sSql, $aParam = null, $iResultType = null)
+    public function getRow(string $sql, ?array $param = null, ?int $resultType = null): array
     {
-        $aResult = $this->execute($sSql, $aParam, $iResultType);
-        return empty($aResult) ? array() : $aResult[0];
-    } // function getRow
+        $result = $this->execute($sql, $param, $resultType);
+        return empty($result) ? [] : $result[0];
+    }
 
-    /**
-     * Get row assoc
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @return object Result set
-     */
-    public function getRowAssoc($sSql, $aParam = null)
+    public function getRowAssoc(string $sql, ?array $param = null): array
     {
-        return $this->getRow($sSql, $aParam, MYSQL_ASSOC);
-    } // function getRowAssoc
+        return $this->getRow($sql, $param, MYSQL_ASSOC);
+    }
 
-    /**
-     * Get col
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @return object Result set
-     */
-    public function getCol($sSql, $sColName, $aParam = null)
+    public function getCol(string $sql, string|int $colName, ?array $param = null): array
     {
-        $aResult = array();
-        $aTmp = $this->execute($sSql, $aParam, MYSQL_ASSOC);
-        if (!empty($aTmp)) {
-            foreach ($aTmp as $v) {
-                $aResult[] = isset($v[$sColName]) ? $v[$sColName] : null;
+        $result = [];
+        $tmp = $this->execute($sql, $param, MYSQL_ASSOC);
+        if (!empty($tmp)) {
+            foreach ($tmp as $v) {
+                $result[] = isset($v[$colName]) ? $v[$colName] : null;
             }
         }
-        return $aResult;
-    } // function getCol
+        return $result;
+    }
 
-    /**
-     * Get assoc
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @return object Result set
-     */
-    public function getAssoc($sSql, $aParam = null)
+    public function getAssoc(string $sql, ?array $param = null): array
     {
-        $aResult = array();
-        $aTmp = $this->execute($sSql, $aParam, MYSQL_ASSOC);
-        if (!empty($aTmp)) {
-            foreach ($aTmp as $v) {
+        $result = [];
+        $tmp = $this->execute($sql, $param, MYSQL_ASSOC);
+        if (!empty($tmp)) {
+            foreach ($tmp as $v) {
                 $k = array_shift($v);
-                $aResult[$k] = $v;
+                $result[$k] = $v;
             }
-            return $aResult;
+            return $result;
         }
-        return array();
-    } // function getAssoc
+        return [];
+    }
 
-    /**
-     * Get all
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @return object Result set
-     */
-    public function getAll($sSql, $aParam = null, $iResultType = null)
+    public function getAll(string $sql, ?array $param = null, int|string|null $resultType = null): array
     {
-        $aResult = $this->execute($sSql, $aParam, $iResultType);
-        return empty($aResult) ? array() : $aResult;
-    } // function getAll
+        $result = $this->execute($sql, $param, $resultType);
+        return empty($result) ? [] : $result;
+    }
 
-    /**
-     * Get all
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @return object Result set
-     */
-    public function getAllLimit($sSql, $aParam = null, $nQtt = -1, $nOffset = -1, $iResultType = null, $iResultType = null)
+    public function getAllLimit(string $sql, ?array $param = null, int|float $qtt = -1, int|float $offset = -1, int|string|null $resultType = null): array
     {
-        if ($nQtt > -1) {
-            $sSql .= ' LIMIT ';
-            $sSql .= $nOffset > -1 ? $nOffset . ', ' . $nQtt  : $nQtt;
+        if ($qtt > -1) {
+            $sql .= ' LIMIT ';
+                $sql .= $offset > -1 ? (int)$offset . ', ' . (int)$qtt : (int)$qtt;
         }
-        return $this->getAll($sSql, $aParam, $iResultType);
-    } // function getAllLimit
+        return $this->getAll($sql, $param, $resultType);
+    }
 
-    /**
-     * Get MySQL version
-     * @return string
-     */
-    public function getVersion()
+    public function getVersion(): ?string
     {
         if (empty($this->lConnent)) {
             return null;
         }
-        $aResult = $this->execute('SELECT VERSION() AS ver', null, MYSQL_ASSOC);
-        return 'MySQL ' . $aResult[0]['ver'];
-    } // function getVersion
+        $result = $this->execute('SELECT VERSION() AS ver', null, MYSQL_ASSOC);
+        return 'MySQL ' . $result[0]['ver'];
+    }
+
+    public function getTableStatus(string $tableName): mixed
+    {
+        $result = $this->execute('SHOW TABLE STATUS LIKE ?', [$tableName]);
+        return $result[0];
+    }
 
     /**
-     * Get Status of table
-     * Result array has next fields:
-     *   Name, Engine, Version, Row_format, Rows, Avg_row_length, Data_length,
-     *   Max_data_length, Index_length, Index_length, Data_free, Auto_increment,
-     *   Create_time, Update_time,Check_time, Collation, Checksum, Create_options, Comment
-     * @param string $sTableName Name of Table
-     * @return array
+     * Transforms sql between supported representations.
      */
-    public function getTableStatus($sTableName)
+    public function parseSql(string $sql, array $param): mixed
     {
-        $aResult = $this->execute('SHOW TABLE STATUS LIKE ?', array($sTableName));
-        return $aResult[0];
-    } // function getTableStatus
+        return $this->_parseSql($sql, $param, false);
+    }
 
-    /**
-     * Modifiy SQL-Query - replace Placeholders by parameters
-     * @param string $sSql
-     * @param array $aParam
-     * @return string
-     */
-    public function parseSql($sSql, $aParam)
+    public function getParsedSql(): mixed
     {
-        return $this->_parseSql($sSql, $aParam, false);
-    } // function parseSql
-
-    /**
-     * Return last parsed and executed SQL
-     * @return string
-     */
-    public function getParsedSql()
-    {
-        return $this->sParsedSql;
-    } // function getParsedSql
+        return $this->parsedSql;
+    }
 
     // ======== Private/Protected methods ======== \\
 
-} // class \fan\core\service\database\mysqlPdo
-?>
+}

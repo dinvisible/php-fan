@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\entity\designer;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\entity\designer;
 /**
  * Designer of SQL-request DELETE
  *
@@ -20,10 +24,10 @@ class delete extends \fan\core\service\entity\designer
      * SQL-request parts
      * @var string
      */
-    protected $aQueryParts = array(
+    protected array $queryParts = [
         'deleleTable'    => null,
-        'whereCondition' => array(),
-    );
+        'whereCondition' => [],
+    ];
 
     // ======== Static methods ======== \\
 
@@ -31,22 +35,16 @@ class delete extends \fan\core\service\entity\designer
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Set parts of SQL-requests for delete by parameters
-     * @param array $mParam
-     * @return \fan\core\service\entity\designer\delete
-     */
-    public function setDeleteByParam($mParam)
+    public function setDeleteByParam(array $param): static
     {
-        $this->aQueryParts = array(
+        $this->queryParts = [
             'deleleTable'    => 'DELETE FROM `' . $this->getEntity()->getTableName() . '`',
-            'whereCondition' => $this->makeWhere($mParam, false),
-        );
-        $this->aSrcParam = $mParam;
+            'whereCondition' => $this->makeWhere($param, false),
+        ];
+        $this->srcParam = $param;
         return $this;
-    } // function setDeleteByParam
+    }
 
     // ======== Private/Protected methods ======== \\
 
-} // class \fan\core\service\entity\designer\delete
-?>
+}

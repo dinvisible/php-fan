@@ -1,4 +1,7 @@
-<?php namespace fan\core\base\model;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\base\model;
 use fan\project\exception\model\entity\fatal as fatalException;
 /**
  * Loader of Source SQL-requests for \fan\core\service\entity\designer\request
@@ -21,144 +24,100 @@ class request
      * Used SQL-request
      * @var array
      */
-    protected $aSQL = array();
+    protected array $sql = [];
 
     /**
      * Entity - table data
      * @var \fan\core\base\model\entity
      */
-    protected $oEntity = null;
+    protected ?object $entity = null;
 
-    /**
-     * Row-data constructor
-     * @param \fan\core\base\model\entity $oEntity
-     * @param array $aData
-     */
-    public function __construct(\fan\core\base\model\entity $oEntity)
+    public function __construct(\fan\core\base\model\entity $entity)
     {
-        $this->oEntity = $oEntity;
-    } // function __construct
+        $this->entity = $entity;
+    }
 
     // ======== The magic methods ======== \\
 
-    public function __set($sKey, $mValue)
+    public function __set(string $key, mixed $value): void
     {
-        $this->set($sKey, $mValue);
+        $this->set((string)$key, (string)$value);
     }
 
-    public function __get($sKey)
+    public function __get(string $key): string
     {
-        return $this->get($sKey);
+        return $this->get((string)$key);
     }
     /**
-     * Call to unset entity method
-     * @param string $sMethod method name
-     * @param array $aArgs arguments
-     * @return mixed Value return by engine
      * @throws fatalException
      */
-    public function __call($sMethod, $aArgs)
+    public function __call(string $method, array $args): mixed
     {
-        if(substr($sMethod, 0, 4) == 'set_') {
-            $this->set(substr($sMethod, 4), isset($aArgs[0]) ? $aArgs[0] : null);
-        } elseif (substr($sMethod, 0, 4) == 'get_') {
-            return $this->get(substr($sMethod, 4), isset($aArgs[0]) ? $aArgs[0] : null, isset($aArgs[1]) ? $aArgs[1] : false);
+        $method = (string)$method;
+        if (substr($method, 0, 4) === 'set_') {
+            $this->set(substr($method, 4), (string)($args[0] ?? ''));
+        } elseif (substr($method, 0, 4) === 'get_') {
+            return $this->get(substr($method, 4));
         } else {
             throw new fatalException($this->getEntity(), 'Incorrect call of instance SQL-request loader!');
         }
-    } // function __call
+    }
 
     // ======== Required Interface methods ======== \\
 
     // ======== Main Interface methods ======== \\
-    /**
-     * Get value of data
-     * @param string $sKey
-     * @return string
-     */
-    public function get($sKey)
+    public function get(string $key): string
     {
-        if (!array_key_exists($sKey, $this->aSQL)) {
-            $this->aSQL[$sKey] = $this->_loadSQL($sKey);
+        if (!array_key_exists($key, $this->sql)) {
+            $this->sql[$key] = $this->_loadSQL($key);
         }
-        if (!$this->aSQL[$sKey]) {
-            trigger_error('Call for unset SQL-key.', E_USER_WARNING);
-            return null;
+        if (!$this->sql[$key]) {
+            throw new \OutOfBoundsException('Call for unset SQL-key.');
         }
-        return $this->aSQL[$sKey];
-    } // function get
+        return $this->sql[$key];
+    }
 
-    /**
-     * Set SQL
-     * @param string $sKey
-     * @param string $sValue
-     * @return \fan\core\base\model\request
-     */
-    public function set($sKey, $sValue)
+    public function set(string $key, string $value): static
     {
-        $this->aSQL[$sKey] = $sValue;
+        $this->sql[$key] = $value;
         return $this;
-    } // function set
+    }
 
-    /**
-     * Set several Requests (usualy at the start
-     * @param array $aSQL
-     * @return \fan\core\base\model\request
-     */
-    public function setRequests($aSQL)
+    public function setRequests(array $sql): static
     {
-        $this->aSQL = array_merge($this->aSQL, $aSQL);
+        $this->sql = array_merge($this->sql, $sql);
         return $this;
-    } // function setRequests
+    }
 
-    /**
-     * Gets All Fields by array
-     * @return array
-     */
-    public function toArray()
+    public function toArray(): array
     {
-        return $this->aSQL;
-    } // function toArray
+        return $this->sql;
+    }
 
-    /**
-     * Get instance of Entity
-     * @return \fan\core\base\model\entity
-     */
-    public function getEntity()
+    public function getEntity(): \fan\core\base\model\entity
     {
-        return $this->oEntity;
-    } // function getEntity
+        return $this->entity;
+    }
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Load the SQL query from a file by key
-     * @param string $sKey array's key
-     * @return string SQL query
-     */
-    protected function _loadSQL($sKey)
+    protected function _loadSQL(string $key): ?string
     {
-        $sFileName = $this->_checkSQLfile($sKey);
-        return is_null($sFileName) ? null : file_get_contents($sFileName);
-    } // function _loadSQL
+        $fileName = $this->_checkSQLfile($key);
+        return is_null($fileName) ? null : (string)file_get_contents($fileName);
+    }
 
-    /**
-     * Check the SQL-file is exist
-     * @param string $sKey array's key
-     * @return string file-path
-     */
-    protected function _checkSQLfile($sKey)
+    protected function _checkSQLfile(string $key): ?string
     {
-        $oEntity = $this->getEntity();
-        $sDirName = $oEntity->getService()->getSqlDir();
-        foreach (service('reflector')->getParentPaths($oEntity) as $v) {
-            $sFileName  = pathinfo($v, PATHINFO_DIRNAME) . '/';
-            $sFileName .= $sDirName . '/' . $sKey . '.sql';
-            if (file_exists($sFileName)) {
-                return $sFileName;
+        $entity = $this->getEntity();
+        $dirName = $entity->getService()->getSqlDir();
+        foreach (service('reflector')->getParentPaths($entity) as $v) {
+            $fileName  = pathinfo($v, PATHINFO_DIRNAME) . '/';
+            $fileName .= $dirName . '/' . $key . '.sql';
+            if (file_exists($fileName)) {
+                return $fileName;
             }
         }
         return null;
-    } // function _checkSQLfile
+    }
 
-} // class \fan\core\base\model\request
-?>
+}

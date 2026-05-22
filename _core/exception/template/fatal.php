@@ -1,4 +1,8 @@
-<?php namespace fan\core\exception\template;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\exception\template;
 /**
  * Exception a template fatal error
  *
@@ -16,21 +20,14 @@
  */
 class fatal extends  \fan\core\exception\base
 {
-    /**
-     * Exception's constructor
-     * @param object $oTemplate Object - instance of template
-     * @param string $sLogMessage Log error message
-     * @param numeric $nCode Error Code
-     */
-    public function __construct($oTemplate, $sLogMessage, $nCode = E_USER_ERROR)
+    public function __construct(object $template, string $logMessage, int $code = E_USER_ERROR)
     {
         if (!headers_sent()) {
             header('HTTP/1.1 500 Internal Server Error');
         }
 
-        parent::__construct($sLogMessage, $nCode);
+        parent::__construct($logMessage, $code);
 
-        $this->_logByService($sLogMessage, 'Template\'s exception (' . get_class_alt($oTemplate) . ').');
+        $this->_logByService($logMessage, 'Template\'s exception (' . get_class_alt($template) . ').');
     }
-} // class \fan\core\exception\template\fatal
-?>
+}

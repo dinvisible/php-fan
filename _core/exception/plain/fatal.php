@@ -1,4 +1,8 @@
-<?php namespace fan\core\exception\plain;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\exception\plain;
 /**
  * Exception a plain controller fatal error
  *
@@ -21,36 +25,25 @@ class fatal extends \fan\core\exception\base
      * Instance of class maked exception
      * @var object
      */
-    protected $oController = null;
+    protected ?object $controller = null;
 
-    /**
-     * Exception's constructor
-     * @param object $oController Object - instance of service
-     * @param string $sLogMessage Log error message
-     * @param numeric $nCode Error Code
-     */
-    public function __construct($oController, $sLogMessage, $nCode = E_USER_ERROR, $oPrevious = null)
+    public function __construct(object $controller, string $logMessage, int $code = E_USER_ERROR, ?\Throwable $previous = null)
     {
         /*
         if (!headers_sent()) {
             header('HTTP/1.1 500 Internal Server Error');
         }
          */
-        $this->oController = $oController;
+        $this->controller = $controller;
 
-        parent::__construct($sLogMessage, $nCode, $nCode, $oPrevious);
+        parent::__construct($logMessage, $code, $previous);
 
-        $this->_logByService('Plain controller fatal error (' . get_class_alt($oController) . '). ' . $sLogMessage);
+        $this->_logByService('Plain controller fatal error (' . get_class_alt($controller) . '). ' . $logMessage);
     }
 
-    /**
-     * Get Instance of service
-     * @return object
-     */
-    public function getController()
+    public function getController(): object
     {
-        return $this->oController;
+        return $this->controller;
     }
 
-} // class \fan\core\exception\plain\fatal
-?>
+}

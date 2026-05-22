@@ -1,4 +1,7 @@
-<?php namespace fan\core\view\parser;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view\parser;
 /**
  * View parser HTML-type
  *
@@ -17,51 +20,32 @@
 class html extends \fan\core\view\parser
 {
     // ======== Static methods ======== \\
-    /**
-     * Get View-Format
-     * @return string
-     */
-    final static public function getFormat() {
+    final static public function getFormat(): string {
         return 'html';
-    } // function getFormat
+    }
 
-    /**
-     * Get View-Router for block
-     * @param \fan\core\block\base $oBlock
-     * @return \fan\core\view\router\simple
-     */
-    static public function getRouter(\fan\core\block\base $oBlock) {
-        return new \fan\project\view\router\html($oBlock);
-    } // function getRouter
+    static public function getRouter(\fan\core\block\base $block): \fan\core\view\router\html {
+        return new \fan\project\view\router\html($block);
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Get Final Content Code
-     * @return string
-     */
-    public function getResultData(\fan\core\block\base $oBlock)
+    public function getResultData(\fan\core\block\base $block): array
     {
-        $aTplVar = $oBlock->getViewData();
+        $tplVar = $block->getViewData();
 
-        foreach ($oBlock->getEmbeddedBlocks() as $oEmbeddedBlock) {
-            $aTmp = $this->getResultData($oEmbeddedBlock);
-            $aTplVar[key($aTmp)] = reset($aTmp);
+        foreach ($block->getEmbeddedBlocks() as $embeddedBlock) {
+            $tmp = $this->getResultData($embeddedBlock);
+            $tplVar[key($tmp)] = reset($tmp);
         }
 
-        return array($oBlock->getBlockName() => $this->_parseTemplate($oBlock, $aTplVar));
-    } // function getResultData
+        return [$block->getBlockName() => $this->_parseTemplate($block, $tplVar)];
+    }
 
     // ======== Protected methods ======== \\
-    /**
-     * Set Response Headers
-     * @param type $sResult
-     * @return \fan\core\view\parser
-     */
-    protected function _setHeaders($sResult, $sContentType = 'text/html', $sEncoding = null)
+    protected function _setHeaders($result, $contentType = 'text/html', $encoding = null): \fan\core\service\header
     {
-        return parent::_setHeaders($sResult, $sContentType, $sEncoding);
-    } // function _setHeaders
-} // class \fan\core\view\parser\html
-?>
+        return parent::_setHeaders($result, $contentType, $encoding);
+    }
+}

@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Class of plain handler
@@ -22,29 +25,26 @@ class plain extends \fan\core\base\service\single
      * Instance of matcher
      * @var \fan\core\service\matcher
      */
-    protected $oMatcher = null;
+    protected ?object $matcher = null;
 
     /**
      * Used Application Names
      * @var \fan\core\service\plain\base
      */
-    protected $oController = null;
+    protected ?object $controller = null;
 
     /**
      * @var numeric - error code
      */
-    protected $nErrCode = null;
+    protected int|float|null $errCode = null;
 
-    /**
-     * @var string - error message
-     */
-    protected $sErrMsg = null;
+    protected ?string $errMsg = null;
 
     /**
      * Lict of headers
      * @var array
      */
-    protected $aHeaders = array(
+    protected array $headers = [
         'response'    => 200,
         'contentType' => null,
         'encoding'    => null,
@@ -54,189 +54,144 @@ class plain extends \fan\core\base\service\single
         'legthRange'  => 'bytes',
         'modified'    => null,
         'cacheLimit'  => 0,
-    );
+    ];
 
-    /**
-     * Service plain constructor
-     * @param boolean $bAllowIni
-     */
-    protected function __construct($bAllowIni = true)
+    protected function __construct(bool $allowIni = true)
     {
-        parent::__construct($bAllowIni);
-        $this->oMatcher = \fan\project\service\matcher::instance();
-    } // function __construct
+        parent::__construct($allowIni);
+        $this->matcher = \fan\project\service\matcher::instance();
+    }
 
     // ======== Static methods ======== \\
 
-    /**
-     * Get Plain Content
-     * @param string $sControllerClass
-     * @param string $sMethod
-     * @return string|array
-     */
-    public static function getContent($sKey, $sControllerClass, $sMethod)
+    public static function getContent(int|string $key, string $controllerClass, string $method): mixed
     {
-        $oInstance = \fan\project\service\plain::instance();
-        /* @var $oInstance \fan\core\service\plain */
-        return $oInstance->_setController($sKey, $sControllerClass)->_getFinalContent($sMethod);
+        $instance = \fan\project\service\plain::instance();
+        /* @var $instance \fan\core\service\plain */
+        return $instance->_setController($key, $controllerClass)->_getFinalContent($method);
     }
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Get Current Handle Data
-     * @return array
-     */
-    public function getHandleData()
+    public function getHandleData(): array
     {
-        return $this->oMatcher->getCurrentItem()->handler->toArray();
-    } // function getHandleData
+        return $this->matcher->getCurrentItem()->handler->toArray();
+    }
 
     /**
-     * Transfer to another URI and get content there
-     * ATTENTION!!!
-     *    This method do not control the same URI. So there is possible an infinite recursion.
-     * @param string $sRequest
-     * @param string $sHost
-     * @param string $bShiftCurrent
-     * @return string
+     * @param string $request Request object or payload handled by the operation.
      */
-    public function transfer($sRequest, $sHost = null, $bShiftCurrent = true)
+    public function transfer(string $request, ?string $host = null, bool $shiftCurrent = true): mixed
     {
-        $this->oMatcher->setUri($sRequest, $sHost, $bShiftCurrent);
-        $aHandler = $this->oMatcher->getCurrentHandler(true)->toArray();
-        return call_user_func_array($aHandler['method'], empty($aHandler['param']) ? array() : $aHandler['param']);
-    } // function transfer
+        $this->matcher->setUri($request, $host, $shiftCurrent);
+        $handler = $this->matcher->getCurrentHandler(true)->toArray();
+        return call_user_func_array($handler['method'], empty($handler['param']) ? [] : $handler['param']);
+    }
 
     /**
-     * Add value of Header for current stack
-     * @param string $sKey
-     * @param string $mValue
-     * @return \fan\core\service\plain
+     * @param string $value Value that should be applied or transformed.
+     *
      * @throws fatalException
      */
-    public function addHeader($sKey, $mValue)
+    public function addHeader(string $key, mixed $value): static
     {
-        if (!array_key_exists($sKey, $this->aHeaders)) {
-            throw new fatalException($this, 'Unknown header key "' . $sKey . '"');
+        if (!array_key_exists($key, $this->headers)) {
+            throw new fatalException($this, 'Unknown header key "' . $key . '"');
         }
-        $this->aHeaders[$sKey] = $mValue;
+        $this->headers[$key] = $value;
         return $this;
-    } // function addHeader
+    }
 
-    /**
-     * Set several Headers by array-hash
-     * @param $aHeaders
-     * @return \fan\core\service\plain
-     */
-    public function setHeaders($aHeaders)
+    public function setHeaders(array $headers): static
     {
-        foreach ($aHeaders as $k => $v) {
+        foreach ($headers as $k => $v) {
             $this->addHeader($k, $v);
         }
         return $this;
-    } // function setHeaders
+    }
 
     /**
-     * Set Error Message
-     * @param string $sErrMsg
-     * @param numeric $nErrCode
-     * @return \fan\core\service\plain
      * @throws fatalException
      */
-    public function setErrorMessage($sErrMsg, $nErrCode = 404)
+    public function setErrorMessage(string $errMsg, int|float $errCode = 404): static
     {
-        if (is_numeric($nErrCode) && $nErrCode >= 400 && $nErrCode <= 599) {
-            $this->nErrCode = $nErrCode;
+        if (is_numeric($errCode) && $errCode >= 400 && $errCode <= 599) {
+            $this->errCode = $errCode;
         } else {
-            throw new fatalException($this, 'Error code has incorrect value "' . $nErrCode . '". It must be number between 400 and 599');
+            throw new fatalException($this, 'Error code has incorrect value "' . $errCode . '". It must be number between 400 and 599');
         }
 
-        if (!empty($sErrMsg)) {
-            $this->sErrMsg = $sErrMsg;
+        if (!empty($errMsg)) {
+            $this->errMsg = $errMsg;
         }
 
         return $this;
-    } // function setErrorMessage
+    }
 
-    /**
-     * Is Error
-     * @return boolean
-     */
-    public function isError()
+    public function isError(): bool
     {
-        return !empty($this->sErrMsg);
-    } // function isError
+        return !empty($this->errMsg);
+    }
 
     // ======== Private/Protected methods ======== \\
 
     /**
-     * Get Final Content
-     * @return string|array
      * @throws fatalException
      */
-    protected function _getFinalContent($sMethod)
+    protected function _getFinalContent(string $method): mixed
     {
-        if (empty($this->oController)) {
+        if (empty($this->controller)) {
             throw new fatalException($this, 'Engine for plain content isn\'t set.');
         }
-        $mResult = $this->oController->$sMethod();
+        $result = $this->controller->$method();
         if ($this->isError()) {
             $this->_defineError404();
-            $mResult = $this->sErrMsg;
+            $result = $this->errMsg;
         }
         $this->_assignHeaders();
-        return $mResult;
-    } // function _getFinalContent
+        return $result;
+    }
 
     /**
-     * Set Engine for plain output
-     * @param string $sControllerClass
-     * @return \fan\core\service\plain
      * @throws fatalException
      */
-    protected function _setController($sControllerKey, $sControllerClass)
+    protected function _setController(int|string $controllerKey, string $controllerClass): static
     {
-        if (!class_exists($sControllerClass)) {
-            throw new fatalException($this, 'Can\'t find class "' . $sControllerClass . '" for plain content.');
+        if (!class_exists($controllerClass)) {
+            throw new fatalException($this, 'Can\'t find class "' . $controllerClass . '" for plain content.');
         }
-        $this->oController = new $sControllerClass($this, $sControllerKey);
-        if (method_exists($this->oController, 'setConfig')) {
-            $oConfig = \fan\core\service\config::instance('plain')->getControllerConfig($this->oController, $sControllerKey);
-            $this->oController->setConfig($oConfig);
+        $this->controller = new $controllerClass($this, $controllerKey);
+        if (method_exists($this->controller, 'setConfig')) {
+            $config = \fan\core\service\config::instance('plain')->getControllerConfig($this->controller, $controllerKey);
+            $this->controller->setConfig($config);
         }
         return $this;
-    } // function _setController
+    }
 
-    protected function _assignHeaders()
+    protected function _assignHeaders(): static
     {
-        service('header')->setHeaders($this->aHeaders);
+        $this->containerService('header')->setHeaders($this->headers);
         return $this;
-    } // function _assignHeaders
+    }
 
-    /**
-     * Set value of Headers by current stack
-     * @return \fan\core\service\plain
-     */
-    protected function _defineError404()
+    protected function _defineError404(): static
     {
-        $this->aHeaders = array(
+        $this->headers = [
             'response'    => 404,
             'contentType' => 'text/plain',
             'encoding'    => 'charset=utf-8',
             'filename'    => 'Error 404',
             'disposition' => true,
-            'length'      => strlen($this->sErrMsg),
+            'length'      => strlen($this->errMsg),
             'legthRange'  => 'bytes',
             'modified'    => null,
             'cacheLimit'  => 0,
-        );
+        ];
         return $this;
-    } // function _defineError404
+    }
 
     // ======== The magic methods ======== \\
 
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\service\plain
-?>
+}

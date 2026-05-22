@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\matcher\item;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\matcher\item;
 /**
  * Description of parsed
  *
@@ -32,7 +35,7 @@ class parsed extends base
      * Allowed property
      * @var array
      */
-    protected $aData = array(
+    protected array $data = [
         'app_name'     => null,
         'app_prefix'   => null,
         'language'     => null,
@@ -44,99 +47,94 @@ class parsed extends base
         'class'        => null,
         'file'         => null,
         'urn'          => null,
-    );
+    ];
 
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
 
-    public function __toString() {
-        return $this->aData['urn'];
+    public function __toString(): string {
+        return (string)$this->data['urn'];
     }
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
 
-    public function getMainRequest()
+    public function getMainRequest(): array
     {
-        if (is_null($this->aData['main_request'])) {
-            $this->oItem->parseRequest();
+        if (is_null($this->data['main_request'])) {
+            $this->item->parseRequest();
         }
-        return $this->aData['main_request'];
+        return $this->data['main_request'];
     }
 
-    public function getAddRequest()
+    public function getAddRequest(): array
     {
-        if (is_null($this->aData['add_request'])) {
-            $this->oItem->parseRequest();
+        if (is_null($this->data['add_request'])) {
+            $this->item->parseRequest();
         }
-        return $this->aData['add_request'];
+        return $this->data['add_request'];
     }
 
-    public function getBothRequest()
+    public function getBothRequest(): array
     {
-        if (is_null($this->aData['both_request'])) {
-            $this->aData['both_request'] = array_merge($this['main_request'], $this['add_request']);
+        if (is_null($this->data['both_request'])) {
+            $this->data['both_request'] = array_merge($this['main_request'], $this['add_request']);
         }
-        return $this->aData['both_request'];
+        return $this->data['both_request'];
     }
 
-    public function getClass()
+    public function getClass(): string
     {
-        if (is_null($this->aData['class'])) {
-            $aMainRequest = $this['main_request'];
-            if (empty($aMainRequest)) {
-                $this->aData['class'] = '';
+        if (is_null($this->data['class'])) {
+            $mainRequest = $this['main_request'];
+            if (empty($mainRequest)) {
+                $this->data['class'] = '';
             } else {
-                $this->aData['class']  = '\\fan\\app\\' . $this->aData['app_name'];
-                $this->aData['class'] .= '\\' . $this->_getConfig('main_block_dir', 'main') . '\\';
-                $this->aData['class'] .= implode('\\', $aMainRequest);
+                $this->data['class']  = '\\fan\\app\\' . $this->data['app_name'];
+                $this->data['class'] .= '\\' . $this->_getConfig('main_block_dir', 'main') . '\\';
+                $this->data['class'] .= implode('\\', $mainRequest);
             }
         }
-        return $this->aData['class'];
+        return $this->data['class'];
     }
 
-    public function getFile()
+    public function getFile(): string
     {
-        if (is_null($this->aData['file'])) {
-            $aMainRequest = $this['main_request'];
-            if (empty($aMainRequest)) {
-                $this->aData['file'] = '';
+        if (is_null($this->data['file'])) {
+            $mainRequest = $this['main_request'];
+            if (empty($mainRequest)) {
+                $this->data['file'] = '';
             } else {
-                $this->aData['file'] = rtrim(\bootstrap::getLoader()->main, '\\/');
-                $this->aData['file'] .= '/' . implode('/', $aMainRequest) . '.php';
+                $this->data['file'] = rtrim(\bootstrap::getLoader()->main, '\\/');
+                $this->data['file'] .= '/' . implode('/', $mainRequest) . '.php';
             }
         }
-        return $this->aData['file'];
+        return $this->data['file'];
     }
 
-    public function getUrn()
+    public function getUrn(): string
     {
-        $sUrn =& $this->aData['urn'];
-        if (is_null($sUrn)) {
+        $urn =& $this->data['urn'];
+        if (is_null($urn)) {
 
-            $sUrn  = '/';
+            $urn  = '/';
             // ToDo: Possibility to switch positions "language" and "app_prefix"
-            if (!empty($this->aData['language'])) {
-                $sUrn  .= $this->aData['language'] . '/';
+            if (!empty($this->data['language'])) {
+                $urn  .= $this->data['language'] . '/';
             }
-            if (!empty($this->aData['app_prefix'])) {
-                $sUrn  .= trim($this->aData['app_prefix'], '/') . '/';
+            if (!empty($this->data['app_prefix'])) {
+                $urn  .= trim($this->data['app_prefix'], '/') . '/';
             }
 
-            $sUrn  .= implode('/', $this->aData['both_request']);
+            $urn  .= implode('/', (array)$this->data['both_request']);
         }
-        return $sUrn;
+        return $urn;
     }
 
-    /**
-     * Return all data
-     * @return array
-     */
-    public function toArray()
+    public function toArray(): array
     {
-        return $this->aData;
-    } // function toArray
+        return $this->data;
+    }
 
     // ======== Private/Protected methods ======== \\
 
-} // class \fan\core\service\matcher\item\parsed
-?>
+}

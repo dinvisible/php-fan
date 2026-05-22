@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\error;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\error;
 /**
  * Base abstract block of error 403
  *
@@ -17,22 +21,15 @@
  */
 abstract class error403 extends \fan\core\block\base
 {
-    /**
-     * Set View Vars
-     * @param string $sError
-     * @param string $sMessage
-     * @param string $sCombiMessage
-     */
-    public function setViewVars($sError, $sMessage, $sCombiMessage)
+    public function setViewVars(string $error, string $message, string $combiMessage): void
     {
-        $this->view->error    = $sError;
-        $this->view->message  = $sMessage;
-        $this->view->sHomeUri = $this->oTab->getURI('~/');
-        if ($this->getViewFormat() == 'loader') {
-            $this->view->setJson('error',   $sError);
-            $this->view->setJson('message', $sMessage);
-            $this->view->setText($sCombiMessage);
+        $this->view->error    = $error;
+        $this->view->message  = $message;
+        $this->view->homeUri = $this->tab->getURI('~/');
+        if ($this->getViewFormat() === 'loader') {
+            $this->view->setJson('error',   $error);
+            $this->view->setJson('message', $message);
+            $this->view->setText($combiMessage);
         }
-    } // function setViewVars
-} // class \fan\core\block\error\error403
-?>
+    }
+}

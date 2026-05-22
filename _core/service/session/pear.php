@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\session;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\session;
 /**
  * PEAR session engine
  *
@@ -16,81 +20,52 @@
  */
 class pear
 {
-    /**
-     * Constructor
-     * @param \fan\core\service\config\row $oConfig Configuration data
-     */
-    public function __construct($oConfig)
-    {
-        app_set_include_path(\bootstrap::get_dir('LIBS') . '/PEAR');
-        require_once @'HTTP/Session.php';
+    use \fan\core\di\container_aware_trait;
 
-        if ($oConfig['IS_DATABASE']) {
-            $aDbConfig = \fan\project\service\config::instance()->get('database');
-            $aDb = $aDbConfig['DATABASES'][$oConfig['CONNECTION']];
-            HTTP_Session::setContainer('DB', array(
-                'dsn'   => $aDb['DRIVER'] . '://' . $aDb['USER'] . ':' . $aDb['PASSWORD'] . '@' . $aDb['HOST'] . '/' . $aDb['DATABASE'],
-                'table' => $oConfig['TABLE']));
+    public function __construct(mixed $config)
+    {
+        $config = is_array($config) ? $config : [];
+        \fan\project\adapter\pear_http_session::ensureAvailable();
+
+        if ($config['IS_DATABASE']) {
+            $dbConfig = $this->containerService('config')->get('database');
+            $db = $dbConfig['DATABASES'][$config['CONNECTION']];
+            HTTP_Session::setContainer('DB', [
+                'dsn'   => (string)$db['DRIVER'] . '://' . (string)$db['USER'] . ':' . (string)$db['PASSWORD'] . '@' . (string)$db['HOST'] . '/' . (string)$db['DATABASE'],
+                'table' => (string)$config['TABLE']]);
         } // check database
 
         HTTP_Session::useCookies(true);
-        HTTP_Session::start($oConfig['SESSION_NAME'], \fan\project\service\request::instance()->get($oConfig['SESSION_NAME']));
-    } // function __construct
+        HTTP_Session::start((string)$config['SESSION_NAME'], $this->containerService('request')->get((string)$config['SESSION_NAME']));
+    }
 
-    /**
-     * Get Session ID
-     * @return string Session ID
-     */
-    public function getSessionId()
+    public function getSessionId(): mixed
     {
         return HTTP_Session::id();
-    } // function getSessionId
+    }
 
-    /**
-     * Get Session parameter
-     * @param string $sKey The Session key
-     * @param string $mDefaultValue The default value
-     * @return mixed Session parameter
-     */
-    public function get($sKey, $mDefaultValue = NULL)
+    public function get(string $key, ?string $defaultValue = NULL): mixed
     {
-        return HTTP_Session::get($sKey, $mDefaultValue);
-    } // function get
+        return HTTP_Session::get($key, $defaultValue);
+    }
 
-    /**
-     * Set Session parameter
-     * @access public
-     * @param string $sKey The Session key
-     * @param string $mValue The Session value
-     */
-    public function set($sKey, $mValue)
+    public function set(string $key, string $value): void
     {
-        HTTP_Session::set($sKey, $mValue);
-    } // function set
+        HTTP_Session::set($key, $value);
+    }
 
-    /**
-     * UnSet Session parameter
-     * @param string $sKey The Session key
-     */
-    public function remove($sKey)
+    public function remove(string $key): void
     {
-        HTTP_Session::set($sKey, NULL);
-    } // function remove
+        HTTP_Session::set($key, NULL);
+    }
 
-    /**
-     * UnSet all Session parameters
-     */
-    public function remove_all()
+    public function remove_all(): void
     {
         HTTP_Session::clear();
-    } // function remove_all
+    }
 
-    /**
-     * Destroy the session
-     */
-    public function destroy()
+    public function destroy(): void
     {
         HTTP_Session::destroy();
-    } // function destroy
-} // class \fan\core\service\session\pear
-?>
+    }
+}

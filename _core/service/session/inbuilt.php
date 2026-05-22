@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\session;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\session;
 /**
  * PHP native session engine
  *
@@ -16,99 +20,66 @@
  */
 class inbuilt
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * Facade of service
      * @var fan\core\service\session
      */
-    protected $oFacade = null;
+    protected ?object $facade = null;
 
-    /**
-     * Constructor
-     * @param string $sSid
-     */
-    public function __construct($sSid)
+    public function __construct(mixed $sid)
     {
-        if (!empty($sSid)) {
-            $this->setSessionId($sSid);
+        if (!empty($sid)) {
+            $this->setSessionId((string)$sid);
         }
         session_start();
-    } // function __construct
+    }
 
-    /**
-     * Set Facade
-     * @param \fan\core\service\session $oFacade
-     * @return \fan\core\service\session\inbuilt
-     */
-    public function setFacade(\fan\core\service\session $oFacade)
+    public function setFacade(\fan\core\service\session $facade): static
     {
-        if (empty($this->oFacade)) {
-            $this->oFacade = $oFacade;
+        if (empty($this->facade)) {
+            $this->facade = $facade;
         }
         return $this;
-    } // function setFacade
+    }
 
-    /**
-     * Get Session ID
-     * @return string Session ID
-     */
-    public function getSessionId()
+    public function getSessionId(): string
     {
         return session_id();
     } // getSessionId
 
-    /**
-     * Set Session ID
-     * @param string $sSid
-     * @return \fan\core\service\session\inbuilt
-     */
-    public function setSessionId($sSid)
+    public function setSessionId(string $sid): static
     {
-        session_id($sSid);
+        session_id($sid);
         return $this;
     } // setSessionId
 
-    /**
-     * Get Session Name
-     * @return string Session Name
-     */
-    public function getSessionName()
+    public function getSessionName(): string
     {
         return session_name();
     } // getSessionName
 
-    /**
-     * Get Session data
-     * @param string $sGroup The default value
-     * @param string $sSesName The Session key
-     * @return mixed Session parameter
-     */
-    public function &getData($sGroup, $sSesName)
+    public function &getData(string $group, string $sesName): mixed
     {
-        if (!isset($_SESSION[$sGroup])) {
-            $_SESSION[$sGroup] = array($sSesName => null);
-        } elseif (!is_array($_SESSION[$sGroup]) || !array_key_exists($sSesName, $_SESSION[$sGroup])) {
-            $_SESSION[$sGroup][$sSesName] = null;
+        if (!isset($_SESSION[$group])) {
+            $_SESSION[$group] = [$sesName => null];
+        } elseif (!is_array($_SESSION[$group]) || !array_key_exists($sesName, $_SESSION[$group])) {
+            $_SESSION[$group][$sesName] = null;
         }
-        return $_SESSION[$sGroup][$sSesName];
-    } // function getData
+        return $_SESSION[$group][$sesName];
+    }
 
-    /**
-     * Get Session data
-     * @return mixed Session parameter
-     */
-    public function &getRoot()
+    public function &getRoot(): array
     {
         return $_SESSION;
-    } // function getRoot
+    }
 
-    /**
-     * Destroy the session
-     * @return \fan\core\service\session\inbuilt
-     */
-    public function destroy()
+    public function destroy(): static
     {
-        @session_destroy();
+        if (session_status() === PHP_SESSION_ACTIVE && !session_destroy()) {
+            $this->containerService('error')->logErrorMessage('Failed to destroy native PHP session.', 'Session error', '', true, false);
+        }
         return $this;
-    } // function destroy
-} // class \fan\core\service\session\inbuilt
-?>
+    }
+}

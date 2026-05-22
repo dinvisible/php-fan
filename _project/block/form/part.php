@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\form;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\form;
 /**
  * Part of form block abstract
  *
@@ -17,5 +21,4 @@
  */
 abstract class part extends \fan\core\block\form\part
 {
-} // class \fan\project\block\form\part
-?>
+}

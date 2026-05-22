@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\tab;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\tab;
 /**
  * Description of subscriber
  *
@@ -20,152 +23,88 @@ class subscriber extends \fan\core\service\tab\delegate
      * List of Subscriber by block name and by class (with namespace)
      * @var array
      */
-    protected $aSubscriber = array('any' => array(), 'name' => array(), 'class' => array());
+    protected array $subscriber = ['any' => [], 'name' => [], 'class' => []];
 
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Subscribe for events By Block-Name
-     * @param \fan\core\block\base $oListener
-     * @param string $sEventName
-     * @param string $sListenerMethod
-     * @return \fan\core\service\tab\delegate\subscriber
-     * @throws \fan\project\exception\service\fatal
-     */
-    public function subscribeForEvent(\fan\core\block\base $oListener, $sEventName, $sListenerMethod = 'eventHandler')
+    /** @throws \fan\project\exception\service\fatal */
+    public function subscribeForEvent(\fan\core\block\base $listener, string $eventName, string $listenerMethod = 'eventHandler'): static
     {
-        return $this->_addSubscriber($oListener, $sListenerMethod, 'any', 0, $sEventName);
-    } // function subscribeForEvent
+        return $this->_addSubscriber($listener, $listenerMethod, 'any', 0, $eventName);
+    }
 
-    /**
-     * Subscribe for events By Block-Name
-     * @param \fan\core\block\base $oListener
-     * @param string $sBroadcasterName
-     * @param string $sEventName
-     * @param string $sListenerMethod
-     * @return \fan\core\service\tab\delegate\subscriber
-     * @throws \fan\project\exception\service\fatal
-     */
-    public function subscribeByName(\fan\core\block\base $oListener, $sBroadcasterName, $sEventName, $sListenerMethod = 'eventHandler')
+    /** @throws \fan\project\exception\service\fatal */
+    public function subscribeByName(\fan\core\block\base $listener, string $broadcasterName, string $eventName, string $listenerMethod = 'eventHandler'): static
     {
-        return $this->_addSubscriber($oListener, $sListenerMethod, 'name', $sBroadcasterName, $sEventName);
-    } // function subscribeByName
+        return $this->_addSubscriber($listener, $listenerMethod, 'name', $broadcasterName, $eventName);
+    }
 
-    /**
-     * Subscribe for events By Block-Name
-     * @param \fan\core\block\base $oListener
-     * @param string $sClassName
-     * @param string $sEventName
-     * @param string $sListenerMethod
-     * @return \fan\core\service\tab\delegate\subscriber
-     * @throws \fan\project\exception\service\fatal
-     */
-    public function subscribeByClass(\fan\core\block\base $oListener, $sClassName, $sEventName, $sListenerMethod = 'eventHandler')
+    /** @throws \fan\project\exception\service\fatal */
+    public function subscribeByClass(\fan\core\block\base $listener, string $className, string $eventName, string $listenerMethod = 'eventHandler'): static
     {
-        return $this->_addSubscriber($oListener, $sListenerMethod, 'class', trim($sClassName, '\\'), $sEventName);
-    } // function subscribeByClass
+        return $this->_addSubscriber($listener, $listenerMethod, 'class', trim($className, '\\'), $eventName);
+    }
 
-    /**
-     * unSubscribe for events By Block-Name
-     * @param \fan\core\block\base $oListener
-     * @param string $sBroadcasterName
-     * @param string $sEventName
-     * @param string $sListenerMethod
-     * @return \fan\core\service\tab\delegate\subscriber
-     */
-    public function unSubscribeByName(\fan\core\block\base $oListener, $sBroadcasterName, $sEventName, $sListenerMethod = 'eventHandler')
+    public function unSubscribeByName(\fan\core\block\base $listener, string $broadcasterName, string $eventName, string $listenerMethod = 'eventHandler'): static
     {
-        return $this->_removeSubscriber($oListener, $sListenerMethod, 'name', $sBroadcasterName, $sEventName);
-    } // function unSubscribeByName
+        return $this->_removeSubscriber($listener, $listenerMethod, 'name', $broadcasterName, $eventName);
+    }
 
-    /**
-     * unSubscribe for events By Block-Name
-     * @param \fan\core\block\base $oListener
-     * @param string $sClassName
-     * @param string $sEventName
-     * @param string $sListenerMethod
-     * @return \fan\core\service\tab\delegate\subscriber
-     */
-    public function unSubscribeByClass(\fan\core\block\base $oListener, $sClassName, $sEventName, $sListenerMethod = 'eventHandler')
+    public function unSubscribeByClass(\fan\core\block\base $listener, string $className, string $eventName, string $listenerMethod = 'eventHandler'): static
     {
-        return $this->_removeSubscriber($oListener, $sListenerMethod, 'class', trim($sClassName, '\\'), $sEventName);
-    } // function unSubscribeByClass
+        return $this->_removeSubscriber($listener, $listenerMethod, 'class', trim($className, '\\'), $eventName);
+    }
 
-    /**
-     * Broadcast Event to other blocks
-     * @param \fan\core\block\base $oBroadcaster
-     * @param string $sEventName
-     * @param array $aData
-     * @return \fan\core\service\tab\delegate\subscriber
-     */
-    public function broadcastEvent(\fan\core\block\base $oBroadcaster, $sEventName, $aData = array())
+    public function broadcastEvent(\fan\core\block\base $broadcaster, string $eventName, array $data = []): static
     {
-        $aKeys = array(
+        $keys = [
             'any'   => 0,
-            'name'  => $oBroadcaster->getBlockName(),
-            'class' => get_class($oBroadcaster),
-        );
-        foreach ($aKeys as $sType => $sKey) {
-            if (isset($this->aSubscriber[$sType][$sKey][$sEventName])) {
-                foreach ($this->aSubscriber[$sType][$sKey][$sEventName] as $v) {
-                    call_user_func($v, $oBroadcaster, $aData);
+            'name'  => $broadcaster->getBlockName(),
+            'class' => get_class($broadcaster),
+        ];
+        foreach ($keys as $type => $key) {
+            if (isset($this->subscriber[$type][$key][$eventName])) {
+                foreach ($this->subscriber[$type][$key][$eventName] as $v) {
+                    call_user_func($v, $broadcaster, $data);
                 }
             }
         }
         return $this;
-    } // function broadcastEvent
+    }
 
     // ======== Private/Protected methods ======== \\
 
     /**
-     * Add new Subscriber
-     * @param \fan\core\block\base $oListener
-     * @param string $sListenerMethod
-     * @param string $sType
-     * @param string $sKey
-     * @param string $sEventName
-     * @return \fan\core\service\tab\delegate\subscriber
      * @throws \fan\project\exception\service\fatal
      */
-    protected function _addSubscriber(\fan\core\block\base $oListener, $sListenerMethod, $sType, $sKey, $sEventName)
+    protected function _addSubscriber(\fan\core\block\base $listener, string $listenerMethod, string $type, int|string $key, string $eventName): static
     {
-        if (!method_exists($oListener, $sListenerMethod) || !is_callable(array($oListener, $sListenerMethod))) {
-            $this->_makeException('Incorrect method name "' . $sListenerMethod . '" in block "' . $oListener->getBlockName() . '".');
+        if (!method_exists($listener, $listenerMethod) || !is_callable([$listener, $listenerMethod])) {
+            $this->_makeException('Incorrect method name "' . $listenerMethod . '" in block "' . $listener->getBlockName() . '".');
         }
-        $this->_removeSubscriber($oListener, $sListenerMethod, $sType, $sKey, $sEventName);
+        $this->_removeSubscriber($listener, $listenerMethod, $type, $key, $eventName);
 
-        if (!isset($this->aSubscriber[$sType][$sKey][$sEventName])) {
-            $this->aSubscriber[$sType][$sKey][$sEventName] = array();
+        if (!isset($this->subscriber[$type][$key][$eventName])) {
+            $this->subscriber[$type][$key][$eventName] = [];
         }
-        $this->aSubscriber[$sType][$sKey][$sEventName][] = array($oListener, $sListenerMethod);
+        $this->subscriber[$type][$key][$eventName][] = [$listener, $listenerMethod];
         return $this;
-    } // function _addSubscriber
+    }
 
-    /**
-     * Remove Subscriber
-     * @param \fan\core\block\base $oListener
-     * @param string $sListenerMethod
-     * @param string $sType
-     * @param string $sKey
-     * @param string $sEventName
-     * @return \fan\core\service\tab\delegate\subscriber
-     * @throws \fan\project\exception\service\fatal
-     */
-    protected function _removeSubscriber(\fan\core\block\base $oListener, $sListenerMethod, $sType, $sKey, $sEventName)
+    protected function _removeSubscriber(\fan\core\block\base $listener, string $listenerMethod, string $type, int|string $key, string $eventName): static
     {
-        if (isset($this->aSubscriber[$sType][$sKey][$sEventName])) {
-            foreach ($this->aSubscriber[$sType][$sKey][$sEventName] as $k => $v) {
-                if ($oListener === $v[0] && $sListenerMethod == $v[1]) {
-                    unset($this->aSubscriber[$sType][$sKey][$sEventName][$k]);
+        if (isset($this->subscriber[$type][$key][$eventName])) {
+            foreach ($this->subscriber[$type][$key][$eventName] as $k => $v) {
+                if ($listener === $v[0] && (string)$listenerMethod === (string)$v[1]) {
+                    unset($this->subscriber[$type][$key][$eventName][$k]);
                     return $this;
                 }
             }
         }
         return $this;
-    } // function _removeSubscriber
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
-} // class \fan\core\service\tab\subscriber
-?>
+}

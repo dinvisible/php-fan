@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 /**
  * Description of log
  *
@@ -20,216 +23,177 @@ class log extends \fan\core\base\service\single
      * Array of log parcers
      * @var array
      */
-    protected $aParcers;
+    protected ?array $parcers = null;
 
     /**
      * File Directory of each type
      * @var string
      */
-    protected $aDir;
+    protected ?array $dir = null;
 
     /**
      * File name of each type
      * @var string
      */
-    protected $aFile;
+    protected ?array $file = null;
 
     /**
      * Log file is new
      * @var bolean
      */
-    protected $bIsNewFile = false;
+    protected bool $isNewFile = false;
 
     /**
-     * Get Log Parser
-     * @param string $sVariety - variety of log-file
-     * @param string $sFile - log-file name
-     * @return log_parser_base
+     * @param string $file File path or file descriptor handled by the operation.
      */
-    public function getLogParser($sVariety, $sFile)
+    public function getLogParser(string $variety, string $file): \fan\core\service\log\parser_base
     {
-        if (!isset($this->aParcers[$sVariety][$sFile])) {
-            $oEngine = $this->_getEngine('parser_'  . $sVariety);
-            $this->aParcers[$sVariety][$sFile] = $oEngine;
-            if (empty($oEngine)) {
-                throw new \fan\project\exception\service\fatal($this, $sVariety ? 'Incorrect Variety of log-file: "' . $sVariety . '"' : 'Unset Variety of log-file.');
+        if (!isset($this->parcers[$variety][$file])) {
+            $engine = $this->_getEngine('parser_'  . $variety);
+            $this->parcers[$variety][$file] = $engine;
+            if (empty($engine)) {
+                throw new \fan\project\exception\service\fatal($this, $variety ? 'Incorrect Variety of log-file: "' . $variety . '"' : 'Unset Variety of log-file.');
             }
-            $oEngine->setFilePath($sVariety, $sFile);
+            $engine->setFilePath($variety, $file);
         } else {
-            $this->aParcers[$sVariety][$sFile]->checkIndex();
+            $this->parcers[$variety][$file]->checkIndex();
         }
-        return $this->aParcers[$sVariety][$sFile];
-    } // function getLogParser
+        return $this->parcers[$variety][$file];
+    }
 
     /**
-     * Log data
-     * @param string $sType
-     * @param mixed $mData
-     * @param string $sTitle
-     * @param string $sNote
-     * @param number $nDataDepth
-     * @param boolean $bIsTrace
-     * @param string $sFile
+     * @param ?string $file File path or file descriptor handled by the operation.
      */
-    public function logData($sType, $mData, $sTitle, $sNote = '', $nDataDepth = null, $bIsTrace = true, $sFile = null)
+    public function logData(string $type, mixed $data, string $title, string $note = '', int|float|null $dataDepth = null, bool $isTrace = true, ?string $file = null): void
     {
-        if (is_null($nDataDepth) || $nDataDepth < 1) {
-            $nDataDepth = $this->getConfig('DATA_DEPTH', 4);
+        if (is_null($dataDepth) || $dataDepth < 1) {
+            $dataDepth = $this->getConfig('DATA_DEPTH', 4);
         }
-        $aRow = $this->_setAttribute($sTitle);
-        $aRow['data'] = $this->_setNewData($mData, $nDataDepth);
-        $this->_setNote($aRow, $sNote);
-        if ($bIsTrace) {
-            $aRow['trace'] = $this->_getTrace();
+        $row = $this->_setAttribute($title);
+        $row['data'] = $this->_setNewData($data, $dataDepth);
+        $this->_setNote($row, $note);
+        if ($isTrace) {
+            $row['trace'] = $this->_getTrace();
         }
-        $this->_saveLog('data', $sType, $aRow, $sFile);
-    } // function logData
+        $this->_saveLog('data', $type, $row, $file);
+    }
 
     /**
-     * Log error-message
-     * @param string $sType
-     * @param string $sMessage
-     * @param string $sTitle
-     * @param string $sNote
-     * @param boolean $bIsTrace
-     * @param string $sFile
+     * @param ?string $file File path or file descriptor handled by the operation.
      */
-    public function logError($sType, $sMessage, $sTitle, $sNote = '', $bIsTrace = true, $sFile = null)
+    public function logError(string $type, string $message, string $title, string $note = '', bool $isTrace = true, ?string $file = null): void
     {
-        $aRow = $this->_setAttribute($sTitle);
-        $aRow['main_msg'] = $sMessage;
-        $this->_setNote($aRow, $sNote);
-        if ($bIsTrace) {
-            $aRow['trace'] = $this->_getTrace();
+        $row = $this->_setAttribute($title);
+        $row['main_msg'] = $message;
+        $this->_setNote($row, $note);
+        if ($isTrace) {
+            $row['trace'] = $this->_getTrace();
         }
-        $this->_saveLog('error', $sType, $aRow, $sFile);
-    } // function logError
+        $this->_saveLog('error', $type, $row, $file);
+    }
 
     /**
-     * Log error-message
-     * @param string $sType
-     * @param string $sMessage
-     * @param string $sTitle
-     * @param string $sNote
-     * @param string $sFile
+     * @param ?string $file File path or file descriptor handled by the operation.
      */
-    public function logMessage($sType, $sMessage, $sTitle, $sNote = '', $sFile = null)
+    public function logMessage(string $type, string $message, string $title, string $note = '', ?string $file = null): void
     {
-        $aRow = $this->_setAttribute($sTitle);
-        $aRow['main_msg'] = $sMessage;
-        $this->_setNote($aRow, $sNote);
-        $this->_saveLog('message', $sType, $aRow, $sFile);
-    } // function logMessage
+        $row = $this->_setAttribute($title);
+        $row['main_msg'] = $message;
+        $this->_setNote($row, $note);
+        $this->_saveLog('message', $type, $row, $file);
+    }
 
-    /**
-     * Set new record tag
-     * @param string $sType
-     */
-    protected function _setAttribute($sTitle)
+    protected function _setAttribute(string $title): array
     {
-        $aRow = array();
-        $aRow['method'] = !isset($_SERVER['REQUEST_METHOD']) ? 'CLI' : $_SERVER['REQUEST_METHOD'];
-        if (@$this->oConfig['SET_PROTOCOL']) {
-            $aRow['protocol'] = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on' ? 'https' : 'http';
+        $row = [];
+        $row['method'] = !isset($_SERVER['REQUEST_METHOD']) ? 'CLI' : $_SERVER['REQUEST_METHOD'];
+        if (!empty($this->config['SET_PROTOCOL'])) {
+            $row['protocol'] = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
         }
-        if ($aRow['method'] != 'CLI' && (@$this->oConfig['SET_DOMAIN'] || @$this->oConfig['SET_PROTOCOL'])) {
-            $aRow['domain'] = isset($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : null;
+        if ($row['method'] !== 'CLI' && (!empty($this->config['SET_DOMAIN']) || !empty($this->config['SET_PROTOCOL']))) {
+            $row['domain'] = isset($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : null;
         }
-        $aRow['request'] = $aRow['method'] != 'CLI' ? @$_SERVER['REQUEST_URI'] : (isset($_SERVER['argv']) ? @implode(' ', $_SERVER['argv']) : 'No path');
+        $row['request'] = $row['method'] !== 'CLI' ? ($_SERVER['REQUEST_URI'] ?? '') : (isset($_SERVER['argv']) ? implode(' ', $_SERVER['argv']) : 'No path');
 
-        $aRow['header']  = $sTitle;
-        return $aRow;
-    } // function _setAttribute
+        $row['header']  = $title;
+        return $row;
+    }
 
-    /**
-     * Set Data Element
-     * @param number $nDataDepth
-     * @return array
-     */
-    protected function _setNewData($mData, $nDataDepth)
+    protected function _setNewData(mixed $data, int|float $dataDepth): array
     {
-        $bIsRow = is_object($mData) && is_subclass_of($mData, '\fan\core\base\model\row');
-        $aDtEl = array(
-            'type'  => $bIsRow ? get_class($mData) . ':' : (is_object($mData) ? 'object:' . get_class($mData) : gettype($mData)),
-        );
+        $isRow = is_object($data) && is_subclass_of($data, '\fan\core\base\model\row');
+        $dtEl = [
+            'type' => $isRow ? get_class($data) . ':' : (is_object($data) ? 'object:' . get_class($data) : gettype($data)),
+        ];
 
-        if (is_null($mData)) {
-            $aDtEl['singular'] = 'NULL';
-        } elseif (is_scalar($mData)) {
-            $aDtEl['singular'] = is_bool($mData) ? ($mData ? 'true' : 'false') : $this->_checkIncorrectSymbol($mData, 'scalar_val', 2048);
-        } elseif (is_array($mData) || is_object($mData)) {
-            if ($nDataDepth < 1) {
-                $aDtEl['singular'] = is_array($mData) ? 'array[' . count($mData) . ']' : 'object:' . get_class($mData);
+        if (is_null($data)) {
+            $dtEl['singular'] = 'NULL';
+        } elseif (is_scalar($data)) {
+            $dtEl['singular'] = is_bool($data) ? ($data ? 'true' : 'false') : $this->_checkIncorrectSymbol((string)$data, 'scalar_val', 2048);
+        } elseif (is_array($data) || is_object($data)) {
+            if ($dataDepth < 1) {
+                $dtEl['singular'] = is_array($data) ? 'array[' . count($data) . ']' : 'object:' . get_class($data);
             } else {
-                $aDtEl['multiple'] = array();
-                if ($bIsRow) {
-                    foreach ($mData->getDebugInfo() as $k => $v) {
-                        $aDtEl['multiple'][$k] = $this->_setNewData($v, $nDataDepth);
+                $dtEl['multiple'] = [];
+                if ($isRow) {
+                    foreach ($data->getDebugInfo() as $k => $v) {
+                        $dtEl['multiple'][$k] = $this->_setNewData($v, $dataDepth);
                     }
                 } else {
-                    foreach ($mData as $k => $v) {
-                        $aDtEl['multiple'][$this->_checkIncorrectSymbol($k, 'mp_key', 64)] = $this->_setNewData($v, $nDataDepth - 1);
+                    foreach ($data as $k => $v) {
+                        $dtEl['multiple'][$this->_checkIncorrectSymbol((string)$k, 'mp_key', 64)] = $this->_setNewData($v, $dataDepth - 1);
                     }
                 }
-                if (empty($aDtEl['multiple'])) {
-                    $aDtEl['singular'] = is_array($mData) ? 'Empty array' : 'Object:' . get_class($mData) . ' without public property.';
-                    unset($aDtEl['multiple']);
+                if (empty($dtEl['multiple'])) {
+                    $dtEl['singular'] = is_array($data) ? 'Empty array' : 'Object:' . get_class($data) . ' without public property.';
+                    unset($dtEl['multiple']);
                 }
             }
         } else {
-            $aDtEl['singular'] = $this->_checkIncorrectSymbol(var_export($mData, true), 'any_var', 4096);
+            $dtEl['singular'] = $this->_checkIncorrectSymbol(var_export($data, true), 'any_var', 4096);
         }
 
-        return $aDtEl;
-    } // function _setNewData
+        return $dtEl;
+    }
 
-    /**
-     * Set Note
-     * @param array $aRow
-     * @param string $sNote
-     */
-    protected function _setNote(&$aRow, $sNote)
+    protected function _setNote(array &$row, string $note): void
     {
-        if ($sNote) {
-            $aRow['note'] = $this->_checkIncorrectSymbol($sNote, 'note', 4096);
+        if ($note) {
+            $row['note'] = $this->_checkIncorrectSymbol($note, 'note', 4096);
         }
-    } // function _setNote
+    }
 
-    /**
-     * Get Trace
-     * @return array
-     */
-    protected function _getTrace()
+    protected function _getTrace(): array
     {
-        $aRet = array();
-        $aTmp = debug_backtrace();
-        $aBackTrace = array();
-        for ($i = count($aTmp) - 1; $i >= 0; $i--) {
-            $aBackTrace[$i]['file'] = isset($aTmp[$i]['file']) ? $aTmp[$i]['file'] : '';
-            $aBackTrace[$i]['line'] = isset($aTmp[$i]['line']) ? $aTmp[$i]['line'] : '';
-            $aBackTrace[$i]['function'] = (isset($aTmp[$i]['class']) ? $aTmp[$i]['class'] . $aTmp[$i]['type'] : '') . $aTmp[$i]['function'];
-            $aBackTrace[$i]['args'] = isset($aTmp[$i]['args']) ? $aTmp[$i]['args'] : array();
-            if (isset($aTmp[$i]['class']) && preg_match('/^(?:core|project)\\\\service\\\\(?:log|error)$/', $aTmp[$i]['class'])) {
+        $ret = [];
+        $tmp = debug_backtrace();
+        $backTrace = [];
+        for ($i = count($tmp) - 1; $i >= 0; $i--) {
+            $backTrace[$i]['file'] = isset($tmp[$i]['file']) ? $tmp[$i]['file'] : '';
+            $backTrace[$i]['line'] = isset($tmp[$i]['line']) ? $tmp[$i]['line'] : '';
+            $backTrace[$i]['function'] = (isset($tmp[$i]['class']) ? $tmp[$i]['class'] . $tmp[$i]['type'] : '') . $tmp[$i]['function'];
+            $backTrace[$i]['args'] = isset($tmp[$i]['args']) ? $tmp[$i]['args'] : [];
+            if (isset($tmp[$i]['class']) && preg_match('/^(?:core|project)\\\\service\\\\(?:log|error)$/', $tmp[$i]['class'])) {
                 break;
             }
         }
-        ksort($aBackTrace);
-        foreach ($aBackTrace as $v) {
-            $aCall = array();
+        ksort($backTrace);
+        foreach ($backTrace as $v) {
+            $call = [];
             if ($v['file']) {
-                $aCall['file'] = $v['file'];
+                $call['file'] = $v['file'];
             }
             if ($v['file']) {
-                $aCall['line'] = $v['line'];
+                $call['line'] = $v['line'];
             }
-            $aCall['func'] = $v['function'];
+            $call['func'] = $v['function'];
             if ($v['args']) {
-                $aCall['arg'] = array();
+                $call['arg'] = [];
                 foreach ($v['args'] as $arg) {
                     if (is_null($arg)) {
                         $s = 'NULL';
                     } elseif (is_scalar($arg)) {
-                        $s = is_bool($arg) ? ($arg ? 'true' : 'false') : $this->_checkIncorrectSymbol($arg, 'argument', 128);
+                        $s = is_bool($arg) ? ($arg ? 'true' : 'false') : $this->_checkIncorrectSymbol((string)$arg, 'argument', 128);
                     } elseif (is_array($arg)) {
                         $s = 'Array[' . count($arg) . ']';
                     } elseif (is_object($arg)) {
@@ -237,86 +201,77 @@ class log extends \fan\core\base\service\single
                     } else {
                         $s = $this->_checkIncorrectSymbol(var_export($arg, true), 'argument', 128);
                     }
-                    $aCall['arg'][] = array(gettype($arg), str_replace ('&', '&amp;',$s));
+                    $call['arg'][] = [gettype($arg), str_replace ('&', '&amp;',$s)];
                 }
             }
-            $aRet[] = $aCall;
+            $ret[] = $call;
         }
-        return $aRet;
-    } // function _getTrace
+        return $ret;
+    }
 
     /**
-     * Set Xml data (from file or create)
-     * @param string $sVariety
-     * @param string $sFile
-     * @return boolean
+     * @param string $file File path or file descriptor handled by the operation.
      */
-    protected function _saveLog($sVariety, $sType, $aRow, $sFile)
+    protected function _saveLog(string $variety, string $type, array $row, ?string $file): void
     {
-        $sRow  = date('H:i:s') . "\t" . $sType . "\t";
-        if ($this->getConfig(array('USE_PID', $sVariety), false)) {
-            $sRow .= \bootstrap::getPid() . "\t";
+        $row  = date('H:i:s') . "\t" . $type . "\t";
+        if ($this->getConfig(['USE_PID', $variety], false)) {
+            $row .= \bootstrap::getPid() . "\t";
         }
-        $sRow .= addcslashes(serialize($aRow), "\\\t\r\n\0") . "\n";
-        error_log($sRow, 3, $this->_getFullPath($sVariety, $sFile));
-    } // function _saveLog
+        $row .= addcslashes(\fan\core\adapter\safe_serializer::encodeJson($row), "\\\t\r\n\0") . "\n";
+        error_log($row, 3, $this->_getFullPath($variety, $file));
+    }
 
     /**
-     * Eeset Xml-file
-     * @param string $sVariety
-     * @return sring
+     * @param mixed $file File path or file descriptor handled by the operation.
      */
-    protected function _getFullPath($sVariety, $sFile)
+    protected function _getFullPath(string $variety, mixed $file): string
     {
-        if (!isset($this->aDir[$sVariety])) {
-            $this->aDir[$sVariety] = \bootstrap::parsePath($this->oConfig['LOG_DIR'][$sVariety]);
-            if (!@is_writable($this->aDir[$sVariety])) {
-                throw new \fan\project\exception\fatal('Directory "' . $sFile . '" isn\'t writable.');
+        if (!isset($this->dir[$variety])) {
+            $this->dir[$variety] = \bootstrap::parsePath((string)$this->config['LOG_DIR'][$variety]);
+            if (!is_writable($this->dir[$variety])) {
+                throw new \fan\project\exception\fatal('Directory "' . $file . '" isn\'t writable.');
             }
         }
 
-        if ($sFile) {
-            $sDir = dirname($sFile);
-            if ($sDir) {
-                if (!@is_dir($sDir)) {
-                    $sDir = $this->aDir[$sVariety] . '/' . $sDir;
-                    if (!@is_dir($sDir)) {
-                        throw new \fan\project\exception\fatal('Incorrect log-file path "' . $sFile . '".');
+        if ($file) {
+            $file = (string)$file;
+            $dir = dirname($file);
+            if ($dir) {
+                if (!is_dir($dir)) {
+                    $dir = $this->dir[$variety] . '/' . $dir;
+                    if (!is_dir($dir)) {
+                        throw new \fan\project\exception\fatal('Incorrect log-file path "' . $file . '".');
                     }
                 }
-                if (!@is_writable($sDir)) {
-                    throw new \fan\project\exception\fatal('Directory "' . $sFile . '" isn\'t writable.');
+                if (!is_writable($dir)) {
+                    throw new \fan\project\exception\fatal('Directory "' . $file . '" isn\'t writable.');
                 }
-                return $sDir . '/' . $sFile;
+                return $dir . '/' . $file;
             }
-            return $this->aDir[$sVariety] . '/' . $sFile;
+            return $this->dir[$variety] . '/' . $file;
         }
 
         for ($i = 0; $i < 1000; $i++) {
-            $sFile = date('Y-m-d') . '_' . str_pad($i, 3, '0', STR_PAD_LEFT) . '.log';
-            $sFullPath = $this->aDir[$sVariety] . '/' . $sFile;
-            if (!file_exists($sFullPath) || is_writable($sFullPath) && filesize($sFullPath) < $this->getConfig('MAX_FILE_SIZE', 1000000)) {
+            $file = date('Y-m-d') . '_' . str_pad((string)$i, 3, '0', STR_PAD_LEFT) . '.log';
+            $fullPath = $this->dir[$variety] . '/' . $file;
+            if (!file_exists($fullPath) || is_writable($fullPath) && filesize($fullPath) < (int)$this->getConfig('MAX_FILE_SIZE', 1000000)) {
                 break;
             }
         }
-        return $sFullPath;
-    } // function _getFullPath
+        return $fullPath;
+    }
 
-    /**
-     * Check incorrect symbol
-     * @param string $sStr
-     * @return string
-     */
-    protected function _checkIncorrectSymbol($sStr, $sLimitKey = null, $nLimitDefault = null)
+    protected function _checkIncorrectSymbol(string $str, ?string $limitKey = null, ?int $limitDefault = null): string
     {
-        $nLimit = $this->getConfig(array('LEN_LIMIT', $sLimitKey), is_null($nLimitDefault) ? 16384 : $nLimitDefault);
-        $sStr = (string)$sStr;
-        $k = min(strlen($sStr), $nLimit);
-        $sRet = $k < strlen($sStr) ? '[REDUCED]' : '';
+        $limit = (int)$this->getConfig(['LEN_LIMIT', $limitKey], is_null($limitDefault) ? 16384 : $limitDefault);
+        $str = (string)$str;
+        $k = min(strlen($str), $limit);
+        $ret = $k < strlen($str) ? '[REDUCED]' : '';
         for ($i=0; $i < $k; $i++) {
-            $c = substr($sStr, $i, 1);
+            $c = substr($str, $i, 1);
             $n = ord($c);
-            if($n == 0) {
+            if ($n === 0) {
                 return '[BINARY CODE]';
             } elseif ($n & 0x80) {
                 if ($n & 0x40) {
@@ -324,8 +279,8 @@ class log extends \fan\core\base\service\single
                     $c1 = $c;
                     $b  = true;
                     for ($j = 1; ($j <= 5) && ($n1 & 0x40); $j++, $n1 = $n1 << 1) {
-                        $c = substr($sStr, $i + $j, 1);
-                        if ((ord($c) & 0xC0) == 0x80) {
+                        $c = substr($str, $i + $j, 1);
+                        if ((ord($c) & 0xC0) === 0x80) {
                             $c1 .= $c;
                         } else {
                             $b = false;
@@ -333,25 +288,24 @@ class log extends \fan\core\base\service\single
                         }
                     }
                     if ($b) {
-                        $sRet .= $c1;
+                        $ret .= $c1;
                         $i += ($j - 1);
                     } else {
-                        $sRet .= '♣';
+                        $ret .= '♣';
                     }
                 } else {
-                    $sRet .= '♠';
+                    $ret .= '♠';
                 }
-            } elseif($n < 0x20 && $n != 0x0D && $n != 0x0A && $n != 0x09) {
-                $sRet .= '♥';
-            } elseif($n == 127) {
-                $sRet .= '♦';
+            } elseif ($n < 0x20 && $n !== 0x0D && $n !== 0x0A && $n !== 0x09) {
+                $ret .= '♥';
+            } elseif ($n === 127) {
+                $ret .= '♦';
             } else {
-                $sRet .= $c;
+                $ret .= $c;
             }
         }
 
-        return $sRet;
-    } // function _checkIncorrectSymbol
+        return $ret;
+    }
 
-} // class \fan\core\service\log
-?>
+}

@@ -1,4 +1,7 @@
-<?php namespace fan\core\view\parser;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view\parser;
 /**
  * View parser HTML-type
  *
@@ -19,61 +22,48 @@ class debug1 extends html
     /**
      * @var \fan\core\service\debug Root block
      */
-    protected $oDebug;
+    protected ?object $debug = null;
 
-    /**
-     * View meta constructor
-     * @param fan\core\block\base $oBlock
-     */
-    public function __construct(\fan\core\block\base $oMainBlock)
+    public function __construct(\fan\core\block\base $mainBlock)
     {
-        parent::__construct($oMainBlock);
-        $this->oDebug = \fan\project\service\debug::instance();
-    } // function __construct
+        parent::__construct($mainBlock);
+        $this->debug = \fan\project\service\debug::instance();
+    }
 
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Get Final Content Code
-     * @return string
-     */
-    public function getResultData(\fan\core\block\base $oRootBlock)
+    public function getResultData(\fan\core\block\base $rootBlock): array
     {
-        $this->oDebug->setExtFiles($oRootBlock, 1);
+        $this->debug->setExtFiles($rootBlock, true);
 
-        $aTplVar = $oRootBlock->getViewData();
+        $tplVar = $rootBlock->getViewData();
 
-        $bIsWrap = false;
-        foreach ($oRootBlock->getEmbeddedBlocks() as $oEmbeddedBlock) {
-            $aTmp = $this->_getInternalResultData($oEmbeddedBlock);
-            if ($bIsWrap) {
-                $aTplVar[key($aTmp)] = reset($aTmp);
+        $isWrap = false;
+        foreach ($rootBlock->getEmbeddedBlocks() as $embeddedBlock) {
+            $tmp = $this->_getInternalResultData($embeddedBlock);
+            if ($isWrap) {
+                $tplVar[key($tmp)] = reset($tmp);
             } else {
-                $aTplVar[key($aTmp)] = $this->oDebug->wrapHtmlCode(reset($aTmp), $oRootBlock);
-                $bIsWrap = true;
+                $tplVar[key($tmp)] = $this->debug->wrapHtmlCode(reset($tmp), $rootBlock);
+                $isWrap = true;
             }
         }
 
-        return array($oRootBlock->getBlockName() => $this->_parseTemplate($oRootBlock, $aTplVar));
-    } // function getResultData
+        return [$rootBlock->getBlockName() => $this->_parseTemplate($rootBlock, $tplVar)];
+    }
 
     // ======== Protected methods ======== \\
-    /**
-     * Get Internal Result Data
-     * @return array
-     */
-    public function _getInternalResultData(\fan\core\block\base $oBlock)
+    public function _getInternalResultData(\fan\core\block\base $block): array
     {
-        $aTplVar = $oBlock->getViewData();
+        $tplVar = $block->getViewData();
 
-        foreach ($oBlock->getEmbeddedBlocks() as $oEmbeddedBlock) {
-            $aTmp = $this->_getInternalResultData($oEmbeddedBlock);
-            $aTplVar[key($aTmp)] = reset($aTmp);
+        foreach ($block->getEmbeddedBlocks() as $embeddedBlock) {
+            $tmp = $this->_getInternalResultData($embeddedBlock);
+            $tplVar[key($tmp)] = reset($tmp);
         }
 
-        return array($oBlock->getBlockName() => $this->oDebug->wrapHtmlCode($this->_parseTemplate($oBlock, $aTplVar), $oBlock));
-    } // function _getInternalResultData
-} // class \fan\core\view\parser\debug1
-?>
+        return [$block->getBlockName() => $this->debug->wrapHtmlCode($this->_parseTemplate($block, $tplVar), $block)];
+    }
+}

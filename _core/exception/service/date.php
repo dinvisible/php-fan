@@ -1,4 +1,8 @@
-<?php namespace fan\core\exception\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\exception\service;
 /**
  * Exception a service fatal error
  *
@@ -17,16 +21,9 @@
 class date extends \fan\core\exception\base
 {
 
-    /**
-     * Exception's constructor
-     * @param string $sLogErrMsg Log error message
-     * @param numeric $nCode Error Code
-     * @param \Exception $oPrevious Previous exception
-     */
-    public function __construct($sLogErrMsg, $nCode = E_USER_ERROR, $oPrevious = null)
+    public function __construct(string $logErrMsg, int $code = E_USER_ERROR, ?\Throwable $previous = null)
     {
-        parent::__construct($sLogErrMsg, $nCode, $oPrevious);
-        $this->_logByPhp($sLogErrMsg);
-    } // function __construct
-} // class \fan\core\exception\service\date
-?>
+        parent::__construct($logErrMsg, $code, $previous);
+        $this->_logByPhp($logErrMsg);
+    }
+}

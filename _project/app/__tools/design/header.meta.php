@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Meta data of header main block
  *
@@ -14,11 +17,10 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.005 (12.02.2015)
  */
-return array(
-    'own' => array(
-        'embeddedBlocks' => array(
+return [
+    'own' => [
+        'embeddedBlocks' => [
             'nav' => 'design/nav/main_nav',
-        ),
-    ),
-);
-?>
+        ],
+    ],
+];

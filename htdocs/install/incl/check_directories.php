@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Check directories of V-host
  *
@@ -20,206 +23,194 @@ class check_directories extends base
      * Directory separator
      * @var string
      */
-    protected $sSeparator = '';
+    protected string $separator = '';
     /**
      * Path to Base V-host directory
      * @var string
      */
-    protected $sBaseDir = null;
+    protected ?string $baseDir = null;
     /**
      * Path to CORE directory
      * @var string
      */
-    protected $sCoreDir = null;
+    protected ?string $coreDir = null;
     /**
      * Path to PROJECT directory
      * @var string
      */
-    protected $sProjectDir = null;
+    protected ?string $projectDir = null;
     /**
      * Path to TEMP-files directory
      * @var string
      */
-    protected $sTempDir = null;
+    protected ?string $tempDir = null;
     /**
      * Path to Bootstrap config
      * @var string
      */
-    protected $sBootstrapConfig = null;
+    protected ?string $bootstrapConfig = null;
     /**
      * Path to Service config
      * @var string
      */
-    protected $sServiceConfig = null;
+    protected ?string $serviceConfig = null;
     /**
      * Flag is PROJECT dir specially defined
      * @var string
      */
-    protected $bIsDefinedProjectDir = false;
+    protected bool $isDefinedProjectDir = false;
     /**
      * Content of INI-file
      * @var array
      */
-    protected $aIniContent = array(
+    protected array $iniContent = [
         'bootstrap' => '',
         'service'   => '',
-    );
+    ];
     /**
      * Keys for parse path
      * @var array
      */
-    protected $aPlaceholderMap = array(
-        'BASE_DIR'    => 'sBaseDir',
-        'CORE_DIR'    => 'sCoreDir',
-        'PROJECT'     => 'sProjectDir',
-        'PROJECT_DIR' => 'sProjectDir',
-        'TEMP'        => 'sTempDir',
-    );
+    protected array $placeholderMap = [
+        'BASE_DIR'    => 'baseDir',
+        'CORE_DIR'    => 'coreDir',
+        'PROJECT'     => 'projectDir',
+        'PROJECT_DIR' => 'projectDir',
+        'TEMP'        => 'tempDir',
+    ];
 
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
-    public function runCheck()
+    public function runCheck(): bool
     {
-        $this->sSeparator = DIRECTORY_SEPARATOR;
-        $bRes  = $this->_checkBaseDirectories();
-        $bRes &= $this->_checkLogDirectories();
-        $bRes &= $this->_checkCacheDirectories();
+        $this->separator = DIRECTORY_SEPARATOR;
+        $res  = $this->_checkBaseDirectories();
+        $res &= $this->_checkLogDirectories();
+        $res &= $this->_checkCacheDirectories();
 
         $this->_setConst();
-        return $bRes;
-    } // function runCheck
+        return $res;
+    }
     // ======== Private/Protected methods ======== \\
-    /**
-     * Check Base Directories
-     * @return boolean
-     */
-    protected function _checkBaseDirectories()
+    protected function _checkBaseDirectories(): bool
     {
-        $bResult = false;
-        $this->sBaseDir = $this->_adaptPath($_SERVER['DOCUMENT_ROOT']);
-        $sIndexDir = $this->_findIndexDir();
-        $this->aView['sBaseDir']  = $this->sBaseDir;
-        $this->aView['sIndexDir'] = $sIndexDir;
+        $result = false;
+        $this->baseDir = $this->_adaptPath($_SERVER['DOCUMENT_ROOT']);
+        $indexDir = $this->_findIndexDir();
+        $this->view['baseDir']  = $this->baseDir;
+        $this->view['indexDir'] = $indexDir;
 
-        if (!empty($sIndexDir)) {
-            $bIsCoreDir = is_dir($this->sCoreDir);
-            if  ($bIsCoreDir) {
-                $this->sCoreDir = $this->_adaptPath(realpath($this->sCoreDir));
+        if (!empty($indexDir)) {
+            $isCoreDir = is_dir($this->coreDir);
+            if ($isCoreDir) {
+                $this->coreDir = $this->_adaptPath(realpath($this->coreDir));
             }
 
-            $bIsProjectDir = is_dir($this->sProjectDir);
-            if  ($bIsProjectDir) {
-                $this->sProjectDir = $this->_adaptPath(realpath($this->sProjectDir));
+            $isProjectDir = is_dir($this->projectDir);
+            if ($isProjectDir) {
+                $this->projectDir = $this->_adaptPath(realpath($this->projectDir));
             }
 
-            if (empty($this->sBootstrapConfig)) {
-                $this->sBootstrapConfig = $this->sProjectDir . '/conf/bootstrap.ini';
+            if (empty($this->bootstrapConfig)) {
+                $this->bootstrapConfig = $this->projectDir . '/conf/bootstrap.ini';
             }
-            $this->sBootstrapConfig = file_exists($this->sBootstrapConfig) ?  $this->_adaptPath(realpath($this->sBootstrapConfig)) : null;
+            $this->bootstrapConfig = file_exists($this->bootstrapConfig) ?  $this->_adaptPath(realpath($this->bootstrapConfig)) : null;
 
-            $this->aView['sCoreDir']     = $this->sCoreDir;
-            $this->aView['bIsCoreDir']   = $bIsCoreDir;
-            $this->aView['bIsCoreUnder'] = $this->_isUnderDir($this->sCoreDir);
+            $this->view['coreDir']     = $this->coreDir;
+            $this->view['isCoreDir']   = $isCoreDir;
+            $this->view['isCoreUnder'] = $this->_isUnderDir($this->coreDir);
 
-            $this->aView['sProjectDir']     = $this->sProjectDir;
-            $this->aView['bIsProjectDir']   = $bIsProjectDir;
-            $this->aView['bIsProjectUnder'] = $this->_isUnderDir($this->sProjectDir);
-            $this->aView['bIsDefinedProjectDir'] = $this->bIsDefinedProjectDir;
+            $this->view['projectDir']     = $this->projectDir;
+            $this->view['isProjectDir']   = $isProjectDir;
+            $this->view['isProjectUnder'] = $this->_isUnderDir($this->projectDir);
+            $this->view['isDefinedProjectDir'] = $this->isDefinedProjectDir;
 
-            $this->aView['sBootstrapConfig'] = $this->sBootstrapConfig;
+            $this->view['bootstrapConfig'] = $this->bootstrapConfig;
 
-            $bResult = !empty($this->sCoreDir) && !empty($this->sProjectDir);
+            $result = !empty($this->coreDir) && !empty($this->projectDir);
         }
 
         $this->_parseTemplate('base_directories');
 
-        return $bResult;
-    } // function _checkBaseDirectories
-    /**
-     * Check Log Directories
-     * @return boolean
-     */
-    protected function _checkLogDirectories()
+        return $result;
+    }
+    protected function _checkLogDirectories(): bool
     {
-        $this->aIniContent['bootstrap'] = file_get_contents($this->sBootstrapConfig);
+        $this->iniContent['bootstrap'] = file_get_contents($this->bootstrapConfig);
 
         $Matches = null;
 
-        if (preg_match('/^\s*ini\.temp_dir\s*\=\s*\"(.+?)\"\s*$/m', $this->aIniContent['bootstrap'], $aMatches)) {
-            $this->sTempDir = $this->_replacePlaceholder($aMatches[1]);
+        if (preg_match('/^\s*ini\.temp_dir\s*\=\s*\"(.+?)\"\s*$/m', $this->iniContent['bootstrap'], $matches)) {
+            $this->tempDir = $this->_replacePlaceholder($matches[1]);
         }
 
-        if (preg_match('/^\s*global_path\.config_source\s*\=\s*\"(.+?)\"\s*$/m', $this->aIniContent['bootstrap'], $aMatches)) {
-            $this->sServiceConfig = $this->_replacePlaceholder($aMatches[1]);
+        if (preg_match('/^\s*global_path\.config_source\s*\=\s*\"(.+?)\"\s*$/m', $this->iniContent['bootstrap'], $matches)) {
+            $this->serviceConfig = $this->_replacePlaceholder($matches[1]);
         } else {
-            $aTmp = pathinfo($this->sBootstrapConfig);
-            $this->sServiceConfig = $aTmp['dirname'];
+            $tmp = pathinfo($this->bootstrapConfig);
+            $this->serviceConfig = $tmp['dirname'];
         }
-        $this->sServiceConfig .= '/service.ini';
+        $this->serviceConfig .= '/service.ini';
 
-        $this->aIniContent['service'] = file_get_contents($this->sServiceConfig);
+        $this->iniContent['service'] = file_get_contents($this->serviceConfig);
 
-        $bResult = true;
-        $aLogDir = array(
-            'apache'    => array('file' => 'bootstrap', 'key' => 'global_path\\.apache_log'),
-            'bootstrap' => array('file' => 'bootstrap', 'key' => 'global_path\\.bootstrap_log'),
-            'data'      => array('file' => 'service',   'key' => 'LOG_DIR\\.data'),
-            'error'     => array('file' => 'service',   'key' => 'LOG_DIR\\.error'),
-            'message'   => array('file' => 'service',   'key' => 'LOG_DIR\\.message'),
-        );
+        $result = true;
+        $logDir = [
+            'apache'    => ['file' => 'bootstrap', 'key' => 'global_path\\.apache_log'],
+            'bootstrap' => ['file' => 'bootstrap', 'key' => 'global_path\\.bootstrap_log'],
+            'data'      => ['file' => 'service',   'key' => 'LOG_DIR\\.data'],
+            'error'     => ['file' => 'service',   'key' => 'LOG_DIR\\.error'],
+            'message'   => ['file' => 'service',   'key' => 'LOG_DIR\\.message'],
+        ];
 
-        foreach ($aLogDir as &$v) {
-            if (preg_match('/^\s*' . $v['key'] . '\s*\=\s*\"(.+?)\"\s*$/m', $this->aIniContent[$v['file']], $Matches)) {
+        foreach ($logDir as &$v) {
+            if (preg_match('/^\s*' . $v['key'] . '\s*\=\s*\"(.+?)\"\s*$/m', $this->iniContent[$v['file']], $Matches)) {
                 $v['dir']      = $this->_replacePlaceholder($Matches[1]);
                 $v['writable'] = is_dir($v['dir']) && is_writable($v['dir']);
                 if (!$v['writable'] && !file_exists($v['dir'])) {
-                    $aTmp = pathinfo($v['dir']);
-                    if (is_writable($aTmp['dirname']) && mkdir($v['dir'])) {
+                    $tmp = pathinfo($v['dir']);
+                    if (is_writable($tmp['dirname']) && mkdir($v['dir'])) {
                         $v['writable'] = true;
                     } else {
-                        $v['parent'] = $aTmp['dirname'];
+                        $v['parent'] = $tmp['dirname'];
                     }
                 }
             }
-            $bResult &= $v['writable'];
+            $result &= $v['writable'];
         }
 
-        $this->aView['aLogDir'] = $aLogDir;
+        $this->view['logDir'] = $logDir;
         $this->_parseTemplate('log_directories');
-        return $bResult;
-    } // function _checkLogDirectories
-    /**
-     * Check Cache Directories
-     * @return boolean
-     */
-    protected function _checkCacheDirectories()
+        return $result;
+    }
+    protected function _checkCacheDirectories(): bool
     {
-        $bResult = false;
-        if (empty($this->sTempDir)) {
-            $iIsTmp = 0;
-        } elseif (!is_dir($this->sTempDir)) {
-            $iIsTmp = -1;
+        $result = false;
+        if (empty($this->tempDir)) {
+            $isTmp = 0;
+        } elseif (!is_dir($this->tempDir)) {
+            $isTmp = -1;
         } else {
-            $this->sTempDir = realpath($this->sTempDir);
-            if (!is_writable($this->sTempDir)) {
-                $iIsTmp = -2;
+            $this->tempDir = realpath($this->tempDir);
+            if (!is_writable($this->tempDir)) {
+                $isTmp = -2;
             } else {
-                $iIsTmp = 1;
+                $isTmp = 1;
 
-                $bResult = true;
-                $aCacheDir = array(
-                    'config'       => array('required' =>  1, 'file' => 'bootstrap', 'key' => '\[config_cache\][^\[]+BASE_DIR'),
-                    'template'     => array('required' =>  1, 'file' => 'service',   'key' => '\[template\][^\[]+CACHE_DIR'),
-                    'entity'       => array('required' =>  0, 'file' => 'service',   'key' => '\[entity\][^\[]+CACHE_DIR'),
-                    'service-data' => array('required' =>  0, 'file' => 'service',   'key' => '\[cache\.TYPE\.service_data\][^\[]+BASE_DIR'),
-                    'file-store'   => array('required' =>  0, 'file' => 'service',   'key' => '\[cache\.TYPE\.file_store\][^\[]+BASE_DIR'),
-                    'img-nail'     => array('required' =>  0, 'file' => 'service',   'key' => '\[cache\.TYPE\.img_nail\][^\[]+BASE_DIR'),
-                    'common'       => array('required' => -1, 'file' => 'service',   'key' => '\[cache\.TYPE\.common_by_file\][^\[]+BASE_DIR'),
-                );
+                $result = true;
+                $cacheDir = [
+                    'config'       => ['required' =>  1, 'file' => 'bootstrap', 'key' => '\[config_cache\][^\[]+BASE_DIR'],
+                    'template'     => ['required' =>  1, 'file' => 'service',   'key' => '\[template\][^\[]+CACHE_DIR'],
+                    'entity'       => ['required' =>  0, 'file' => 'service',   'key' => '\[entity\][^\[]+CACHE_DIR'],
+                    'service-data' => ['required' =>  0, 'file' => 'service',   'key' => '\[cache\.TYPE\.service_data\][^\[]+BASE_DIR'],
+                    'file-store'   => ['required' =>  0, 'file' => 'service',   'key' => '\[cache\.TYPE\.file_store\][^\[]+BASE_DIR'],
+                    'img-nail'     => ['required' =>  0, 'file' => 'service',   'key' => '\[cache\.TYPE\.img_nail\][^\[]+BASE_DIR'],
+                    'common'       => ['required' => -1, 'file' => 'service',   'key' => '\[cache\.TYPE\.common_by_file\][^\[]+BASE_DIR'],
+                ];
 
-                $aUnset = array();
-                foreach ($aCacheDir as $k => &$v) {
-                    if (preg_match('/\s*' . $v['key'] . '\s*\=\s*\"(.+?)\"\s*/', $this->aIniContent[$v['file']], $Matches)) {
+                $unset = [];
+                foreach ($cacheDir as $k => &$v) {
+                    if (preg_match('/\s*' . $v['key'] . '\s*\=\s*\"(.+?)\"\s*/', $this->iniContent[$v['file']], $Matches)) {
                         $v['dir']      = $this->_replacePlaceholder($Matches[1]);
                         $v['writable'] = is_dir($v['dir']) && is_writable($v['dir']);
                         if (!$v['writable'] && !file_exists($v['dir'])) {
@@ -232,137 +223,108 @@ class check_directories extends base
                     }
 
                     if (!$v['writable'] && $v['required'] < 0) {
-                        $aUnset[] = $k;
+                        $unset[] = $k;
                     } else {
                         $v['img'] = $v['writable'] ? 'correct' : ($v['required'] > 0 ? 'incorrect' : 'need');
                     }
-                    $bResult &= ($v['writable'] || $v['required'] < 1);
+                    $result &= ($v['writable'] || $v['required'] < 1);
                 }
 
-                foreach ($aUnset as $k) {
-                    unset($aCacheDir[$k]);
+                foreach ($unset as $k) {
+                    unset($cacheDir[$k]);
                 }
             }
         }
 
-        $this->aView['iIsTmp']    = $iIsTmp;
-        $this->aView['sTempDir']  = $this->sTempDir;
-        $this->aView['aCacheDir'] = $aCacheDir;
+        $this->view['isTmp']    = $isTmp;
+        $this->view['tempDir']  = $this->tempDir;
+        $this->view['cacheDir'] = $cacheDir;
 
         $this->_parseTemplate('cache_directories');
-        return $bResult;
-    } // function _checkCacheDirectories
+        return $result;
+    }
 
-    /**
-     * Find Directory with Index-file
-     * @return null|string
-     */
-    protected function _findIndexDir()
+    protected function _findIndexDir(): ?string
     {
-        $iLenRoot = strlen($this->sBaseDir);
-        $aScript  = pathinfo($_SERVER['SCRIPT_FILENAME']);
-        $sTmp = $this->_adaptPath($aScript['dirname']);
+        $lenRoot = strlen($this->baseDir);
+        $script  = pathinfo($_SERVER['SCRIPT_FILENAME']);
+        $tmp = $this->_adaptPath($script['dirname']);
 
-        if ($iLenRoot >= strlen($sTmp)) {
+        if ($lenRoot >= strlen($tmp)) {
             return null;
         }
-        $iPos = strrpos($sTmp, '/', $iLenRoot);
-        if (!$iPos) {
+        $pos = strrpos($tmp, '/', $lenRoot);
+        if (!$pos) {
             return null;
         }
 
-        $sIndexDir = substr($sTmp, 0, $iPos);
+        $indexDir = substr($tmp, 0, $pos);
 
-        if ($this->_checkIndexFile($sIndexDir)) {
-            return $sIndexDir;
+        if ($this->_checkIndexFile($indexDir)) {
+            return $indexDir;
         }
-        return $this->_checkIndexFile($this->sBaseDir) ? $this->sBaseDir : null;
-    } // function _findIndexDir
+        return $this->_checkIndexFile($this->baseDir) ? $this->baseDir : null;
+    }
 
-    /**
-     * Check Index File by Directory
-     * @param string $sDir
-     * @return bool
-     */
-    protected function _checkIndexFile($sDir)
+    protected function _checkIndexFile(string $dir): bool
     {
-        $sPath = $sDir . '/index.php';
-        if (is_file($sPath)) {
-            $sIndex   = file_get_contents($sPath);
+        $path = $dir . '/index.php';
+        if (is_file($path)) {
+            $index   = file_get_contents($path);
 
-            $aMatches1 = $aMatches2 = $aMatches3 = null;
+            $matches1 = $matches2 = $matches3 = null;
 
-            $bRes1 = preg_match('/require_once\s+.+?\'(.+\/_core)\/bootstrap\.php\'\;/', $sIndex, $aMatches1);
-            $bRes2 = preg_match('/\\\\bootstrap\:\:run\((?:.+\'(.+\/bootstrap\.ini)\')?\)\;/', $sIndex, $aMatches2);
+            $res1 = preg_match('/require_once\s+.+?\'(.+\/_core)\/bootstrap\.php\'\;/', $index, $matches1);
+            $res2 = preg_match('/\\\\bootstrap\:\:run\((?:.+\'(.+\/bootstrap\.ini)\')?\)\;/', $index, $matches2);
 
-            if ($bRes1 && $bRes2) {
-                $this->sCoreDir = $sDir . $aMatches1[1];
-                if (preg_match('/define\s*\(\s*\'PROJECT_DIR\'\s*\,.+?\'(.+)\'\)\;/', $sIndex, $aMatches3)) {
-                    $this->sProjectDir = $sDir . $aMatches3[1];
-                    $this->bIsDefinedProjectDir = true;
+            if ($res1 && $res2) {
+                $this->coreDir = $dir . $matches1[1];
+                if (preg_match('/define\s*\(\s*\'PROJECT_DIR\'\s*\,.+?\'(.+)\'\)\;/', $index, $matches3)) {
+                    $this->projectDir = $dir . $matches3[1];
+                    $this->isDefinedProjectDir = true;
                 } else {
-                    $this->sProjectDir = $this->sCoreDir . '/../_project';
+                    $this->projectDir = $this->coreDir . '/../_project';
                 }
-                if (isset($aMatches2[1])) {
-                    $sTmp = $sDir . $aMatches2[1];
-                    $this->sBootstrapConfig = file_exists($sTmp) ?  realpath($sTmp) : null;
+                if (isset($matches2[1])) {
+                    $tmp = $dir . $matches2[1];
+                    $this->bootstrapConfig = file_exists($tmp) ?  realpath($tmp) : null;
                 }
                 return true;
             }
         }
         return false;
-    } // function _checkIndexFile
+    }
 
-    /**
-     * Check - this Directory is Under root
-     * @param string $sDir
-     * @return boolean
-     */
-    protected function _isUnderDir($sDir)
+    protected function _isUnderDir(string $dir): bool
     {
-        $iPos1 = strrpos($this->sBaseDir, '/');
-        $iPos2 = strrpos($sDir, '/');
-        return substr($this->sBaseDir, 0, $iPos1) == substr($sDir, 0, $iPos2);
-    } // function _isUnderDir
+        $pos1 = strrpos($this->baseDir, '/');
+        $pos2 = strrpos($dir, '/');
+        return substr($this->baseDir, 0, $pos1) === substr($dir, 0, $pos2);
+    }
 
-    /**
-     * Adapt Path - replace Separator to "/"
-     * @param string $sPath
-     * @return string
-     */
-    protected function _adaptPath($sPath)
+    protected function _adaptPath(string $path): string
     {
-        return $this->sSeparator == '/' ? $sPath : str_replace($this->sSeparator, '/', $sPath);
-    } // function _adaptPath
+        return $this->separator === '/' ? $path : str_replace($this->separator, '/', $path);
+    }
 
-    /**
-     * Replace placeholders to real value in the Path
-     * @param string $sPath
-     * @return string
-     */
-    protected function _replacePlaceholder($sPath)
+    protected function _replacePlaceholder(string $path): string
     {
-        foreach ($this->aPlaceholderMap as $k => $v) {
-            $sPath = str_replace('{' . $k . '}', $this->$v, $sPath);
+        foreach ($this->placeholderMap as $k => $v) {
+            $path = str_replace('{' . $k . '}', $this->$v, $path);
         }
-        return $sPath;
-    } // function _adaptPath
+        return $path;
+    }
 
-    /**
-     * Set Gloal Constants for all Paths
-     * @return check_directories
-     */
-    protected function _setConst()
+    protected function _setConst(): static
     {
-        foreach ($this->aPlaceholderMap as $k => $v) {
-            $sName = 'FAN_' . $k;
-            if (!empty($this->$v) && !defined($sName)) {
-                define($sName, $this->$v);
+        foreach ($this->placeholderMap as $k => $v) {
+            $name = 'FAN_' . $k;
+            if (!empty($this->$v) && !defined($name)) {
+                define($name, $this->$v);
             }
         }
         return $this;
-    } // function _adaptPath
+    }
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
-} // class check_directories
-?>
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\core\base\meta;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\base\meta;
 /**
  * Meta-Data Maker
  *
@@ -20,17 +24,14 @@ class maker implements \IteratorAggregate
      * Cache of blocks of Meta-data
      * @var array
      */
-    protected static $aMetaCache = array();
+    protected static array $metaCache = [];
 
     /**
      * @var \fan\core\block\base Linked block
      */
-    protected $oBlock;
+    protected ?object $block = null;
 
-    /**
-     * @var string Block Name
-     */
-    protected $sBlockName;
+    protected ?string $blockName = null;
 
     /**
      * Array of source Meta-data
@@ -40,13 +41,13 @@ class maker implements \IteratorAggregate
      *   and can't be used in the the Main block
      * @var array
      */
-    protected $aSource = array(
-        'folder'    => array('common' => null, 'own' => null),
-        'parent'    => array('common' => null, 'own' => null),
-        'block'     => array('common' => null, 'own' => null),
-        'container' => array('common' => null, 'own' => null),
-        'main'      => array('blockName' => null),
-    );
+    protected array $source = [
+        'folder'    => ['common' => null, 'own' => null],
+        'parent'    => ['common' => null, 'own' => null],
+        'block'     => ['common' => null, 'own' => null],
+        'container' => ['common' => null, 'own' => null],
+        'main'      => ['blockName' => null],
+    ];
 
     /**
      * Order of Assemble Meta-data for
@@ -54,344 +55,281 @@ class maker implements \IteratorAggregate
      *   "Other blocks" receive Meta-data from the Main only
      * @var array
      */
-    protected $aOrder = array(
-        'tab' => array(
-            array('folder', 'common'   ),
-            array('parent', 'common'   ),
-            array('block',  'common'   ),
-            array('parent', 'own'      ),
-            array('folder', 'own'      ),
-            array('block',  'own'      ),
-            array('folder', 'blockName'),
-        ),
-        'current' => array(
-            array('folder',    'common'   ),
-            array('parent',    'common'   ),
-            array('block',     'common'   ),
-            array('container', 'common'   ),
-            array('parent',    'own'      ),
-            array('folder',    'own'      ),
-            array('block',     'own'      ),
-            array('folder',    'blockName'),
-            array('container', 'own'      ),
-            array('main',      'blockName'),
-        ),
-        'other' => array(
+    protected array $order = [
+        'tab' => [
+            ['folder', 'common'   ],
+            ['parent', 'common'   ],
+            ['block',  'common'   ],
+            ['parent', 'own'      ],
+            ['folder', 'own'      ],
+            ['block',  'own'      ],
+            ['folder', 'blockName'],
+        ],
+        'current' => [
+            ['folder',    'common'   ],
+            ['parent',    'common'   ],
+            ['block',     'common'   ],
+            ['container', 'common'   ],
+            ['parent',    'own'      ],
+            ['folder',    'own'      ],
+            ['block',     'own'      ],
+            ['folder',    'blockName'],
+            ['container', 'own'      ],
+            ['main',      'blockName'],
+        ],
+        'other' => [
             'folder',
             'parent',
             'block',
-        ),
-        'embeded' => array(
+        ],
+        'embeded' => [
             'parent',
             'block',
-        ),
-    );
+        ],
+    ];
 
     /**
      * @var \fan\core\base\meta\row
      */
-    protected $oRootRow;
+    protected ?object $rootRow = null;
+
+    public function __construct(\fan\core\block\base $block)
+    {
+        $this->block     = $block;
+        $this->blockName = $block->getBlockName();
+
+        $paths = \fan\project\service\reflector::instance()->getParentPaths($this->block);
+        $this->_defineBlockMeta($paths);
+        $this->_defineFolderMeta($paths);
+    }
 
     /**
-     * Constructor of meta maker
-     * @param fan\core\block\base $oBlock
+     * Handles dynamic property writes for this current component.
+     *
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function __construct(\fan\core\block\base $oBlock)
+    public function __set(string $key, mixed $value): void
     {
-        $this->oBlock     = $oBlock;
-        $this->sBlockName = $oBlock->getBlockName();
-
-        $aPaths = \fan\project\service\reflector::instance()->getParentPaths($this->oBlock);
-        $this->_defineBlockMeta($aPaths);
-        $this->_defineFolderMeta($aPaths);
-    } // function __construct
-
-    public function __set($sKey, $mValue)
-    {
-        return $this->oBlock->$sKey = $mValue;
+        $this->block->$key = $value;
     }
 
-    public function __get($sKey)
+    /**
+     * Handles dynamic property reads for this current component.
+     */
+    public function __get(string $key): mixed
     {
-        return $this->oBlock->$sKey;
+        return $this->block->$key;
     }
 
-    public function __call($sMethod, $aArguments = array())
+    public function __call(string $method, array $arguments = []): mixed
     {
-        return call_user_func_array(array($this->oBlock, $sMethod), $aArguments);
+        return call_user_func_array([$this->block, $method], $arguments);
     }
 
-    final public function getIterator() {
+    final public function getIterator(): \Traversable {
         return $this->getMeta();
     }
 
-    /**
-     * Get instance of linked Block
-     * @return \fan\core\block\base
-     */
-    public function getBlock()
+    public function getBlock(): object
     {
-        return $this->oBlock;
-    } // function getBlock
+        return $this->block;
+    }
 
-    /**
-     * Set Container Meta
-     * @param type $aContainerMeta
-     * @return \fan\core\base\meta\maker
-     */
-    public function setContainerMeta($aContainerMeta)
+    public function setContainerMeta(array $containerMeta): static
     {
-        $this->_setSource('container', $aContainerMeta);
+        $this->_setSource('container', $containerMeta);
         return $this;
-    } // function setContainerMeta
+    }
 
-    /**
-     * Set Meta-data assigned for current block in Main-Content block
-     * @return \fan\core\base\meta\maker
-     */
-    public function setMainBlockMeta()
+    public function setMainBlockMeta(): static
     {
-        $oTab = $this->oBlock->getTab();
-        $aMainMeta = array(
-            $this->sBlockName => $oTab->getBlocksMetaByMain($this->sBlockName)
-        );
-        $this->_setSource('main', $aMainMeta);
+        $tab = $this->block->getTab();
+        $mainMeta = [
+            $this->blockName => $tab->getBlocksMetaByMain($this->blockName)
+        ];
+        $this->_setSource('main', $mainMeta);
         return $this;
-    } // function setMainBlockMeta
+    }
 
-    /**
-     * Assemble meta-data for Tab
-     * @return array
-     */
-    public function assembleTab()
+    public function assembleTab(): array
     {
-        $aData = array();
+        $data = [];
         foreach ($this->getOrder('tab') as $v) {
-            $key   = $v[1] == 'blockName' ? $this->sBlockName : $v[1];
-            if (isset($this->aSource[$v[0]][$key])) {
-                $aData = $this->_mergeMeta($aData, $this->aSource[$v[0]][$key], $v[0]);
+            $key   = (string)$v[1] === 'blockName' ? $this->blockName : $v[1];
+            if (isset($this->source[$v[0]][$key])) {
+                $data = $this->_mergeMeta($data, $this->source[$v[0]][$key], $v[0]);
             }
         }
-        return $aData;
-    } // function assembleTab
+        return $data;
+    }
 
-    /**
-     * Assemble meta-data for Block
-     * @return \fan\core\base\meta\row
-     */
-    public function assembleBlock()
+    public function assembleBlock(): \fan\core\base\meta\row
     {
-        $aData = array();
+        $data = [];
         foreach ($this->getOrder('current') as $v) {
-            $key = $v[1] == 'blockName' ? $this->sBlockName : $v[1];
-            if (isset($this->aSource[$v[0]][$key])) {
-                $aData = $this->_mergeMeta($aData, $this->aSource[$v[0]][$key], $v[0]);
+            $key = (string)$v[1] === 'blockName' ? $this->blockName : $v[1];
+            if (isset($this->source[$v[0]][$key])) {
+                $data = $this->_mergeMeta($data, $this->source[$v[0]][$key], $v[0]);
             }
         }
-        $this->oRootRow = new \fan\project\base\meta\row($this, $aData);
-        return $this->oRootRow;
-    } // function assembleBlock
+        $this->rootRow = new \fan\project\base\meta\row($this, $data);
+        return $this->rootRow;
+    }
 
-    /**
-     * Assemble Meta-data from the Main to Other Blocks
-     * @return array
-     */
-    public function assembleOther()
+    public function assembleOther(): array
     {
-        $aData = array();
+        $data = [];
         foreach ($this->getOrder('other') as $key) {
-            $aSource = $this->aSource[$key];
-            unset($aSource['common']);
-            unset($aSource['own']);
-            unset($aSource[$this->sBlockName]);
-            $aData = $this->_mergeMeta($aData, $aSource, null);
+            $source = $this->source[$key];
+            unset($source['common']);
+            unset($source['own']);
+            unset($source[$this->blockName]);
+            $data = $this->_mergeMeta($data, $source, null);
         }
-        return $aData;
-    } // function assembleOther
+        return $data;
+    }
 
-    /**
-     * Assemble Meta-data for Embeded Blocks
-     * @param string $sBlockName
-     * @return array
-     */
-    public function assembleEmbeded($sBlockName)
+    public function assembleEmbeded(string $blockName): array
     {
-        $aData = array();
+        $data = [];
         foreach ($this->getOrder('embeded') as $key) {
-            if (isset($this->aSource[$key][$sBlockName])) {
-                $aData = $this->_mergeMeta($aData, $this->aSource[$key][$sBlockName], null);
+            if (isset($this->source[$key][$blockName])) {
+                $data = $this->_mergeMeta($data, $this->source[$key][$blockName], null);
             }
         }
-        return $aData;
-    } // function assembleEmbeded
+        return $data;
+    }
 
-    /**
-     * Get all meta-data for embedded blocks
-     * @return array
-     */
-    public function getMixSrcMeta()
+    public function getMixSrcMeta(): array
     {
-        $aFolder    = array('common' => $this->getSource(array('folder', 'common')));
-        $aParent    = $this->getSource('parent');
-        unset($aParent['own']);
-        $aBlock     = $this->getSource('block');
-        unset($aBlock['own']);
-        $aContainer = array('common' => $this->getSource(array('container', 'common')));
-        return array_merge_recursive_alt($aFolder, $aParent, $aBlock, $aContainer);
-    } // function getMixSrcMeta
+        $folder    = ['common' => $this->getSource(['folder', 'common'])];
+        $parent    = $this->getSource('parent');
+        unset($parent['own']);
+        $block     = $this->getSource('block');
+        unset($block['own']);
+        $container = ['common' => $this->getSource(['container', 'common'])];
+        return array_merge_recursive_alt($folder, $parent, $block, $container);
+    }
 
-    /**
-     * Get Assemble Order of Meta Data
-     * @return array
-     */
-    public function getOrder($sKey)
+    public function getOrder(string $key): array
     {
-        if (isset($this->aOrder[$sKey])) {
-            return $this->aOrder[$sKey];
+        if (isset($this->order[$key])) {
+            return $this->order[$key];
         }
-        trigger_error('Get Undefined Order of Meta-data "' . $sKey . '" in block "' . $this->sBlockName . '", class "' . get_class_alt($this->oBlock) . '".', E_USER_NOTICE);
-        return array();
-    } // function getTabOrder
+        throw new \OutOfBoundsException('Get Undefined Order of Meta-data "' . $key . '" in block "' . $this->blockName . '", class "' . get_class_alt($this->block) . '".');
+    }
 
     /**
-     * Get Root element of Meta Data
-     * @param string|array $mKey
-     * @param mixed $mDefault
-     * @return \fan\core\base\meta\row
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    public function getMeta($mKey = null, $mDefault = null)
+    public function getMeta(string|array|null $key = null, mixed $default = null): mixed
     {
-        return is_null($mKey) ? $this->oRootRow : $this->oRootRow->get($mKey, $mDefault );
-    } // function getMeta
+        return is_null($key) ? $this->rootRow : $this->rootRow->get($key, $default );
+    }
 
     /**
-     * Set Meta Data of Current element
-     * @param string|array $mKey
-     * @param mixed $mValue
-     * @return \fan\core\base\meta\maker
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function setMeta($mKey, $mValue)
+    public function setMeta(string|array $key, mixed $value): static
     {
-        $this->oRootRow->set($mKey, $mValue);
+        $this->rootRow->set($key, $value);
         return $this;
-    } // function setMeta
+    }
 
-    /**
-     * Get Source of Meta Data
-     * @return array
-     */
-    public function getSource($mKey = null)
+    public function getSource(mixed $key = null): mixed
     {
-        return is_null($mKey) ? $this->aSource : array_get_element($this->aSource, $mKey, false);
-    } // function getSourceMeta
+        return is_null($key) ? $this->source : array_get_element($this->source, $key, false);
+    }
 
     // ============ Protected methods ============ \\
-    /**
-     * Define Meta of Block-file
-     * @param array $aPaths
-     */
-    protected function _defineBlockMeta($aPaths)
+    protected function _defineBlockMeta(array $paths): void
     {
-        $aMeta = array();
-        foreach ($aPaths as $k => $v) {
-            $aMeta[$k] = $this->_loadBlockSource($k, $v);
+        $meta = [];
+        foreach ($paths as $k => $v) {
+            $meta[$k] = $this->_loadBlockSource($k, $v);
         }
 
         // Set Block's Meta
-        $this->_setSource('block', array_shift($aMeta));
+        $this->_setSource('block', array_shift($meta));
 
         // Set Parent Meta
-        $aParentMeta = array('common' => array(), 'own' => array());
-        foreach (array_reverse($aMeta) as $v) {
-            $aParentMeta = $this->_mergeMeta($aParentMeta, $v, 'parent');
+        $parentMeta = ['common' => [], 'own' => []];
+        foreach (array_reverse($meta) as $v) {
+            $parentMeta = $this->_mergeMeta($parentMeta, $v, 'parent');
         }
-        $this->_setSource('parent', $aParentMeta);
-    } // function _defineBlockMeta
+        $this->_setSource('parent', $parentMeta);
+    }
 
-    /**
-     * Define Meta of Folder-file
-     * @param array $aPaths
-     */
-    protected function _defineFolderMeta($aPaths)
+    protected function _defineFolderMeta(array $paths): void
     {
-        $aPathParts  = pathinfo(array_shift($aPaths));
-        $sFolderPath = $aPathParts['dirname'] . '/_folder.meta.php';
-        if (file_exists($sFolderPath)) {
-            $this->_setSource('folder', include($sFolderPath));
+        $pathParts  = pathinfo(array_shift($paths));
+        $folderPath = $pathParts['dirname'] . '/_folder.meta.php';
+        if (file_exists($folderPath)) {
+            $this->_setSource('folder', $this->readMetaSource(
+                \fan\project\adapter\php_array_file::load($folderPath, []),
+                $folderPath
+            ));
         }
-    } // function _defineFolderMeta
+    }
 
-    /**
-     * Get Source Block Meta
-     * @param string $sClass
-     * @param string $sPath
-     * @return array
-     */
-    protected function _loadBlockSource($sClass, $sPath)
+    protected function _loadBlockSource(string $class, string $path): array
     {
-        if (!array_key_exists($sClass, self::$aMetaCache)) {
-            $sMetaPath = substr($sPath, 0, -3) . 'meta.php';
-            self::$aMetaCache[$sClass] = file_exists($sMetaPath) ? include($sMetaPath) : null;
+        if (!array_key_exists($class, self::$metaCache)) {
+            $metaPath = substr($path, 0, -3) . 'meta.php';
+            self::$metaCache[$class] = file_exists($metaPath) ?
+                $this->readMetaSource(\fan\project\adapter\php_array_file::load($metaPath), $metaPath) :
+                [];
         }
-        return self::$aMetaCache[$sClass];
-    } // function _loadBlockSource
+        return self::$metaCache[$class];
+    }
+
+    protected function readMetaSource(mixed $data, string $metaPath): array
+    {
+        if (is_array($data)) {
+            return $data;
+        }
+
+        throw new \UnexpectedValueException(
+            sprintf('Meta file "%s" must return an array, %s returned.', $metaPath, get_debug_type($data))
+        );
+    }
 
     /**
-     * Set source Meta-data
-     * @param string $sType
-     * @param array $aData
-     * @return \fan\core\base\meta\maker
      * @throws \fan\project\exception\block\fatal
      */
-    protected function _setSource($sType, $aData)
+    protected function _setSource(string $type, array $data): static
     {
-        if (!key_exists($sType, $this->aSource)) {
-            throw new \fan\project\exception\block\fatal($this->oBlock, 'Unknown type "' . $sType . '" of source Meta-data');
+        if (!key_exists($type, $this->source)) {
+            throw new \fan\project\exception\block\fatal($this->block, 'Unknown type "' . $type . '" of source Meta-data');
         }
-        $this->aSource[$sType] = $aData;
+        $this->source[$type] = $data;
         return $this;
-    } // function _setSource
+    }
 
-    /**
-     * Merge Meta-data
-     * @param array $aSrcData
-     * @param array $aAddData
-     * @param string $sType
-     * @return array
-     */
-    protected function _mergeMeta($aSrcData, $aAddData, $sType)
+    protected function _mergeMeta(mixed $srcData, mixed $addData, ?string $type): mixed
     {
-        if (!empty($aAddData) && is_array($aAddData)) {
-            foreach ($aAddData as $k => $v) {
-                $aSrcData[$k] = isset($aSrcData[$k]) && (is_array($aSrcData[$k]) || is_array($v)) ?
-                    $this->_mergeMeta($aSrcData[$k], $v, $sType) :
-                    $v; // ToDo: Take into account merging attributes for $sType
+        if (!empty($addData) && is_array($addData)) {
+            foreach ($addData as $k => $v) {
+                $srcData[$k] = isset($srcData[$k]) && (is_array($srcData[$k]) || is_array($v)) ?
+                    $this->_mergeMeta($srcData[$k], $v, $type) :
+                    $v; // ToDo: Take into account merging attributes for $type
             }
         }
-        return $aSrcData;
-    } // function _mergeMeta
+        return $srcData;
+    }
 
-    /**
-     * Make Active Meta-data (delayed or in praesenti)
-     * @param string $sMethod
-     * @param mixed $mArguments
-     * @param string|object $mObj
-     * @param boolean $bDelayed
-     * @return \fan\project\base\meta\delayed|mixed
-     */
-    protected function _makeActiveMeta($sMethod, $mArguments = array(), $mObj = null, $bDelayed = true)
+    protected function _makeActiveMeta(string $method, mixed $arguments = [], string|object|null $obj = null, bool $delayed = true): mixed
     {
-        if (is_null($mObj)) {
-            $mObj = $this->getBlock();
+        if (is_null($obj)) {
+            $obj = $this->getBlock();
         }
-        if (is_null($mArguments)) {
-            $mArguments = array();
-        } elseif (!is_array($mArguments)) {
-            $mArguments = adduceToArray($mArguments);
+        if (is_null($arguments)) {
+            $arguments = [];
+        } elseif (!is_array($arguments)) {
+            $arguments = adduceToArray($arguments);
         }
-        $mRet = $bDelayed ? new \fan\project\base\meta\delayed($mObj, $sMethod, $mArguments) : call_user_func_array(array($mObj, $sMethod), $mArguments);
-        return $mRet;
-    } // function _makeActiveMeta
+        $ret = $delayed ? new \fan\project\base\meta\delayed($obj, $method, $arguments) : call_user_func_array([$obj, $method], $arguments);
+        return $ret;
+    }
 
-} // class \fan\core\base\meta\maker
-?>
+}

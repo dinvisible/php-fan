@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\form;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\form;
 /**
  * Form-filter block abstract
  *
@@ -17,12 +21,8 @@
  */
 abstract class filter extends \fan\core\block\form\usual
 {
-    /**
-     * Init block
-     */
-    public function init ()
+    public function init (): void
     {
         $this->_parseForm();
-    } // function init
-} // class \fan\project\block\form\filter
-?>
+    }
+}

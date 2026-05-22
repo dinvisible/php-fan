@@ -1,4 +1,8 @@
-<?php namespace fan\core\exception;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\exception;
 /**
  * Exception an error 500
  *
@@ -16,21 +20,14 @@
  */
 class error500 extends base
 {
-    /**
-     * Exception's constructor
-     * @param string $sLogErrMsg Error message
-     * @param numeric $nCode Error Code
-     * @param \Exception $oPrevious Previous Exception
-     */
-    public function __construct($sLogErrMsg, $nCode = E_USER_ERROR, $oPrevious = null)
+    public function __construct(string $logErrMsg, int $code = E_USER_ERROR, ?\Throwable $previous = null)
     {
         if (!headers_sent()) {
             header('HTTP/1.1 500 Internal Server Error');
         }
 
-        parent::__construct($sLogErrMsg, $nCode, $oPrevious);
+        parent::__construct($logErrMsg, $code, $previous);
 
-        $this->_logByService($sLogErrMsg, 'Error 500');
+        $this->_logByService($logErrMsg, 'Error 500');
     }
-} // class \fan\core\exception\error500
-?>
+}

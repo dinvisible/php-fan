@@ -1,4 +1,8 @@
-<?php namespace fan\core\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service;
 /**
  * Description of error
  *
@@ -20,7 +24,7 @@ class error extends \fan\core\base\service\single
      * Types of system error
      * @var array
      */
-    protected $aSysErrorType = array (
+    protected array $sysErrorType = [
         E_ERROR           => 'Error',
         E_WARNING         => 'Warning',
         E_PARSE           => 'Parsing Error',
@@ -32,449 +36,419 @@ class error extends \fan\core\base\service\single
         E_USER_ERROR      => 'User Error',
         E_USER_WARNING    => 'User Warning',
         E_USER_NOTICE     => 'User Notice',
-        E_STRICT          => 'Runtime Notice',
-    );
+        2048              => 'Runtime Notice',
+    ];
 
     /**
      * Types of system error
      * @var array
      */
-    protected $aSysErrWithoutFile = array (
+    protected array $sysErrWithoutFile = [
         E_USER_ERROR,
         E_USER_WARNING,
         E_USER_NOTICE,
-    );
+    ];
 
     /**
      * Path of system error which ignored
      * @var array
      */
-    protected $aIgnorePath = array();
+    protected array $ignorePath = [];
 
     /**
      * Mask of system error which need parse
      * @var number
      */
-    protected $nSysMask;
+    protected int|float|null $sysMask = null;
+
+    /**
+     * Error service buckets keyed by log type.
+     *
+     * @var array<string, int>
+     */
+    protected array $sysErrMask = [];
 
     /**
      * Flag of system error
      * @var boolean
      */
-    protected $bIsSysError = false;
+    protected bool $isSysError = false;
     /**
      * Flag of buffering of system error
      * @var boolean
      */
-    protected $bBufSysError = false;
+    protected bool $isBufferingSysError = false;
     /**
      * Backup value of system error mask
      * @var number
      */
-    protected $nBufBakSysMask;
+    protected int|float|null $bufBakSysMask = null;
     /**
      * Bufering system errors
      * @var array
      */
-    protected $aBufSysError;
+    protected ?array $sysErrorBuffer = null;
 
     /**
      * Service log
      * @var \fan\project\service\log
      */
-    protected $oServLog = null;
+    protected ?object $servLog = null;
 
     /**
      * Service email
      * @var \fan\project\service\email
      */
-    protected $oServEmail = null;
+    protected ?object $servEmail = null;
 
     /**
      * Enable Parse DB-error
      * @var boolean
      */
-    private $bParseDBerror = true;
+    private bool $parseDBerror = true;
 
     /**
      * Enable Duplicate errors by email
      * @var boolean
      */
-    private $bDuplicateByEmail = false;
+    private bool $duplicateByEmail = false;
 
-    /**
-     * Service's constructor
-     * @param boolean $bAllowIni
-     */
-    protected function __construct($bAllowIni = true)
+    protected function __construct(bool $allowIni = true)
     {
-        parent::__construct($bAllowIni);
-        $oConfig = $this->oConfig;
+        parent::__construct($allowIni);
+        $config = $this->config;
 
         if (\bootstrap::isCli()) {
-            $this->bDuplicateByEmail = false;
-        } elseif (!empty($oConfig['DUPLICATE_BY_EMAIL'])) {
-            if (!is_array($oConfig['DUPLICATE_BY_EMAIL']) && !($oConfig['DUPLICATE_BY_EMAIL'] instanceof \fan\core\service\config\row)) {
-                $oConfig['DUPLICATE_BY_EMAIL'] = array($oConfig['DUPLICATE_BY_EMAIL']);
+            $this->duplicateByEmail = false;
+        } elseif (!empty($config['DUPLICATE_BY_EMAIL'])) {
+            if (!is_array($config['DUPLICATE_BY_EMAIL']) && !($config['DUPLICATE_BY_EMAIL'] instanceof \fan\core\service\config\row)) {
+                $config['DUPLICATE_BY_EMAIL'] = [$config['DUPLICATE_BY_EMAIL']];
             }
-            foreach ($oConfig['DUPLICATE_BY_EMAIL'] as $v) {
-                if (preg_match($v, $_SERVER['SERVER_NAME'])) {
-                    $this->bDuplicateByEmail = true;
+            foreach ($config['DUPLICATE_BY_EMAIL'] as $v) {
+                if (preg_match((string)$v, (string)($_SERVER['SERVER_NAME'] ?? ''))) {
+                    $this->duplicateByEmail = true;
                     break;
                 }
             }
         }
 
         if (defined('E_RECOVERABLE_ERROR')) {
-            $this->aSysErrorType[E_RECOVERABLE_ERROR] = 'Catchable fatal error';
+            $this->sysErrorType[E_RECOVERABLE_ERROR] = 'Catchable fatal error';
         }
 
-        $this->nSysMask = $oConfig->get('SYS_MASK', E_ALL);
+        $this->sysMask = $this->readErrorMask($config->get('SYS_MASK', E_ALL));
+        foreach ($config->get('SYS_ERR', []) as $type => $mask) {
+            $this->sysErrMask[(string)$type] = $this->readErrorMask($mask);
+        }
 
-        foreach ($oConfig->get('IGNORE_PATH', array()) as $v) {
+        foreach ($config->get('IGNORE_PATH', []) as $v) {
             if (isset($v['path']) && isset($v['mask'])) {
                 foreach ($v['path'] as $p) {
                     $this->addIgnorePath($v['mask'], $p);
                 }
             }
         }
-    } // function __construct
+    }
 
-    /**
-     * System error handler
-     * @param number $nErrNo Error number
-     * @param string $sErrMsg Error message
-     * @param string $sFileName file name
-     * @param number $nLineNum line number
-     * @param array $aErrContext An array that points to the active symbol table
-     */
-    public function handleError($nErrNo, $sErrMsg, $sFileName, $nLineNum, $aErrContext)
+    public function handleError(int|float $errNo, string $errMsg, mixed $fileName = null, int|float|null $lineNum = null, mixed $errContext = null): ?bool
     {
-        if (!error_reporting() || !($nErrNo & $this->nSysMask)) {
-            return;
+        if ($errNo === E_DEPRECATED || $errNo === E_USER_DEPRECATED) {
+            return true;
         }
+        if (!error_reporting() || !($errNo & $this->sysMask)) {
+            return null;
+        }
+        $errContext = is_array($errContext) ? $errContext : [];
+        $fileName = is_null($fileName) ? '' : (string)$fileName;
 
-        $sLogFileName = str_replace('\\', '/', $sFileName);
-        foreach ($this->aIgnorePath as $m => $v) {
-            if ($nErrNo & $m) {
+        $logFileName = str_replace('\\', '/', $fileName);
+        foreach ($this->ignorePath as $m => $v) {
+            if ($errNo & $m) {
                 foreach ($v as $p) {
-                    if (substr($sLogFileName, 0, strlen($p)) == $p){
-                        return;
+                    if (substr($logFileName, 0, strlen($p)) === $p){
+                        return null;
                     }
                 }
             }
         }
 
-        $sErrType = 'debug';
-        foreach ($this->oConfig['SYS_ERR'] as $k => $v) {
-            if ($nErrNo & $v) {
-                $sErrType = $k;
+        $errType = 'debug';
+        foreach ($this->sysErrMask as $k => $v) {
+            if ($errNo & $v) {
+                $errType = $k;
                 break;
             }
         }
 
         //if (function_exists('mb_convert_encoding')) {
-        //    $sErrMsg  = mb_convert_encoding($sErrMsg, 'UTF-8', 'CP1251');
+        //    $errMsg  = mb_convert_encoding($errMsg, 'UTF-8', 'CP1251');
         //}
-        $sMessage = in_array($nErrNo, $this->aSysErrWithoutFile) ? $sErrMsg : $sErrMsg . ' in ' . $sLogFileName . ' on line ' . $nLineNum;
-        $sHeader  = isset($this->aSysErrorType[$nErrNo]) ? $this->aSysErrorType[$nErrNo] : 'Unknown system error ' . $nErrNo;
+        $message = in_array($errNo, $this->sysErrWithoutFile) ? $errMsg : $errMsg . ' in ' . $logFileName . ' on line ' . $lineNum;
+        $header  = isset($this->sysErrorType[$errNo]) ? $this->sysErrorType[$errNo] : 'Unknown system error ' . $errNo;
 
-        if ($this->bIsSysError) {
-            \bootstrap::logError($sHeader . "\n" . $sMessage);
-            return;
+        if ($this->isSysError) {
+            \bootstrap::logError($header . "\n" . $message);
+            return null;
         }
-        $this->bIsSysError = true;
+        $this->isSysError = true;
 
-        if ($this->bBufSysError) {
-            $this->aBufSysError[] = array(
-                'sys_err_no'          => $nErrNo,
-                'sys_err_message'     => $sErrMsg,
-                'sys_err_file_name'   => $sLogFileName,
-                'sys_err_line_number' => $nLineNum,
-                'sys_err_context'     => $aErrContext,
-                'service_err_type'    => $sErrType,
-                'service_message'     => $sMessage,
-                'service_header'      => $sHeader
-            );
+        if ($this->isBufferingSysError) {
+            $this->sysErrorBuffer[] = [
+                'sys_err_no'          => $errNo,
+                'sys_err_message'     => $errMsg,
+                'sys_err_file_name'   => $logFileName,
+                'sys_err_line_number' => $lineNum,
+                'sys_err_context'     => $errContext,
+                'service_err_type'    => $errType,
+                'service_message'     => $message,
+                'service_header'      => $header
+            ];
         } else {
-            $aNote = array();
+            $note = [];
             $t1 = '<i style="color:#999999; font-size:9px;">';
             $t2 = '</i>';
-            foreach ($aErrContext as $v) {
+            foreach ($errContext as $v) {
                 if (is_null($v)) {
-                    $aNote[] = $t1 . 'NULL';
+                    $note[] = $t1 . 'NULL';
                 } elseif (is_bool($v)) {
-                    $aNote[] = $t1 . 'boolean' . $t2 . ' ' . ($v ? 'true' : 'false');
+                    $note[] = $t1 . 'boolean' . $t2 . ' ' . ($v ? 'true' : 'false');
                 } elseif (is_scalar($v)) {
-                    $aNote[] = $t1 . gettype($v) . $t2 . ' ' . (strlen($v) > 48 ? substr($v, 0, 48) . '...' : $v);
+                    $v = (string)$v;
+                    $note[] = $t1 . gettype($v) . $t2 . ' ' . (strlen($v) > 48 ? substr($v, 0, 48) . '...' : $v);
                 } elseif (is_array($v)) {
-                    $aNote[] = $t1 . 'array' . $t2  . '[' . count($v) . ']';
+                    $note[] = $t1 . 'array' . $t2  . '[' . count($v) . ']';
                 } elseif (is_object($v)) {
-                    $aNote[] = $t1 . 'object' . $t2 . '[' . get_class($v) . ']';
+                    $note[] = $t1 . 'object' . $t2 . '[' . get_class($v) . ']';
                 } else {
-                    $aNote[] = $t1 . 'var' . $t2    . '[' . gettype($v) . ']';
+                    $note[] = $t1 . 'var' . $t2    . '[' . gettype($v) . ']';
                 }
             }
-            $this->_logError($sErrType, $sMessage, $sHeader, implode(', ', $aNote), false, $sErrType != 'warn');
+            $this->_logError($errType, $message, $header, implode(', ', $note), false, $errType !== 'warn');
         }
-        $this->bIsSysError = false;
-    } // function handleError
+        $this->isSysError = false;
+        return null;
+    }
 
-    /**
-     * Set Buffering of Error
-     * @param type $nSysMask
-     * @return boolean
-     */
-    public function setErrorBuffering($nSysMask = null)
+    public function setErrorBuffering(mixed $sysMask = null): bool
     {
-        if (!$this->bBufSysError) {
-            $this->aBufSysError = array();
-            $this->bBufSysError = true;
-            $this->nBufBakSysMask = $this->nSysMask;
-            $this->nSysMask = is_null($nSysMask) ? E_ALL : $nSysMask;
+        if (!$this->isBufferingSysError) {
+            $this->sysErrorBuffer = [];
+            $this->isBufferingSysError = true;
+            $this->bufBakSysMask = $this->sysMask;
+            $this->sysMask = $this->readErrorMask(is_null($sysMask) ? E_ALL : $sysMask);
             return true;
         }
         return false;
-    } // function setErrorBuffering
+    }
 
-    /**
-     * Get Buffered Error data
-     * @return type
-     */
-    public function getErrorBuffering()
+    public function getErrorBuffering(): ?array
     {
-        return empty($this->aBufSysError) ? null : $this->aBufSysError;
-    } // function getErrorBuffr
+        return empty($this->sysErrorBuffer) ? null : $this->sysErrorBuffer;
+    }
 
-    /**
-     * Off Buffering of Error and return buffered data
-     * @return type
-     */
-    public function offErrorBuffering()
+    public function offErrorBuffering(): ?array
     {
-        $aResult = $this->getErrorBuffering();
-        $this->bBufSysError = false;
-        $this->nSysMask = $this->nBufBakSysMask;
-        return $aResult;
-    } // function offErrorBuffering
+        $result = $this->getErrorBuffering();
+        $this->isBufferingSysError = false;
+        $this->sysMask = $this->bufBakSysMask;
+        return $result;
+    }
 
-    /**
-     * Enter description here...
-     * @param unknown_type $nMask
-     * @param unknown_type $sPath
-     */
-    public function addIgnorePath($nMask, $sPath)
+    public function addIgnorePath(mixed $mask, mixed $path): void
     {
-        if (!empty($sPath)) {
-            $sPath = \bootstrap::parsePath($sPath);
-            if (@is_dir($sPath)) {
-                $sPath = str_replace('\\', '/', realpath($sPath));
-                if (!isset($this->aIgnorePath[$nMask]) || !in_array($sPath, $this->aIgnorePath[$nMask])) {
-                    $this->aIgnorePath[$nMask][] = $sPath;
+        $mask = $this->readErrorMask($mask);
+        if (!empty($path)) {
+            $path = \bootstrap::parsePath((string)$path);
+            if (is_dir($path)) {
+                $realPath = realpath($path);
+                $path = is_string($realPath) ? str_replace('\\', '/', $realPath) : null;
+                if (!is_null($path) && (!isset($this->ignorePath[$mask]) || !in_array($path, $this->ignorePath[$mask]))) {
+                    $this->ignorePath[$mask][] = $path;
                 }
             }
         }
-    } // function addIgnorePath
+    }
 
-    /**
-     * Set parse Data Base error as enabled/disabled
-     */
-    public function setParseDBerror($bValj)
+    protected function readErrorMask(mixed $mask): int
     {
-        $this->bParseDBerror = $bValj ? true : false;
-    } // function setParseDBerror
+        if (is_int($mask) || is_float($mask) || is_bool($mask)) {
+            return (int)$mask;
+        }
+        $mask = trim((string)$mask);
+        if (is_numeric($mask)) {
+            return (int)$mask;
+        }
 
-    /**
-     * Parse Data Base error
-     * @param string $sDBType Data Base Type
-     * @param string $sOperation Operation generate error
-     * @param number $nErrorNum Number of error
-     * @param string $sErrMsg Error message
-     * @param mixed $mMainParam Main parameters
-     * @param mixed $mAddParam Add parameters
-     * @param object $oObj link to current object
-     */
-    public function logDatabaseError($sConnectionName, $sOperation, $sErrorMessage, $nErrorNum, $sParsedSql)
+        throw new \UnexpectedValueException('Error mask must be numeric. Got "' . $mask . '".');
+    }
+
+    public function setParseDBerror(bool $valj): void
     {
-        if (!$this->bParseDBerror) {
+        $this->parseDBerror = $valj ? true : false;
+    }
+
+    public function logDatabaseError(mixed $connectionName, string $operation, mixed $errorMessage, int|float $errorNum, mixed $parsedSql): void
+    {
+        if (!$this->parseDBerror) {
             return;
         }
 
-        $sMessage = '<div style="color: #990000;">' . htmlentities(preg_replace('/\s*(\n*\r+|\r*\n+)+\s*/s', ' ', $sErrorMessage)) . '</div>';
-        $sHeader  = 'Data Base Error: ' . $sConnectionName . ' - ' . $sOperation . ', Error No ' . $nErrorNum;
-        $sNote    = $sParsedSql ? htmlentities($sParsedSql) : '';
+        $message = '<div style="color: #990000;">' . htmlentities((string)preg_replace('/\s*(\n*\r+|\r*\n+)+\s*/s', ' ', (string)$errorMessage)) . '</div>';
+        $header  = 'Data Base Error: ' . $connectionName . ' - ' . $operation . ', Error No ' . $errorNum;
+        $note    = $parsedSql ? htmlentities((string)$parsedSql) : '';
 
-        $this->_logError('sql', $sMessage, $sHeader, $sNote, true, true);
-    } // function logDatabaseError
+        $this->_logError('sql', $message, $header, $note, true, true);
+    }
 
-    /**
-     * Parse Soap error
-     * @param object $oSoapError link to Soap Error object
-     */
-    public function logSoapError($oSoapError)
+    public function logSoapError(object $soapError): string
     {
-        $sErrMsg = 'Error ' . $oSoapError->getCode() . ': ' . $oSoapError->getMessage();
-        $this->_logError('soap', $sErrMsg, 'Soap Error', '', true, true);
-        return $sErrMsg;
-    } // function logSoapError
+        $errMsg = 'Error ' . $soapError->getCode() . ': ' . $soapError->getMessage();
+        $this->_logError('soap', $errMsg, 'Soap Error', '', true, true);
+        return $errMsg;
+    }
 
 
-    /**
-     * Show errors of different types
-     * @param string $sType
-     * @param string $sMessage
-     * @param string $sHeader
-     * @param string $sNote
-     * @param boolean $bIsTrace
-     * @param boolean $bDuplicateByEmail
-     */
-    public function logErrorMessage($sMessage, $sHeader = '', $sNote = '', $bIsTrace = false, $bDuplicateByEmail = false)
+    public function logErrorMessage(string $message, string $header = '', string $note = '', bool $isTrace = false, bool $duplicateByEmail = false): void
     {
-        $this->_logError('custom', $sMessage, $sHeader ? $sHeader : 'Custom error', $sNote, $bIsTrace, $bDuplicateByEmail);
-    } // function logErrorMessage
+        $this->_logError('custom', $message, $header ? $header : 'Custom error', $note, $isTrace, $duplicateByEmail);
+    }
 
-    /**
-     * Show errors of exception
-     * @param string $sMessage
-     * @param string $sHeader
-     * @param string $sNote
-     */
-    public function logExceptionMessage($sMessage, $sHeader = '', $sNote = '')
+    public function logExceptionMessage(string $message, string $header = '', string $note = ''): void
     {
-        $this->_logError('exception', $sMessage, $sHeader ? $sHeader : 'Custom error', $sNote, true, true);
-    } // function logExceptionMessage
+        $this->_logError('exception', $message, $header ? $header : 'Custom error', $note, true, true);
+    }
 
-    /**
-     * Log error-message
-     * @param string $sType
-     * @param string $sMessage
-     * @param string $sHeader
-     * @param string $sNote
-     * @param boolean $bIsTrace
-     * @param boolean $bDuplicateByEmail
-     */
-    protected function _logError($sType, $sMessage, $sHeader, $sNote, $bIsTrace, $bDuplicateByEmail)
+    protected function _logError(string $type, string $message, string $header, string $note, bool $isTrace, bool $duplicateByEmail): void
     {
-        if (isset($_SERVER['REQUEST_METHOD']) && !in_array(strtoupper($_SERVER['REQUEST_METHOD']), array('GET', 'POST'))) {
-            if (!empty($sNote)) {
-                $sNote .= '<br />';
+        if (isset($_SERVER['REQUEST_METHOD']) && !in_array(strtoupper($_SERVER['REQUEST_METHOD']), ['GET', 'POST'])) {
+            if (!empty($note)) {
+                $note .= '<br />';
             }
-            $sNote .= '$_SERVER = ' . var_export($_SERVER, true);
+            $note .= '$_SERVER = ' . var_export($_SERVER, true);
         }
 
-        if (!$this->oServLog) {
-            $this->oServLog = \fan\project\service\log::instance();
+        if (!$this->servLog) {
+            $this->servLog = \fan\project\service\log::instance();
         }
-        $this->oServLog->logError($sType, $sMessage, $sHeader, $sNote, $bIsTrace);
+        $this->servLog->logError($type, $message, $header, $note, $isTrace);
 
-        if ($bDuplicateByEmail && $this->bDuplicateByEmail) {
-            $this->makeErrorEmail($sType, $sHeader, $sMessage);
+        if ($duplicateByEmail && $this->duplicateByEmail) {
+            $this->makeErrorEmail($type, $header, $message);
         }
-    } // function _logError
+    }
 
-    /**
-     * Send message about error by email
-     * @param string $sType
-     * @param string $sSubject
-     * @param string $sMessage
-     */
-    public function makeErrorEmail($sType, $sSubject, $sMessage)
+    public function makeErrorEmail(string $type, string $subject, string $message): void
     {
-        $oConfig = $this->oConfig;
-        if ($oConfig['MAIL_TO']) {
-            $sFile = $oConfig['MAIL_FILE'];
-            if (strstr($sSubject, 'fatal') === false && $sFile) {
-                $nCtime = time();
-                $sFile = \bootstrap::parsePath($sFile) . $sType . '.log.php';
-                $bFileExists = file_exists($sFile);
+        $config = $this->config;
+        if ($config['MAIL_TO']) {
+            $file = $config['MAIL_FILE'];
+            if (strstr($subject, 'fatal') === false && $file) {
+                $ctime = time();
+                $file = \bootstrap::parsePath((string)$file) . $type . '.log.php';
+                $fileExists = file_exists($file);
 
-                $aData = $bFileExists ? include($sFile) : array('start' => $nCtime);
-                $sKey = md5($sMessage);
-                if(isset($aData[$sKey])) {
-                    $aData[$sKey]['qtt']++;
+                $data = $fileExists ? \fan\project\adapter\php_array_file::load($file, ['start' => $ctime]) : ['start' => $ctime];
+                $key = md5($message);
+                if (isset($data[$key])) {
+                    $data[$key]['qtt']++;
                 } else {
-                    $aData[$sKey] = array(
-                        'subject' => $sSubject,
-                        'message' => $sMessage,
+                    $data[$key] = [
+                        'subject' => $subject,
+                        'message' => $message,
                         'qtt'     => 1,
-                    );
+                    ];
                 }
 
-                if ($bFileExists && ($aData['start'] + $oConfig['SENT_TIME_LIMIT'] < $nCtime)) {
-                    @unlink($sFile);
-                    $aData['start'] = date('d F Y H:i:s.', $aData['start']);
-                    $this->_sendErrorEmail('Packet email of ' . $sType, var_export($aData, true));
+                if ($fileExists && ($data['start'] + $config['SENT_TIME_LIMIT'] < $ctime)) {
+                    $this->removePacketFile($file);
+                    $data['start'] = date('d F Y H:i:s.', $data['start']);
+                    $this->_sendErrorEmail('Packet email of ' . $type, var_export($data, true));
                 } else {
-                    file_put_contents($sFile, '<?php' . "\nreturn " . var_export($aData, true) . ";\n" . '?>');
-                    if (!$bFileExists) {
-                        @chmod($sFile, 0666);
+                    file_put_contents($file, '<?php' . "\nreturn " . var_export($data, true) . ";\n" . '?>');
+                    if (!$fileExists) {
+                        $this->chmodPacketFile($file, 0666);
                     }
                 }
             } else {
-                $this->_sendErrorEmail($sSubject, $sMessage);
+                $this->_sendErrorEmail($subject, $message);
             }
         }
-    } // function makeErrorEmail
+    }
 
 
-    /**
-     * Check of packet files
-     */
-    public function sendPacketEmais()
+    public function sendPacketEmais(): void
     {
-        $oConfig = $this->oConfig;
-        if ($oConfig['MAIL_TO'] && $oConfig['MAIL_FILE']) {
+        $config = $this->config;
+        if ($config['MAIL_TO'] && $config['MAIL_FILE']) {
 
-            $nCtime = time();
+            $ctime = time();
 
-            $sPath = \bootstrap::parsePath($oConfig['MAIL_FILE']);
+            $path = \bootstrap::parsePath((string)$config['MAIL_FILE']);
 
-            $sDirName = dirname($sPath);
-            $sPrefix = basename($sPath);
-            $nLen = strlen($sPrefix);
+            $dirName = dirname($path);
+            $prefix = basename($path);
+            $len = strlen($prefix);
 
-            foreach (scandir($sDirName) as $v) {
-                $sFile = $sDirName . '/' . $v;
-                if (substr($v, 0, $nLen) == $sPrefix && file_exists($sFile)) {
-                    $aData = include($sFile);
-                    if ($aData['start'] + $oConfig['SENT_TIME_LIMIT'] < $nCtime) {
-                        @unlink($sFile);
-                        $aData['start'] = date('d F Y H:i:s.', $aData['start']);
-                        $this->_sendErrorEmail('Packet email of ' . substr($v, $nLen, -8), var_export($aData, true));
+            foreach (scandir($dirName) as $v) {
+                $file = $dirName . '/' . $v;
+                if (substr($v, 0, $len) === $prefix && file_exists($file)) {
+                    $data = \fan\project\adapter\php_array_file::load($file, []);
+                    if ($data['start'] + $config['SENT_TIME_LIMIT'] < $ctime) {
+                        $this->removePacketFile($file);
+                        $data['start'] = date('d F Y H:i:s.', $data['start']);
+                        $this->_sendErrorEmail('Packet email of ' . substr($v, $len, -8), var_export($data, true));
                     }
                 }
             }
         }
-    } // function sendPacketEmais
+    }
 
-    /**
-     * Send message about error by email
-     * @param string $sSubject
-     * @param string $sMessage
-     */
-    protected function _sendErrorEmail($sSubject, $sMessage)
+    private function removePacketFile(string $file): void
     {
-        $oConfig = $this->oConfig;
-        if (!$this->oServEmail) {
-            $this->oServEmail = \fan\project\service\email::instance('err_message');
+        if (!is_file($file)) {
+            return;
         }
-        $this->oServEmail->clearAllRecipients();
-        if (isset($oConfig['MAIL_CC'])) {
-            foreach ($oConfig['MAIL_CC'] as $v) {
-                $v = trim($v);
+        if (!is_writable($file)) {
+            error_log('Cannot remove error packet file "' . $file . '": file is not writable.');
+            return;
+        }
+        if (!unlink($file)) {
+            error_log('Cannot remove error packet file "' . $file . '".');
+        }
+    }
+
+    private function chmodPacketFile(string $file, int $mode): void
+    {
+        if (!file_exists($file)) {
+            return;
+        }
+        if (!chmod($file, $mode)) {
+            error_log('Cannot chmod error packet file "' . $file . '".');
+        }
+    }
+
+    protected function _sendErrorEmail(string $subject, string $message): void
+    {
+        $config = $this->config;
+        if (!$this->servEmail) {
+            $this->servEmail = $this->containerService('email', 'err_message');
+        }
+        $this->servEmail->clearAllRecipients();
+        if (isset($config['MAIL_CC'])) {
+            foreach ($config['MAIL_CC'] as $v) {
+                $v = trim((string)$v);
                 if ($v) {
                     if (strpos($v, '/') > 0) {
-                        list($sEmail, $sName) = explode('/', $v, 2);
+                        list($email, $name) = explode('/', $v, 2);
                     } else {
-                        $sEmail = $v;
-                        $sName  = '';
+                        $email = $v;
+                        $name  = '';
                     }
-                    $this->oServEmail->addCc($sEmail, $sName);
+                    $this->servEmail->addCc($email, $name);
                 }
             }
         }
-        $this->oServEmail->send($sSubject, $sMessage, $oConfig['MAIL_TO'], $oConfig['NAME_TO']);
-    } // function _sendErrorEmail
+        $this->servEmail->send($subject, $message, (string)$config['MAIL_TO'], (string)$config['NAME_TO']);
+    }
 
-} // class \fan\core\service\error
-?>
+}

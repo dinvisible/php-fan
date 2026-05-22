@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Meta data of request password block
  *
@@ -14,51 +17,50 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.005 (12.02.2015)
  */
-return array(
-    'own' => array(
+return [
+    'own' => [
 
         'carcass' => 'carcass/simple',
 
         'title'   => 'Enter password',
 
-        'externalCss' => array(
-            'style' => array('~/password.css'),
-        ),
+        'externalCss' => [
+            'style' => ['~/password.css'],
+        ],
 
         'passwd_as_hash' => 0,
 
-        'form' => array(
+        'form' => [
             'action_method'  => 'POST',
             'request_type'   => 'P',
             'redirect_uri'   => '~/index.html',
             'form_key_name'  => 'tools_password',
             'form_id'        => 'tools_password',
             'required_msg'   => 'FIELD_"{FIELD_LABEL}"_IS_REQUIRED',
-            'fields' => array(
-                'login' => array(
+            'fields' => [
+                'login' => [
                     'label'          => 'Login',
                     'input_type'     => 'text',
                     'is_required'    => true,
-                ),
+                ],
 
-                'password' => array(
+                'password' => [
                     'label'          => 'Password',
                     'input_type'     => 'password',
                     'is_required'    => true,
-                    'validate_rules' => array(
-                        array(
+                    'validate_rules' => [
+                        [
                             'rule_name' => 'checkPassword',
-                            'rule_data' => array (
+                            'rule_data' => [
                                 'login' => 'login',
-                            ),
+                            ],
                             'not_empty' => true,
                             'error_msg' => 'Incorrect login or password',
                             'not_js'    => true,
-                        ),
-                    ),
-                ),
-            ),
-        ), //form
-    ), //'own'
-);
-?>
+                        ],
+                    ],
+                ],
+            ],
+        ], //form
+    ], //'own'
+];

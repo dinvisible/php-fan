@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 /**
  * Description of JSON
  *
@@ -16,104 +19,80 @@
  */
 class json extends \fan\core\base\service\multi
 {
-    const DECODE_OPT_PHP_VERSION = '5.4.0';
+    public const DECODE_OPT_PHP_VERSION = '5.4.0';
     /**
      * Service's Instances
      * @var \fan\core\service\json[]
      */
-    private static $aInstances = array();
+    private static array $instances = [];
 
     /**
      * Error Code
      * @var integer
      */
-    protected $iErrorCode;
+    protected ?int $errorCode = null;
 
     /**
      * Use Base64
      * @var boolean
      */
-    protected $bUseBase64 = false;
+    protected bool $useBase64 = false;
 
-    /**
-     * Service's constructor
-     * @param boolean $bUseBase64
-     */
-    protected function __construct($bUseBase64)
+    protected function __construct(bool $useBase64)
     {
         parent::__construct(true);
-        $this->bUseBase64 = $bUseBase64;
-    } // function __construct
+        $this->useBase64 = (bool)$useBase64;
+    }
 
     // ======== Static methods ======== \\
-    /**
-     * Get instance of JSON
-     * @param boolean $bUseBase64
-     * @return \fan\core\service\json
-     */
-    public static function instance($bUseBase64 = false)
+    public static function instance(bool $useBase64 = false): self
     {
-        $nKey = empty($bUseBase64) ? 0 : 1;
-        if (!isset(self::$aInstances[$nKey])) {
-            self::$aInstances[$nKey] = new self((bool)$nKey);
+        $key = empty($useBase64) ? 0 : 1;
+        if (!isset(self::$instances[$key])) {
+            self::$instances[$key] = new self((bool)$key);
         }
-        return self::$aInstances[$nKey];
-    } // function instance
+        return self::$instances[$key];
+    }
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Decode JSON-string to object/array
-     * @param string $sJson
-     * @param boolean $bArray
-     * @param integer $iDepth
-     * @param integer $iOptions
-     * @return array|stdClass
-     */
-    public function decode($sJson, $bArray = true, $iDepth = null, $iOptions = null)
+    public function decode(string $json, bool $array = true, mixed $depth = null, mixed $options = null): mixed
     {
-        $this->iErrorCode = null;
-        if (is_null($iDepth)) {
-            $iDepth = $this->getConfig('DEPTH', 25);
+        $this->errorCode = null;
+        if (is_null($depth)) {
+            $depth = $this->getConfig('DEPTH', 25);
         }
-        if (is_null($iOptions)) {
-            $iOptions = $this->getConfig('DECODE_OPTIONS', 0);
+        if (is_null($options)) {
+            $options = $this->getConfig('DECODE_OPTIONS', 0);
         }
         if ($this->getConfig('ALLOW_INTERNAL', true)) {
-            $mResult = version_compare(PHP_VERSION, self::DECODE_OPT_PHP_VERSION) < 0 ?
-                    json_decode($sJson, $bArray, $iDepth) :
-                    json_decode($sJson, $bArray, $iDepth, $iOptions);
-            $this->iErrorCode = json_last_error();
-            if ($this->bUseBase64 && is_array($mResult)) {
-                array_walk_recursive($mResult, array($this, '_code64'), 'decode');
+            $result = version_compare(PHP_VERSION, self::DECODE_OPT_PHP_VERSION) < 0 ?
+                    json_decode($json, $array, (int)$depth) :
+                    json_decode($json, $array, (int)$depth, (int)$options);
+            $this->errorCode = json_last_error();
+            if ($this->useBase64 && is_array($result)) {
+                array_walk_recursive($result, [$this, '_code64'], 'decode');
             }
-            return $mResult;
+            return $result;
         }
         // ToDo: make special procedures for JSON-decode
-        trigger_error('JSON-decode is supported by internal functions yet.', E_USER_WARNING);
-        return $bArray ? array() : new \stdClass();
-    } // function decode
+        throw new \LogicException('JSON-decode is supported by internal functions yet.');
+    }
 
-    /**
-     * Encode object/array to JSON-string
-     * @param mixed $mSourse
-     * @param integer $iOptions
-     * @return string
-     */
-    public function encode($mSourse, $iOptions = null, $bLogError = true)
+    public function encode(mixed $sourse, mixed $options = null, mixed $logError = true): string|false
     {
-        $this->iErrorCode = JSON_ERROR_NONE;
-        if (is_null($iOptions)) {
-            $iOptions = $this->getConfig('ENCODE_OPTIONS', 0);
+        $this->errorCode = JSON_ERROR_NONE;
+        if (is_null($options)) {
+            $options = $this->getConfig('ENCODE_OPTIONS', 0);
         }
         if ($this->getConfig('ALLOW_INTERNAL', true)) {
-            if ($this->bUseBase64 && is_array($mSourse)) {
-                array_walk_recursive($mSourse, array($this, '_code64'), 'encode');
+            if ($this->useBase64 && is_array($sourse)) {
+                array_walk_recursive($sourse, [$this, '_code64'], 'encode');
                 // ToDo: This method doesn't work with object
             }
-            $sResult = @json_encode($mSourse, $iOptions);
-            $this->iErrorCode = json_last_error();
-            if ($this->iErrorCode != JSON_ERROR_NONE && $bLogError) {
-                service('error')->logErrorMessage(
+            $result = json_encode($sourse, (int)$options);
+            $this->errorCode = json_last_error();
+            if ((int)$this->errorCode !== JSON_ERROR_NONE && $logError) {
+                $this->containerService('error')->logErrorMessage(
                         $this->getErrorText(),
                         'JSON error',
                         '',
@@ -121,55 +100,33 @@ class json extends \fan\core\base\service\multi
                         false
                 );
             }
-            return $sResult;
+            return $result;
         }
         // ToDo: make special procedures for JSON-encode
-        trigger_error('JSON-encode is supported by internal functions yet.', E_USER_WARNING);
-        return '';
-    } // function encode
+        throw new \LogicException('JSON-encode is supported by internal functions yet.');
+    }
 
-    /**
-     * Encode XML-file to JSON-string
-     * @param type $sXml
-     * @param type $bIgnoreXmlAttributes
-     */
-    public function fromXml($sXml, $bIgnoreXmlAttributes = true)
+    public function fromXml(mixed $xml, bool $ignoreXmlAttributes = true): void
     {
         // ToDo: make procedures for encode XML to JSON
-    } // function fromXml
+    }
 
-    /**
-     * Encode YAML-file to JSON-string
-     * @param type $sYaml
-     */
-    public function fromYaml($sYaml)
+    public function fromYaml(mixed $yaml): void
     {
         // ToDo: make procedures for encode YAML to JSON
-    } // function fromYaml
+    }
 
-    /**
-     * Is Error
-     * @return boolean
-     */
-    public function isError()
+    public function isError(): bool
     {
-        return $this->iErrorCode != JSON_ERROR_NONE;
-    } // function isError.
+        return (int)$this->errorCode !== JSON_ERROR_NONE;
+    }
 
-    /**
-     * Get Error-code
-     * @return integer
-     */
-    public function getError()
+    public function getError(): ?int
     {
-        return $this->iErrorCode;
-    } // function getError
+        return $this->errorCode;
+    }
 
-    /**
-     * Get Error-text
-     * @return integer
-     */
-    public function getErrorText()
+    public function getErrorText(): string
     {
         switch ($this->getError()) {
         case JSON_ERROR_DEPTH:
@@ -184,56 +141,45 @@ class json extends \fan\core\base\service\multi
             return 'Malformed UTF-8 characters, possibly incorrectly encoded';
         }
         return 'No error has occurred';
-    } // function getErrorText
+    }
 
-    /**
-     * Make string for Pretty Print JSON
-     * @param type $sJson
-     * @param type $sIndent
-     * @return string
-     */
-    public function prettyPrint($sJson, $sIndent = "\t")
+    public function prettyPrint(string $json, string $indent = "\t"): string
     {
-        $aTokens  = preg_split('/([\{\}\]\[,])/', $sJson, -1, PREG_SPLIT_DELIM_CAPTURE);
-        $sResult  = '';
-        $nIndSize = 0;
+        $json = (string)$json;
+        $indent = (string)$indent;
+        $tokens  = preg_split('/([\{\}\]\[,])/', $json, -1, PREG_SPLIT_DELIM_CAPTURE);
+        $result  = '';
+        $indSize = 0;
 
-        foreach($aTokens as $v) {
-            if ($v == '') {
+        foreach ($tokens as $v) {
+            if ($v === '') {
                 continue;
             }
-            $sPrefix = str_repeat($sIndent, $nIndSize);
-            if ($v == '{' || $v == '[') {
-                $nIndSize++;
-                if($sResult != '' && $sResult[strlen($sResult) - 1] == "\n") {
-                    $sResult .= $sPrefix;
+            $prefix = str_repeat($indent, $indSize);
+            if ($v === '{' || $v === '[') {
+                $indSize++;
+                if ($result !== '' && $result[strlen($result) - 1] === "\n") {
+                    $result .= $prefix;
                 }
-                $sResult .= $v . "\n";
-            } else if($v == '}' || $v == ']') {
-                $nIndSize--;
-                $sPrefix = str_repeat($sIndent, $nIndSize);
-                $sResult .= "\n" . $sPrefix . $v;
-            } else if($v == ',') {
-                $sResult .= $v . "\n";
+                $result .= $v . "\n";
+            } else if ($v === '}' || $v === ']') {
+                $indSize--;
+                $prefix = str_repeat($indent, $indSize);
+                $result .= "\n" . $prefix . $v;
+            } else if ($v === ',') {
+                $result .= $v . "\n";
             } else {
-                $sResult .= $sPrefix . $v;
+                $result .= $prefix . $v;
             }
         }
-        return $sResult;
-   } // function prettyPrint
+        return $result;
+   }
 
     // ======== Private/Protected methods ======== \\
-   /**
-    * Code/decode by "base64" elements of array
-    * @param mixed $v
-    * @param mixed $k
-    * @param string $sOp
-    */
-    protected function _code64(&$v, $k, $sOp)
+    protected function _code64(mixed &$v, mixed $k, string $op): void
     {
         if (is_scalar($v)) {
-            $v = $sOp == 'encode' ? base64_encode($v) : base64_decode($v);
+            $v = $op === 'encode' ? base64_encode((string)$v) : base64_decode((string)$v);
         }
-    } // function _code64
-} // class \fan\core\service\json
-?>
+    }
+}

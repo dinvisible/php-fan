@@ -1,4 +1,8 @@
-<?php namespace fan\app\frontend\common;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\frontend\common;
 /**
  * Viewer root block
  *
@@ -16,5 +20,4 @@
  */
 class root extends \fan\project\block\root\html5
 {
-} // class \fan\app\frontend\common\root
-?>
+}

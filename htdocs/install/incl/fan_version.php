@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Show fan-version
  *
@@ -19,37 +22,32 @@ class fan_version extends base
     // ======== Static methods ======== \\
 
     // ======== Main Interface methods ======== \\
-    public function runCheck()
+    public function runCheck(): bool
     {
         return $this->_showFanVersion();
-    } // function runCheck
+    }
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Show FAN version
-     * @return boolean
-     */
-    protected function _showFanVersion()
+    protected function _showFanVersion(): bool
     {
-        $sFanVer  = 'Unknown';
-        $sServApp = FAN_CORE_DIR . '/service/application.php';
-        $aMatches = null;
-        if (file_exists($sServApp)) {
-            $sApp = file_get_contents($sServApp);
-            if (preg_match('/^\s*return\s*\'([^\']+)\'\;\s*$/m', $sApp, $aMatches)) {
-                $sFanVer = $aMatches[1];
+        $fanVer  = 'Unknown';
+        $servApp = FAN_CORE_DIR . '/service/application.php';
+        $matches = null;
+        if (file_exists($servApp)) {
+            $app = file_get_contents($servApp);
+            if (preg_match('/^\s*return\s*\'([^\']+)\'\;\s*$/m', $app, $matches)) {
+                $fanVer = $matches[1];
             }
         }
-        $this->aView['sFanVer'] = $sFanVer;
+        $this->view['fanVer'] = $fanVer;
 
-        if (preg_match('/^(\/.*?)install\//', $_SERVER['REQUEST_URI'], $aMatches)) {
-            $this->aView['sLogViewer'] = $_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['HTTP_HOST'] . $aMatches[1] . '__log_viewer/';
+        if (preg_match('/^(\/.*?)install\//', $_SERVER['REQUEST_URI'], $matches)) {
+            $this->view['logViewer'] = $_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['HTTP_HOST'] . $matches[1] . '__log_viewer/';
         }
 
         $this->_parseTemplate('fan_version');
         return true;
-    } // function _showFanVersion
+    }
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
-} // class check_configuration
-?>
+}

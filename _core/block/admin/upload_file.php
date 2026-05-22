@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\admin;
 /**
  * Admin upload file class for loader block
  *
@@ -17,171 +21,147 @@
 class upload_file extends base
 {
 
-    /**
-     * @var array File param array
-     */
-    protected $aFile = array();
+    protected ?array $file = [];
 
-    /**
-     * @var string Error message
-     */
-    protected $sError = '';
+    protected string $error = '';
 
-    /**
-     * Block constructor
-     * @param string $sBlockName Block Name
-     * @param \core\service\tab $oTab
-     */
-    public function finishConstruct($oContainer, $aContainerMeta, $bAllowSetEmbedded = true)
+    public function finishConstruct(?\fan\core\block\base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
     {
-        parent::finishConstruct($oContainer, $aContainerMeta, $bAllowSetEmbedded);
+        parent::finishConstruct($container, $containerMeta, $allowSetEmbedded);
 
-        $this->aFile = service('request')->get('file', 'F');
-        if ($this->aFile['error'] == UPLOAD_ERR_NO_FILE) {
-            $this->aFile = null;
-        } elseif ($this->aFile['error'] == UPLOAD_ERR_PARTIAL) {
-            $this->aFile = null;
-            $this->sError = 'File was broken!';
-        } elseif ($this->aFile['error'] == UPLOAD_ERR_INI_SIZE || $this->aFile['error'] == UPLOAD_ERR_FORM_SIZE) {
-            $this->aFile = null;
-            $this->sError = 'Incorrect file size (there is limit ' . ini_get('upload_max_filesize') . ')!';
-        } elseif (!$this->aFile['tmp_name'] || $this->aFile['error']) {
-            $this->aFile = null;
+        $this->file = $this->containerService('request')->get('file', 'F');
+        if (!is_array($this->file)) {
+            $this->file = null;
+            return;
         }
-    } // function __construct
+        $uploadError = (int)$this->file['error'];
+        if ($uploadError === UPLOAD_ERR_NO_FILE) {
+            $this->file = null;
+        } elseif ($uploadError === UPLOAD_ERR_PARTIAL) {
+            $this->file = null;
+            $this->error = 'File was broken!';
+        } elseif ($uploadError === UPLOAD_ERR_INI_SIZE || $uploadError === UPLOAD_ERR_FORM_SIZE) {
+            $this->file = null;
+            $this->error = 'Incorrect file size (there is limit ' . ini_get('upload_max_filesize') . ')!';
+        } elseif (!$this->file['tmp_name'] || $this->file['error']) {
+            $this->file = null;
+        }
+    }
 
-    /**
-     * Init output block data
-     */
-    public function init()
+    public function init(): void
     {
-        service('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
+        $this->containerService('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
 
-        if($this->sError) {
-            $this->setText($this->sError);
+        if ($this->error) {
+            $this->setText($this->error);
             return;
         }
 
-        $aData = $this->getData();
-        $aMain = $this->getMeta('main_table');
-        if(!isset($aMain['file_id'])) {
-            $aMain['file_id'] = 'id_file_data';
+        $data = $this->getData();
+        $main = $this->getMeta('main_table');
+        if (!isset($main['file_id'])) {
+            $main['file_id'] = 'id_file_data';
         }
-        $aLink = $this->getMeta('link_table');
+        $link = $this->getMeta('link_table');
 
-        if (!$this->checkMainTableId($oMainRow, $aData, $aMain, $aLink)) {
+        if (!$this->checkMainTableId($mainRow, $data, $main, $link)) {
             $this->setText('Incorrect main table ID');
             return;
         }
 
-        if ($aLink) {
-            if (!$this->checkLinkTableId($oLinkRow, $aData, $aMain, $aLink)) {
+        if ($link) {
+            if (!$this->checkLinkTableId($linkRow, $data, $main, $link)) {
                 $this->setText('Incorrect link table ID');
                 return;
             }
         }
 
-        $oFile = gr(service('entity')->getFileNsSuffix() . 'file_data', @$aData['fileId']);
-        if ($aData['op'] == 'dl' && @$aData['fileId']) {
-            if ($oFile->checkIsLoad()) {
-                if ($aLink) {
-                    $oLinkRow->delete();
-                    $oLinkRow->getEntity()->getConnection()->commit();
+        $file = gr((string)$this->containerService('entity')->getFileNsSuffix() . 'file_data', $data['fileId'] ?? null);
+        if ((string)$data['op'] === 'dl' && !empty($data['fileId'])) {
+            if ($file->checkIsLoad()) {
+                if ($link) {
+                    $linkRow->delete();
+                    $linkRow->getEntity()->getConnection()->commit();
                 } else {
-                    $oMainRow->setFields(array($aMain['file_id'] => null), true);
-                    $oMainRow->getEntity()->getConnection()->commit();
+                    $mainRow->setFields([$main['file_id'] => null], true);
+                    $mainRow->getEntity()->getConnection()->commit();
                 }
-                $oFile->delete('file_data', $aData['fileId']);
+                $file->delete('file_data', $data['fileId']);
             }
-        } elseif ($aData['op'] == 'ul' && $this->aFile) {
-            $oFile->setFormFile('file', array(), 'other', service('request')->get('description', 'P', ''));
-            $oFile->setAccessType($this->getMeta('access_type', null));
-            if ($oFile->checkIsLoad() && !@$aData['fileId']) {
-                $oFile->getEntity()->getConnection()->commit();
-                if ($aLink) {
-                    $oLinkRow->setFields(array($aLink['main_id'] => $aData['mId'], $aLink['file_id'] => $oFile->getId()), true);
+        } elseif ((string)$data['op'] === 'ul' && $this->file) {
+            $file->setFormFile('file', [], 'other', (string)$this->containerService('request')->get('description', 'P', ''));
+            $accessType = $this->getMeta('access_type', null);
+            if (!is_null($accessType)) {
+                $file->setAccessType((string)$accessType);
+            }
+            if ($file->checkIsLoad() && empty($data['fileId'])) {
+                $file->getEntity()->getConnection()->commit();
+                if ($link) {
+                    $linkRow->setFields([$link['main_id'] => $data['id'], $link['file_id'] => $file->getId()], true);
                 } else {
-                    $oMainRow->setFields(array($aMain['file_id'] => $oFile->getId()), true);
+                    $mainRow->setFields([$main['file_id'] => $file->getId()], true);
                 }
             }
         }
 
-        $aJsonData = @$aData['line'] ? $this->getFileLineData($aData, $aLink) : $this->getFileOneData($oMainRow, $aMain, $aLink);
-        if (!$oFile->checkIsLoad() && $aJsonData['id']) {
-            $oFile->loadById($aJsonData['id']);
+        $jsonData = !empty($data['line']) ? $this->getFileLineData($data, $link) : $this->getFileOneData($mainRow, $main, $link);
+        if (!$file->checkIsLoad() && $jsonData['id']) {
+            $file->loadById($jsonData['id']);
         }
-        $aJsonData['filename'] = $oFile->checkIsLoad() ? $oFile->get_src_name() : '';
-        $this->setJson(array('data' => $aJsonData));
+        $jsonData['filename'] = $file->checkIsLoad() ? $file->get_src_name() : '';
+        $this->setJson(['data' => $jsonData]);
 
         $this->setText('ok');
     }
 
-    /**
-     * Check Main Table Id
-     */
-    public function checkMainTableId(&$oMainRow, &$aData, $aMain, $aLink)
+    public function checkMainTableId(mixed &$mainRow, array &$data, array $main, mixed $link): bool
     {
-        $oMainRow = gr($aMain['table_name'], @$aData['mId']);
-        if (@$aData['fileId'] && !$aLink) {
-            $sMethod = 'get_' . $aMain['file_id'];
-            return $oMainRow->$sMethod(null, true) == $aData['fileId'];
+        $mainRow = gr((string)$main['table_name'], $data['id'] ?? null);
+        if (!empty($data['fileId']) && !$link) {
+            $method = 'get_' . $main['file_id'];
+            return (string)$mainRow->$method(null, true) === (string)$data['fileId'];
         }
-        return $oMainRow->checkIsLoad();
-    } // function checkMainTableId
+        return $mainRow->checkIsLoad();
+    }
 
-    /**
-     * Check Link Table Id
-     */
-    public function checkLinkTableId(&$oLinkRow, &$aData, $aMain, $aLink)
+    public function checkLinkTableId(mixed &$linkRow, array &$data, array $main, array $link): bool
     {
-        if (!@$aData['fileId']) {
-            $oLinkRow = gr($aLink['table_name']);
+        if (empty($data['fileId'])) {
+            $linkRow = gr((string)$link['table_name']);
             return true;
         } else {
-            $oLinkRow = gr($aLink['table_name'], array($aLink['main_id'] => $aData['mId'], $aLink['file_id'] => $aData['fileId']));
-            return $oLinkRow->checkIsLoad();
+            $linkRow = gr((string)$link['table_name'], [$link['main_id'] => $data['id'], $link['file_id'] => $data['fileId']]);
+            return $linkRow->checkIsLoad();
         }
-    } // function checkMainTableId
+    }
 
-    /**
-     * Get File Line Data
-     */
-    public function getFileLineData($aData, $aLink)
+    public function getFileLineData(array $data, array $link): array
     {
-        $aRet = array();
-        $aLstId = ge($aLink['table_name'])->getRowsetByParam(array($aLink['main_id'] => $aData['mId']))->getColumn($aLink['file_id']);
-        foreach ($aLstId as $v) {
-            $aRet[] = $this->getFileData($v);
+        $ret = [];
+        $lstId = ge((string)$link['table_name'])->getRowsetByParam([$link['main_id'] => $data['id']])->getColumn($link['file_id']);
+        foreach ($lstId as $v) {
+            $ret[] = $this->getFileData($v);
         }
-        return $aRet;
-    } // function getFileLineData
+        return $ret;
+    }
 
-    /**
-     * Get File Data
-     */
-    public function getFileOneData($oMainRow, $aMain, $aLink)
+    public function getFileOneData(\fan\core\base\model\row $mainRow, array $main, mixed $link): ?array
     {
-        if ($aLink) {
-            $aLstId = ge($aLink['table_name'])->getRowsetByParam($aLink['main_id'])->getColumn($aLink['file_id']);
-            return $this->getFileData(@$aLstId[0]);
+        if ($link) {
+            $lstId = ge((string)$link['table_name'])->getRowsetByParam($link['main_id'])->getColumn($link['file_id']);
+            return $this->getFileData($lstId[0] ?? null);
         } else {
-            $sMethod = 'get_' . $aMain['file_id'];
-            return $this->getFileData($oMainRow->$sMethod());
+            $method = 'get_' . $main['file_id'];
+            return $this->getFileData($mainRow->$method());
         }
-    } // function getFileLineData
+    }
 
-    /**
-     * Get File Data
-     * @param mixed $mFileId
-     * @return array
-     */
-    public function getFileData($mFileId)
+    public function getFileData(mixed $fileId): ?array
     {
-        if (!$mFileId) {
+        if (!$fileId) {
             return null;
         }
         // To Do: Get full info about file
-        return array('id' => $mFileId);
-    } // function getFileData
-} // class \fan\core\block\admin\upload_file
-?>
+        return ['id' => $fileId];
+    }
+}

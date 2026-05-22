@@ -1,4 +1,8 @@
-<?php namespace fan\core\cli;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\cli;
 /**
  * Restore password CLI-tool
  *
@@ -16,69 +20,82 @@
  */
 class restore_password
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * Service config
      * @var \fan\core\service\config
      */
-    protected $oConf = null;
+    protected ?object $conf = null;
 
-    /**
-     * Init method
-     */
-    public function init()
+    public function init(): void
     {
-        $this->oConf = service('config');
-        $sErrDir = \bootstrap::parsePath($this->oConf->get('log', array('LOG_DIR', 'error')));
-        $aTmp    = filter_var(scandir($sErrDir), FILTER_VALIDATE_REGEXP, array(
+        $this->conf = $this->containerService('config');
+        $errDir = \bootstrap::parsePath((string)$this->conf->get('log', ['LOG_DIR', 'error']));
+        $tmp    = filter_var(scandir($errDir) ?: [], FILTER_VALIDATE_REGEXP, [
             'flags'   => FILTER_FORCE_ARRAY,
-            'options' => array('regexp' => '/.+\.log$/i')
-        ));
-        $aFiles = array_diff($aTmp, array(false));
-        rsort($aFiles);
-        foreach ($aFiles as $v) {
-            $aContent = file($sErrDir . '/' . $v);
-            for ($i = count($aContent) - 1; $i >= 0; $i--) {
-                $aData = explode("\t", $aContent[$i]);
-                if ($aData[1] == 'custom' && $this->parceData($aData[2])) {
+            'options' => ['regexp' => '/.+\.log$/i']
+        ]);
+        $files = is_array($tmp) ? array_diff($tmp, [false]) : [];
+        rsort($files);
+        foreach ($files as $v) {
+            $content = file($errDir . '/' . $v);
+            if ($content === false) {
+                continue;
+            }
+            for ($i = count($content) - 1; $i >= 0; $i--) {
+                $data = explode("\t", $content[$i]);
+                if (($data[1] ?? null) === 'custom' && $this->parceData((string)($data[2] ?? ''))) {
                     break 2;
                 }
             }
         }
-    }  // function init
+    }
 
-    /**
-     * Parce Row Data or log-file
-     * @param string $sSrc
-     * @return boolean
-     */
-    public function parceData($sSrc)
+    public function parceData(string $src): bool
     {
-        $sSrc = trim(str_replace('\n', "\n", $sSrc));
-        $aInf = @unserialize($sSrc);
-        if (isset($aInf['header']) && trim($aInf['header']) == 'Error authentication') {
-            $aMatches = array();
-            if (preg_match('/^[^\"]+\"([^\"]+)\"/', $aInf['main_msg'], $aMatches)) {
-                $mIdentifier = $aMatches[1];
+        $src = trim(str_replace('\n', "\n", $src));
+        $inf = $this->unserializeLogRow($src);
+        if (is_array($inf) && isset($inf['header']) && trim((string)$inf['header']) === 'Error authentication') {
+            $hashe = null;
+            $identifier = null;
+            $ns = null;
+            $matches = [];
+            if (preg_match('/^[^\"]+\"([^\"]+)\"/', (string)($inf['main_msg'] ?? ''), $matches)) {
+                $identifier = $matches[1];
             }
-            if (preg_match('/^.+?\:\s*(\S+).+?\:\s*(\S+)/s', $aInf['note'], $aMatches)) {
-                $sHashe = $aMatches[1];
-                $sNS    = $aMatches[2];
+            if (preg_match('/^.+?\:\s*(\S+).+?\:\s*(\S+)/s', (string)($inf['note'] ?? ''), $matches)) {
+                $hashe = $matches[1];
+                $ns    = $matches[2];
+            }
+            if ($hashe === null || $identifier === null || $ns === null) {
+                return false;
             }
 
-            $oUserSpace = $this->oConf->get('user', array('space', $sNS));
-            if ($oUserSpace['ENGINE'] == 'entity') {
-                echo 'In DB-table of entity "' . $oUserSpace['ENGINE_KEY'] .
-                        '" for "' .$mIdentifier . '" set password=' . $sHashe . "\n\n";
-            } elseif ($oUserSpace['ENGINE'] == 'config') {
-                echo 'In the file "' . $oUserSpace['ENGINE_SOURCE'] . '.ini", section "' .
-                        $oUserSpace['ENGINE_KEY'] . '" for "' .$mIdentifier .
-                        '" set password=' . $sHashe . "\n\n";
+            $userSpace = $this->conf->get('user', ['space', $ns]);
+            if ((string)$userSpace['ENGINE'] === 'entity') {
+                echo 'In DB-table of entity "' . $userSpace['ENGINE_KEY'] .
+                        '" for "' .$identifier . '" set password=' . $hashe . "\n\n";
+            } elseif ((string)$userSpace['ENGINE'] === 'config') {
+                echo 'In the file "' . $userSpace['ENGINE_SOURCE'] . '.ini", section "' .
+                        $userSpace['ENGINE_KEY'] . '" for "' .$identifier .
+                        '" set password=' . $hashe . "\n\n";
             } else {
                 return false;
             }
             return true;
         }
         return false;
-    } // function parceData
-} // class \fan\project\cli\restore_password
-?>
+    }
+
+    private function unserializeLogRow(string $src): mixed
+    {
+        return \fan\core\adapter\safe_serializer::decodeExternalPayload(
+            $src,
+            false,
+            static function (string $message): void {
+                error_log('Cannot unserialize restore_password log row: ' . $message);
+            }
+        );
+    }
+}

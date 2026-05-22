@@ -1,4 +1,8 @@
-<?php namespace fan\core\base\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\base\service;
 /**
  * Base abstract service
  *
@@ -17,57 +21,42 @@
  */
 abstract class single extends \fan\core\base\service
 {
-    /**
-     * @var array service's Instances
-     */
-    private static $aInstances;
+    private static ?array $instances = null;
 
     // ======== Static methods ======== \\
 
-    /**
-     * Get service's instance by class name
-     * @return object Aservice Service's instance
-     */
-    public static function instance()
+    public static function instance(): static
     {
-        $sName = self::checkName(get_called_class());
-        if (!isset(self::$aInstances[$sName])) {
-            $oInstance = new $sName();
-            if (!isset(self::$aInstances[$sName])) {
-                self::$aInstances[$sName] = $oInstance;
+        $name = self::checkName(get_called_class());
+        if (!isset(self::$instances[$name])) {
+            $instance = new $name();
+            if (!isset(self::$instances[$name])) {
+                self::$instances[$name] = $instance;
             }
         }
-        return self::$aInstances[$sName];
-    } // function instance
+        return self::$instances[$name];
+    }
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Is singleton
-     * @return boolean
-     */
-    final public function isSingleton()
+    final public function isSingleton(): bool
     {
         return true;
-    } // function isSingleton
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Save service's Instance
-     */
-    protected function _saveInstance()
+    protected function _saveInstance(): static
     {
-        $sClassName = self::checkName(get_class($this));
-        if(isset(self::$aInstances[$sClassName])) {
-            throw new \fan\project\exception\service\fatal($this, 'Dublicate of service init "' . $sClassName . '"');
+        $className = self::checkName(get_class($this));
+        if (isset(self::$instances[$className])) {
+            throw new \fan\project\exception\service\fatal($this, 'Dublicate of service init "' . $className . '"');
         }
-        self::$aInstances[$sClassName] = $this;
+        self::$instances[$className] = $this;
         return $this;
-    } // function _saveInstance
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\base\service\single
-?>
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\admin;
 /**
  * Admin upload flash-file class for loader block
  *
@@ -17,171 +21,144 @@
 class upload_flash extends base
 {
 
-    /**
-     * @var array Flash param array
-     */
-    protected $aFlash = array();
+    protected ?array $flash = [];
 
-    /**
-     * @var string Error message
-     */
-    protected $sError = '';
+    protected string $error = '';
 
-    /**
-     * Block constructor
-     * @param string $sBlockName Block Name
-     * @param \core\service\tab $oTab
-     */
-    public function finishConstruct($oContainer, $aContainerMeta, $bAllowSetEmbedded = true)
+    public function finishConstruct(?\fan\core\block\base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
     {
-        parent::finishConstruct($oContainer, $aContainerMeta, $bAllowSetEmbedded);
+        parent::finishConstruct($container, $containerMeta, $allowSetEmbedded);
 
-        $this->aFlash = service('request')->get('flash', 'F');
-        if ($this->aFlash['error'] == UPLOAD_ERR_NO_FILE) {
-            $this->aFlash = null;
-        } elseif ($this->aFlash['error'] == UPLOAD_ERR_PARTIAL) {
-            $this->aFlash = null;
-            $this->sError = 'File was broken!';
-        } elseif ($this->aFlash['error'] == UPLOAD_ERR_INI_SIZE || $this->aFlash['error'] == UPLOAD_ERR_FORM_SIZE) {
-            $this->aFlash = null;
-            $this->sError = 'Incorrect file size (there is limit ' . ini_get('upload_max_filesize') . ')!';
-        } elseif (!$this->aFlash['tmp_name'] || $this->aFlash['error']) {
-            $this->aFlash = null;
+        $this->flash = $this->containerService('request')->get('flash', 'F');
+        if (!is_array($this->flash)) {
+            $this->flash = null;
+            return;
         }
-    } // function __construct
+        $uploadError = (int)$this->flash['error'];
+        if ($uploadError === UPLOAD_ERR_NO_FILE) {
+            $this->flash = null;
+        } elseif ($uploadError === UPLOAD_ERR_PARTIAL) {
+            $this->flash = null;
+            $this->error = 'File was broken!';
+        } elseif ($uploadError === UPLOAD_ERR_INI_SIZE || $uploadError === UPLOAD_ERR_FORM_SIZE) {
+            $this->flash = null;
+            $this->error = 'Incorrect file size (there is limit ' . ini_get('upload_max_filesize') . ')!';
+        } elseif (!$this->flash['tmp_name'] || $this->flash['error']) {
+            $this->flash = null;
+        }
+    }
 
-    /**
-     * Init output block data
-     */
-    public function init()
+    public function init(): void
     {
-        service('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
+        $this->containerService('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
 
-        if($this->sError) {
-            $this->setText($this->sError);
+        if ($this->error) {
+            $this->setText($this->error);
             return;
         }
 
-        $aData = $this->getData();
-        $aMain = $this->getMeta('main_table');
-        if(!isset($aMain['flash_id'])) {
-            $aMain['flash_id'] = 'id_file_data';
+        $data = $this->getData();
+        $main = $this->getMeta('main_table');
+        if (!isset($main['flash_id'])) {
+            $main['flash_id'] = 'id_file_data';
         }
-        $aLink = $this->getMeta('link_table');
+        $link = $this->getMeta('link_table');
 
-        if (!$this->checkMainTableId($oMainRow, $aData, $aMain, $aLink)) {
+        if (!$this->checkMainTableId($mainRow, $data, $main, $link)) {
             $this->setText('Incorrect main table ID');
             return;
         }
 
-        if ($aLink) {
-            if (!$this->checkLinkTableId($oLinkRow, $aData, $aMain, $aLink)) {
+        if ($link) {
+            if (!$this->checkLinkTableId($linkRow, $data, $main, $link)) {
                 $this->setText('Incorrect link table ID');
                 return;
             }
         }
-        $oFlash = gr(service('entity')->getFileNsSuffix() . 'flash', @$aData['flashId']);
-        if ($aData['op'] == 'dl' && @$aData['flashId']) {
-            if ($oFlash->checkIsLoad()) {
-                if ($aLink) {
-                    $oLinkRow->delete();
-                    $oLinkRow->getEntity()->getConnection()->commit();
+        $flash = gr((string)$this->containerService('entity')->getFileNsSuffix() . 'flash', $data['flashId'] ?? null);
+        if ((string)$data['op'] === 'dl' && !empty($data['flashId'])) {
+            if ($flash->checkIsLoad()) {
+                if ($link) {
+                    $linkRow->delete();
+                    $linkRow->getEntity()->getConnection()->commit();
                 } else {
-                    $oMainRow->setFields(array($aMain['flash_id'] => null), true);
-                    $oMainRow->getEntity()->getConnection()->commit();
+                    $mainRow->setFields([$main['flash_id'] => null], true);
+                    $mainRow->getEntity()->getConnection()->commit();
                 }
-                $oFlash->delete('flash', $aData['flashId']);
+                $flash->delete('flash', $data['flashId']);
             }
-        } elseif ($aData['op'] == 'ul' && $this->aFlash) {
-            $oReq = service('request');
-            $oFlash->setFormFile('flash', array(), $oReq->get('description', 'P', ''), $oReq->get('width', 'P', 100), $oReq->get('height', 'P', 100), $oReq->get('bgcolor', 'P', ''));
-            if ($oFlash->checkIsLoad() && !@$aData['flashId']) {
-                $oFlash->getEntity()->getConnection()->commit();
-                if ($aLink) {
-                    $oLinkRow->setFields(array($aLink['main_id'] => $aData['mId'], $aLink['flash_id'] => $oFlash->getId()), true);
+        } elseif ((string)$data['op'] === 'ul' && $this->flash) {
+            $req = $this->containerService('request');
+            $flash->setFormFile('flash', [], (string)$req->get('description', 'P', ''), $req->get('width', 'P', 100), $req->get('height', 'P', 100), (string)$req->get('bgcolor', 'P', ''));
+            if ($flash->checkIsLoad() && empty($data['flashId'])) {
+                $flash->getEntity()->getConnection()->commit();
+                if ($link) {
+                    $linkRow->setFields([$link['main_id'] => $data['id'], $link['flash_id'] => $flash->getId()], true);
                 } else {
-                    $oMainRow->setFields(array($aMain['flash_id'] => $oFlash->getId()), true);
+                    $mainRow->setFields([$main['flash_id'] => $flash->getId()], true);
                 }
             }
         }
 
-        $aJsonData = @$aData['line'] ? $this->getFlashLineData($aData, $aLink) : $this->getFlashOneData($oMainRow, $aMain, $aLink);
-        if (!$oFlash->checkIsLoad() && $aJsonData['id']) {
-            $oFlash->loadById($aJsonData['id']);
+        $jsonData = !empty($data['line']) ? $this->getFlashLineData($data, $link) : $this->getFlashOneData($mainRow, $main, $link);
+        if (!$flash->checkIsLoad() && $jsonData['id']) {
+            $flash->loadById($jsonData['id']);
         }
-        $aJsonData['filename'] = $oFlash->checkIsLoad() ? $oFlash->get_src_name() : '';
-        $this->setJson(array('data' => $aJsonData));
+        $jsonData['filename'] = $flash->checkIsLoad() ? $flash->get_src_name() : '';
+        $this->setJson(['data' => $jsonData]);
 
 
         $this->setText('ok');
     }
 
-    /**
-     * Check Main Table Id
-     */
-    public function checkMainTableId(&$oMainRow, &$aData, $aMain, $aLink)
+    public function checkMainTableId(mixed &$mainRow, array &$data, array $main, mixed $link): bool
     {
-        $oMainRow = gr($aMain['table_name'], @$aData['mId']);
-        if (@$aData['flashId'] && !$aLink) {
-            $sMethod = 'get_' . $aMain['flash_id'];
-            return $oMainRow->$sMethod(null, true) == $aData['flashId'];
+        $mainRow = gr((string)$main['table_name'], $data['id'] ?? null);
+        if (!empty($data['flashId']) && !$link) {
+            $method = 'get_' . $main['flash_id'];
+            return (string)$mainRow->$method(null, true) === (string)$data['flashId'];
         }
-        return $oMainRow->checkIsLoad();
-    } // function checkMainTableId
+        return $mainRow->checkIsLoad();
+    }
 
-    /**
-     * Check Link Table Id
-     */
-    public function checkLinkTableId(&$oLinkRow, &$aData, $aMain, $aLink)
+    public function checkLinkTableId(mixed &$linkRow, array &$data, array $main, array $link): bool
     {
-        if (!@$aData['flashId']) {
-            $oLinkRow = gr($aLink['table_name']);
+        if (empty($data['flashId'])) {
+            $linkRow = gr((string)$link['table_name']);
             return true;
         } else {
-            $oLinkRow = gr($aLink['table_name'], array($aLink['main_id'] => $aData['mId'], $aLink['flash_id'] => $aData['flashId']));
-            return $oLinkRow->checkIsLoad();
+            $linkRow = gr((string)$link['table_name'], [$link['main_id'] => $data['id'], $link['flash_id'] => $data['flashId']]);
+            return $linkRow->checkIsLoad();
         }
-    } // function checkMainTableId
+    }
 
-    /**
-     * Get Flash Line Data
-     */
-    public function getFlashLineData($aData, $aLink)
+    public function getFlashLineData(array $data, array $link): array
     {
-        $aRet = array();
-        $aLstId = ge($aLink['table_name'])->getRowsetByParam(array($aLink['main_id'] => $aData['mId']))->getColumn($aLink['flash_id']);
-        foreach ($aLstId as $v) {
-            $aRet[] = $this->getFlashData($v);
+        $ret = [];
+        $lstId = ge((string)$link['table_name'])->getRowsetByParam([$link['main_id'] => $data['id']])->getColumn($link['flash_id']);
+        foreach ($lstId as $v) {
+            $ret[] = $this->getFlashData($v);
         }
-        return $aRet;
-    } // function getFlashLineData
+        return $ret;
+    }
 
-    /**
-     * Get Flash Data
-     */
-    public function getFlashOneData($oMainRow, $aMain, $aLink)
+    public function getFlashOneData(\fan\core\base\model\row $mainRow, array $main, mixed $link): ?array
     {
-        if ($aLink) {
-            $aLstId = ge($aLink['table_name'])->getRowsetByParam($aLink['main_id'])->getColumn($aLink['flash_id']);
-            return $this->getFlashData(@$aLstId[0]);
+        if ($link) {
+            $lstId = ge((string)$link['table_name'])->getRowsetByParam($link['main_id'])->getColumn($link['flash_id']);
+            return $this->getFlashData($lstId[0] ?? null);
         } else {
-            $sMethod = 'get_' . $aMain['flash_id'];
-            return $this->getFlashData($oMainRow->$sMethod());
+            $method = 'get_' . $main['flash_id'];
+            return $this->getFlashData($mainRow->$method());
         }
-    } // function getFlashOneData
+    }
 
-    /**
-     * Get Flash Data
-     * @param mixed $nFlashId
-     * @return array
-     */
-    public function getFlashData($nFlashId)
+    public function getFlashData(mixed $flashId): ?array
     {
-        if (!$nFlashId) {
+        if (!$flashId) {
             return null;
         }
         // To Do: Get full info about flash
-        return array('id' => $nFlashId);
-    } // function getFlashData
-} // class \fan\core\block\admin\upload_flash
-?>
+        return ['id' => $flashId];
+    }
+}

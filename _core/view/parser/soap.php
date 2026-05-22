@@ -1,4 +1,7 @@
-<?php namespace fan\core\view\parser;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view\parser;
 /**
  * View parser SOAP-type
  *
@@ -17,17 +20,12 @@
 class soap extends \fan\core\view\parser
 {
     // ======== Static methods ======== \\
-    /**
-     * Get View-Format
-     * @return string
-     */
-    final static public function getFormat() {
+    final static public function getFormat(): string {
         return 'soap';
-    } // function getFormat
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
     // ======== Protected methods ======== \\
-} // class \fan\core\view\parser\soap
-?>
+}

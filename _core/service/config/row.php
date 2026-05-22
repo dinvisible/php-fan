@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\config;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\config;
 /**
  * Meta Data Row
  *
@@ -20,250 +24,217 @@ class row extends \fan\core\base\data
      * Saved source data
      * @var array
      */
-    protected $aSrcData = array();
+    protected array $srcData = [];
 
     /**
      * Facade of service
      * @var fan\core\base\service
      */
-    protected $oFacade = null;
+    protected ?object $facade = null;
 
     /**
      * Services - owners of config
      * @var array
      */
-    protected $aOwners = array();
+    protected array $owners = [];
 
     /**
      * Rooy Key of element
      * @var string
      */
-    protected $sRootKey = null;
+    protected ?string $rootKey = null;
 
-    /**
-     * Constructor of Config-data
-     * @param array $aData
-     * @param string $sKey
-     * @param fan\core\service\config\row $oSuperior
-     */
-    public function __construct($aData, $sKey = null, $oSuperior = null)
+    public function __construct(mixed $data, int|string|null $key = null, ?\fan\core\base\data $superior = null)
     {
-        parent::__construct($aData, $sKey, $oSuperior);
+        parent::__construct($data, $key, $superior);
 
-        $this->aSrcData = $this->aData;
-        //$this->aErrMsg[91] = 'Facade isn\'t set';
-    } // function __construct
+        $this->srcData = $this->data;
+        //$this->errMsg[91] = 'Facade isn\'t set';
+    }
 
     // ======== Main Interface methods ======== \\
-    /**
-     * Set Facade
-     * @param \fan\core\base\service $oFacade
-     */
-    public function setFacade(\fan\core\base\service $oFacade)
+    public function setFacade(\fan\core\base\service $facade): static
     {
-        if (empty($this->oFacade)) {
-            $this->oFacade = $oFacade;
-            if (in_array($oFacade->getConfigType(), array('service', 'entity', 'cli', 'plain'))) {
-                $this->_setSetter($oFacade);
+        if (empty($this->facade)) {
+            $this->facade = $facade;
+            if (in_array($facade->getConfigType(), ['service', 'entity', 'cli', 'plain'])) {
+                $this->_setSetter($facade);
             }
         }
         foreach ($this->_getSubData() as $v) {
-            $v->setFacade($oFacade);
+            $v->setFacade($facade);
         }
         return $this;
-    } // function setFacade
+    }
 
-    /**
-     * Get Root Key
-     */
-    public function getRootKey()
+    public function getRootKey(): string
     {
-        if (is_null($this->sRootKey)) {
-            if (empty($this->oSuperior)) {
-                $this->sRootKey = '';
+        if (is_null($this->rootKey)) {
+            if (empty($this->superior)) {
+                $this->rootKey = '';
             } else {
-                $sRootKey = $this->oSuperior->getRootKey();
-                $this->sRootKey = empty($sRootKey) ? $this->sKey : $sRootKey;
+                $rootKey = $this->superior->getRootKey();
+                $this->rootKey = empty($rootKey) ? $this->key : $rootKey;
             }
         }
-        return $this->sRootKey;
-    } // function getRootKey
+        return $this->rootKey;
+    }
 
-    /**
-     * Set Service - Owner of Config
-     * @param \fan\core\base\service $oService
-     * @return \fan\core\service\config\row
-     */
-    public function setServiceOwner(\fan\core\base\service $oService)
+    public function setServiceOwner(\fan\core\base\service $service): static
     {
-        $sName = get_class_name($oService);
-        if ($sName == $this->getRootKey()) {
-            $this->_setSetter($oService);
-            $this->aOwners[] = $oService;
+        $name = get_class_name($service);
+        if ($name === $this->getRootKey()) {
+            $this->_setSetter($service);
+            $this->owners[] = $service;
             foreach ($this->_getSubData() as $v) {
-                $v->setServiceOwner($oService);
+                $v->setServiceOwner($service);
             }
         }
         return $this;
-    } // function setServiceOwner
-    /**
-     * Set Plain Controller - Owner of Config
-     * @param object $oCtrl
-     * @param string $sName
-     * @return \fan\core\service\config\row
-     */
-    public function setPlainOwner($oCtrl, $sName)
+    }
+    public function setPlainOwner(object $ctrl, string $name): static
     {
-        if ($sName == $this->getRootKey()) {
-            $this->_setSetter($oCtrl);
-            $this->aOwners[] = $oCtrl;
+        if ($name === $this->getRootKey()) {
+            $this->_setSetter($ctrl);
+            $this->owners[] = $ctrl;
             foreach ($this->_getSubData() as $v) {
-                $v->setPlainOwner($oCtrl);
+                $v->setPlainOwner($ctrl);
             }
         }
         return $this;
-    } // function setPlainOwner
+    }
 
-    /**
-     * Set Entity - Owner of Config
-     * @param \fan\core\base\model\entity $oEntity
-     * @param string $sName
-     * @return \fan\core\service\config\row
-     */
-    public function setEntityOwner(\fan\core\base\model\entity $oEntity, $sName)
+    public function setEntityOwner(\fan\core\base\model\entity $entity, string $name): static
     {
-        if ($sName == $this->getRootKey()) {
-            $this->_setSetter($oEntity);
-            $this->aOwners[] = $oEntity;
+        if ($name === $this->getRootKey()) {
+            $this->_setSetter($entity);
+            $this->owners[] = $entity;
             foreach ($this->_getSubData() as $v) {
-                $v->setEntityOwner($oEntity);
+                $v->setEntityOwner($entity);
             }
         }
         return $this;
-    } // function setEntityOwner
-    /**
-     * Get array of Owners
-     * @return array
-     */
-    public function getOwners()
+    }
+    public function getOwners(): array
     {
-        return $this->aOwners;
-    } // function getOwners
+        return $this->owners;
+    }
 
-    /**
-     * Get array of Owners
-     * @return array
-     */
-    public function getSources()
+    public function getSources(): array
     {
-        $oClone = clone $this;
-        $oClone->reset();
-        return $oClone->toArray();
-    } // function getSources
+        $clone = clone $this;
+        $clone->reset();
+        return $clone->toArray();
+    }
 
-    /**
-     * Reset Config data
-     * @param string $sKey Key of parameter
-     * @return \fan\core\service\config\row
-     */
-    public function reset($sKey)
+    public function reset(mixed $key = null): static
     {
         if ($this->_checkSetter()) {
-            if (is_null($sKey)) {
-                $this->aData = $this->aSrcData;
+            if (is_null($key)) {
+                $this->data = $this->srcData;
                 foreach ($this->_getSubData() as $v) {
                     $v->reset(null);
                 }
-            }  elseif (!isset($this->aSrcData[$sKey])) {
-                $this->aData[$sKey] = null;
-            }  elseif (is_scalar($this->aSrcData[$sKey])) {
-                $this->aData[$sKey] = $this->aSrcData[$sKey];
+            }  elseif (!isset($this->srcData[$key])) {
+                $this->data[$key] = null;
+            }  elseif (is_scalar($this->srcData[$key])) {
+                $this->data[$key] = $this->srcData[$key];
             } else {
-                $this->set($sKey, $this->aSrcData[$sKey]);
+                $this->set($key, $this->srcData[$key]);
             }
         }
         return $this;
-    } // function reset
+    }
 
-    /**
-     * Merge data
-     * @param array|\fan\core\service\config\row $aData
-     * @param boolean $bPriority
-     * @return \fan\core\service\config\row
-     */
-    public function mergeData($aData, $bPriority = true)
+    public function mergeData(array|\fan\core\service\config\row $data, bool $priority = true): static
     {
-        if (is_object($aData) && $aData instanceof \fan\core\service\config\row) {
-            $aData = $aData->toArray();
+        if (is_object($data) && $data instanceof \fan\core\service\config\row) {
+            $data = $data->toArray();
         }
-        if ($this->_checkSetter() && is_array($aData)) {
-            foreach ($aData as $k => $v) {
-                if ($bPriority || !isset($this->aData[$k])) {
+        if ($this->_checkSetter() && is_array($data)) {
+            foreach ($data as $k => $v) {
+                if ($priority || !isset($this->data[$k])) {
                     $this->set($k, $v);
                 }
             }
         }
         return $this;
-    } // function mergeData
+    }
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Convert Array to another structure (usually instance of this class)
-     * Methd need to redefine in children classes if it use another parameter of constructor
-     * @param string $sKey
-     * @param array $aValue
-     * @return mixed
-     */
-    protected function _makeSubData($sKey, $aValue)
+    protected function _makeSubData(mixed $key, mixed $value): \fan\core\service\config\row
     {
-        $sClass = get_class($this);
-        $oSubData = new $sClass($aValue, $sKey, $this);
-        if (!empty($this->oFacade)) {
-            $oSubData->setFacade($this->oFacade);
+        $class = get_class($this);
+        $subData = new $class($value, $key, $this);
+        if (!empty($this->facade)) {
+            $subData->setFacade($this->facade);
         }
-        return $oSubData;
-    } // function _makeSubData
+        return $subData;
+    }
 
-    /**
-     * Check Setter
-     * @return boolean
-     */
-    protected function _checkSetter()
+    protected function _checkSetter(): bool
     {
-        //$this->oFacade->
+        //$this->facade->
         return parent::_checkSetter();
-    } // function _checkSetter
+    }
     // ======== The magic methods ======== \\
     /**
-     * Clone config
+     * Implements PHP magic behavior for this current component.
      */
-    function __clone() {
+    public function __clone()
+    {
         $this->reset(null);
     }
 
-    public function __unset($sKey)
+    /**
+     * Handles dynamic property removal for this current component.
+     */
+    public function __unset(string $key): void
     {
         // Todo: Do this "throw" only if it is enabled in config
-        throw new \fan\project\exception\service\fatal($this->oFacade, 'You can\'t unset data for key "' . $sKey . '".');
+        throw new \fan\project\exception\service\fatal($this->facade, 'You can\'t unset data for key "' . $key . '".');
     }
 
     // ======== Required Interface methods ======== \\
 
-    public function serialize() {
-        return serialize(array(
-            'parent'  => parent::serialize(),
-            'srcData' => $this->aSrcData,
-            'rootKey' => $this->sRootKey,
-        ));
-    }
-    public function unserialize($sRecover) {
-        $aRecover = unserialize($sRecover);
-
-        parent::unserialize($aRecover['parent']);
-
-        $this->aSrcData = $aRecover['srcData'];
-        $this->sRootKey = $aRecover['rootKey'];
+    /**
+     * Exports object state for PHP serialization.
+     *
+     * @return array Returns the structured data produced by the operation.
+     */
+    public function __serialize(): array
+    {
+        return [
+            'parent'  => parent::__serialize(),
+            'srcData' => $this->srcData,
+            'rootKey' => $this->rootKey,
+        ];
     }
 
-} // class \fan\core\service\config\row
-?>
+    /**
+     * Restores object state from PHP serialization data.
+     */
+    public function __unserialize(array $recover): void
+    {
+        parent::__unserialize($recover['parent']);
+
+        $this->srcData = $recover['srcData'];
+        $this->rootKey = $recover['rootKey'];
+    }
+
+    public function serialize(): string
+    {
+        return \fan\core\adapter\safe_serializer::encodePhpSnapshot($this->__serialize());
+    }
+
+    public function unserialize(string $recover): void
+    {
+        $recover = \fan\core\adapter\safe_serializer::decodePhpSnapshot($recover, []);
+
+        parent::__unserialize($recover['parent']);
+
+        $this->srcData = $recover['srcData'];
+        $this->rootKey = $recover['rootKey'];
+    }
+
+}

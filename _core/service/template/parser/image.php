@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\template\parser;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\template\parser;
 /**
  * Template parser engine form
  *
@@ -16,19 +19,11 @@
  */
 class image extends base
 {
-    /**
-     * @var array Defined tpl-tag list
-     */
-    protected $aTagList = array('some_special');
+    protected array $tagList = ['some_special'];
 
-    /**
-     * Parse some special
-     * @return string
-     */
-    public function parse_some_special()
+    public function parse_some_special(): string
     {
-        return '$sReturnHtmlVal.=$this->getSpecial();' . "\n";
-    } // function parse_some_special
+        return '$returnHtmlVal.=$this->getSpecial();' . "\n";
+    }
 
-} // class \fan\core\service\template\parser\image
-?>
+}

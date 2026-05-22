@@ -1,4 +1,7 @@
-<?php namespace fan\core\base;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\base;
 /**
  * Timer program base
  *
@@ -17,54 +20,39 @@
  */
 abstract class timer_program
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * @var entity_timer_program Entity of timer
      */
-    private $oTimerRow = null;
+    private ?object $timerRow = null;
 
     /**
      * @var number Period of callings
      */
-    private $nPeriod = null;
+    private int|float|null $period = null;
 
 
-    /**
-     * Set current entyty
-     * @param entity_timer_program $oTimerRow
-     */
-    public function setTimerRow($oTimerRow)
+    public function setTimerRow($timerRow): void
     {
-        $this->oTimerRow = $oTimerRow;
-    } // function setTimerEntity
+        $this->timerRow = $timerRow;
+    }
 
-    /**
-     * Get current entyty
-     * @return entity_timer_program
-     */
-    public function getTimerRow()
+    public function getTimerRow(): ?object
     {
-        return $this->oTimerRow;
-    } // function getTimerEntity
+        return $this->timerRow;
+    }
 
-    /**
-     * Set time for next run this program
-     * @param number $nPeriod
-     */
-    public function setPeriod($nPeriod)
+    public function setPeriod(int|float $period): void
     {
-        if($nPeriod >= 0) {
-            $this->nPeriod = $nPeriod;
+        if ($period >= 0) {
+            $this->period = $period;
         }
-    } // function setPeriod
+    }
 
-    /**
-     * Get time for next run this program
-     * @return number
-     */
-    public function getPeriod()
+    public function getPeriod(): mixed
     {
-        return is_null($this->nPeriod) ? $this->getTimerRow()->get_period(0, true) : $this->nPeriod;
-    } // function getPeriod
+        return is_null($this->period) ? $this->getTimerRow()->get_period(0, true) : $this->period;
+    }
 
-} // class timer_program_base
-?>
+}

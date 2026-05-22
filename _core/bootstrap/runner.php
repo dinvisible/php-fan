@@ -1,4 +1,8 @@
-<?php namespace fan\core\bootstrap;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\bootstrap;
 /**
  * Description of runner
  *
@@ -17,215 +21,186 @@
 
 class runner
 {
-    const MAIN_ERROR_DEMONSTRATOR    = '{CORE_DIR}/error/demonstrator.php';
-    const PROJECT_ERROR_DEMONSTRATOR = '{PROJECT_DIR}/error/demonstrator.php';
+    use \fan\core\di\container_aware_trait;
+
+    public const MAIN_ERROR_DEMONSTRATOR    = '{CORE_DIR}/error/demonstrator.php';
+    public const PROJECT_ERROR_DEMONSTRATOR = '{PROJECT_DIR}/error/demonstrator.php';
 
     /**
      * Ini-config data
      * @var array
      */
-    protected $aConfig;
+    protected ?array $config = null;
 
-    /**
-     * Construct of class
-     * @param array $aConfig
-     */
-    public function __construct($aConfig)
+    public function __construct($config)
     {
-        $this->aConfig = $aConfig;
+        $this->config = $config;
     }
 
     /**
-     * Run process to execute
-     * @param boolean $bIsEcho allow to output data
-     * @param string|array $mProcedure procedure for run
-     * @param array $aParameters Parameters for call
-     * @return mixed Output data
+     * @param array $parameters Parameter set passed into the operation.
      */
-    public function run($bIsEcho = true, $mProcedure = null, $aParameters = array())
+    public function run(bool $isEcho = true, string|array|null $procedure = null, array $parameters = []): mixed
     {
         try {
-            ob_start(array($this, 'handleOb'));
+            ob_start([$this, 'handleOb']);
 
-            if (empty($mProcedure)) {
-                list($mProcedure, $aParameters) = $this->getHandler();
+            if (empty($procedure)) {
+                list($procedure, $parameters) = $this->getHandler();
             }
-            $mRet = call_user_func_array($mProcedure, empty($aParameters) ? array() : $aParameters);
+            $ret = call_user_func_array($procedure, empty($parameters) ? [] : $parameters);
 
             ob_end_clean();
 
-            if ($bIsEcho) {
-                service('header')->sendHeaders();
+            if ($isEcho) {
+                $this->containerService('header')->sendHeaders();
 
-                if (is_array($mRet) && is_callable($mRet)) {
-                    call_user_func($mRet);
-                } elseif (is_scalar($mRet)) {
-                    echo $mRet;
+                if (is_array($ret) && is_callable($ret)) {
+                    call_user_func($ret);
+                } elseif (is_scalar($ret)) {
+                    echo $ret;
                 }
             }
 
-            return $mRet;
+            return $ret;
         } catch (\Exception $e) {
         }
         $this->_logException($e);
         ob_end_clean();
-        $this->_showExceptionError($e, $bIsEcho);
+        $this->_showExceptionError($e, $isEcho);
         return null;
-    } // function run
+    }
 
-    public function runCli($sClassName, $sMethodName)
+    public function runCli($className, $methodName): mixed
     {
         try {
-            list($mProcedure, $aAddParameters) = $this->getHandler();
-            $aParameters = array($sClassName, $sMethodName);
-            if (!empty($aAddParameters)) {
-                $aParameters = array_merge($aParameters, $aAddParameters);
+            list($procedure, $addParameters) = $this->getHandler();
+            $parameters = [$className, $methodName];
+            if (!empty($addParameters)) {
+                $parameters = array_merge($parameters, $addParameters);
             }
-            $mRet = call_user_func_array($mProcedure, $aParameters);
+            $ret = call_user_func_array($procedure, $parameters);
 
-            if (is_array($mRet) && is_callable($mRet)) {
-                call_user_func($mRet);
-            } elseif (is_scalar($mRet)) {
-                echo $mRet;
+            if (is_array($ret) && is_callable($ret)) {
+                call_user_func($ret);
+            } elseif (is_scalar($ret)) {
+                echo $ret;
             }
 
-            return $mRet;
+            return $ret;
         } catch (\Exception $e) {
         }
         $this->_logException($e);
         $this->_showExceptionError($e, true);
         return null;
-    } // function runCli
+    }
 
-    /**
-     * Interception uncontrolled errors
-     * @param string $sMessage
-     * @return string
-     */
-    public function getHandler()
+    public function getHandler(): array
     {
-        $aHandler = service('matcher')->getCurrentHandler();
-        return array($aHandler['method'], $aHandler['param']);
-    } // function getHandler
+        $handler = service('matcher')->getCurrentHandler();
+        return [$handler['method'], $handler['param']];
+    }
 
-    /**
-     * Interception uncontrolled errors
-     * @param string $sMessage
-     * @return string
-     */
-    public function handleOb($sMessage)
+    public function handleOb(string $message): ?string
     {
-        if (trim($sMessage)) {
-            if (preg_match('/\w+\s+error.+$/', $sMessage, $aMatches)) {
-                $sErrMessage = trim(strip_tags($aMatches[0]));
-                $sErrNote    = htmlspecialchars($sMessage);
-            } elseif (trim(strip_tags($sMessage)) == '') {
-                $sErrMessage = htmlspecialchars($sMessage);
-                $sErrNote    = '';
+        if (trim($message)) {
+            if (preg_match('/\w+\s+error.+$/', $message, $matches)) {
+                $errMessage = trim(strip_tags($matches[0]));
+                $errNote    = htmlspecialchars($message);
+            } elseif (trim(strip_tags($message)) === '') {
+                $errMessage = htmlspecialchars($message);
+                $errNote    = '';
             } else {
-                $sErrMessage = trim(strip_tags($sMessage));
-                $sErrNote    = htmlspecialchars($sMessage);
+                $errMessage = trim(strip_tags($message));
+                $errNote    = htmlspecialchars($message);
             }
-            if ($sErrMessage == $sErrNote) {
-                $sErrNote = '';
+            if ($errMessage === $errNote) {
+                $errNote = '';
             }
 
-            $sErrNote .= service('request')->getInfoString();
-            service('error')->logErrorMessage($sErrMessage, 'Intercepted fatal error', $sErrNote, false, true);
+            $errNote .= $this->containerService('request')->getInfoString();
+            $this->containerService('error')->logErrorMessage($errMessage, 'Intercepted fatal error', $errNote, false, true);
 
-            $sRet = $this->showError(null, 'error_500', false);
-            return $sRet ? $sRet : 'Error 500';
+            $ret = $this->showError(null, 'error_500', false);
+            return $ret ? $ret : 'Error 500';
         }
-    } // function ob_handler
 
-    /**
-     * Show error message
-     * @param mixed $mErrMsg
-     * @param string $sTplName
-     * @param boolean $bIsEcho
-     */
-    public function showError($mErrMsg, $sTplName = 'error_500', $bIsEcho = true)
+        return null;
+    }
+
+    public function showError(mixed $errMsg, string $tplName = 'error_500', bool $isEcho = true): mixed
     {
-        if(empty($mErrMsg)) {
+        if (empty($errMsg)) {
+            $host = $_SERVER['HTTP_HOST'] ?? '';
+            $requestUri = $_SERVER['REQUEST_URI'] ?? '';
             //ToDo: make this message by special file
-            $mErrMsg = array(
-                'aErrMsg' => array(
-                    'Please could you send a message about this error to <a href="mailto:' . ADMIN_EMAIL . '?subject=Error%20reporting&amp;body=Fatal%20Error%20at%20the%20request%20' . urlencode('http://' . @$_SERVER['HTTP_HOST'] . @$_SERVER['REQUEST_URI']) . '">' . ADMIN_EMAIL . '</a>',
+            $errMsg = [
+                'errMsg' => [
+                    'Please could you send a message about this error to <a href="mailto:' . ADMIN_EMAIL . '?subject=Error%20reporting&amp;body=Fatal%20Error%20at%20the%20request%20' . urlencode('http://' . $host . $requestUri) . '">' . ADMIN_EMAIL . '</a>',
                     'We will do everything we can to get this fixed ASAP.'
-                )
-            );
-        } elseif (!is_array($mErrMsg)) {
-            $mErrMsg = array('aErrMsg' => array(strval($mErrMsg)));
+                ]
+            ];
+        } elseif (!is_array($errMsg)) {
+            $errMsg = ['errMsg' => [strval($errMsg)]];
         }
-        if ($bIsEcho) {
+        if ($isEcho) {
             while (ob_get_status()) {
                 ob_end_clean();
             }
         }
 
         include str_replace('{CORE_DIR}', CORE_DIR, self::MAIN_ERROR_DEMONSTRATOR);
-        $sProjectPath = str_replace('{PROJECT_DIR}', PROJECT_DIR, self::PROJECT_ERROR_DEMONSTRATOR);
-        if (is_file($sProjectPath)) {
-            include $sProjectPath;
-            $oDemonstrator = new \fan\project\error\demonstrator($mErrMsg, $sTplName);
+        $projectPath = str_replace('{PROJECT_DIR}', PROJECT_DIR, self::PROJECT_ERROR_DEMONSTRATOR);
+        if (is_file($projectPath)) {
+            include $projectPath;
+            $demonstrator = new \fan\project\error\demonstrator($errMsg, $tplName);
         } else {
-            $oDemonstrator = new \fan\core\error\demonstrator($mErrMsg, $sTplName);
+            $demonstrator = new \fan\core\error\demonstrator($errMsg, $tplName);
         }
 
-        if ($bIsEcho) {
-            return $oDemonstrator->showTplContent();
+        if ($isEcho) {
+            return $demonstrator->showTplContent();
         }
-        return $oDemonstrator->getTplContent();
-    } // function showError
+        return $demonstrator->getTplContent();
+    }
 
-    /**
-     * Log error message
-     * @param \Exception $e
-     * @return \fan\core\bootstrap\runner
-     */
-    protected function _logException(\Exception $e)
+    protected function _logException(\Exception $e): static
     {
-        $sErrMsg  = 'Uncaught exception "' . get_class($e) . '" with message:' . "\n";
+        $errMsg  = 'Uncaught exception "' . get_class($e) . '" with message:' . "\n";
         if (!($e instanceof \fan\core\exception\base)) {
-            $sErrMsg .= method_exists($e, 'getMessageForShow') ? $e->getMessageForShow() . "\n" : '';
-            $sErrMsg .= method_exists($e, 'getErrorMessage')   ? $e->getErrorMessage()   . "\n" : '';
+            $errMsg .= method_exists($e, 'getMessageForShow') ? $e->getMessageForShow() . "\n" : '';
+            $errMsg .= method_exists($e, 'getErrorMessage')   ? $e->getErrorMessage()   . "\n" : '';
         }
-        $sErrMsg .= $e->getMessage() . "\n \n";
+        $errMsg .= $e->getMessage() . "\n \n";
 
         if (method_exists($e, 'getLogVars')) {
-            $sErrMsg .= 'Properties: <pre>' . htmlspecialchars($e->getLogVars()) . "</pre>\n";
+            $errMsg .= 'Properties: <pre>' . htmlspecialchars((string)$e->getLogVars()) . "</pre>\n";
         }
 
-        $sErrMsg .= 'Thrown in ' . $e->getFile() . ' on line ' . $e->getLine() . "\n";
-        $sErrMsg .= "Stack trace:<pre>" . $e->getTraceAsString() . '</pre>';
+        $errMsg .= 'Thrown in ' . $e->getFile() . ' on line ' . $e->getLine() . "\n";
+        $errMsg .= "Stack trace:<pre>" . $e->getTraceAsString() . '</pre>';
 
-        \bootstrap::logError($sErrMsg);
+        \bootstrap::logError($errMsg);
         return $this;
-    } // function _logException
+    }
 
-    /**
-     * Parse Exception
-     * @param \Exception $e
-     * @param boolean $bIsEcho
-     */
-    public function _showExceptionError(\Exception $e, $bIsEcho)
+    public function _showExceptionError(\Exception $e, bool $isEcho): void
     {
         if (method_exists($e, 'getMessageForShow')) {
-            $mErrMsg = $e->getMessageForShow();
+            $errMsg = $e->getMessageForShow();
         } elseif (method_exists($e, 'getErrorMessage')) {
-            $mErrMsg = $e->getErrorMessage();
+            $errMsg = $e->getErrorMessage();
         } else {
-            $mErrMsg = '';
+            $errMsg = '';
         }
 
-        $sErrFile = method_exists($e, 'getErrorFile') ? $e->getErrorFile() : 'error_500';
+        $errFile = method_exists($e, 'getErrorFile') ? $e->getErrorFile() : 'error_500';
 
-        $this->showError($mErrMsg, $sErrFile, $bIsEcho);
+        $this->showError($errMsg, $errFile, $isEcho);
 
-        if ($bIsEcho) {
+        if ($isEcho) {
             exit();
         }
-    } // function _showExceptionError
+    }
 
-} // class \fan\core\bootstrap\runner
-?>
+}

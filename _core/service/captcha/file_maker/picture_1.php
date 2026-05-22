@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\captcha\file_maker;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\captcha\file_maker;
 /**
  * Siple text geterator for captcha
  *
@@ -16,176 +19,134 @@
  */
 class picture_1 extends \fan\core\service\captcha\base
 {
-    /**
-     * @var array Image Info
-     */
-    protected $aImgInfo;
+    protected ?array $imgInfo = null;
 
-    /**
-     * Get Headers for Binary Data of Captcha
-     * @return string
-     */
-    public function getHeaders()
+    public function getHeaders(): array
     {
         $this->getData();
-        $aHeaders = $this->aImgInfo['headers'];
-        $aHeaders['filename'] = 'captcha.' . $this->aImgInfo['type'];
-        return $aHeaders;
-    } // function getHeaders
+        $headers = $this->imgInfo['headers'];
+        $headers['filename'] = 'captcha.' . $this->imgInfo['type'];
+        return $headers;
+    }
 
-    /**
-     * Get Binary Data of Captcha
-     * @return string
-     */
-    public function getData()
+    public function getData(): string
     {
-        if (empty($this->aImgInfo)) {
+        if (empty($this->imgInfo)) {
             $this->_makeBinaryData();
         }
-        return $this->aImgInfo['content'];
-    } // function getData
+        return $this->imgInfo['content'];
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * String of result binary data
-     * @return string
-     */
-    protected function _makeBinaryData()
+    protected function _makeBinaryData(): static
     {
-        $oConf = $this->oConfig['image'];
-        /* @var $oConf \fan\core\service\config\row */
-        $nWidth   = $oConf->get('width',  180);
-        $nHeight  = $oConf->get('height',  60);
-        $nQuality = $oConf->get('quality', 80);
+        $conf = $this->config['image'];
+        /* @var $conf \fan\core\service\config\row */
+        $width   = (int)$conf->get('width',  180);
+        $height  = (int)$conf->get('height',  60);
+        $quality = (int)$conf->get('quality', 80);
 
         // Make image service
-        $oImg = service('image_draw');
-        /* @var $oImg \fan\core\service\image_draw */
-        $sSrc = $this->_randomChoice($oConf['src_files']);
-        if (empty($sSrc)) {
-            $oImg->setSource(null, array(
-                'width'   => $nWidth,
-                'height'  => $nHeight,
-                'quality' => $nQuality,
-            ));
+        $img = service('image_draw');
+        /* @var $img \fan\core\service\image_draw */
+        $src = $this->_randomChoice($conf['src_files']);
+        if (empty($src)) {
+            $img->setSource(null, [
+                'width'   => $width,
+                'height'  => $height,
+                'quality' => $quality,
+            ]);
         } else {
-            $oImg->setSource($this->oConfig['SRC_DIR'] . $sSrc, array(
-                'quality' => $nQuality,
-            ));
-            $oImg->crop(
-                    rand(0, $oImg->getWidth() - $nWidth),
-                    rand(0, $oImg->getHeigth() - $nHeight),
-                    $nWidth,
-                    $nHeight
+            $img->setSource($this->config['SRC_DIR'] . $src, [
+                'quality' => $quality,
+            ]);
+            $img->crop(
+                    rand(0, (int)$img->getWidth() - $width),
+                    rand(0, (int)$img->getHeigth() - $height),
+                    $width,
+                    $height
             );
         }
 
         // Draw lines in background
-        $this->_drawLines($oImg, $oConf, $oConf->get('line_qtt', 10), $nHeight);
+        $this->_drawLines($img, $conf, $conf->get('line_qtt', 10), $height);
 
         // Draw captcha text
-        $sText = $this->oFacade->getText();
-        $nLeft = rand(5, 10);
-        $nTop  = rand(5, floor($nHeight / 2));
-        $sFont = $this->_randomChoice($oConf['fonts']);
-        for($i = 0; $i < strlen($sText); $i++) {
-            $nFontHeight = $this->_randomValue($oConf['font_height'], 20, 24);
-            $oImg->drawTextTtf($sText{$i}, array(
-                'left'   => $nLeft,
-                'top'    => rand($nTop, $nTop + floor($nHeight / 10)),
-                'height' => $nFontHeight,
+        $text = (string)$this->facade->getText();
+        $left = rand(5, 10);
+        $top  = rand(5, (int)floor($height / 2));
+        $font = $this->_randomChoice($conf['fonts']);
+        for ($i = 0; $i < strlen($text); $i++) {
+            $fontHeight = $this->_randomValue($conf['font_height'], 20, 24);
+            $img->drawTextTtf($text[$i], [
+                'left'   => $left,
+                'top'    => rand($top, $top + (int)floor($height / 10)),
+                'height' => $fontHeight,
                 'angle'  => rand(-5, 5),
-            ), $sFont, $this->_randomColor($oConf, 'font'));
-            $nLeft += floor($nFontHeight * 0.8) + $this->_randomValue($oConf['interval'], 2, 5);
+            ], $font, $this->_randomColor($conf, 'font'));
+            $left += (int)floor($fontHeight * 0.8) + $this->_randomValue($conf['interval'], 2, 5);
         }
 
         // Draw lines in front
-        $this->_drawLines($oImg, $oConf, $oConf->get('line_qtt', 10), $nHeight);
+        $this->_drawLines($img, $conf, $conf->get('line_qtt', 10), $height);
 
-        $this->aImgInfo = $oImg->getImageInfo();
+        $this->imgInfo = $img->getImageInfo();
         return $this;
-    } // function _makeBinaryData
+    }
 
-    /**
-     * Choice random value from array
-     * @param type $aArr
-     * @return mixed
-     */
-    protected function _randomChoice($aArr)
+    protected function _randomChoice(mixed $arr): mixed
     {
-        if (is_object($aArr)) {
-            if (!method_exists($aArr, 'toArray')) {
+        if (is_object($arr)) {
+            if (!method_exists($arr, 'toArray')) {
                 return null;
             }
-            $aArr = $aArr->toArray();
+            $arr = $arr->toArray();
         }
-        return empty($aArr) ? null : $aArr[array_rand($aArr)];
-    } // function _randomChoice
+        return empty($arr) ? null : $arr[array_rand($arr)];
+    }
 
-    /**
-     * Get random value
-     * @param \fan\core\service\config\row $oConf
-     * @param numeric $nDefMin
-     * @param numeric $nDefMax
-     * @return numeric
-     */
-    protected function _randomValue($oConf, $nDefMin, $nDefMax)
+    protected function _randomValue(mixed $conf, int|float $defMin, int|float $defMax): int
     {
-        if (is_object($oConf)) {
-            $nMin = $oConf->get(0, $nDefMin);
-            $nMax = $oConf->get(1, $nDefMax);
+        if (is_object($conf)) {
+            $min = $conf->get(0, $defMin);
+            $max = $conf->get(1, $defMax);
         } else {
-            $nMin = $nDefMin;
-            $nMax = $nDefMax;
+            $min = $defMin;
+            $max = $defMax;
         }
-        return rand($nMin, $nMax);
-    } // function _randomValue
+        return rand((int)$min, (int)$max);
+    }
 
-    /**
-     * Get random value
-     * @param \fan\core\service\config\row $oConf
-     * @param sting $sKey
-     * @return numeric
-     */
-    protected function _randomColor($oConf, $sKey)
+    protected function _randomColor(\fan\core\service\config\row $conf, string $key): array
     {
-        $aSrc = array(
-            'r' => array(0, 255),
-            'g' => array(0, 255),
-            'b' => array(0, 255),
-        );
+        $src = [
+            'r' => [0, 255],
+            'g' => [0, 255],
+            'b' => [0, 255],
+        ];
 
-        $aRes = array();
-        foreach ($aSrc as $k => $v) {
-            $nMin = $oConf->get(array('color', $sKey, $k, 0), $v[0]);
-            $nMax = $oConf->get(array('color', $sKey, $k, 1), $v[1]);
-            $aRes[$k] = rand($nMin, $nMax);
+        $res = [];
+        foreach ($src as $k => $v) {
+            $min = $conf->get(['color', $key, $k, 0], $v[0]);
+            $max = $conf->get(['color', $key, $k, 1], $v[1]);
+            $res[$k] = rand((int)$min, (int)$max);
         }
-        return $aRes;
-    } // function _randomColor
+        return $res;
+    }
 
-    /**
-     * Draw several Lines
-     * @param \fan\core\service\image_draw $oImg
-     * @param \fan\core\service\config\row $oConf
-     * @param numeric $nQtt
-     * @param numeric $nHeight
-     * @return \fan\core\service\captcha\file_maker\picture_1
-     */
-    protected function _drawLines($oImg, $oConf, $nQtt, $nHeight)
+    protected function _drawLines(\fan\core\service\image_draw $img, \fan\core\service\config\row $conf, int|float $qtt, int|float $height): static
     {
-        for ($i = 0; $i < $nQtt / 2; $i++)
+        for ($i = 0; $i < $qtt / 2; $i++)
         {
-            $oImg->line(array(
+            $img->line([
                 'left'   => rand(0, 20),
                 'right'  => rand(0, 20),
-                'top'    => rand(0, $nHeight),
-                'bottom' => rand(0, $nHeight),
-            ), $this->_randomColor($oConf, 'line'));
+                'top'    => rand(0, (int)$height),
+                'bottom' => rand(0, (int)$height),
+            ], $this->_randomColor($conf, 'line'));
         }
         return $this;
-    } // function _drawLines
+    }
 
-} // class \fan\core\service\captcha\file_maker\picture_1
-?>
+}

@@ -1,4 +1,8 @@
-<?php namespace fan\core\exception\model\entity;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\exception\model\entity;
 /**
  * Exception a fatal error
  *
@@ -20,42 +24,25 @@ class fatal extends \fan\core\exception\base
      * Entity's object
      * @var \fan\core\base\model\entity
      */
-    protected $oEntity = null;
+    protected ?object $entity = null;
 
-    /**
-     * Exception's constructor
-     * @param object $oEntity Object - instance of entity
-     * @param string $sLogErrMsg Log error message
-     * @param numeric $nCode Error Code
-     * @param \Exception $oPrevious Previous Exception
-     */
-    public function __construct(\fan\core\base\model\entity $oEntity, $sLogErrMsg, $nCode = E_USER_ERROR, $oPrevious = null)
+    public function __construct(\fan\core\base\model\entity $entity, string $logErrMsg, int $code = E_USER_ERROR, ?\Throwable $previous = null)
     {
-        $this->oEntity = $oEntity;
+        $this->entity = $entity;
 
-        parent::__construct($sLogErrMsg, $nCode, $oPrevious);
+        parent::__construct($logErrMsg, $code, $previous);
 
-        $sNote = method_exists($oEntity, '__toString') ? $oEntity->__toString() : '';
-        $this->_logByService($sLogErrMsg, 'Entity fatal error (' . get_class($oEntity) . ').', $sNote);
+        $note = method_exists($entity, '__toString') ? $entity->__toString() : '';
+        $this->_logByService($logErrMsg, 'Entity fatal error (' . get_class($entity) . ').', $note);
     }
 
-    /**
-     * Get object of entity
-     * @return \fan\core\base\model\entity
-     */
-    public function getEntity()
+    public function getEntity(): \fan\core\base\model\entity
     {
-        return $this->oEntity;
-    } // function getEntity
+        return $this->entity;
+    }
 
-    /**
-     * Get operation for Db (rollback) when exception occured
-     * @param string $sDbOper
-     * @return null|string
-     */
-    protected function _defineDbOper($sDbOper = 'rollback')
+    protected function _defineDbOper(?string $dbOper = 'rollback'): ?string
     {
-        return parent::_defineDbOper($sDbOper);
-    } // function _defineDbOper
-} // class \fan\core\exception\model\entity\fatal
-?>
+        return parent::_defineDbOper($dbOper);
+    }
+}

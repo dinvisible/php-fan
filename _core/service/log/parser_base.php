@@ -1,13 +1,17 @@
-<?php namespace fan\core\service\log;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\log;
 /**
  * Base parser of log file
- * array (
+ * [
  *     0 => offset,
  *     1 => prefix length,
  *     2 => main length,
  *     3 => time,
  *     4 => md5 of main message,
  *     5 => type of message;
+ * ]
  *     6 => is PID;
  * )
  *
@@ -30,465 +34,425 @@ abstract class parser_base
      * Service Log
      * @var \fan\core\service\log
      */
-    protected $oFacade;
+    protected ?object $facade = null;
 
     /**
      * Key of dir by Bootstrap
      * @var string
      */
-    protected $sLogDirKey = null;
+    protected ?string $logDirKey = null;
 
     /**
      * Type of record is available
      * @var boolean
      */
-    protected $bIsType = true;
+    protected bool $isType = true;
     /**
      * Is serialized
      * @var boolean
      */
-    protected $bIsSerialized = true;
+    protected bool $isSerialized = true;
     /**
      * Is PID in the log-file
      * @var boolean
      */
-    protected $bIsPid = true;
+    protected bool $isPid = true;
 
     /**
      * Path to data file
      * @var string
      */
-    private $sDataFile = '';
+    private string $dataFile = '';
 
     /**
      * Path to index file
      * @var string
      */
-    private $sIndxFile = '';
+    private string $indxFile = '';
 
     /**
      * Size of file
      * @var integer
      */
-    protected $nSize = 0;
+    protected int|float $size = 0;
 
     /**
      * Index data
      * @var array
      */
-    protected $aIndxData = null;
+    protected ?array $indxData = null;
 
     /**
      * Keys of Unique Index data
      * @var array
      */
-    protected $aUniqueKeys = array();
+    protected array $uniqueKeys = [];
 
     /**
      * Keys of Similar data
      * @var array
      */
-    protected $aSimilarKeys = array();
+    protected array $similarKeys = [];
 
     /**
-     * setFilePath
+     * @param mixed $file File path or file descriptor handled by the operation.
      */
-    public function setFilePath($sVariety, $sFile)
+    public function setFilePath(string $variety, string $file): void
     {
-        $sLogDir = $this->sLogDirKey ?
-            \bootstrap::getGlobalPath($this->sLogDirKey) :
-            \bootstrap::parsePath($this->oFacade->getConfig(array('LOG_DIR', $sVariety)));
-        $this->sDataFile = $sLogDir . '/' . $sFile . '.log';
-        $this->sIndxFile = $sLogDir . '/' . $sFile . '.i0.php';
+        $variety = (string)$variety;
+        $file = (string)$file;
+        $logDir = $this->logDirKey ?
+            \bootstrap::getGlobalPath($this->logDirKey) :
+            \bootstrap::parsePath((string)$this->facade->getConfig(['LOG_DIR', $variety]));
+        $this->dataFile = $logDir . '/' . $file . '.log';
+        $this->indxFile = $logDir . '/' . $file . '.i0.php';
 
-        $this->bIsPid = $this->oFacade->getConfig(array('USE_PID', $sVariety), false);
+        $this->isPid = (bool)$this->facade->getConfig(['USE_PID', $variety], false);
 
         $this->checkIndex();
-    } // function setFilePath
+    }
 
-    /**
-     * Set Facade
-     * @param object $oFacade
-     */
-    public function setFacade(\fan\core\base\service $oFacade)
+    public function setFacade(\fan\core\base\service $facade): void
     {
-        $this->oFacade = $oFacade;
-    } // function setFacade
+        $this->facade = $facade;
+    }
 
-    /**
-     * Check Index file
-     * @return boolean
-     */
-    public function checkIndex()
+    public function checkIndex(): bool
     {
-        $sCurSize = is_file($this->sDataFile) ? filesize($this->sDataFile) : 0;
-        if ($sCurSize == 0) {
+        $curSize = is_file($this->dataFile) ? (int)filesize($this->dataFile) : 0;
+        if ($curSize === 0) {
             $this->_removeFile();
-            $this->aIndxData = null;
+            $this->indxData = null;
             return false;
         }
 
-        $sCurTime = filemtime($this->sDataFile);
-        if (!is_readable($this->sIndxFile) || filemtime($this->sIndxFile) < $sCurTime) {
+        $curTime = (int)filemtime($this->dataFile);
+        if (!is_readable($this->indxFile) || filemtime($this->indxFile) < $curTime) {
             $this->_recreateIndex();
         } else {
-            $aTmp = include $this->sIndxFile;
-            if ($aTmp['size'] == $sCurSize && $aTmp['time'] == $sCurTime) {
-                $this->aIndxData = $aTmp['data'];
-                $this->nSize     = $sCurSize;
+            $tmp = \fan\project\adapter\php_array_file::load($this->indxFile, []);
+            if ((int)$tmp['size'] === $curSize && (int)$tmp['time'] === $curTime) {
+                $this->indxData = $tmp['data'];
+                $this->size     = $curSize;
             } else {
                 $this->_recreateIndex();
             }
         }
         return true;
-    } // function checkIndex
+    }
 
 
-    /**
-     * Check is data in this file
-     * @param boolean $bIsUnique
-     * @return boolean
-     */
-    public function isData($bReindex = false)
+    public function isData(bool $reindex = false): bool
     {
-        if ($bReindex) {
+        if ($reindex) {
             $this->checkIndex();
         }
-        return !is_null($this->aIndxData);
-    } // function boolean
+        return !is_null($this->indxData);
+    }
 
-    /**
-     * Get Quantity of elements
-     * @param boolean $bIsUnique
-     * @return integer
-     */
-    public function getQtt($bIsUnique = false)
+    public function getQtt(bool $isUnique = false): ?int
     {
-        if (is_null($this->aIndxData)) {
+        if (is_null($this->indxData)) {
             return null;
         }
-        if ($bIsUnique) {
+        if ($isUnique) {
             $this->_setUniqueKeys();
-            return count($this->aUniqueKeys);
+            return count($this->uniqueKeys);
         }
-        return count($this->aIndxData);
-    } // function getQtt
+        return count($this->indxData);
+    }
 
-    /**
-     * Check - Is new elements after last key
-     * @param string $sLastKey
-     * @param boolean $bIsUnique
-     * @return integer - number of next key
-     */
-    public function checkAfterLast($sLastKey, $bIsUnique = false)
+    public function checkAfterLast(mixed $lastKey, bool $isUnique = false): ?int
     {
-        if (!is_null($this->aIndxData) && !is_null($sLastKey)) {
-            if ($bIsUnique) {
+        if (!is_null($this->indxData) && !is_null($lastKey)) {
+            if ($isUnique) {
                 $this->_setUniqueKeys();
-                $k = array_search ($sLastKey, $this->aUniqueKeys);
-                return $k === false ? 0 : (isset($this->aUniqueKeys[$k + 1]) ? $k + 1 : null);
+                $k = array_search ($lastKey, $this->uniqueKeys);
+                return $k === false ? 0 : (isset($this->uniqueKeys[$k + 1]) ? $k + 1 : null);
             }
-            return isset($this->aIndxData[$sLastKey + 1]) ? $sLastKey + 1 : null;
+            return isset($this->indxData[$lastKey + 1]) ? $lastKey + 1 : null;
         }
         return null;
-    } // function checkAfterLast
+    }
 
 
-    /**
-     * Get Data Array
-     * @param integer $nFirst
-     * @param integer $nQtt
-     * @param boolean $bIsUnique
-     * @return array
-     */
-    public function getDataArr($nFirst, $nQtt, $bIsUnique = false)
+    public function getDataArr(int $first, int $qtt, bool $isUnique = false): ?array
     {
-        if (is_null($this->aIndxData)) {
+        if (is_null($this->indxData)) {
             return null;
         }
-        if ($bIsUnique) {
+        if ($isUnique) {
             $this->_setUniqueKeys();
         }
 
-        $aRecords = array();
-        $f = fopen($this->sDataFile, 'r');
-        for ($i = 0; $i < $nQtt; $i++) {
-            $id = $i + $nFirst;
-            if ($bIsUnique) {
-                if (!isset($this->aUniqueKeys[$id])) {
+        $records = [];
+        $f = fopen($this->dataFile, 'r');
+        for ($i = 0; $i < $qtt; $i++) {
+            $id = $i + $first;
+            if ($isUnique) {
+                if (!isset($this->uniqueKeys[$id])) {
                     break;
                 }
-                $id = $this->aUniqueKeys[$id];
+                $id = $this->uniqueKeys[$id];
             }
-            $ind = @$this->aIndxData[$id];
+            $ind = $this->indxData[$id] ?? null;
             if (!$ind) {
                 break;
             }
 
-            fseek($f, $ind[0] + $ind[1]);
-            $aRD = $this->bIsSerialized ? unserialize(stripcslashes(fread($f, $ind[2]))) :
-                array(
+            fseek($f, (int)($ind[0] + $ind[1]));
+            $rd = $this->isSerialized ? $this->decodeLogRowPayload(stripcslashes(fread($f, (int)$ind[2]))) :
+                [
                     'method'   => '',
                     'request'  => '',
                     'header'   => '',
-                    'main_msg' => stripcslashes(fread($f, $ind[2])),
-                );
-            $aRecords[$i] = array(
+                    'main_msg' => stripcslashes(fread($f, (int)$ind[2])),
+                ];
+            $records[$i] = [
                 'id'     => $id,
-                'attr'   => array(
+                'attr'   => [
                     'time'   => $ind[3],
                     'type'   => isset($ind[5]) ? $ind[5] : '',
-                ),
-                'header' => $aRD['header'],
-            );
-            if ($this->bIsPid && isset($ind[6])) {
-                $aRecords[$i]['attr']['pid'] = $ind[6];
+                ],
+                'header' => $rd['header'],
+            ];
+            if ($this->isPid && isset($ind[6])) {
+                $records[$i]['attr']['pid'] = $ind[6];
             }
-            foreach (array(
+            foreach ([
                 'method',
                 'protocol',
                 'domain',
                 'request',
-            ) as $k) {
-                if (isset($aRD[$k])) {
-                    $aRecords[$i]['attr'][$k] = $aRD[$k];
+            ] as $k) {
+                if (isset($rd[$k])) {
+                    $records[$i]['attr'][$k] = $rd[$k];
                 }
             }
-            foreach (array(
+            foreach ([
                 'data',
                 'main_msg',
                 'note',
-            ) as $k) {
-                if (isset($aRD[$k])) {
-                    $aRecords[$i][$k] = $aRD[$k];
+            ] as $k) {
+                if (isset($rd[$k])) {
+                    $records[$i][$k] = $rd[$k];
                 }
             }
-            if (isset($aRD['trace'])) {
-                $aRecords[$i]['trace'] = 1;
+            if (isset($rd['trace'])) {
+                $records[$i]['trace'] = 1;
             }
         }
         fclose($f);
-        return $aRecords;
-    } // function getDataArr
+        return $records;
+    }
 
-    /**
-     * Get Trace
-     * @param string $sKey
-     * @return array
-     */
-    public function getTrace($sKey)
+    public function getTrace(string $key): mixed
     {
-        if (is_null($this->aIndxData) || !$this->bIsSerialized) {
+        if (is_null($this->indxData) || !$this->isSerialized) {
             return null;
         }
-        $aTrace = null;
-        $ind = @$this->aIndxData[$sKey];
+        $trace = null;
+        $ind = $this->indxData[$key] ?? null;
         if ($ind) {
-            $f = fopen($this->sDataFile, 'r');
-            fseek($f, $ind[0] + $ind[1]);
-            $aRD = unserialize(stripcslashes(fread($f, $ind[2])));
+            $f = fopen($this->dataFile, 'r');
+            fseek($f, (int)($ind[0] + $ind[1]));
+            $rd = $this->decodeLogRowPayload(stripcslashes(fread($f, (int)$ind[2])));
             fclose($f);
-            if (isset($aRD['trace'])) {
-                $aTrace = $aRD['trace'];
+            if (isset($rd['trace'])) {
+                $trace = $rd['trace'];
             }
         }
-        return $aTrace;
-    } // function getTrace
+        return $trace;
+    }
 
-    /**
-     * Delete Rows
-     * @param boolean $bIsUnique
-     */
-    public function deleteRows($aKeys, $bIsUnique = false)
+    protected function decodeLogRowPayload(string $payload): array
     {
-        if ($bIsUnique) {
+        $decoded = \fan\core\adapter\safe_serializer::decodeExternalPayload(
+            $payload,
+            [],
+            static function (string $message): void {
+                error_log('Cannot decode log row payload: ' . $message);
+            }
+        );
+
+        $default = [
+            'method'   => '',
+            'request'  => '',
+            'header'   => '',
+            'main_msg' => '',
+        ];
+
+        return is_array($decoded) ? $decoded + $default : $default;
+    }
+
+    public function deleteRows(array $keys, bool $isUnique = false): void
+    {
+        if ($isUnique) {
             $this->_setUniqueKeys(true);
         }
 
-        $aOffsets = array();
-        foreach ($aKeys as $k1) {
-            $sHash = $this->_setOffset($aOffsets, $k1);
-            if ($bIsUnique && $sHash) {
-                foreach ($this->aSimilarKeys[$sHash] as $k2) {
-                    $this->_setOffset($aOffsets, $k2);
+        $offsets = [];
+        foreach ($keys as $k1) {
+            $hash = $this->_setOffset($offsets, $k1);
+            if ($isUnique && $hash) {
+                foreach ($this->similarKeys[$hash] as $k2) {
+                    $this->_setOffset($offsets, $k2);
                 }
             }
         }
-        ksort($aOffsets);
+        ksort($offsets);
 
-        $nStart = 0;
-        $aOffsets[$this->nSize] = null;
-        rename($this->sDataFile, $this->sDataFile . '.tmp');
-        $fw = fopen($this->sDataFile, 'w');
-        $fr = fopen($this->sDataFile . '.tmp', 'r');
-        foreach ($aOffsets as $k => $v) {
-            $nEnd = $k;
-            if ($nStart < $nEnd) {
-                if (!$this->_dataTransfer($fw, $fr, $nStart, $nEnd)) {
+        $start = 0;
+        $offsets[$this->size] = null;
+        rename($this->dataFile, $this->dataFile . '.tmp');
+        $fw = fopen($this->dataFile, 'w');
+        $fr = fopen($this->dataFile . '.tmp', 'r');
+        foreach ($offsets as $k => $v) {
+            $end = $k;
+            if ($start < $end) {
+                if (!$this->_dataTransfer($fw, $fr, $start, $end)) {
                     // ToDo: take into account error
                     break;
                 }
             }
             if ($v) {
-                $nStart = $nEnd + $v[0];
-                unset($this->aIndxData[$v[1]]);
+                $start = $end + $v[0];
+                unset($this->indxData[$v[1]]);
             }
         }
         fclose($fw);
         fclose($fr);
-        unlink($this->sDataFile . '.tmp');
+        unlink($this->dataFile . '.tmp');
         $this->_recreateIndex();
-    } // function deleteRows
+    }
 
-    /**
-     * Set array of Offsets for delete
-     * @param array $aOffsets
-     * @param string $k
-     * @return string
-     */
-    protected function _setOffset(&$aOffsets, $k)
+    protected function _setOffset(array &$offsets, string $k): ?string
     {
-        $ind = @$this->aIndxData[$k];
+        $ind = $this->indxData[$k] ?? null;
         if ($ind) {
-            $aOffsets[$ind[0]] = array(
+            $offsets[$ind[0]] = [
                 $ind[1] + $ind[2] + 1,
                 $k,
-            );
+            ];
             return $ind[4];
         }
         return null;
-    } // function _setOffset
+    }
 
-    /**
-     * Recreate index
-     */
-    protected function _recreateIndex()
+    protected function _recreateIndex(): void
     {
-        $this->aUniqueKeys  = array();
-        if (!filesize($this->sDataFile)) {
-            $this->aIndxData = null;
+        $this->uniqueKeys  = [];
+        if (!filesize($this->dataFile)) {
+            $this->indxData = null;
             $this->_removeFile();
             return;
         }
-        $aData = array();
+        $data = [];
 
-        $sStr = '';
+        $str = '';
         $l = 0;
 
-        $nChunk = $this->oFacade->getConfig('FILE_CHUNK', 8192);
-        $f = fopen($this->sDataFile, 'r');
+        $chunk = (int)$this->facade->getConfig('FILE_CHUNK', 8192);
+        $f = fopen($this->dataFile, 'r');
         while (!feof($f)) {
-            $sStr .= fread($f, $nChunk);
-            $aStr = explode("\n", $sStr);
-            for ($i = 0; $i < count($aStr) - 1; $i++) {
-                $this->_parceSting($aData, $aStr[$i], $l);
-                $l += strlen($aStr[$i]) + 1;
+            $str .= fread($f, $chunk);
+            $str = explode("\n", $str);
+            for ($i = 0; $i < count($str) - 1; $i++) {
+                $this->_parceSting($data, $str[$i], $l);
+                $l += strlen($str[$i]) + 1;
             }
-            $sStr = $aStr[$i];
+            $str = $str[$i];
         }
         fclose($f);
-        $this->_parceSting($aData, $sStr, $l);
+        $this->_parceSting($data, $str, $l);
 
-        $this->aIndxData    = $aData;
+        $this->indxData    = $data;
         $this->_writeIndexFile();
-    } // function _recreateIndex
+    }
 
-    /**
-     * Parce Sting
-     */
-    protected function _parceSting(&$aData, $sStr, $l)
+    protected function _parceSting(array &$data, string $str, int $l): void
     {
-        if ($sStr) {
-            $aArr = explode("\t", $sStr);
+        $str = (string)$str;
+        $l = (int)$l;
+        if ($str) {
+            $arr = explode("\t", $str);
 
-            $sMain = end($aArr);
-            $len = strlen($sMain);
+            $main = end($arr);
+            $len = strlen($main);
 
-            $aRow = array(
+            $row = [
                 0 => $l,
-                1 => strlen($sStr) - $len,
+                1 => strlen($str) - $len,
                 2 => $len,
-                3 => $aArr[0],
-                4 => md5($sMain),
-            );
-            if ($this->bIsType) {
-                $aRow[5] = $aArr[1];
+                3 => $arr[0],
+                4 => md5($main),
+            ];
+            if ($this->isType) {
+                $row[5] = $arr[1];
             }
-            if ($this->bIsPid) {
-                $aRow[6] = $aArr[$this->bIsType ? 2 : 1];
+            if ($this->isPid) {
+                $row[6] = $arr[$this->isType ? 2 : 1];
             }
-            $aData[] = $aRow;
+            $data[] = $row;
         }
-    } // function _parceSting
+    }
 
-    /**
-     * Make and return Unique Index Keys
-     * @return array
-     */
-    protected function _setUniqueKeys()
+    protected function _setUniqueKeys(): void
     {
-        if (empty($this->aUniqueKeys)) {
-            $this->aUniqueKeys  = array();
-            $this->aSimilarKeys = array();
-            foreach ($this->aIndxData as $k => $v) {
+        if (empty($this->uniqueKeys)) {
+            $this->uniqueKeys  = [];
+            $this->similarKeys = [];
+            foreach ($this->indxData as $k => $v) {
                 $s = $v[4];
-                if (!isset($this->aSimilarKeys[$s])) {
-                    $this->aUniqueKeys[] = $k;
-                    $this->aSimilarKeys[$s] = array($k);
+                if (!isset($this->similarKeys[$s])) {
+                    $this->uniqueKeys[] = $k;
+                    $this->similarKeys[$s] = [$k];
                 } else {
-                    $this->aSimilarKeys[$s][] = $k;
+                    $this->similarKeys[$s][] = $k;
                 }
             }
         }
-    } // function _setUniqueKeys
+    }
 
-    /**
-     * Data transfer from one file to other
-     */
-    protected function _dataTransfer($fw, $fr, $nStart, $nEnd)
+    protected function _dataTransfer(mixed $fw, mixed $fr, int $start, int $end): bool
     {
-        $nChunk = $this->oFacade->getConfig('FILE_CHUNK', 8192);
-        fseek($fr, $nStart);
-        while ($nStart < $nEnd) {
-            $l = min($nEnd - $nStart, $nChunk);
+        $chunk = (int)$this->facade->getConfig('FILE_CHUNK', 8192);
+        $start = (int)$start;
+        $end = (int)$end;
+        fseek($fr, $start);
+        while ($start < $end) {
+            $l = min($end - $start, $chunk);
             if (fwrite($fw, fread($fr, $l)) === false) {
                 return false;
             }
-            $nStart += $l;
+            $start += $l;
         }
         return true;
-    } // function _dataTransfer
+    }
 
-    /**
-     * Remove Files
-     */
-    protected function _removeFile()
+    protected function _removeFile(): void
     {
-        if (is_file($this->sDataFile)) {
-            unlink($this->sDataFile);
+        if (is_file($this->dataFile)) {
+            unlink($this->dataFile);
         }
-        if (is_file($this->sIndxFile)) {
-            unlink($this->sIndxFile);
+        if (is_file($this->indxFile)) {
+            unlink($this->indxFile);
         }
-    } // function _removeFile
+    }
 
-    /**
-     * Write Index File
-     */
-    protected function _writeIndexFile()
+    protected function _writeIndexFile(): void
     {
-        $aTmp = array (
-            'size' => filesize($this->sDataFile),
-            'time' => filemtime($this->sDataFile),
-            'data' => $this->aIndxData,
-        );
-        $this->nSize = $aTmp['size'];
-        file_put_contents($this->sIndxFile, '<?php
+        $tmp = [
+            'size' => filesize($this->dataFile),
+            'time' => filemtime($this->dataFile),
+            'data' => $this->indxData,
+        ];
+        $this->size = $tmp['size'];
+        file_put_contents($this->indxFile, '<?php
 /*
  * Index data
  */
-return ' . var_export($aTmp, true) . ';
+return ' . var_export($tmp, true) . ';
 ?>');
-    } // function _writeIndexFile
-} // class \fan\core\service\log\parser_base
-?>
+    }
+}

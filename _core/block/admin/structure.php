@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\admin;
 /**
  * Admin structure class for loader block
  *
@@ -16,75 +20,59 @@
  */
 class structure extends base
 {
-    /**
-     * Init output block data
-     */
-    public function init()
+    public function init(): void
     {
-        service('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
+        $this->containerService('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
 
-        $aData = $this->getData();
-        $aJson = array();
+        $data = $this->getData();
+        $json = [];
 
         // Prepare template
         $this->initTplVar();
 
-        $sHtml = $this->getTemplateCode();
-        if (!empty($sHtml)) {
-            $aJson['condition']['code'] = $sHtml;
+        $html = $this->getTemplateCode();
+        if (!empty($html)) {
+            $json['condition']['code'] = $html;
         }
         // Prepare param
-        $aAddParam = $this->getAddParam();
-        if ($aAddParam) {
-            $aJson['condition']['param'] = $aAddParam;
+        $addParam = $this->getAddParam();
+        if ($addParam) {
+            $json['condition']['param'] = $addParam;
         }
         // Prepare Extra data
-        $aExtra = $this->getExtraData();
-        if ($aExtra) {
-            $aJson['condition']['extra'] = $aExtra;
+        $extra = $this->getExtraData();
+        if ($extra) {
+            $json['condition']['extra'] = $extra;
         }
         // Prepare condition Data
-        $aCondition = $this->getCondition();
-        if ($aCondition) {
-            $aJson['condition']['cond'] = $aCondition;
+        $condition = $this->getCondition();
+        if ($condition) {
+            $json['condition']['cond'] = $condition;
         }
 
-        if ($aJson) {
-            $this->setJson($aJson);
+        if ($json) {
+            $this->setJson($json);
         }
 
         $this->setText('ok');
     }
 
-    /**
-     * Init Template Vars
-     */
-    public function initTplVar()
+    public function initTplVar(): void
     {
-    } // function initTplVar
+    }
 
-    /**
-     * Get Condition Parameters
-     */
-    public function getAddParam()
+    public function getAddParam(): array
     {
-        return $this->getMeta('addParam', array());
-    } // function getAddParam
+        return $this->getMeta('addParam', []);
+    }
 
-    /**
-     * Get Condition ExtraData
-     */
-    public function getExtraData()
+    public function getExtraData(): array
     {
-        return $this->getMeta('extra', array());
-    } // function getExtraData
+        return $this->getMeta('extra', []);
+    }
 
-    /**
-     * Get Condition Data
-     */
-    public function getCondition()
+    public function getCondition(): array
     {
-        return $this->getMeta('cond', array());
-    } // function getCondition
-} // class \fan\core\block\admin\structure
-?>
+        return $this->getMeta('cond', []);
+    }
+}

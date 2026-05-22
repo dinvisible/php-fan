@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\matcher\item;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\matcher\item;
 /**
  * Description of handler
  *
@@ -23,21 +26,20 @@ class handler extends base
      * Allowed property
      * @var array
      */
-    protected $aData = array(
+    protected array $data = [
         'key'     => null,
         'method'  => null,
         'param'   => null,
         'ctrlKey' => null, // Config-key used for define current handler
-        'mReqKey' => null, // Regexp result, used for define Main Request
-    );
+        'reqKey' => null, // Regexp result, used for define Main Request
+    ];
 
-    public function offsetGet($sKey)
+    public function offsetGet(mixed $key): mixed
     {
-        if (empty($this->aData['method'])) {
+        if (empty($this->data['method'])) {
             //$this->init();
         }
-        $this->_checkKey($sKey);
-        return $this->aData[$sKey];
+        $this->_checkKey((string)$key);
+        return $this->data[$key];
     }
-} // class \fan\core\service\matcher\item\handler
-?>
+}

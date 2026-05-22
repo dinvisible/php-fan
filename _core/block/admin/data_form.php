@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\admin;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\admin;
 /**
  * Admin form data class for loader block
  *
@@ -20,120 +24,89 @@ class data_form extends data
      * Edited or Inserted entity
      * @var object entity
      */
-    protected $oRow;
+    protected ?object $row = null;
 
-    /**
-     * Validate Data
-     */
-    public function validateData(&$aEdit, &$aInsert)
+    public function validateData(array &$edit, array &$insert): bool
     {
-        if ($aEdit) {
-            $aErr = $this->doValidate($aEdit, 'edit');
-        } elseif ($aInsert) {
-            $aErr = $this->doValidate($aInsert, 'ins');
+        if ($edit) {
+            $err = $this->doValidate($edit, 'edit');
+        } elseif ($insert) {
+            $err = $this->doValidate($insert, 'ins');
         }
-        if ($aErr) {
-            $this->aErrorMsg[] = implode("\n", $aErr);
+        if ($err) {
+            $this->errorMsg[] = implode("\n", $err);
             return false;
         }
         return true;
-    } // function validateData
+    }
 
-    /**
-     * Parse changed/inserted Data
-     * @param array $aEdit
-     * @param array $aInsert
-     * @return \fan\core\block\admin\data
-     */
-    public function parseData($aEdit, $aInsert)
+    public function parseData(mixed $edit, mixed $insert): static
     {
-        //$sEttAcces = $this->getMeta('check_access4edit'); // ToDo: Check for use it
-        $aFields   = $this->getMeta(array('form_struct', 'rows'));
-        if ($aEdit) {
-            $this->oRow = ge($this->getMeta('entity'))->getRowByParam($this->getCondition());
-            $this->saveRow($this->oRow, $aEdit, $aFields);
-            $this->checkDBerror($this->oRow, 'Can\'t update data: ');
-        } elseif ($aInsert) {
-            $aAddFields = array_keys($this->getMeta(array('addParam', 'default_val'), array()));
-            $this->oRow = gr($this->getMeta('entity'));
-            $this->saveRow($this->oRow, $aInsert, $aFields, $aAddFields);
-            $this->checkDBerror($this->oRow, 'Can\'t insert data: ');
+        //$ettAcces = $this->getMeta('check_access4edit'); // ToDo: Check for use it
+        $fields   = adduceToArray($this->getMeta(['form_struct', 'rows']));
+        if ($edit) {
+            $this->row = ge((string)$this->getMeta('entity'))->getRowByParam($this->getCondition());
+            $this->saveRow($this->row, $edit, $fields);
+            $this->checkDBerror($this->row, 'Can\'t update data: ');
+        } elseif ($insert) {
+            $addFields = array_keys($this->getMeta(['addParam', 'default_val'], []));
+            $this->row = gr((string)$this->getMeta('entity'));
+            $this->saveRow($this->row, $insert, $fields, $addFields);
+            $this->checkDBerror($this->row, 'Can\'t insert data: ');
         }
         return $this;
-    } // function parseData
+    }
 
-    /**
-     * Init Template Vars
-     */
-    public function initTplVar()
+    public function initTplVar(): void
     {
-        $aTplRows  = array();
-        $aMetaRows = $this->getMeta(array('form_struct', 'rows'), array());
-        foreach ($aMetaRows as $k => $v) {
-            $aTplRows[$v['field']] = $v;
+        $tplRows  = [];
+        $metaRows = $this->getMeta(['form_struct', 'rows'], []);
+        foreach ($metaRows as $k => $v) {
+            $tplRows[$v['field']] = $v;
         }
-        $this->setTemplateVar('rows', $aTplRows);
-    } // function initTplVar
+        $this->setTemplateVar('rows', $tplRows);
+    }
 
-    /**
-     * Get Main Data
-     * @param array $aData
-     * @param array $aForce
-     * @return boolean
-     */
-    protected function getMainData($aData, $aForce = array())
+    protected function getMainData(array $data, array $force = []): array
     {
-        $aJson = parent::getMainData($aData, $aForce);
-        $oEtt  = $this->getCurrentRow(true);
-        $aJson['ei_mode'] = !empty($oEtt) && $oEtt->checkIsLoad() ? 'edit' : 'ins';
-        return $aJson;
-    } // function getMainData
+        $json = parent::getMainData($data, $force);
+        $ett  = $this->getCurrentRow(true);
+        $json['ei_mode'] = !empty($ett) && $ett->checkIsLoad() ? 'edit' : 'ins';
+        return $json;
+    }
 
 
-    /**
-     * Get Content Data
-     */
-    public function getContentData($bCacheEnable = true)
+    public function getContentData(bool $cacheEnable = true): array
     {
-        $oRow = $this->getCurrentRow($bCacheEnable);
+        $row = $this->getCurrentRow($cacheEnable);
 
-        $aDataSrc = $oRow && $oRow->checkIsLoad() ? $oRow->getFields() : array();
-        $aData = array();
-        foreach ($this->getMeta(array('form_struct', 'rows'), array()) as $v) {
-            if(@$v['field'] && !(@$v['notSQL'])) {
-                $aData[$v['field']] = @$aDataSrc[$v['field']];
+        $dataSrc = $row && $row->checkIsLoad() ? $row->getFields() : [];
+        $data = [];
+        foreach ($this->getMeta(['form_struct', 'rows'], []) as $v) {
+            if (!empty($v['field']) && empty($v['notSQL'])) {
+                $data[$v['field']] = $dataSrc[$v['field']] ?? null;
             }
         }
-        return $aData;
-    } // function getContentData
+        return $data;
+    }
 
 
-    /**
-     * Get field label
-     * @param string $sName
-     * @return string
-     */
-    public function getFieldLabel($sName)
+    public function getFieldLabel(mixed $name): mixed
     {
-        foreach ($this->getMeta(array('form_struct', 'rows'), array()) as $v) {
-            if ($v['field'] == $sName && @$v['label']) {
+        foreach ($this->getMeta(['form_struct', 'rows'], []) as $v) {
+            if ((string)$v['field'] === (string)$name && !empty($v['label'])) {
                 return $v['label'];
             }
         }
-        return $sName;
-    } // function getFieldLabel
+        return $name;
+    }
 
-    /**
-     * Get current entity
-     * @return \fan\core\base\model\row
-     */
-    public function getCurrentRow($bCacheEnable)
+    public function getCurrentRow(bool $cacheEnable): \fan\core\base\model\row
     {
-        $oEtt = ge($this->getMeta('entity'));
-        $sEttKey = $this->getMeta('entity_key', null);
-        return $sEttKey ?
-            $oEtt->getRowByKey($sEttKey, $this->getCondition()) :
-            $oEtt->getRowByParam($this->getCondition());
-    } // function getCurrentRow
-} // class \fan\core\block\admin\data_form
-?>
+        $ett = ge((string)$this->getMeta('entity'));
+        $ettKey = $this->getMeta('entity_key', null);
+        return $ettKey ?
+            $ett->getRowByKey((string)$ettKey, $this->getCondition()) :
+            $ett->getRowByParam($this->getCondition());
+    }
+}

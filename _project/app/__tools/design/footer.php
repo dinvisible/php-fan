@@ -1,4 +1,8 @@
-<?php namespace fan\app\__tools\design;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__tools\design;
 /**
  * footer block
  *
@@ -17,5 +21,4 @@
 class footer extends \fan\project\block\base
 {
 
-} // class \fan\app\__tools\design\footer
-?>
+}

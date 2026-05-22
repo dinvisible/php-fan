@@ -1,4 +1,8 @@
-<?php namespace fan\core\exception\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\exception\service;
 /**
  * Exception a service fatal error
  *
@@ -20,58 +24,37 @@ class fatal extends \fan\core\exception\base
     /**
      * @var \fan\core\base\service Instance of class maked exception
      */
-    protected $oService = null;
+    protected ?object $service = null;
 
-    /**
-     * Exception's constructor
-     * @param \fan\core\base\service $oService Object - instance of service
-     * @param string $sLogErrMsg Log error message
-     * @param numeric $nCode Error Code
-     */
-    public function __construct(\fan\core\base\service $oService, $sLogErrMsg, $nCode = E_USER_ERROR, $oPrevious = null)
+    public function __construct(\fan\core\base\service $service, string $logErrMsg, int $code = E_USER_ERROR, ?\Throwable $previous = null)
     {
-        $this->oService = $oService;
+        $this->service = $service;
 
-        parent::__construct($sLogErrMsg, $nCode, $oPrevious);
+        parent::__construct($logErrMsg, $code, $previous);
 
-        $this->_logErrorMessage($oService->getExceptionLogType());
+        $this->_logErrorMessage($service->getExceptionLogType());
     }
 
-    /**
-     * Get Instance of service
-     * @return \fan\core\base\service
-     */
-    public function getService()
+    public function getService(): \fan\core\base\service
     {
-        return $this->oService;
-    } // function getService
+        return $this->service;
+    }
 
-    /**
-     * Get Instance of service
-     * @param string $sLogType
-     * @return \fan\core\base\service
-     */
-    protected function _logErrorMessage($sLogType)
+    protected function _logErrorMessage(string $logType): static
     {
-        if (in_array($sLogType, array('php', 'service'))) {
-            $sLogMethod = $sLogType == 'php' ? '_logByPhp' : '_logByService';
-            $this->$sLogMethod('Service fatal error (' . get_class($this->oService) . '). ' . $this->sLogErrMsg);
+        if (in_array($logType, ['php', 'service'])) {
+            $logMethod = $logType === 'php' ? '_logByPhp' : '_logByService';
+            $this->$logMethod('Service fatal error (' . get_class($this->service) . '). ' . $this->logErrMsg);
         }
         return $this;
     }
 
-    /**
-     * Get operation for Db (rollback, commit or nothing) when exception occured
-     * @param string $sDbOper
-     * @return null|string
-     */
-    protected function _defineDbOper($sDbOper = null)
+    protected function _defineDbOper(?string $dbOper = null): ?string
     {
-        if (empty($sDbOper) && method_exists($this->oService, 'getExceptionDbOper')) {
-            $sDbOper = $this->oService->getExceptionDbOper();
+        if (empty($dbOper) && method_exists($this->service, 'getExceptionDbOper')) {
+            $dbOper = $this->service->getExceptionDbOper();
         }
-        return parent::_defineDbOper($sDbOper);
-    } // function _defineDbOper
+        return parent::_defineDbOper($dbOper);
+    }
 
-} // class \fan\core\exception\service\fatal
-?>
+}

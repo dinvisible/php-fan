@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\database;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\database;
 /**
  *
  *
@@ -19,85 +23,88 @@ class mysql extends base
 {
 
     /**
-     * @var link of Connection by 'mysql_pconnect' OR 'mysql_connect'
+     * @var \mysqli Connection by mysqli
      */
-    protected $lConnent = null;
+    protected mixed $lConnent = null;
 
-    /**
-     * @var string Parsed Sql query
-     */
-    protected $sParsedSql = '';
+    protected string $parsedSql = '';
 
     // ======== Main Interface methods ======== \\
-    /**
-     * Restore closed database connection
-     * @param array $aParam
-     * @param boolean $bMakeException Make Exception if connection impossible
-     * @return boolean
-     */
-    public function reconnect($aParam, $bMakeException = true)
+    public function reconnect(array $param, bool $makeException = true): bool
     {
-        $this->sParsedSql = '';
+        $this->parsedSql = '';
 
-        $aParamConnect = array();
-        foreach (array('HOST', 'USER', 'PASSWORD') as $k) {
-            if (empty($aParam[$k])) {
-                break;
-            }
-            $aParamConnect[] = $aParam[$k];
-        }
-        if (count($aParamConnect) == 3) {
-            $aParamConnect[] = true; //Always create new link
-        }
-        $sFunc    = empty($aParam['PERSISTENT']) ? 'mysql_connect' : 'mysql_pconnect';
-        $lConnent = @call_user_func_array($sFunc, $aParamConnect);
-        if (empty($lConnent)) {
+        if (!class_exists('\mysqli', false)) {
             $this->_fixError(
                     1,
                     'Connect to mysql server.',
-                    mysql_errno(),
-                    'Could not connect: ' . mysql_error(),
-                    $bMakeException
+                    0,
+                    'MySQLi extension is not loaded.',
+                    $makeException
             );
             return false;
         }
-        if (@mysql_select_db($aParam['DATABASE'], $lConnent)) {
+
+        $host = (string)(isset($param['HOST']) ? $param['HOST'] : ini_get('mysqli.default_host'));
+        if (!empty($param['PERSISTENT']) && $host && substr($host, 0, 2) !== 'p:') {
+            $host = 'p:' . $host;
+        }
+        $user     = (string)(isset($param['USER']) ? $param['USER'] : ini_get('mysqli.default_user'));
+        $password = (string)(isset($param['PASSWORD']) ? $param['PASSWORD'] : ini_get('mysqli.default_pw'));
+        try {
+            $lConnent = mysqli_init();
+            $isConnected = $lConnent instanceof \mysqli && $lConnent->real_connect($host, $user, $password);
+        } catch (\mysqli_sql_exception $exception) {
+            $lConnent = $lConnent ?? null;
+            $isConnected = false;
+            $connectionError = $exception->getMessage();
+            $connectionCode = $exception->getCode();
+        }
+
+        if (empty($lConnent) || !$isConnected) {
+            $this->_fixError(
+                    1,
+                    'Connect to mysql server.',
+                    empty($lConnent) ? 0 : ($connectionCode ?? $lConnent->connect_errno),
+                    'Could not connect: ' . (empty($lConnent) ? 'mysqli_init failed' : ($connectionError ?? $lConnent->connect_error)),
+                    $makeException
+            );
+            return false;
+        }
+        try {
+            $isSelected = $lConnent->select_db((string)$param['DATABASE']);
+        } catch (\mysqli_sql_exception $exception) {
+            $isSelected = false;
+            $selectionError = $exception->getMessage();
+            $selectionCode = $exception->getCode();
+        }
+        if ($isSelected) {
             $this->lConnent = $lConnent;
         } else {
             $this->_fixError(
                     2,
                     'Select mysql DB.',
-                    mysql_errno($lConnent),
-                    'Can\'t use DB "' . $aParam['DATABASE'] . '": ' . mysql_error($lConnent),
-                    $bMakeException
+                    $selectionCode ?? $lConnent->errno,
+                    'Can\'t use DB "' . $param['DATABASE'] . '": ' . ($selectionError ?? $lConnent->error),
+                    $makeException
             );
             return false;
         }
         return true;
-    } // function reconnect
+    }
 
-    /**
-     * Close connection
-     */
-    public function connectionClose()
+    public function connectionClose(): static
     {
         if (!empty($this->lConnent)) {
-            mysql_close($this->lConnent);
+            $this->lConnent->close();
             $this->lConnent = null;
         }
         return $this;
-    } // function connectionClose
+    }
 
-    /**
-     * Execute SQL query
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @param integer $iResultType
-     * @return object Result set
-     */
-    public function execute($sSql, $aParam = null, $iResultType = null)
+    public function execute(string $sql, ?array $param = null, mixed $resultType = null): array|bool|null
     {
-        $this->sParsedSql = '';
+        $this->parsedSql = '';
 
         if (empty($this->lConnent)) {
             $this->_fixError(
@@ -110,300 +117,209 @@ class mysql extends base
             return null;
         }
 
-        $mResult = mysql_query($this->_parseSql($sSql, $aParam, true), $this->lConnent);
-        if (empty($mResult)) {
+        try {
+            $queryResult = $this->lConnent->query($this->_parseSql($sql, $param, true));
+        } catch (\mysqli_sql_exception $exception) {
+            $queryResult = false;
+            $queryError = $exception->getMessage();
+            $queryCode = $exception->getCode();
+        }
+        if ($queryResult === false) {
             $this->_fixError(
                     4,
                     'Execute SQL.',
-                    mysql_errno($this->lConnent),
-                    'Invalid query: ' . mysql_error($this->lConnent),
+                    $queryCode ?? $this->lConnent->errno,
+                    'Invalid query: ' . ($queryError ?? $this->lConnent->error),
                     false
             );
             return null;
         }
 
-        if (!is_bool($mResult)) {
-            if (is_null($iResultType) || !$this->_isValidType($iResultType)) {
-                $iResultType = $this->iResultType;
+        if (!is_bool($queryResult)) {
+            if (is_null($resultType) || !$this->_isValidType($resultType)) {
+                $resultType = $this->resultType;
             }
-            $aResult = array();
+            $result = [];
             do {
-                $aLine = mysql_fetch_array($mResult, $iResultType);
-                if ($aLine) {
-                    $aResult[] = $aLine;
+                $line = $queryResult->fetch_array($resultType);
+                if ($line) {
+                    $result[] = $line;
                 }
-            } while(!empty($aLine));
-            mysql_free_result($mResult);
-            return $aResult;
+            } while (!empty($line));
+            $queryResult->free();
+            return $result;
         }
-        return $mResult;
-    } // function execute
+        return $queryResult;
+    }
 
-    /**
-     * Start Transaction
-     * @return mixed
-     */
-    public function startTransaction()
+    public function startTransaction(): bool|null
     {
         return $this->execute('START TRANSACTION');
-    } // function startTransaction
+    }
 
-    /**
-     * Set SavePoint
-     * @param string $sSavePoint
-     * @return mixed
-     */
-    public function setSavePoint($sSavePoint)
+    public function setSavePoint(string $savePoint): bool|null
     {
-        return $this->execute('SAVEPOINT ?', $sSavePoint);
-    } // function setSavePoint
+        return $this->execute('SAVEPOINT ?', [$savePoint]);
+    }
 
-    /**
-     * Commit Transaction
-     * @return mixed
-     */
-    public function commit()
+    public function commit(): bool|null
     {
         return $this->execute('COMMIT');
-    } // function commit
+    }
 
-    /**
-     * Rollback Transaction
-     * @param string $sSavePoint
-     * @return mixed
-     */
-    public function rollback($sSavePoint = null)
+    public function rollback(?string $savePoint = null): bool|null
     {
-        return empty($sSavePoint) ? $this->execute('ROLLBACK') : $this->execute('ROLLBACK TO SAVEPOINT ?', $sSavePoint);
-    } // function rollback
+        return empty($savePoint) ? $this->execute('ROLLBACK') : $this->execute('ROLLBACK TO SAVEPOINT ?', [$savePoint]);
+    }
 
-    /**
-     * Get last insert id
-     * @return int Id
-     */
-    public function getInsertId()
+    public function getInsertId(): mixed
     {
         if (empty($this->lConnent)) {
             return null;
         }
-        $aResult = $this->execute('SELECT LAST_INSERT_ID() AS id', null, MYSQL_ASSOC);
-        return $aResult[0]['id'];
-    } // function getInsertId
+        $result = $this->execute('SELECT LAST_INSERT_ID() AS id', null, MYSQL_ASSOC);
+        return $result[0]['id'];
+    }
 
-    /**
-     * Get one value
-     * @param string $sSql SQL query
-     * @param string $sFieldName Field Name
-     * @param array $aParam Input parameters
-     * @return mixed
-     */
-    public function getOne($sSql, $sFieldName, $aParam = null)
+    public function getOne(string $sql, string $fieldName, ?array $param = null): mixed
     {
-        $aResult = $this->execute($sSql, $aParam, MYSQL_ASSOC);
-        return empty($aResult) ? null : $aResult[0][$sFieldName];
-    } // function getOne
+        $result = $this->execute($sql, $param, MYSQL_ASSOC);
+        return empty($result) ? null : $result[0][$fieldName];
+    }
 
-    /**
-     * Get row
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @param integer $iResultType
-     * @return object Result set
-     */
-    public function getRow($sSql, $aParam = null, $iResultType = null)
+    public function getRow(string $sql, ?array $param = null, ?int $resultType = null): array
     {
-        $aResult = $this->execute($sSql, $aParam, $iResultType);
-        return empty($aResult) ? array() : $aResult[0];
-    } // function getRow
+        $result = $this->execute($sql, $param, $resultType);
+        return empty($result) ? [] : $result[0];
+    }
 
-    /**
-     * Get row assoc
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @return object Result set
-     */
-    public function getRowAssoc($sSql, $aParam = null)
+    public function getRowAssoc(string $sql, ?array $param = null): array
     {
-        return $this->getRow($sSql, $aParam, MYSQL_ASSOC);
-    } // function getRowAssoc
+        return $this->getRow($sql, $param, MYSQL_ASSOC);
+    }
 
-    /**
-     * Get col
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @return object Result set
-     */
-    public function getCol($sSql, $sColName, $aParam = null)
+    public function getCol(string $sql, string|int $colName, ?array $param = null): array
     {
-        $aResult = array();
-        $aTmp = $this->execute($sSql, $aParam, is_string($sColName) ? MYSQL_ASSOC : MYSQL_NUM);
-        if (!empty($aTmp)) {
-            foreach ($aTmp as $v) {
-                $aResult[] = isset($v[$sColName]) ? $v[$sColName] : null;
+        $result = [];
+        $tmp = $this->execute($sql, $param, is_string($colName) ? MYSQL_ASSOC : MYSQL_NUM);
+        if (!empty($tmp)) {
+            foreach ($tmp as $v) {
+                $result[] = isset($v[$colName]) ? $v[$colName] : null;
             }
         }
-        return $aResult;
-    } // function getCol
+        return $result;
+    }
 
-    /**
-     * Get assoc
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @return object Result set
-     */
-    public function getAssoc($sSql, $aParam = null)
+    public function getAssoc(string $sql, ?array $param = null): array
     {
-        $aResult = array();
-        $aTmp = $this->execute($sSql, $aParam, MYSQL_ASSOC);
-        if (!empty($aTmp)) {
-            foreach ($aTmp as $v) {
+        $result = [];
+        $tmp = $this->execute($sql, $param, MYSQL_ASSOC);
+        if (!empty($tmp)) {
+            foreach ($tmp as $v) {
                 $k = array_shift($v);
-                $aResult[$k] = $v;
+                $result[$k] = $v;
             }
-            return $aResult;
+            return $result;
         }
-        return array();
-    } // function getAssoc
+        return [];
+    }
 
-    /**
-     * Get all
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @return object Result set
-     */
-    public function getAll($sSql, $aParam = null, $iResultType = null)
+    public function getAll(string $sql, ?array $param = null, int|string|null $resultType = null): array
     {
-        $aResult = $this->execute($sSql, $aParam, $iResultType);
-        return empty($aResult) ? array() : $aResult;
-    } // function getAll
+        $result = $this->execute($sql, $param, $resultType);
+        return empty($result) ? [] : $result;
+    }
 
-    /**
-     * Get all
-     * @param string $sSql SQL query
-     * @param array $aParam Input parameters
-     * @return object Result set
-     */
-    public function getAllLimit($sSql, $aParam = null, $nQtt = -1, $nOffset = -1, $iResultType = null, $iResultType = null)
+    public function getAllLimit(string $sql, ?array $param = null, int|float $qtt = -1, int|float $offset = -1, int|string|null $resultType = null): array
     {
-        if ($nQtt > -1) {
-            $sSql .= ' LIMIT ';
-            $sSql .= $nOffset > -1 ? $nOffset . ', ' . $nQtt  : $nQtt;
+        if ($qtt > -1) {
+            $sql .= ' LIMIT ';
+                $sql .= $offset > -1 ? (int)$offset . ', ' . (int)$qtt : (int)$qtt;
         }
-        return $this->getAll($sSql, $aParam, $iResultType);
-    } // function getAllLimit
+        return $this->getAll($sql, $param, $resultType);
+    }
 
-    /**
-     * Get MySQL version
-     * @return string
-     */
-    public function getVersion()
+    public function getVersion(): ?string
     {
         if (empty($this->lConnent)) {
             return null;
         }
-        $aResult = $this->execute('SELECT VERSION() AS ver', null, MYSQL_ASSOC);
-        return 'MySQL ' . $aResult[0]['ver'];
-    } // function getVersion
+        $result = $this->execute('SELECT VERSION() AS ver', null, MYSQL_ASSOC);
+        return 'MySQL ' . $result[0]['ver'];
+    }
+
+    public function getTableStatus(string $tableName): mixed
+    {
+        $result = $this->execute('SHOW TABLE STATUS LIKE ?', [$tableName]);
+        return $result[0];
+    }
 
     /**
-     * Get Status of table
-     * Result array has next fields:
-     *   Name, Engine, Version, Row_format, Rows, Avg_row_length, Data_length,
-     *   Max_data_length, Index_length, Index_length, Data_free, Auto_increment,
-     *   Create_time, Update_time,Check_time, Collation, Checksum, Create_options, Comment
-     * @param string $sTableName Name of Table
-     * @return array
+     * Transforms sql between supported representations.
      */
-    public function getTableStatus($sTableName)
+    public function parseSql(string $sql, array $param): string
     {
-        $aResult = $this->execute('SHOW TABLE STATUS LIKE ?', array($sTableName));
-        return $aResult[0];
-    } // function getTableStatus
+        return $this->_parseSql($sql, $param, false);
+    }
 
-    /**
-     * Modifiy SQL-Query - replace Placeholders by parameters
-     * @param string $sSql
-     * @param array $aParam
-     * @return string
-     */
-    public function parseSql($sSql, $aParam)
+    public function getParsedSql(): string
     {
-        return $this->_parseSql($sSql, $aParam, false);
-    } // function parseSql
-
-    /**
-     * Return last parsed and executed SQL
-     * @return string
-     */
-    public function getParsedSql()
-    {
-        return $this->sParsedSql;
-    } // function getParsedSql
+        return $this->parsedSql;
+    }
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Modifiy SQL-Query - replace Placeholders by parameters
-     * @param string $sSql
-     * @param array $aParam
-     * @param boolean $bSaveResult
-     * @return string
-     */
-    protected function _parseSql($sSql, $aParam, $bSaveResult)
+    protected function _parseSql(string $sql, mixed $param, bool $saveResult): string
     {
-        if (!empty($aParam)) {
+        if (!empty($param)) {
 
-            if (!is_array($aParam)) {
-                $aParam = array($aParam);
+            if (!is_array($param)) {
+                $param = [$param];
             }
 
-            $aSqlArr = explode('?', $sSql);
-            $sSql = '';
-            foreach ($aParam as $v) {
-                if (empty($aSqlArr)) {
-                    // ToDo: Maybe made exception if $aSqlArr is empty.
-                    trigger_error('Quantity of parameters more than quantity of placeholders.', E_USER_WARNING);
-                    $sSql .= ' ';
+            $sqlArr = explode('?', $sql);
+            $sql = '';
+            foreach ($param as $v) {
+                if (empty($sqlArr)) {
+                    throw new \InvalidArgumentException('Quantity of parameters more than quantity of placeholders.');
                 } else {
-                    $sSql .= array_shift($aSqlArr);
+                    $sql .= array_shift($sqlArr);
                 }
                 if (is_null($v)) {
-                    $sSql .= 'NULL';
+                    $sql .= 'NULL';
                 } else {
                     switch (gettype($v)) {
                     case 'integer' :
-                        $sSql .= $v;
+                        $sql .= $v;
                         break;
                     case 'double' :
-                        $sSql .= str_replace(',', '.', $v);
+                        $sql .= str_replace(',', '.', (string)$v);
                         break;
                     case 'boolean' :
-                        $sSql .= $v ? 1 : 0;
+                        $sql .= $v ? 1 : 0;
                         break;
                     case 'object' :
                         $v = method_exists($v, '__toString') ? $v->__toString() : (string)$v;
                     default:
                         if (is_scalar($v)) {
-                            $sSql .= '\'' . mysql_real_escape_string($v, $this->lConnent) . '\'';
+                            $v = (string)$v;
+                            $sql .= '\'' . (empty($this->lConnent) ? addslashes($v) : $this->lConnent->real_escape_string($v)) . '\'';
                         } else {
-                            // ToDo: Maybe made exception there if count of elements in $aSqlArr more than 1;
-                            trigger_error('Incorrect type of placeholder "' . gettype($v) . '".', E_USER_WARNING);
+                            throw new \InvalidArgumentException('Incorrect type of placeholder "' . gettype($v) . '".');
                         }
                     }
                 }
             }
-            if (!empty($aSqlArr)) {
-                if (count($aSqlArr) > 1) {
-                    // ToDo: Maybe made exception there if count of elements in $aSqlArr more than 1;
-                    trigger_error('Quantity of parameters less than quantity of placeholders.', E_USER_WARNING);
+            if (!empty($sqlArr)) {
+                if (count($sqlArr) > 1) {
+                    throw new \InvalidArgumentException('Quantity of parameters less than quantity of placeholders.');
                 }
-                $sSql .= implode('?', $aSqlArr);
+                $sql .= implode('?', $sqlArr);
             }
         }
-        if ($bSaveResult) {
-            $this->sParsedSql = $sSql;
+        if ($saveResult) {
+            $this->parsedSql = $sql;
         }
-        return $sSql;
-    } // function _parseSql
+        return $sql;
+    }
 
-} // class \fan\core\service\database\mysql
-?>
+}

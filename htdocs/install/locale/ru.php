@@ -1,5 +1,8 @@
 <?php
-return array(
+
+declare(strict_types=1);
+
+return [
     'CHECK_BASIC_PARAMETERS' => 'Проверка основных параметров',
     'CHECK_PHP_VER' => 'Проверка версии PHP',
     'INCORRECT_PHP_VER' => 'Работа не возможна. Не корректная версия PHP',
@@ -40,5 +43,4 @@ return array(
     'YOUR_PHP_FAN' => 'Ваш PHP-FAN',
     'SEE_LOG_VIEWER' => 'Если при работе вашего проекта будут возникать ошибки - они все будут сохранены в логи. Для просмотра логов используйте специальную программу "просмотрщик"',
     'DO_NOT_FORGET_REMOVE_INSTALL' => 'Не забудьте удалить каталог "install" после настройки проекта',
-);
-?>
+];

@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Pager meta-file
  *
@@ -14,22 +17,22 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.005 (12.02.2015)
  */
-return array(
+return [
     /**
      * Meta data for curent carcass block
      */
-    'own' => array(
-        'externalCss' => array(
-            'style' => array('/css/pager.css'),
-        ),
+    'own' => [
+        'externalCss' => [
+            'style' => ['/css/pager.css'],
+        ],
 
         'elmPerPage'    => 8,
-        'qttLimit' => array(
+        'qttLimit' => [
             'startEnd' => 2,
             'middle'   => 5,
-        ),
+        ],
 
-        'tplVars' => array (
+        'tplVars' => [
             //the type of templates
             'tplType'       => 'references',
             //if showIfOnePage=1, the pager will be showed even if there is one page
@@ -38,7 +41,6 @@ return array(
             'showPrevNext'  => 1,
             //if showFirstLast=1, the references on the first page and last page will be showed
             'showFirstLast' => 1,
-        ),
-    ),
-);
-?>
+        ],
+    ],
+];

@@ -1,29 +1,35 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Home page meta-data
  * @version 05.02.001 (10.03.2014)
  */
-return array(
-    'own' => array(
-        'title' => 'Home page',
+return [
+    'own' => [
+
+        'embeddedBlocks' => [ // Key - template var; Value - path to block
+            'test' => '{MAIN}/test',
+        ],
+
 
         /** /
         'carcass'     => '{CARCASS}/home_carcass',
-        'externalCss' => array( // css files
-            'new' => array('/css/home.css'),
-        ),/**/
+        'externalCss' => [ // css files
+            'new' => ['/css/home.css'],
+        ],/**/
 
         /**
          * All parameters below it is possible to set as "own"-part, amd in "common"-part
          * /
-        'tplVars' => array( // variable, which sets in template automaticaly
-            'tplVar1' => 'Value of variable 1',
+        'tplVars' => [ // variable, which sets in template automaticaly
+            'test' => '{FRONTED}/main/test',
             'tplVar2' => 'Value of variable 2',
-        ),/**/
-    ),
+        ],/**/
+    ],
     /** /
-    'common' => array(
+    'common' => [
         'test0' => 1,
-    ),/**/
-);
-?>
+    ],/**/
+];

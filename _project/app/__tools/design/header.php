@@ -1,4 +1,8 @@
-<?php namespace fan\app\__tools\design;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__tools\design;
 /**
  * header_main block
  *
@@ -16,8 +20,7 @@
  */
 class header extends \fan\project\block\base
 {
-    public function init()
+    public function init(): void
     {
-    } // function init
-} // class \fan\app\__tools\design\header
-?>
+    }
+}

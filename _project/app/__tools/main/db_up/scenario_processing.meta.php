@@ -1,18 +1,20 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Scenario processing tools meta
  * @version 05.02.005 (12.02.2015)
  */
-return array(
-    'own' => array(
+return [
+    'own' => [
 
         'carcass' => 'carcass/simple',
 
         'title' => 'Scenario processing',
 
-        'externalCss' => array( // css files
-            'style' => array('~/db_up_processing.css'),
-        ),
-    ),
-);
-?>
+        'externalCss' => [ // css files
+            'style' => ['~/db_up_processing.css'],
+        ],
+    ],
+];

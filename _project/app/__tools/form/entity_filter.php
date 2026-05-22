@@ -1,4 +1,8 @@
-<?php namespace fan\app\__tools\form;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__tools\form;
 /**
  * entity_filter block
  *
@@ -16,59 +20,47 @@
  */
 class entity_filter extends \fan\project\block\form\filter
 {
-    /**
-     * Init block
-     */
-    public function init()
+    public function init(): void
     {
         $this->_parseForm(true, true);
-    } // function init
+    }
 
-    /**
-     * Get List of databases
-     * @return array
-     */
-    public function getDbList()
+    public function getDbList(): array
     {
-        $aDB   = array();
-        $aConf = service('database')->getConfig();
-        foreach ($aConf['DATABASE'] as $k => $v) {
-            $aDB[] = array(
+        $db   = [];
+        $conf = $this->containerService('database')->getConfig();
+        foreach ($conf['DATABASE'] as $k => $v) {
+            $db[] = [
                 'text'  => $v['DATABASE'],
                 'value' => $k,
-            );
+            ];
         }
-        return $aDB;
-    } // function getDbList
+        return $db;
+    }
 
-    /**
-     * Get List of model-directories
-     * @return array
-     */
-    public function getDirList()
+    public function getDirList(): array
     {
-        $sPrefix = rtrim(service('entity')->getNsPrefix(), '\\');
-        $sText   = str_replace('\\', '/', $sPrefix);
-        $aDir = array(array(
-            'text'  => $sText,
-            'value' => $sPrefix,
-        ));
-        $sSep  = \fan\core\bootstrap\loader::DEFAULT_DIR_SEPARATOR;
-        $sPath = \bootstrap::getLoader()->getPathByNS($sPrefix);
-        foreach (scandir($sPath) as $v) {
+        $prefix = rtrim($this->containerService('entity')->getNsPrefix(), '\\');
+        $text   = str_replace('\\', '/', $prefix);
+        $dir = [[
+            'text'  => $text,
+            'value' => $prefix,
+        ]];
+        $sep  = \fan\core\bootstrap\loader::DEFAULT_DIR_SEPARATOR;
+        $path = \bootstrap::getLoader()->getPathByNS($prefix);
+        foreach (scandir($path) as $v) {
             if (
-                    $v != '.' &&
-                    $v != '..' &&
-                    is_dir($sPath . $sSep . $v) &&
-                    !is_file($sPath . $sSep . $v . $sSep . 'entity.php')
+                    $v !== '.' &&
+                    $v !== '..' &&
+                    is_dir($path . $sep . $v) &&
+                    !is_file($path . $sep . $v . $sep . 'entity.php')
             ) {
-                $aDir[] = array(
-                    'text'  => $sText . '/' . $v,
-                    'value' => $sPrefix . '\\' . $v,
-                );
+                $dir[] = [
+                    'text'  => $text . '/' . $v,
+                    'value' => $prefix . '\\' . $v,
+                ];
             }
         }
-        return $aDir;
-    } // function getDirList
-} // class \fan\app\__tools\form\entity_filter
-?>
+        return $dir;
+    }
+}

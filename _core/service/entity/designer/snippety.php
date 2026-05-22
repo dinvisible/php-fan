@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\entity\designer;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\entity\designer;
 /**
  * Designer of snippety SQL-request
  *
@@ -20,10 +24,10 @@ class snippety extends \fan\core\service\entity\designer
      * SQL-request snippets
      * @var string
      */
-    protected $aQueryParts = array(
-        'snippet' => array(),
+    protected array $queryParts = [
+        'snippet' => [],
         'orderBy' => null,
-    );
+    ];
 
 
     // ======== Static methods ======== \\
@@ -32,103 +36,68 @@ class snippety extends \fan\core\service\entity\designer
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Separate Source SQL-requests at the snippets and set it
-     * @param string $sQueryKey
-     * @return \fan\core\service\entity\designer\snippety
-     */
-    public function setSqlRequest($sQueryKey)
+    public function setSqlRequest(string $queryKey): static
     {
-        $oRequest = $this->getEntity()->getRequestLoader();
-        $sSourceSQL = $oRequest->get($sQueryKey);
-        if ($sSourceSQL != '') {
-            $this->aQueryParts['snippet'] = substr($sSourceSQL, 0, 2) == '##' ?
-                    $this->_parseSQL(trim(substr($sSourceSQL, 2))) :
-                    array($sSourceSQL);
+        $request = $this->getEntity()->getRequestLoader();
+        $sourceSQL = (string)$request->get($queryKey);
+        if ($sourceSQL !== '') {
+            $this->queryParts['snippet'] = substr($sourceSQL, 0, 2) === '##' ?
+                    $this->_parseSQL(trim(substr($sourceSQL, 2))) :
+                    [$sourceSQL];
         }
         return $this;
-    } // function setSqlRequest
+    }
 
-    /**
-     * Set Snippet of Request
-     * @param string $sSourceSQL
-     * @return \fan\core\service\entity\designer\snippety
-     */
-    public function setRequestSnippet($mSnippetValue, $bAllowException = true)
+    public function setRequestSnippet(mixed $snippetValue, bool $allowException = true): static
     {
-        $this->set('snippet', $mSnippetValue, $bAllowException);
+        $this->set('snippet', $snippetValue, $allowException);
         return $this;
-    } // function setRequestSnippet
+    }
 
-    /**
-     * Add Snippet of Request
-     * @param string|array $mSnippetValue
-     * @param type $bToEnd
-     * @param type $bAllowException
-     * @return \fan\core\service\entity\designer\snippety
-     */
-    public function addRequestSnippet($mSnippetValue, $bToEnd = true, $bAllowException = true)
+    public function addRequestSnippet(string|array $snippetValue, bool $toEnd = true, bool $allowException = true): static
     {
-        $this->add('snippet', $mSnippetValue, $bToEnd, $bAllowException);
+        $this->add('snippet', $snippetValue, (bool)$toEnd, $allowException);
         return $this;
-    } // function addRequestSnippet
+    }
 
-    /**
-     * Set Part of Order
-     * @param mixed $mPartValue
-     * @param boolean $bAllowException
-     * @return \fan\core\service\entity\designer\snippety
-     */
-    public function setOrderPart($mPartValue, $bAllowException = true)
+    public function setOrderPart(mixed $partValue, bool $allowException = true): static
     {
-        if (!empty($mPartValue)) {
-            $this->set('orderBy', $mPartValue, $bAllowException);
+        if (!empty($partValue)) {
+            $this->set('orderBy', $partValue, $allowException);
         }
         return $this;
-    } // function setOrderPart
+    }
 
-    /**
-     * Add Part of Order
-     * @param string|array $mPartValue
-     * @param boolean $bToEnd
-     * @param boolean $bAllowException
-     * @return \fan\core\service\entity\designer\snippety
-     */
-    public function addOrderPart($mPartValue, $bToEnd = true, $bAllowException = true)
+    public function addOrderPart(string|array $partValue, bool $toEnd = true, bool $allowException = true): static
     {
-        $this->add('orderBy', $mPartValue, $bToEnd, $bAllowException);
+        $this->add('orderBy', $partValue, $toEnd, $allowException);
         return $this;
-    } // function addOrderPart
+    }
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Parse Source SQL
-     * @param type $sSourceSQL
-     * @return array
-     */
-    public function _parseSQL($sSourceSQL)
+    public function _parseSQL(string $sourceSQL): array
     {
-        $aSnippets = array();
+        $sourceSQL = (string)$sourceSQL;
+        $snippets = [];
 
         do {
-            $aMatches = array();
-            if (preg_match('/^(.*?)[\r\n]+\#\#([^#]+)(?:\-\#\-(\w+(?:\:\w+)?))?\#\#([\r\n].+?)[\r\n]+\#\#\-\-/s', $sSourceSQL, $aMatches)) {
-                if (!empty($aMatches[1])) {
-                    array_push($aSnippets, $aMatches[1]);
+            $matches = [];
+            if (preg_match('/^(.*?)[\r\n]+\#\#([^#]+)(?:\-\#\-(\w+(?:\:\w+)?))?\#\#([\r\n].+?)[\r\n]+\#\#\-\-/s', $sourceSQL, $matches)) {
+                if (!empty($matches[1])) {
+                    array_push($snippets, $matches[1]);
                 }
-                array_push($aSnippets, $this->getEntity()->getService()->getSnippet($this, $aMatches[4], $aMatches[2], $aMatches[3]));
+                array_push($snippets, $this->getEntity()->getService()->getSnippet($this, $matches[4], $matches[2], $matches[3]));
             } else {
                 break;
             }
 
-            $sSourceSQL = substr($sSourceSQL, strlen($aMatches[0]));
-        } while(!empty($sSourceSQL));
+            $sourceSQL = substr($sourceSQL, strlen($matches[0]));
+        } while (!empty($sourceSQL));
 
-        if (!empty($sSourceSQL)) {
-            array_push($aSnippets, $sSourceSQL);
+        if (!empty($sourceSQL)) {
+            array_push($snippets, $sourceSQL);
         }
-        return $aSnippets;
-    } // function _parseSQL
+        return $snippets;
+    }
 
-} // class \fan\core\service\entity\designer\snippety
-?>
+}

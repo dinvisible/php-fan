@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\matcher\item;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\matcher\item;
 /**
  * Description of source
  *
@@ -23,17 +26,21 @@ class source extends base
      * Allowed property
      * @var array
      */
-    protected $aData = array(
+    protected array $data = [
         'request' => null,
         'host'    => null,
         'file'    => null,
         'path'    => null,
-    );
+    ];
 
-    public function __toString() {
-        return empty($this->aData['request']) ?
-            $this->aData['path'] . '/' . $this->aData['file'] :
-            $this->aData['host'] . $this->aData['request'];
+    /**
+     * Implements PHP magic behavior for this current component.
+     *
+     * @return string String representation of the matched source request.
+     */
+    public function __toString(): string {
+        return empty($this->data['request']) ?
+            (string)$this->data['path'] . '/' . (string)$this->data['file'] :
+            (string)$this->data['host'] . (string)$this->data['request'];
     }
-} // class \fan\core\service\matcher\item\source
-?>
+}

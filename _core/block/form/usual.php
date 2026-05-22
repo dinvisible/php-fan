@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\form;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\form;
 /**
  * Usual form block abstract
  *
@@ -22,97 +26,83 @@ abstract class usual extends parser
      * Array for template
      * @var array
      */
-    protected $aFormTpl = array();
+    protected array $formTpl = [];
 
-    /**
-     * Finish Construction of block
-     * @param \fan\core\block\base $oContainer
-     * @param array $aContainerMeta
-     * @param boolean $bAllowSetEmbedded
-     */
-    public function finishConstruct($oContainer = null, $aContainerMeta = array(), $bAllowSetEmbedded = true)
+    public function finishConstruct(?\fan\core\block\base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
     {
-        parent::finishConstruct($oContainer, $aContainerMeta, $bAllowSetEmbedded);
-        if ($this->bIsForm && !$this->getRoleCondition()) {
+        parent::finishConstruct($container, $containerMeta, $allowSetEmbedded);
+        if ($this->isForm && !$this->getRoleCondition()) {
             // Create JS validation rule
-            if (!$this->sRoleName || !role($this->sRoleName)) {
-                $sValidateJS = $this->getForm()->strForJsValidation();
-                if ($sValidateJS) {
-                    $this->_getBlock('root')->setEmbedJs($sValidateJS);
+            if (!$this->roleName || !role($this->roleName)) {
+                $validateJS = $this->getForm()->strForJsValidation();
+                if ($validateJS) {
+                    $this->_getBlock('root')->setEmbedJs($validateJS);
                 }
             }
         }
-    } // function finishConstruct
+    }
 
-    /**
-     * Get cache permission: true if cache enabled
-     * @return boolean
-     */
-    public function getCachePermission()
+    public function getCachePermission(): bool
     {
-        $nMode = $this->getMeta(array('cache', 'mode'));
-        if ($nMode == 0 || !empty($_POST) && $this->getForm()->necessaryFormParsing(null, false)) {
+        $mode = $this->getMeta(['cache', 'mode']);
+        if ((int)$mode === 0 || !empty($_POST) && $this->getForm()->necessaryFormParsing(null, false)) {
             $this->disableCache();
             return false;
-        } elseif($nMode == 1) {
+        } elseif ((int)$mode === 1) {
             return false;
         }
         return true;
-    } // function getCachePermission
+    }
 
-    /**
-     * Get All View data
-     * @return array
-     */
-    public function getViewData()
+    public function getViewData(): array
     {
-        $aResult     = parent::getViewData();
-        $oForm       = $this->getForm();
-        $aFieldValue = $oForm->getFieldValue();
+        $result     = parent::getViewData();
+        $form       = $this->getForm();
+        $fieldValue = $form->getFieldValue();
 
-        foreach ($this->getFieldsMeta() as $sFieldName => $aParameters) {
+        foreach ($this->getFieldsMeta() as $fieldName => $parameters) {
 
-            if (!isset($this->aFormTpl[$sFieldName])) {
+            if (!isset($this->formTpl[$fieldName])) {
                 //name of the form element
-                $this->aFormTpl[$sFieldName]['name'] = $sFieldName;
+                $this->formTpl[$fieldName]['name'] = $fieldName;
                 //type of the form element
-                $this->aFormTpl[$sFieldName]['type'] = empty($aParameters['input_type']) ? null : $aParameters['input_type'];
+                $this->formTpl[$fieldName]['type'] = empty($parameters['input_type']) ? null : $parameters['input_type'];
                 //label of the form element
-                $this->aFormTpl[$sFieldName]['label'] = empty($aParameters['label']) ? null : $aParameters['label'];
+                $this->formTpl[$fieldName]['label'] = empty($parameters['label']) ? null : $parameters['label'];
                 //value of the form element
                 //it can be an array. if it is, it's mean that may be a few elements with same name and different indexes
-                $this->aFormTpl[$sFieldName]['value'] = $oForm->isError() || isset($aFieldValue[$sFieldName]) ?
-                        array_val($aFieldValue, $sFieldName) :
-                        empty($aParameters['default_value']) ? null : $aParameters['default_value'];
+                $this->formTpl[$fieldName]['value'] = $form->isError() || isset($fieldValue[$fieldName]) ?
+                        array_val($fieldValue, $fieldName) :
+                        (empty($parameters['default_value']) ? null : $parameters['default_value']);
                 //parameters of the form element
-                $this->aFormTpl[$sFieldName]['parameters'] = empty($aParameters['parameters']) ? null : $aParameters['parameters'];
+                $this->formTpl[$fieldName]['parameters'] = empty($parameters['parameters']) ? null : $parameters['parameters'];
             }
         }
 
 
-        $aResult['aErrors']  = $oForm->getErrorMsg();
-        $aResult['aFormTpl'] = $this->aFormTpl;
-        $sActionUrl = $this->getFormMeta('action_url');
-        if(empty($sActionUrl)) {
-            $sActionUrl    = $this->oTab->getCurrentURI(false, true, strtoupper($this->getFormMeta('action_method')) != 'GET', false);
-            $sDefaultHttps = $this->oTab->getTabMeta('page_https');
+        $result['aErrors']  = $form->getErrorMsg();
+        $result['formTpl'] = $this->formTpl;
+        $actionUrl = $this->getFormMeta('action_url');
+        $actionMethodMeta = (string)$this->getFormMeta('action_method');
+        if (empty($actionUrl)) {
+            $actionUrl    = $this->tab->getCurrentURI(false, true, strtoupper($actionMethodMeta) !== 'GET', false);
+            $defaultHttps = $this->tab->getTabMeta('page_https');
         } else {
-            $sDefaultHttps = null;
+            $defaultHttps = null;
         }
-        $aResult['action_url'] = $this->oTab->getURI($sActionUrl, 'link', false, $this->getFormMeta('action_https', $sDefaultHttps));
+        $result['action_url'] = $this->tab->getURI((string)$actionUrl, 'link', false, $this->getFormMeta('action_https', $defaultHttps));
 
-        $sActionMethod = strtolower($this->getFormMeta('action_method'));
-        if ($sActionMethod == 'file') {
-            $sActionMethod = 'post" enctype="multipart/form-data';
-        } elseif ($sActionMethod != 'get') {
-            $sActionMethod = 'post';
+        $actionMethod = strtolower($actionMethodMeta);
+        if ($actionMethod === 'file') {
+            $actionMethod = 'post" enctype="multipart/form-data';
+        } elseif ($actionMethod !== 'get') {
+            $actionMethod = 'post';
         }
-        $aResult['action_method']  = '"' . $sActionMethod . '"';
-        $aResult['form_key_field'] = $this->getFormMeta('form_key_field');
-        $aResult['form_id']        = $this->getFormMeta('form_id');
+        $result['action_method']  = '"' . $actionMethod . '"';
+        $result['form_key_field'] = $this->getFormMeta('form_key_field');
+        $result['form_id']        = $this->getFormMeta('form_id');
 
-        return $aResult;
-    } // function getViewData
+        return $result;
+    }
 
-} // class \fan\core\block\form\usual
-?>
+}

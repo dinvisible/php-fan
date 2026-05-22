@@ -1,4 +1,7 @@
-<?php namespace fan\core\view\parser;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view\parser;
 /**
  * View parser JSON-type
  *
@@ -18,40 +21,27 @@ class json extends \fan\core\view\parser
 {
     // ======== Static methods ======== \\
 
-    /**
-     * Get View-Format
-     * @return string
-     */
-    final static public function getFormat() {
+    final static public function getFormat(): string {
         return 'json';
-    } // function getFormat
-    /**
-     * Get View-Router for block
-     * @param \fan\core\block\base $oBlock
-     * @return \fan\core\view\router\json
-     */
-    static public function getRouter(\fan\core\block\base $oBlock) {
-        return new \fan\project\view\router\json($oBlock);
-    } // function getRouter
+    }
+
+    static public function getRouter(\fan\core\block\base $block): \fan\core\view\router\json {
+        return new \fan\project\view\router\json($block);
+    }
 
     // ======== Main Interface methods ======== \\
-   /**
-     * Get Final Content Code
-     * @return string
-     */
-    public function getFinalContent()
+    public function getFinalContent(): string
     {
-        $oView = $this->oRootBlock->getView();
-        $bUseBase64 = method_exists($oView, 'isUseBase64') && $oView->isUseBase64();
-        $sResult = service('json', $bUseBase64)->encode($this->aResult);
-        
-        $this->_setHeaders($sResult, 'application/json');
-        return $sResult;
-    } // function getFinalContent
+        $view = $this->rootBlock->getView();
+        $useBase64 = method_exists($view, 'isUseBase64') && $view->isUseBase64();
+        $result = $this->containerService('json', $useBase64)->encode($this->result);
+
+        $this->_setHeaders($result, 'application/json');
+        return $result;
+    }
 
     // ======== Protected methods ======== \\
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\view\parser\json
-?>
+}

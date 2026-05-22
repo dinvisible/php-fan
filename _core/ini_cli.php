@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Init CLI operation
  *
@@ -15,7 +18,7 @@
  * @version of file: 05.01.001 (29.09.2011)
  */
 if (!defined('BASE_DIR')) {
-    define('BASE_DIR', dirname($_SERVER['SCRIPT_FILENAME']));
+    define('BASE_DIR', dirname((string)($_SERVER['SCRIPT_FILENAME'] ?? '')));
 }
 
 require_once __DIR__ . '/bootstrap.php';
@@ -25,4 +28,3 @@ if (file_exists(__DIR__ . '/../_project/ini_cli.php')) {
 } else {
     \bootstrap::init(__DIR__ . '/../_project/conf/bootstrap.ini');
 }
-?>

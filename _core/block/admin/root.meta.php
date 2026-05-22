@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Basiс xhtml_1 Meta data
  *
@@ -14,18 +17,17 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.01.002 (01.05.2013)
  */
-return array(
-    'own' => array(
+return [
+    'own' => [
 
-        'browserClasses' => array (
-            'isOpera' => array(
+        'browserClasses' => [
+            'isOpera' => [
                 'regExp'   => '/Opera\W*(\d+(:?\.\d+)?)/',
-                'olderVer' => array('isOpera8' => 9),
-            ),
-        ),
-        'cache' => array(
+                'olderVer' => ['isOpera8' => 9],
+            ],
+        ],
+        'cache' => [
             'mode' => 1,
-        ),
-    ),
-);
-?>
+        ],
+    ],
+];

@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\entity;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\entity;
 use fan\project\exception\model\entity\fatal as fatalException;
 /**
  * Entity table-description
@@ -16,18 +20,18 @@ use fan\project\exception\model\entity\fatal as fatalException;
  * @version of file: 05.02.004 (25.12.2014)
  *
  * @property-read string|array $primeryKey
- * @method \fan\core\service\entity\description setPrimeryKey() setPrimeryKey(array|string $mKey)
+ * @method \fan\core\service\entity\description setPrimeryKey() setPrimeryKey(array|string $key)
  * @method mixed getPrimeryKey()
  * @property-read array $fields
- * @method \fan\core\service\entity\description setFields() setFields(array $aFields)
+ * @method \fan\core\service\entity\description setFields() setFields(array $fields)
  * @method mixed getFields()
  * @property-read array $keys
- * @method \fan\core\service\entity\description setKeys() setKeys(array $aKeys)
+ * @method \fan\core\service\entity\description setKeys() setKeys(array $keys)
  * @method mixed getKeys()
  * @property-read array $relations
  * @method mixed getRelations()
  * @property-read array $dependents
- * @method \fan\core\service\entity\description setDependents()  setDependents(array $aDependents)
+ * @method \fan\core\service\entity\description setDependents()  setDependents(array $dependents)
  * @method mixed getDependents()
  * @property-read string $engine
  * @method string getEngine()
@@ -44,18 +48,18 @@ class description
      * Entity - owner of table description
      * @var \fan\core\base\model\entity
      */
-    protected $oEntity = null;
+    protected ?object $entity = null;
     /**
      * Table descriptor (Maker dynamic description)
      * @var \fan\core\service\entity\descriptor
      */
-    protected $oDescriptor = null;
+    protected ?object $descriptor = null;
 
     /**
      * List of applied property avaylable by magic functions
      * @var array
      */
-    protected $aProperty = array(
+    protected array $property = [
         'primeryKey'     => null,
         'fields'         => null,
         'keys'           => null,
@@ -65,279 +69,218 @@ class description
         'createTime'     => null,
         'tableCollation' => null,
         'comment'        => null,
-    );
+    ];
 
     /**
      * Enable save/load cache of entity structure
      * @var boolean
      */
-    protected $bCacheEnabled = true;
+    protected bool $cacheEnabled = true;
     /**
      * List of Property which set dynamically
      * @var array
      */
-    protected $aDynamicProperty = array();
+    protected array $dynamicProperty = [];
 
-    /**
-     * Description constructor
-     * @param \fan\core\base\model\entity $oEntity
-     * @param array $aParam
-     */
-    public function __construct(\fan\core\base\model\entity $oEntity, $aParam)
+    public function __construct(\fan\core\base\model\entity $entity, array $param)
     {
-        $this->oEntity = $oEntity;
+        $this->entity = $entity;
 
-        $this->bCacheEnabled    = isset($aParam['cacheEnabled']) ? !empty($aParam['cacheEnabled']) : $oEntity->getConfig()->get('cacheEnabled', true);
-        $this->aDynamicProperty = $this->_defineDynamicProperty($aParam);
-    } // function __construct
+        $this->cacheEnabled    = isset($param['cacheEnabled']) ? !empty($param['cacheEnabled']) : (bool)$entity->getConfig()->get('cacheEnabled', true);
+        $this->dynamicProperty = $this->_defineDynamicProperty($param);
+    }
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
 
     /**
-     * Set virtual property
-     * @param string $sKey
-     * @param mixed $mValue
+     * Handles dynamic property writes for this current component.
+     *
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function __set($sKey, $mValue)
+    public function __set(string $key, mixed $value): void
     {
-        $this->set($sKey, $mValue);
-    } // function __set
+        $this->set((string)$key, $value);
+    }
 
     /**
-     * Get virtual property
-     * @param string $sKey
-     * @return mixed
+     * Handles dynamic property reads for this current component.
      */
-    public function __get($sKey)
+    public function __get(string $key): mixed
     {
-        $mRet = $this->get($sKey);
-        return is_string($mRet) ? (string)$mRet : $mRet; //ToDo: Examine this hack
-    } // function __get
+        $ret = $this->get((string)$key);
+        return is_string($ret) ? (string)$ret : $ret; //ToDo: Examine this hack
+    }
 
-    /**
-     * Call to unset entity method
-     * @param string $sMethod method name
-     * @param array $aArgs arguments
-     * @return mixed Value return by engine
-     */
-    public function __call($sMethod, $aArgs)
+    public function __call(string $method, array $args): mixed
     {
-        $sKey = lcfirst(substr($sMethod, 3));
-        if(substr($sMethod, 0, 3) == 'set' && $this->_checkPropertyName($sKey, false)) {
-            $this->set($sKey, $aArgs[0]);
+        $method = (string)$method;
+        $key = lcfirst(substr($method, 3));
+        if (substr($method, 0, 3) === 'set' && $this->_checkPropertyName($key, false)) {
+            $this->set($key, $args[0]);
             return $this;
-        } elseif (substr($sMethod, 0, 3) == 'get' && $this->_checkPropertyName($sKey, false)) {
-            return $this->get($sKey, isset($aArgs[0]) ? $aArgs[0] : false);
+        } elseif (substr($method, 0, 3) === 'get' && $this->_checkPropertyName($key, false)) {
+            return $this->get($key, isset($args[0]) ? $args[0] : false);
         }
         throw new fatalException($this->getEntity(), 'Incorrect call of entity description!');
-    } // function __call
+    }
 
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    /**
-     * Get value of property
-     * @param string $sKey
-     * @return string
-     */
-    public function get($sKey, $bForce = false)
+    public function get(string $key, bool $force = false): mixed
     {
-        if ($this->_checkPropertyName($sKey)) {
-            if (is_null($this->aProperty[$sKey])) {
-                $this->_loadDynamicProperty($sKey, $bForce);
+        if ($this->_checkPropertyName($key)) {
+            if (is_null($this->property[$key])) {
+                $this->_loadDynamicProperty($key, $force);
             }
-            return $this->aProperty[$sKey];
+            return $this->property[$key];
         }
         return null;
-    } // function get
+    }
 
     /**
-     * Set value of property
-     * @param string $sKey
-     * @param mixed $mValue
-     * @return \fan\core\service\entity\description
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function set($sKey, $mValue)
+    public function set(string $key, mixed $value): static
     {
-        if ($this->_checkPropertyName($sKey) && ($sKey == 'comment' || is_null($this->aProperty[$sKey]))) {
-            $sMethod = 'set' . ucfirst($sKey);
-            if (method_exists($this, $sMethod)) {
-                $this->$sMethod($mValue);
+        if ($this->_checkPropertyName($key) && ($key === 'comment' || is_null($this->property[$key]))) {
+            $method = 'set' . ucfirst($key);
+            if (method_exists($this, $method)) {
+                if ($method === 'setComment') {
+                    $value = (string)$value;
+                }
+                $this->$method($value);
             } else {
-                $this->aProperty[$sKey] = $mValue;
+                $this->property[$key] = $value;
             }
         }
         return $this;
-    } // function set
+    }
 
     /**
-     * Set Comment
-     * @param string $sValue
-     * @return \fan\core\service\entity\description
+     * @param string $value Value that should be applied or transformed.
      */
-    public function setComment($sValue)
+    public function setComment(string $value): static
     {
-        $this->getEntity()->getConnection()->execute('ALTER TABLE `' . $this->getTableName() . '` COMMENT = ?', array($sValue));
-        if ($this->bCacheEnabled) {
+        $this->getEntity()->getConnection()->execute('ALTER TABLE `' . $this->getTableName() . '` COMMENT = ?', [$value]);
+        if ($this->cacheEnabled) {
             $this->_loadDynamicProperty();
         }
-        $this->aProperty['comment'] = (string)$sValue;
+        $this->property['comment'] = (string)$value;
         $this->_saveCacheFile();
         return $this;
-    } // function setComment
+    }
 
-    /**
-     * Check - is Table exists in DB
-     * @return boolean
-     */
-    public function isTableExists()
+    public function isTableExists(): bool
     {
         return $this->_getDescriptor()->isTableExists();
-    } // function isTableExists
+    }
 
-    /**
-     * Get Table Name
-     * @return string
-     */
-    public function getTableName()
+    public function getTableName(): string
     {
         return $this->getEntity()->getTableName();
-    } // function getTableName
+    }
 
 // ToDo: Set dependents by entity-class/method (OR it will by recognized by DB-field automatically)
 
-    /**
-     * Gets All Property by array
-     * @return array
-     */
-    public function toArray()
+    public function toArray(): array
     {
-        return $this->aProperty;
-    } // function toArray
+        return $this->property;
+    }
 
-    /**
-     * Get instance of Entity
-     * @return \fan\core\base\model\entity
-     */
-    public function getEntity()
+    public function getEntity(): \fan\core\base\model\entity
     {
-        return $this->oEntity;
-    } // function getEntity
+        return $this->entity;
+    }
     // ======== Private/Protected methods ======== \\
 
     /**
-     *
-     * @param string $sPropName
-     * @param boolean $bAllowException
-     * @return boolean
      * @throws fatalException
      */
-    protected function _checkPropertyName($sPropName, $bAllowException = true)
+    protected function _checkPropertyName(string $propName, bool $allowException = true): bool
     {
-        if (array_key_exists($sPropName, $this->aProperty)) {
+        if (array_key_exists($propName, $this->property)) {
             return true;
         }
-        if ($bAllowException) {
-            throw new fatalException($this->getEntity(), 'Incorret Property Name of Entity-desckription "' . $sPropName . '".');
+        if ($allowException) {
+            throw new fatalException($this->getEntity(), 'Incorret Property Name of Entity-desckription "' . $propName . '".');
         }
         return false;
-    } // function _checkPropertyName
+    }
 
-    /**
-     * Get Table Descriptor (Several classes for different type of description)
-     * @return \fan\core\service\entity\descriptor
-     */
-    protected function _getDescriptor()
+    protected function _getDescriptor(): \fan\core\service\entity\descriptor
     {
-        if (is_null($this->oDescriptor)) {
+        if (is_null($this->descriptor)) {
             // ToDo: Define descriptor by type of current connection
             try {
-                $this->oDescriptor = new \fan\project\service\entity\descriptor\mysql\schema($this);
+                $this->descriptor = new \fan\project\service\entity\descriptor\mysql\schema($this);
             } catch (\fan\core\exception\model\reverse $e) {
-                $this->oDescriptor = new \fan\project\service\entity\descriptor\mysql\direct($this);
+                $this->descriptor = new \fan\project\service\entity\descriptor\mysql\direct($this);
             }
         }
-        return $this->oDescriptor;
-    } // function _getDescriptor
+        return $this->descriptor;
+    }
 
-    /**
-     * Define array of keys for Property will be set Dynamically
-     * @param array $aParam
-     * @return array
-     */
-    protected function _defineDynamicProperty($aParam = array())
+    protected function _defineDynamicProperty(array $param = []): array
     {
-        $aResult = array();
-        foreach ($this->aProperty as $k => $v) {
-            if (isset($aParam[$k])) {
-                $this->aProperty[$k] = $aParam[$k]; // ToDo: Validate $aParam[$k] before set it
+        $result = [];
+        foreach ($this->property as $k => $v) {
+            if (isset($param[$k])) {
+                $this->property[$k] = $param[$k]; // ToDo: Validate $param[$k] before set it
             } elseif (is_null($v)) {
-                $aResult[] = $k;
+                $result[] = $k;
             }
         }
-        return $aResult;
-    } // function _defineDynamicProperty
+        return $result;
+    }
 
-    /**
-     * Load Dynamic Property
-     * @return \fan\core\base\model\entity
-     */
-    protected function _loadDynamicProperty($sKey = null, $bForce = false)
+    protected function _loadDynamicProperty(?string $key = null, bool $force = false): static
     {
-        $sCacheFile = $this->_getCacheFileName();
-        if ($this->bCacheEnabled && file_exists($sCacheFile) && !$bForce) {
-            $aProperty = include $sCacheFile;
-            foreach ($this->aDynamicProperty as $k => $v) {
-                $this->aProperty[$v] = isset($aProperty[$v]) ? $aProperty[$v] : null;
-                unset($this->aDynamicProperty[$k]);
+        $cacheFile = $this->_getCacheFileName();
+        if ($this->cacheEnabled && file_exists($cacheFile) && !$force) {
+            $property = \fan\project\adapter\php_array_file::load($cacheFile, []);
+            foreach ($this->dynamicProperty as $k => $v) {
+                $this->property[$v] = isset($property[$v]) ? $property[$v] : null;
+                unset($this->dynamicProperty[$k]);
             }
-        } elseif ($this->bCacheEnabled || empty($sKey)) {
+        } elseif ($this->cacheEnabled || empty($key)) {
             if (!$this->isTableExists()) {
                 throw new fatalException($this->getEntity(), 'DB table "' . $this->getTableName() . '" doesn\'t exists.');
             }
-            $oDescriptor = $this->_getDescriptor();
-            foreach ($this->aProperty as $k => $v) {
-                $sMethod = 'get' . ucfirst($k);
-                $this->aProperty[$k] = $oDescriptor->$sMethod();
+            $descriptor = $this->_getDescriptor();
+            foreach ($this->property as $k => $v) {
+                $method = 'get' . ucfirst($k);
+                $this->property[$k] = $descriptor->$method();
             }
             $this->_saveCacheFile();
         } else {
-            $sMethod = 'get' . ucfirst($sKey);
-            $this->aProperty[$sKey] = $this->_getDescriptor()->$sMethod();
+            $method = 'get' . ucfirst($key);
+            $this->property[$key] = $this->_getDescriptor()->$method();
         }
         return $this;
-    } // function _loadDynamicProperty
+    }
 
-    /**
-     * Save Cache File
-     * @return \fan\core\base\model\entity
-     */
-    protected function _saveCacheFile()
+    protected function _saveCacheFile(): static
     {
-        if ($this->bCacheEnabled) {
-            $aSavedData = array_merge(
-                    array('class' => get_class_alt($this->getEntity())),
-                    $this->aProperty
+        if ($this->cacheEnabled) {
+            $savedData = array_merge(
+                    ['class' => get_class_alt($this->getEntity())],
+                    $this->property
             );
-            $sCacheFile = $this->_getCacheFileName();
-            file_put_contents($sCacheFile, '<?php
+            $cacheFile = $this->_getCacheFileName();
+            file_put_contents($cacheFile, '<?php
 /*
  * Entity structure array
  */
-return ' . var_export($aSavedData, true) . ';
+return ' . var_export($savedData, true) . ';
 ?>');
         }
         return $this;
-    } // function _saveCacheFile
-    /**
-     *Get Cache FileName
-     * @return string
-     */
-    protected function _getCacheFileName()
+    }
+    protected function _getCacheFileName(): string
     {
-        $aParam    = $this->getEntity()->getConnection()->getConnectionParam();
-        $sCacheDir = rtrim($this->getEntity()->getService()->getConfig('CACHE_DIR', '{TEMP}/cache/entity'), '\\/') . '/';
-        $sCacheDir = \bootstrap::parsePath($sCacheDir);
-        return $sCacheDir . $this->getTableName() . '_' . md5($aParam['HOST'] . $aParam['DATABASE']);
-    } // function _getCacheFileName
-} // class \fan\core\service\entity\description
-?>
+        $param    = $this->getEntity()->getConnection()->getConnectionParam();
+        $cacheDir = rtrim((string)$this->getEntity()->getService()->getConfig('CACHE_DIR', '{TEMP}/cache/entity'), '\\/') . '/';
+        $cacheDir = \bootstrap::parsePath($cacheDir);
+        return $cacheDir . $this->getTableName() . '_' . md5($param['HOST'] . $param['DATABASE']);
+    }
+}

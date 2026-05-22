@@ -1,4 +1,7 @@
-<?php namespace fan\core\view\router;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view\router;
 /**
  * View router of Block for HTML-type
  *
@@ -20,15 +23,14 @@ class html extends \fan\core\view\router
      * Routers array
      * @var array
      */
-    protected $aKeepers = array(
+    protected array $keepers = [
         'tpl' => null,
-    );
+    ];
     /**
      * Default Routers Key
      * @var string
      */
-    protected $sDefaultKey = 'tpl';
+    protected ?string $defaultKey = 'tpl';
 
     // ======== Main Interface methods ======== \\
-} // class \fan\core\view\router\html
-?>
+}

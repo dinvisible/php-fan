@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\matcher;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\matcher;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Description of item
@@ -22,17 +25,19 @@ use fan\project\exception\service\fatal as fatalException;
  */
 class item implements \ArrayAccess
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * Index of this item
      * @var array
      */
-    protected $iIndex;
+    protected ?int $index = null;
 
     /**
      * Allowed property
      * @var array
      */
-    protected $aData = array(
+    protected array $data = [
         // \fan\core\service\matcher\item\source
         'source'  => null,
         // \fan\core\service\matcher\item\uri
@@ -41,174 +46,145 @@ class item implements \ArrayAccess
         'handler' => null,
         // \fan\core\service\matcher\item\parsed
         'parsed'  => null,
-    );
+    ];
 
     /**
      * Facade of service
      * @var fan\core\service\matcher
      */
-    protected $oFacade = null;
+    protected ?object $facade = null;
 
-    public function __construct($iIndex)
+    public function __construct(int $index)
     {
-        $this->iIndex = $iIndex;
-        foreach ($this->aData as $k => &$v) {
-            $sClass = '\fan\project\service\matcher\item\\' . $k;
-            $v = new $sClass($this);
+        $this->index = (int)$index;
+        foreach ($this->data as $k => &$v) {
+            $class = '\fan\project\service\matcher\item\\' . $k;
+            $v = new $class($this);
         }
     }
 
     // ========== Public interface functions ========== \\
     /**
-     * Init item by Out request
-     * @param string $sRequest
-     * @param string $sHost
+     * @param string $request Request object or payload handled by the operation.
      */
-    public function initOut($sRequest, $sHost)
+    public function initOut(string $request, string $host): void
     {
         // Save current source data
-        $this->aData['source']['request'] = $sRequest;
-        $this->aData['source']['host']    = $sHost;
+        $this->data['source']['request'] = $request;
+        $this->data['source']['host']    = $host;
 
         // Save current array of URI
-        foreach ($this->_parseRequestedUri($sRequest, $sHost) as $k => $v) {
-            $this->aData['uri'][$k] = $v;
+        foreach ($this->_parseRequestedUri($request, $host) as $k => $v) {
+            $this->data['uri'][$k] = $v;
         }
-    } // function initOut
+    }
     /**
-     * Init item by Command Line Interface
-     * @param string $sFile
-     * @param string $sPath
+     * @param string $file File path or file descriptor handled by the operation.
      */
-    public function initCli($sFile, $sPath)
+    public function initCli(string $file, string $path): void
     {
         // Save current source data
-        $this->aData['source']['file'] = $sFile;
-        $this->aData['source']['path'] = $sPath;
+        $this->data['source']['file'] = $file;
+        $this->data['source']['path'] = $path;
 
         // Save current array of CLI
-        foreach ($this->_parseRequestedCli($sFile, $sPath) as $k => $v) {
-            $this->aData['cli'][$k] = $v;
+        foreach ($this->_parseRequestedCli($file, $path) as $k => $v) {
+            $this->data['cli'][$k] = $v;
         }
-    } // function initCli
+    }
 
-    /**
-     * Set Facade
-     * @param \fan\core\service\matcher $oFacade
-     */
-    public function setFacade(\fan\core\service\matcher $oFacade)
+    public function setFacade(\fan\core\service\matcher $facade): static
     {
-        $this->oFacade = $oFacade;
-        foreach ($this->aData as $v) {
-            $v->setFacade($oFacade);
+        $this->facade = $facade;
+        foreach ($this->data as $v) {
+            $v->setFacade($facade);
         }
         return $this;
-    } // function setFacade
+    }
 
-    /**
-     * Get Facade
-     * @return \fan\core\service\matcher
-     */
-    public function getFacade()
+    public function getFacade(): ?\fan\core\service\matcher
     {
-        return $this->oFacade;
-    } // function getFacade
+        return $this->facade;
+    }
 
-    /**
-     * Get Index
-     * @return integer
-     */
-    public function getIndex()
+    public function getIndex(): ?int
     {
-        return $this->iIndex;
-    } // function getIndex
+        return $this->index;
+    }
 
-    /**
-     * Get handler
-     * @param boolean $bForceDefine
-     * @return \fan\core\service\matcher\item\handler
-     */
-    public function getHandler($bForceDefine = false)
+    public function getHandler(bool $forceDefine = false): \fan\core\service\matcher\item\handler
     {
-        if (empty($this->aData['handler']['method'])){
-            foreach ($this->_defineHandler($bForceDefine) as $k => $v) {
-                $this->aData['handler'][$k] = $v;
+        if (empty($this->data['handler']['method'])){
+            foreach ($this->_defineHandler($forceDefine) as $k => $v) {
+                $this->data['handler'][$k] = $v;
             }
         }
-        return $this->aData['handler'];
-    } // function getIndex
+        return $this->data['handler'];
+    }
 
 
-    /**
-     * There is defined:
-     *  - Application name
-     *  - Requested locale
-     *  - URL-prefix of application
-     *  - Cleaned request path (without app and locale)
-     *  - query string
-     */
-    public function preParseRequest()
+    public function preParseRequest(): static
     {
-        $aUri = $this['uri'];
-        $aSubject = array(
-            'request' => $aUri['path'] . (empty($aUri['query']) ? '' : '?' . $aUri['query']),
-            'host'    => $aUri['host'],
-            'full'    => $aUri['full'],
-        );
+        $uri = $this['uri'];
+        $subject = [
+            'request' => $uri['path'] . (empty($uri['query']) ? '' : '?' . $uri['query']),
+            'host'    => $uri['host'],
+            'full'    => $uri['full'],
+        ];
 
-        $sLanguage = null;
-        $sAppName  = null;
-        $aReqData  = array();
-        $sPathPos  = null;
-        $oLocale   = \fan\project\service\locale::instance();
-        $aLanguages      = $oLocale->getAvailableLanguages();
-        $sRegexpLanguage = implode('|', array_keys($aLanguages));
+        $language = null;
+        $appName  = null;
+        $reqData  = [];
+        $pathPos  = null;
+        $locale   = $this->containerService('locale');
+        $languages      = $locale->getAvailableLanguages();
+        $regexpLanguage = implode('|', array_keys($languages));
 
-        $sPrefix  = '';
-        $aMatches = null;
-        foreach ($this->oFacade->getConfig('app', array()) as $k => $v) {
-            $sRegexp = str_replace('{LANGUAGE}', $sRegexpLanguage, $v['regexp']);
-            $sWay    = isset($v['way']) ? $v['way'] : 'path';
-            if (preg_match($sRegexp, $aSubject[$sWay], $aMatches)) {
-                if (isset($v['language']) && !empty($aMatches[$v['language']])) {
-                    $sLanguage = $aMatches[$v['language']];
+        $prefix  = '';
+        $matches = null;
+        foreach ($this->facade->getConfig('app', []) as $k => $v) {
+            $regexp = str_replace('{LANGUAGE}', $regexpLanguage, $v['regexp']);
+            $way    = isset($v['way']) ? $v['way'] : 'path';
+            if (preg_match($regexp, $subject[$way], $matches)) {
+                if (isset($v['language']) && !empty($matches[$v['language']])) {
+                    $language = $matches[$v['language']];
                 }
-                $sAppName = $k;
-                $aReqData = $aMatches;
-                $sPathPos = empty($v['path']) ? null : $v['path'];
-                $sPrefix  = empty($v['prefix']) ? '' : (empty($aMatches[$v['prefix']]) ? '' : $aMatches[$v['prefix']]);
+                $appName = $k;
+                $reqData = $matches;
+                $pathPos = empty($v['path']) ? null : $v['path'];
+                $prefix  = empty($v['prefix']) ? '' : (empty($matches[$v['prefix']]) ? '' : $matches[$v['prefix']]);
                 break;
             }
         }
 
-        if (empty($aReqData)) {
-            $sSrcPath = $aSubject['request'];
-        } elseif (empty($sPathPos)) {
-            $nLen     = strlen($aReqData[0]);
-            $sSubj    = $aSubject[$sWay];
-            $sSrcPath = substr($sSubj, 0, $nLen) == $aReqData[0] ? substr($sSubj, $nLen) : $aSubject['request'];
+        if (empty($reqData)) {
+            $srcPath = $subject['request'];
+        } elseif (empty($pathPos)) {
+            $len     = strlen($reqData[0]);
+            $subj    = $subject[$way];
+            $srcPath = substr($subj, 0, $len) === $reqData[0] ? substr($subj, $len) : $subject['request'];
         } else {
-            $sSrcPath = '';
-            $aParts   = explode('-', $sPathPos);
-            foreach ($aParts as $v) {
-                if (!empty($aReqData[$v])) {
-                    $sSrcPath .= $aReqData[$v];
+            $srcPath = '';
+            $parts   = explode('-', $pathPos);
+            foreach ($parts as $v) {
+                if (!empty($reqData[$v])) {
+                    $srcPath .= $reqData[$v];
                 }
             }
         }
 
-        $oParsed = $this->aData['parsed'];
-        $oParsed['language']   = $sLanguage;
-        $oParsed['app_name']   = $sAppName;
-        $oParsed['app_prefix'] = $sPrefix;
+        $parsed = $this->data['parsed'];
+        $parsed['language']   = $language;
+        $parsed['app_name']   = $appName;
+        $parsed['app_prefix'] = $prefix;
 
-        $nQueryPos = strpos ($sSrcPath, '?');
-        if ($nQueryPos === false) {
-            $oParsed['src_path'] = $sSrcPath;
-            $oParsed['query']    = '';
+        $queryPos = strpos ($srcPath, '?');
+        if ($queryPos === false) {
+            $parsed['src_path'] = $srcPath;
+            $parsed['query']    = '';
         } else {
-            $oParsed['src_path'] = substr($sSrcPath, 0, $nQueryPos);
-            $oParsed['query']    = substr($sSrcPath, $nQueryPos);
+            $parsed['src_path'] = substr($srcPath, 0, $queryPos);
+            $parsed['query']    = substr($srcPath, $queryPos);
         }
 
 
@@ -216,251 +192,232 @@ class item implements \ArrayAccess
         //   - local (disk-paths) must point by last item;
         //   - outer (URN) must point by current item;
         // If this is departed from a rule - will be big error when AppName is changed
-        \fan\project\service\application::instance()->setAppName($sAppName);
+        $this->containerService('application')->setAppName((string)$appName);
         return $this;
-    } // function preParseRequest
+    }
+
+
+    public function getParsedSrc(): array
+    {
+        $parsed = $this->data['parsed'];
+        $data   = explode('/', $parsed['src_path']);
+
+        $regExp = $this->_getConfig(['app', $parsed['app_name'], 'regexp_trim_ext']);
+        if (empty($regExp)) {
+            $regExp = $this->_getConfig('default_regexp_trim_ext', '/^(.+)\\.(?:php|html?)/');
+        }
+        $matches = null;
+        if (!empty($data) && preg_match((string)$regExp, (string)end($data), $matches)) {
+            $data[count($data) - 1] = $matches[1];
+        }
+        return $data;
+    }
 
 
     /**
-     * Get Parsed Sorce Request
-     * @return array
+     * Transforms request between supported representations.
      */
-    public function getParsedSrc()
+    public function parseRequest(): static
     {
-        $oParsed = $this->aData['parsed'];
-        $aData   = explode('/', $oParsed['src_path']);
+        $parsed = $this->data['parsed'];
+        $data   = $this->getParsedSrc();
 
-        $sRegExp = $this->_getConfig(array('app', $oParsed['app_name'], 'regexp_trim_ext'));
-        if (empty($sRegExp)) {
-            $sRegExp = $this->_getConfig('default_regexp_trim_ext', '/^(.+)\\.(?:php|html?)/');
-        }
-        $aMatches = null;
-        if (!empty($aData) && preg_match($sRegExp, end($aData), $aMatches)) {
-            $aData[count($aData) - 1] = $aMatches[1];
-        }
-        return $aData;
-    } // function getParsedSrc
-
-
-    /**
-     * Parse Request - define 'main_request' AND 'add_request'
-     */
-    public function parseRequest()
-    {
-        $oParsed = $this->aData['parsed'];
-        $aData   = $this->getParsedSrc();
-
-        $sHandlerKey = ucfirst(strtolower($this->getHandler()->key));
-        $sMethodName = empty($sHandlerKey) || !method_exists($this, '_parseRequestFor' . $sHandlerKey) ? null : '_parseRequestFor' . $sHandlerKey;
-        if (empty($sMethodName)) {
-            $oParsed['main_request'] = array();
-            $oParsed['add_request']  = array();
+        $handlerKey = ucfirst(strtolower((string)$this->getHandler()->key));
+        $methodName = empty($handlerKey) || !method_exists($this, '_parseRequestFor' . $handlerKey) ? null : '_parseRequestFor' . $handlerKey;
+        if (empty($methodName)) {
+            $parsed['main_request'] = [];
+            $parsed['add_request']  = [];
         } else {
-            $this->$sMethodName($oParsed, $aData);
+            $this->$methodName($parsed, $data);
         }
         return $this;
-    } // function parseRequest
+    }
 
-    /**
-     * Return all data
-     * @return array
-     */
-    public function toArray()
+    public function toArray(): array
     {
-        return $this->aData;
-    } // function toArray
+        return $this->data;
+    }
 
     // ========== Private/protected functions ========== \\
     /**
-     * Parse requested URI - return elelements URI as array
-     * @param string $sRequest
-     * @param string $sHost
-     * @return array
+     * @param string $request Request object or payload handled by the operation.
+     *
      * @throws fatalException
      */
-    protected function _parseRequestedUri($sRequest, $sHost)
+    protected function _parseRequestedUri(string $request, string $host): array
     {
         // Prepare global URI-parameters
-        if (empty($this->iIndex)) {
-            $sScheme   = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on' ? 'https' : 'http';
-            $sUserName = $sPassword = $sAnchor = null; // ToDo: Set start default values there
-            if (empty($sHost)) {
-                $sHost = array_val($_SERVER, 'HTTP_HOST');
+        if (empty($this->index)) {
+            $scheme   = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+            $userName = $password = $anchor = null; // ToDo: Set start default values there
+            if (empty($host)) {
+                $host = array_val($_SERVER, 'HTTP_HOST');
             }
         } else {
-            $aPrevUri  = $this->oFacade->getUri($this->iIndex - 1);
-            $sScheme   = $aPrevUri['scheme'];
-            $sUserName = $aPrevUri['user'];
-            $sPassword = $aPrevUri['pass'];
-            $sAnchor   = $aPrevUri['fragment'];
-            if (empty($sHost)) {
-                $sHost = $aPrevUri['host'];
-            } elseif (!$this->oFacade->getConfig('allow_switch_host', false)) {
-                throw new fatalException($this->oFacade, 'Host switching isn\'t allowed there');
+            $prevUri  = $this->facade->getUri($this->index - 1);
+            $scheme   = $prevUri['scheme'];
+            $userName = $prevUri['user'];
+            $password = $prevUri['pass'];
+            $anchor   = $prevUri['fragment'];
+            if (empty($host)) {
+                $host = $prevUri['host'];
+            } elseif (!$this->facade->getConfig('allow_switch_host', false)) {
+                throw new fatalException($this->facade, 'Host switching isn\'t allowed there');
             }
         }
 
         // Prepare Path and Query
-        if (strpos($sRequest, '?') === false) {
-            $sPath  = $sRequest;
-            $sQuery = empty($this->iIndex) ? null : $aPrevUri['query'];
+        if (strpos($request, '?') === false) {
+            $path  = $request;
+            $query = empty($this->index) ? null : $prevUri['query'];
         } else {
-            list($sPath, $sQuery) = explode('?', $sRequest, 2);
+            list($path, $query) = explode('?', $request, 2);
         }
 
-        $aUri = array (
-            'scheme'   => $sScheme,
-            'host'     => $sHost,
-            'user'     => $sUserName,
-            'pass'     => $sPassword,
-            'path'     => $sPath,
-            'query'    => empty($sQuery) ? null : $sQuery,
-            'fragment' => $sAnchor,
-        );
+        $uri = [
+            'scheme'   => $scheme,
+            'host'     => $host,
+            'user'     => $userName,
+            'pass'     => $password,
+            'path'     => $path,
+            'query'    => empty($query) ? null : $query,
+            'fragment' => $anchor,
+        ];
 
         // Make full URI
-        $sUri = $sScheme . '://' . $sUserName;
-        if ($sPassword) {
-            $sUri .= ':' . $sPassword;
+        $fullUri = $scheme . '://' . $userName;
+        if ($password) {
+            $fullUri .= ':' . $password;
         }
-        if ($sUserName || $sPassword) {
-            $sUri .= '@';
+        if ($userName || $password) {
+            $fullUri .= '@';
         }
-        $sUri .= $sHost . $sPath;
-        if ($sQuery) {
-            $sUri .= '?' . $sQuery;
+        $fullUri .= $host . $path;
+        if ($query) {
+            $fullUri .= '?' . $query;
         }
-        if ($sAnchor) {
-            $sUri .= '#' . $sAnchor;
+        if ($anchor) {
+            $fullUri .= '#' . $anchor;
         }
-        $aUri['full'] = $sUri;
+        $uri['full'] = $fullUri;
 
-        return $aUri;
-    } // function _parseRequestedUri
+        return $uri;
+    }
     /**
-     * Parse requested CLI - return elelements CLI as array
-     * @param string $sFile
-     * @param string $sPath
-     * @return array
+     * @param string $file File path or file descriptor handled by the operation.
+     *
      * @throws fatalException
      */
-    protected function _parseRequestedCli($sFile, $sPath)
+    protected function _parseRequestedCli(string $file, string $path): array
     {
-        $aCli = array (
-            'file' => $sFile,
-            'path' => $sPath,
-            'argv' => empty($_SERVER['argv']) ? array() : $_SERVER['argv'],
-        );
+        $cli = [
+            'file' => $file,
+            'path' => $path,
+            'argv' => empty($_SERVER['argv']) ? [] : $_SERVER['argv'],
+        ];
 
-        return $aCli;
-    } // function _parseRequestedCli
+        return $cli;
+    }
 
-    /**
-     * Define Handler of request
-     * @param boolean $bForceDefine
-     * @return array
-     */
-    protected function _defineHandler($bForceDefine)
+    protected function _defineHandler(bool $forceDefine): array
     {
         if (\bootstrap::isCli()) {
             return $this->_handlerDefinerSapiName();
-        } elseif (empty($this->iIndex) || $bForceDefine) {
+        } elseif (empty($this->index) || $forceDefine) {
             // Find handler by RegExp
-            foreach ($this->oFacade->getConfig('plain', array()) as $k => $v) {
-                $sMethod = '_handlerDefiner' . ucfirst($v['definer']);
-                if (!method_exists($this, $sMethod)) {
+            foreach ($this->facade->getConfig('plain', []) as $k => $v) {
+                $handlerConfig = $this->readHandlerConfig($v);
+                $method = '_handlerDefiner' . ucfirst($handlerConfig['definer']);
+                if (!method_exists($this, $method)) {
                     $this->_makeException('Incorrect Handler definer at the Config of Matcher');
                 }
-                $aResult = $this->$sMethod($k, $v);
+                $result = $this->$method($k, $handlerConfig);
 
-                if (!empty($aResult)) {
-                    return $aResult;
+                if (!empty($result)) {
+                    return $result;
                 }
             }
 
             // Set default handler if it doesn't macth any RegExp
-            $aDefault = $this->oFacade->getConfig('default_handler', array(
+            $default = $this->facade->getConfig('default_handler', [
                 'key'    => 'tab',
                 'method' => '\fan\project\service\tab::getCode',
                 'param'  => null
-            ));
-            return array(
-                'key'    => $aDefault['key'],
-                'method' => $aDefault['method'],
-                'param'  => empty($aDefault['param']) ? null : $aDefault['param'],
-            );
+            ]);
+            return [
+                'key'    => $default['key'],
+                'method' => $default['method'],
+                'param'  => empty($default['param']) ? null : $default['param'],
+            ];
         }
         // Copy handler from first item
-        $oFirstHandler = $this->oFacade->getHandler(0);
-        return array(
-            'key'    => $oFirstHandler['key'],
-            'method' => $oFirstHandler['method'],
-            'param'  => $oFirstHandler['param'],
-        );
-    } // function _defineHandler
+        $firstHandler = $this->facade->getHandler(0);
+        return [
+            'key'    => $firstHandler['key'],
+            'method' => $firstHandler['method'],
+            'param'  => $firstHandler['param'],
+        ];
+    }
 
-    /**
-     * Definer of handler for SapiName
-     * @return array
-     */
-    protected function _handlerDefinerSapiName()
+    protected function readHandlerConfig(mixed $data): array
     {
-        return array(
+        if ($data instanceof \fan\core\service\config\row) {
+            return $data->toArray();
+        }
+        if (is_array($data)) {
+            return $data;
+        }
+
+        throw new \UnexpectedValueException('Matcher handler config must be an array or config row.');
+    }
+
+    protected function _handlerDefinerSapiName(): array
+    {
+        return [
             'key'     => 'cli',
             'method'  => '\fan\project\service\cli::getContent',
-            'param'   => array(),
+            'param'   => [],
             'ctrlKey' => null,
-        );
-    } // function _handlerDefinerSapiName
+        ];
+    }
 
-    /**
-     * Definer of handler for Request
-     * @param string $sKey
-     * @param array $aData
-     */
-    protected function _handlerDefinerRequest($sKey, $aData)
+    protected function _handlerDefinerRequest(string $key, array $data): ?array
     {
-        $aMatches = array();
-        if (preg_match($aData['regexp'], $this->aData['uri']['path'], $aMatches)) {
-            return array(
+        $matches = [];
+        if (preg_match((string)$data['regexp'], (string)$this->data['uri']['path'], $matches)) {
+            return [
                 'key'     => 'plain',
                 'method'  => '\fan\project\service\plain::getContent',
-                'param'   => array($sKey, $aData['class'], $this->_getControllerMethod($aMatches, $aData['method'])),
-                'ctrlKey' => $sKey,
-                'mReqKey' => isset($aMatches[1]) ? $aMatches[1] : null,
-            );
+                'param'   => [$key, $data['class'], $this->_getControllerMethod($matches, $data['method'])],
+                'ctrlKey' => $key,
+                'reqKey' => isset($matches[1]) ? $matches[1] : null,
+            ];
         }
         return null;
-    } // function _handlerDefinerRequest
+    }
 
-    /**
-     *
-     * @param \fan\core\service\matcher\item\parsed $oParsed
-     * @param array $aData
-     * @return \fan\core\service\matcher\item
-     */
-    protected function _parseRequestForTab(\fan\core\service\matcher\item\parsed $oParsed, array $aData)
+    protected function _parseRequestForTab(\fan\core\service\matcher\item\parsed $parsed, array $data): ?static
     {
-        $sPath  = \bootstrap::getLoader()->project;
-        $sPath .= '/app/' . $oParsed['app_name'] . '/' . $this->_getConfig('main_block_dir', 'main');
+        $path  = \bootstrap::getLoader()->project;
+        $path .= '/app/' . $parsed['app_name'] . '/' . $this->_getConfig('main_block_dir', 'main');
 
-        $aMainRequest = array();
-        foreach ($aData as $k => $v) {
+        $mainRequest = [];
+        foreach ($data as $k => $v) {
             if (empty($v)) {
-                unset($aData[$k]);
+                unset($data[$k]);
             } else {
-                if (is_file($sPath . '/' . $v . '.php')) {
-                    $aMainRequest[] = $v;
-                    unset($aData[$k]);
-                    if (!isset($aData[$k + 1]) || !is_dir($sPath . '/' . $v) || !is_dir($sPath . '/' . $aData[$k + 1]) && !is_file($sPath . '/' . $aData[$k + 1] . '.php')) {
-                        $oParsed['main_request'] = $aMainRequest;
-                        $oParsed['add_request']  = array_merge(array(), $aData);
-                        return;
+                if (is_file($path . '/' . $v . '.php')) {
+                    $mainRequest[] = $v;
+                    unset($data[$k]);
+                    if (!isset($data[$k + 1]) || !is_dir($path . '/' . $v) || !is_dir($path . '/' . $data[$k + 1]) && !is_file($path . '/' . $data[$k + 1] . '.php')) {
+                        $parsed['main_request'] = $mainRequest;
+                        $parsed['add_request']  = array_merge([], $data);
+                        return null;
                     }
-                } elseif (is_dir($sPath . '/' . $v)) {
-                    $sPath .= '/' . $v;
-                    $aMainRequest[] = $v;
-                    unset($aData[$k]);
+                } elseif (is_dir($path . '/' . $v)) {
+                    $path .= '/' . $v;
+                    $mainRequest[] = $v;
+                    unset($data[$k]);
                 } else {
                     break;
                 }
@@ -468,149 +425,130 @@ class item implements \ArrayAccess
         }
 
         // Set Index file if in URI it is not requested
-        if (empty($aData)) {
-            $sIndex = empty($aMainRequest) ? $this->_getConfig('directory_index', 'index') : end($aMainRequest);
-            if (is_file($sPath . '/' . $sIndex . '.php')) {
-                $oParsed['main_request'] = array_merge($aMainRequest, array($sIndex));
-                $oParsed['add_request']  = array();
+        if (empty($data)) {
+            $index = empty($mainRequest) ? $this->_getConfig('directory_index', 'index') : end($mainRequest);
+            if (is_file($path . '/' . $index . '.php')) {
+                $parsed['main_request'] = array_merge($mainRequest, [$index]);
+                $parsed['add_request']  = [];
             }
         }
 
         return $this;
-    } // function _parseRequestForTab
-    /**
-     *
-     * @param \fan\core\service\matcher\item\parsed $oParsed
-     * @param array $aData
-     * @return \fan\core\service\matcher\item
-     */
-    protected function _parseRequestForPlain(\fan\core\service\matcher\item\parsed $oParsed, array $aData)
+    }
+    protected function _parseRequestForPlain(\fan\core\service\matcher\item\parsed $parsed, array $data): static
     {
-        $sMainRequstPref = $this->aData['handler']->mReqKey;
-        if (empty($sMainRequstPref)) {
-            $oParsed['main_request'] = array(array_shift($aData));
-            $oParsed['add_request']  = $aData;
+        $mainRequstPref = $this->data['handler']->reqKey;
+        if (empty($mainRequstPref)) {
+            $parsed['main_request'] = [array_shift($data)];
+            $parsed['add_request']  = $data;
         } else {
-            $aMR = explode('/', $sMainRequstPref);
-            $oParsed['main_request'] = $aMR;
-            foreach ($aMR as $v) {
-                if ($aData[0] == $v) {
-                    array_shift($aData);
+            $mr = explode('/', $mainRequstPref);
+            $parsed['main_request'] = $mr;
+            foreach ($mr as $v) {
+                if ((string)$data[0] === (string)$v) {
+                    array_shift($data);
                 }
             }
-            $oParsed['add_request']  = $aData;
+            $parsed['add_request']  = $data;
         }
         return $this;
-    } // function _parseRequestForPlain
-    /**
-     *
-     * @param \fan\core\service\matcher\item\parsed $oParsed
-     * @param array $aData
-     * @return \fan\core\service\matcher\item
-     */
-    protected function _parseRequestForCli(\fan\core\service\matcher\item\parsed $oParsed, array $aData)
+    }
+    protected function _parseRequestForCli(\fan\core\service\matcher\item\parsed $parsed, array $data): static
     {
         return $this;
-    } // function _parseRequestForCli
+    }
 
-    /**
-     * Check Key
-     * @param string $sKey
-     */
-    protected function _checkKey($sKey)
+    protected function _checkKey(string $key): void
     {
-        if (!array_key_exists($sKey, $this->aData)) {
-            $this->_makeException('Invalid key "' . $sKey . '" while accessing the item of matcher.');
+        if (!array_key_exists($key, $this->data)) {
+            $this->_makeException('Invalid key "' . $key . '" while accessing the item of matcher.');
         }
-    } // function _checkKey
+    }
 
     /**
-     * Make Exception
-     * @param string $sErrMsg
      * @throws fatalException
      * @throws \fan\project\exception\fatal
      */
-    protected function _makeException($sErrMsg)
+    protected function _makeException(string $errMsg): never
     {
-        if ($this->oFacade) {
-            throw new fatalException($this->oFacade, $sErrMsg);
+        if ($this->facade) {
+            throw new fatalException($this->facade, $errMsg);
         }
-        throw new \fan\project\exception\fatal($sErrMsg);
-    } // function _makeException
+        throw new \fan\project\exception\fatal($errMsg);
+    }
+
+    protected function _getControllerMethod(array $matches, string $pattern): string
+    {
+        for ($i = 1; $i < count($matches); $i++) {
+            $pattern = str_replace('{\\' . $i . '}', ucfirst(strtolower($matches[$i])), $pattern);
+        }
+
+        $tmp = explode('_', $pattern);
+        $res = array_shift($tmp);
+        foreach ($tmp as $v) {
+            $res .= ucfirst($v);
+        }
+
+        return $res;
+    }
 
     /**
-     * Get Method name of Controller
-     * @param array $aMatches
-     * @param string $sPattern
-     * @return string
+     * @param mixed $default Fallback value returned when no explicit value is available.
      */
-    protected function _getControllerMethod($aMatches, $sPattern)
+    public function _getConfig(mixed $key, mixed $default = null): mixed
     {
-        for ($i = 1; $i < count($aMatches); $i++) {
-            $sPattern = str_replace('{\\' . $i . '}', ucfirst(strtolower($aMatches[$i])), $sPattern);
-        }
-
-        $aTmp = explode('_', $sPattern);
-        $sRes = array_shift($aTmp);
-        foreach ($aTmp as $v) {
-            $sRes .= ucfirst($v);
-        }
-
-        return $sRes;
-    } // function _getControllerMethod
-
-    /**
-     * Get Config row of Matcher
-     * @param mixed $mKey
-     * @param mixed $mDefault
-     * @return mixed
-     */
-    public function _getConfig($mKey, $mDefault = null)
-    {
-        return $this->oFacade->getConfig()->get($mKey, $mDefault);
-    } // function _getConfig
+        return $this->facade->getConfig()->get($key, $default);
+    }
 
     // ========== Magic functions ========== \\
     /**
-     * Offset Set for array access
-     * @param string $sKey
-     * @param mixed $mValue
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function offsetSet($sKey, $mValue)
+    public function offsetSet(mixed $key, mixed $value): void
     {
-        $this->_checkKey($sKey);
-        $this->_makeException('Isn\'t allowed direct set property of item of matcher. Try to set "' . $mValue . '" for "' . $sKey . '"');
+        $this->_checkKey((string)$key);
+        $this->_makeException('Isn\'t allowed direct set property of item of matcher. Try to set "' . $value . '" for "' . $key . '"');
     }
 
-    public function offsetExists($sKey)
+    public function offsetExists(mixed $key): bool
     {
-        $this->_checkKey($sKey);
-        return !is_null($this->aData[$sKey]);
+        $key = (string)$key;
+        $this->_checkKey($key);
+        return !is_null($this->data[$key]);
     }
 
-    public function offsetUnset($sKey)
+    public function offsetUnset(mixed $key): void
     {
-        $this->_checkKey($sKey);
+        $key = (string)$key;
+        $this->_checkKey($key);
         $this->_makeException('Isn\'t allowed unset property of item of matcher.');
     }
 
-    public function offsetGet($sKey)
+    public function offsetGet(mixed $key): mixed
     {
-        $this->_checkKey($sKey);
-        $sMethod = 'get' . ucfirst($sKey);
-        return method_exists($this, $sMethod) ? $this->$sMethod() : $this->aData[$sKey];
+        $key = (string)$key;
+        $this->_checkKey($key);
+        $method = 'get' . ucfirst($key);
+        return method_exists($this, $method) ? $this->$method() : $this->data[$key];
     }
 
-    public function __set($sKey, $mValue)
+    /**
+     * Handles dynamic property writes for this current component.
+     *
+     * @param mixed $value Value that should be applied or transformed.
+     */
+    public function __set(string $key, mixed $value): void
     {
-        return $this->offsetSet($sKey, $mValue);
+        $this->offsetSet($key, $value);
     }
 
-    public function __get($sKey)
+    /**
+     * Handles dynamic property reads for this current component.
+     */
+    public function __get(string $key): mixed
     {
-        return $this->offsetGet($sKey);
+        return $this->offsetGet($key);
     }
 
     // ======== Required Interface methods ======== \\
-} // class \fan\core\service\matcher\item
-?>
+}

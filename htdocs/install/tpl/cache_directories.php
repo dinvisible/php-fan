@@ -1,23 +1,23 @@
-<section class="test">
+<?php declare(strict_types=1); ?><section class="test">
     <h3>{#CHECK_CACHE_DIRECTORIES}</h3>
 
     <div id="tmp_dir">
-        <img src="image/<?php echo $iIsTmp > 0 ? 'correct' : 'incorrect'; ?>.gif" />
-        <?php if (empty($iIsTmp)) : ?>
+        <img src="image/<?php echo $isTmp > 0 ? 'correct' : 'incorrect'; ?>.gif" />
+        <?php if (empty($isTmp)) : ?>
             {#TEMP_DIR_IS_NOT_RECOGNIZED}
         <?php else : ?>
             <b>{#TEMP_DIR}:</b>
-            <code><?php echo $sTempDir; ?></code>
-            <?php if ($iIsTmp < -1) : ?>
+            <code><?php echo $tempDir; ?></code>
+            <?php if ($isTmp < -1) : ?>
                 <br />{#TEMP_DIR_IS_NOT_WRITABLE}
-            <?php elseif ($iIsTmp < 0) : ?>
+            <?php elseif ($isTmp < 0) : ?>
                 <br />{#TEMP_DIR_IS_NOT_EXISTS}
             <?php endif ?>
         <?php endif ?>
     </div>
     <ul class="cache_dir_list">
-        <?php if ($iIsTmp > 0) : ?>
-            <?php foreach ($aCacheDir as $k => $v) : ?>
+        <?php if ($isTmp > 0) : ?>
+            <?php foreach ($cacheDir as $k => $v) : ?>
                 <li>
                     <img src="image/<?php echo $v['img']; ?>.gif" />
                     <b><?php echo $k; ?>-cache-dir:</b>

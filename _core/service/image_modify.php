@@ -1,4 +1,8 @@
-<?php namespace fan\core\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Service Image Processor
@@ -20,758 +24,582 @@ class image_modify extends \fan\core\base\service\multi
     /**
      * @var \fan\core\service\image_modify[] Service's Instances
      */
-    private static $aInstances;
+    private static ?array $instances = null;
 
-    /**
-     * @var string Path to Source Image
-     */
-    protected $sSourcePath;
+    protected ?string $sourcePath = null;
     /**
      * @var numeric width of Source Image
      */
-    protected $nSourceWidth;
+    protected int|float|null $sourceWidth = null;
     /**
      * @var numeric height of Source Image
      */
-    protected $nSourceHeight;
+    protected int|float|null $sourceHeight = null;
     /**
      * @var numeric Image current width
      */
-    protected $nWidth;
+    protected int|float|null $width = null;
     /**
      * @var numeric Image current height
      */
-    protected $nHeight;
-    /**
-     * @var array Parameters of Source image
-     */
-    private $aSourceParam;
-    /**
-     * @var object Data Source image
-     */
-    protected $oImage;
+    protected int|float|null $height = null;
+    private ?array $sourceParam = null;
+    protected ?object $image = null;
 
     /**
      * @var numeric Quality save of Create Image
      */
-    private $nQuality = 80;
+    private int|float $quality = 80;
 
-    /**
-     * @var string Image type
-     */
-    private $sType = null;
+    private ?string $type = null;
 
-    /**
-     * @var array Type images for conversion from numeric to text
-     */
-    private $aConvType = array(
+    private array $convType = [
         1  => 'gif',
         2  => 'jpeg',
         3  => 'png',
         15 => 'wbmp',
         16 => 'xbm',
-    );
+    ];
 
-    /**
-     * Service's constructor
-     */
-    protected function __construct($sSourcePath, $aCreateParam)
+    protected function __construct(?string $sourcePath, array $createParam)
     {
-        parent::__construct(empty(self::$aInstances));
+        parent::__construct(empty(self::$instances));
 
-        if (!empty($sSourcePath) || !empty($aCreateParam)) {
-            $this->setSource($sSourcePath, $aCreateParam);
+        if (!empty($sourcePath) || !empty($createParam)) {
+            $this->setSource($sourcePath, $createParam);
         }
-    } // function __construct
+    }
 
     // ======== Static methods ======== \\
 
-    /**
-     * Get Service's instance of current service by $sSourcePath
-     * If $sSourcePath isn't set - Get defaul instance
-     * @param string $sSourcePath Create Path
-     * @param string $aCreateParam Create parameters
-     *   "type"    => 'gif', 'jpeg', 'png', 'wbmp', 'xbm'
-     *   "quality" => 1-100
-     *   "width"   => 1 - max
-     *   "height"  => 1 - max
-      * @return \fan\core\service\image_modify
-     */
-    public static function instance($sSourcePath = null, $aCreateParam = array(), $bSaveInstance = true)
+    public static function instance(?string $sourcePath = null, array $createParam = [], bool $saveInstance = true): static
     {
-        $sName = self::checkName(get_called_class());
-        if (!$bSaveInstance || !isset(self::$aInstances[$sName])) {
-            $oInstance = new $sName($sSourcePath, $aCreateParam);
-            if (!$bSaveInstance) {
-                return $oInstance;
+        $name = self::checkName(get_called_class());
+        if (!$saveInstance || !isset(self::$instances[$name])) {
+            $instance = new $name($sourcePath, $createParam);
+            if (!$saveInstance) {
+                return $instance;
             }
-            self::$aInstances[$sName] = $oInstance;
+            self::$instances[$name] = $instance;
         }
-        return self::$aInstances[$sName];
-    } // function instance
+        return self::$instances[$name];
+    }
 
     // ======== Main Interface methods ======== \\
 
     // ---------- Prepare functions ---------- \\
-    /**
-     * Prepare Image
-     * Set $sSourcePath
-     * Make image object from file and set input image parameters
-     * @param string $sSourcePath Path to sourse image
-     * @param array $aCreateParam array of image parameters (not required)
-     * @return \fan\core\service\image_modify
-     */
-    public function setSource($sSourcePath, $aCreateParam = array())
+    public function setSource(mixed $sourcePath, array $createParam = []): static
     {
         // If "Create Parameters" exist - save them
-        if (!empty($aCreateParam)) {
-            $this->setParam($aCreateParam);
+        if (!empty($createParam)) {
+            $this->setParam($createParam);
         }
 
-        if (!is_null($sSourcePath)) {
-            // If $sSourcePath is empty, but not NULL - get source image from config
-            if(empty($sSourcePath)) {
-                $sSourcePath = $this->getConfig('DEFAULT_IMAGE');
+        if (!is_null($sourcePath)) {
+            // If $sourcePath is empty, but not NULL - get source image from config
+            if (empty($sourcePath)) {
+                $sourcePath = $this->getConfig('DEFAULT_IMAGE');
             }
-            // If $sSourcePath is not empty set basic image by source
-            if (!empty($sSourcePath)) {
-                $sSourcePath = \bootstrap::parsePath($sSourcePath);
-                if (!file_exists($sSourcePath)) {
-                    $sSourcePath = \bootstrap::parsePath($this->getConfig('BASIC_PATH')) . $sSourcePath;
+            // If $sourcePath is not empty set basic image by source
+            if (!empty($sourcePath)) {
+                $sourcePath = (string)\bootstrap::parsePath((string)$sourcePath);
+                if (!file_exists($sourcePath)) {
+                    $sourcePath = (string)\bootstrap::parsePath((string)$this->getConfig('BASIC_PATH')) . $sourcePath;
                 }
-                $this->sSourcePath = $sSourcePath;
+                $this->sourcePath = $sourcePath;
 
                 // Check - file exists and readable
-                if(is_readable($sSourcePath)) {
-                    if(!exif_imagetype($sSourcePath)) {
-                        throw new fatalException($this, 'Incorrect image file format "' . $sSourcePath . '".');
+                if (is_readable($sourcePath)) {
+                    if (!exif_imagetype($sourcePath)) {
+                        throw new fatalException($this, 'Incorrect image file format "' . $sourcePath . '".');
                     }
-                    $this->aSourceParam = getimagesize($sSourcePath);
+                    $this->sourceParam = getimagesize($sourcePath);
                 } else {
-                    throw new fatalException($this, 'Image-file "' . $this->sSourcePath . '" isn\'t ' . (file_exists($sSourcePath) ? 'readable.' : 'exist.'));
+                    throw new fatalException($this, 'Image-file "' . $this->sourcePath . '" isn\'t ' . (file_exists($sourcePath) ? 'readable.' : 'exist.'));
                 }
 
                 // Set parameters by source
-                $sType = $this->aConvType[$this->aSourceParam[2]];
-                if (is_null($this->sType)) {
-                    $this->sType = $sType;
+                $type = $this->convType[$this->sourceParam[2]];
+                if (is_null($this->type)) {
+                    $this->type = $type;
                 }
 
-                $sFunc = 'imagecreatefrom' . $sType;
-                $this->oImage = $sFunc($sSourcePath);
+                $func = 'imagecreatefrom' . $type;
+                $this->image = $func($sourcePath);
 
-                $this->nSourceWidth = $this->aSourceParam[0];
-                if (empty($this->nWidth)) {
-                    $this->nWidth = $this->nSourceWidth;
+                $this->sourceWidth = (int)$this->sourceParam[0];
+                if (empty($this->width)) {
+                    $this->width = $this->sourceWidth;
                 }
-                $this->nSourceHeight = $this->aSourceParam[1];
-                if (empty($this->nHeight)) {
-                    $this->nHeight = $this->nSourceHeight;
+                $this->sourceHeight = (int)$this->sourceParam[1];
+                if (empty($this->height)) {
+                    $this->height = $this->sourceHeight;
                 }
             }
         }
-        // If $sSourcePath is not set - create blank image
-        if (empty($sSourcePath)) {
-            if($this->nSourceWidth < 1 || $this->nSourceHeight < 1) {
-                throw new fatalException($this, 'Image size doesn\'t set (' . $this->nSourceWidth . 'x' . $this->nSourceHeight . ').');
+        // If $sourcePath is not set - create blank image
+        if (empty($sourcePath)) {
+            if ($this->sourceWidth < 1 || $this->sourceHeight < 1) {
+                throw new fatalException($this, 'Image size doesn\'t set (' . $this->sourceWidth . 'x' . $this->sourceHeight . ').');
             }
-            $this->oImage = imagecreatetruecolor($this->nSourceWidth, $this->nSourceHeight);
+            $this->image = imagecreatetruecolor((int)$this->sourceWidth, (int)$this->sourceHeight);
         }
 
         return $this;
-    } // function setSource
+    }
 
-    /**
-     * Set parameter of Image
-     * @param array $aParam Path to sourse image
-     * @return \fan\core\service\image_modify
-     */
-    public function setParam($aParam)
+    public function setParam(array $param): static
     {
-        if (isset($aParam['type'])) {
-            $this->sType = $aParam['type'];
+        if (isset($param['type'])) {
+            $this->type = (string)$param['type'];
         }
-        if (isset($aParam['quality'])) {
-            $this->nQuality = $aParam['quality'] < 1 || $aParam['quality'] > 100 ? 80 : $aParam['quality'];
+        if (isset($param['quality'])) {
+            $quality = (float)$param['quality'];
+            $this->quality = $quality < 1 || $quality > 100 ? 80 : $quality;
         }
-        if (isset($aParam['width'])) {
-            $this->nWidth = $aParam['width'];
-            if (empty($this->nSourceWidth)) {
-                $this->nSourceWidth = $this->nWidth;
+        if (isset($param['width'])) {
+            $this->width = (float)$param['width'];
+            if (empty($this->sourceWidth)) {
+                $this->sourceWidth = $this->width;
             }
         }
-        if (isset($aParam['height'])) {
-            $this->nHeight = $aParam['height'];
-            if (empty($this->nSourceHeight)) {
-                $this->nSourceHeight = $this->nHeight;
+        if (isset($param['height'])) {
+            $this->height = (float)$param['height'];
+            if (empty($this->sourceHeight)) {
+                $this->sourceHeight = $this->height;
             }
         }
         return $this;
-    } // function setParam
+    }
 
-    /**
-     * Make color transparent
-     * @param integer|string|array $mColor
-     * @return \fan\core\service\image_modify
-     */
-    public function setTransparent($mColor)
+    public function setTransparent(int|string|array $color): static
     {
-        imagecolortransparent($this->oImage, $this->adaptColor($mColor));
+        imagecolortransparent($this->image, $this->adaptColor($color));
         return $this;
-    } // function setTransparent
+    }
 
-    /**
-     * Get Image Source Param
-     * @return array
-     */
-    public function getSourceParam()
+    public function getSourceParam(): ?array
     {
-        return $this->aSourceParam;
-    } // function setSource
+        return $this->sourceParam;
+    }
 
-    /**
-     * Getting Image Width
-     */
-    public function getWidth()
+    public function getWidth(): int|float|null
     {
-        return $this->nWidth;
-    } // function getWidth
-    /**
-     * Getting Image Width
-     */
-    public function getSourceWidth()
+        return $this->width;
+    }
+    public function getSourceWidth(): int|float|null
     {
-        return $this->nSourceWidth;
-    } // function getSourceWidth
-    /**
-     * Getting Image Heigth
-     */
-    public function getHeigth()
+        return $this->sourceWidth;
+    }
+    public function getHeigth(): int|float|null
     {
-        return $this->nHeight;
-    } // function getHeigth
-    /**
-     * Getting Image Heigth
-     */
-    public function getSourceHeigth()
+        return $this->height;
+    }
+    public function getSourceHeigth(): int|float|null
     {
-        return $this->nSourceHeight;
-    } // function getSourceHeigth
+        return $this->sourceHeight;
+    }
 
     // ---------- Main Convert functions ---------- \\
 
-    /**
-     * Relocating Image
-     * @param numeric $nWidth Width of scaling area
-     * @param numeric $nHeight Height of scaling area
-     * @param integer|string|array $nBgrColor Background Color for fill free area (if $nFixRatio=2)
-     * @return \fan\core\service\image_modify
-     */
-    public function relocate($nWidth = null, $nHeight = null, $nBgrColor = 0XFFFFFF)
+    public function relocate(int|float|null $width = null, int|float|null $height = null, int|string|array $bgrColor = 0XFFFFFF): static
     {
-        if (is_null($nWidth)) {
-            $nWidth = $this->nWidth;
+        if (is_null($width)) {
+            $width = $this->width;
         }
-        if (is_null($nHeight)) {
-            $nHeight = $this->nHeight;
+        if (is_null($height)) {
+            $height = $this->height;
         }
-        if($nWidth < 1 || $nHeight < 1) {
-            throw new fatalException($this, 'Image size doesn\'t set (' . $nWidth . 'x' . $nHeight . ').');
+        if ($width < 1 || $height < 1) {
+            throw new fatalException($this, 'Image size doesn\'t set (' . $width . 'x' . $height . ').');
         }
 
-        $nLeft = round(($nWidth - $this->nWidth) / 2);
-        $nTop  = round(($nHeight - $this->nHeight) / 2);
+        $left = round(($width - $this->width) / 2);
+        $top  = round(($height - $this->height) / 2);
 
-        $aPosition = array(
-            'dstX' => $nLeft,
-            'dstY' => $nTop,
+        $position = [
+            'dstX' => $left,
+            'dstY' => $top,
             'srcX' => 0,
             'srcY' => 0,
-            'dstW' => $nWidth,
-            'dstH' => $nHeight,
-            'srcW' => $this->nWidth,
-            'srcH' => $this->nHeight,
-        );
-        $this->_replaceImage($nWidth, $nHeight, $aPosition, null, $nBgrColor);
+            'dstW' => $width,
+            'dstH' => $height,
+            'srcW' => $this->width,
+            'srcH' => $this->height,
+        ];
+        $this->_replaceImage($width, $height, $position, null, $bgrColor);
         return $this;
-    } // function relocate
+    }
 
-    /**
-     * Scaling Image
-     * If $nFixRatio has value 1, so $nWidth or $nHeight can be chaned
-     * @param numeric $nWidth Width of scaling area
-     * @param numeric $nHeight Height of scaling area
-     * @param numeric $nFixRatio : 0 - not fix ratio, 1 - fix ratio (correct size), 2 - fix ratio (fill free area)
-     * @param integer|string|array $mBgrColor Background Color for fill free area (if $nFixRatio=2)
-     * @return \fan\core\service\image_modify
-     */
-    public function scal(&$nWidth, &$nHeight, $nFixRatio = 1, $mBgrColor = 0xFFFFFF)
+    public function scal(int|float|null &$width, int|float|null &$height, int|float $fixRatio = 1, int|string|array $bgrColor = 0xFFFFFF): static
     {
-        $nLeft = 0;
-        $nTop  = 0;
-        if ($nFixRatio && $nWidth && $nHeight)  {
-            if ($this->nWidth/$nWidth > $this->nHeight/$nHeight) {
+        $left = 0;
+        $top  = 0;
+        if ($fixRatio && $width && $height)  {
+            if ($this->width/$width > $this->height/$height) {
                 // to fall into a width
-                $nWidth_  = $nWidth;
-                $nHeight_ = 0;
-                $this->_correctSize($nWidth_, $nHeight_, $this->nWidth, $this->nHeight);
-                if($nFixRatio == 2) {
-                    $nTop = round(($nHeight - $nHeight_) / 2);
+                $width_  = $width;
+                $height_ = 0;
+                $this->correctSize($width_, $height_, $this->width, $this->height);
+                if ((int)$fixRatio === 2) {
+                    $top = round(($height - $height_) / 2);
                 } else {
-                    $nHeight = $nHeight_;
+                    $height = $height_;
                 }
             } else {
                 // to fall into a height
-                $nWidth_  = 0;
-                $nHeight_ = $nHeight;
-                $this->_correctSize($nWidth_, $nHeight_, $this->nWidth, $this->nHeight);
-                if($nFixRatio == 2) {
-                    $nLeft  = round(($nWidth - $nWidth_) / 2);
+                $width_  = 0;
+                $height_ = $height;
+                $this->correctSize($width_, $height_, $this->width, $this->height);
+                if ((int)$fixRatio === 2) {
+                    $left  = round(($width - $width_) / 2);
                 } else {
-                    $nWidth = $nWidth_;
+                    $width = $width_;
                 }
             }
         } else {
-            $this->_correctSize($nWidth, $nHeight, $this->nWidth, $this->nHeight);
-            $nWidth_  = $nWidth;
-            $nHeight_ = $nHeight;
+            $this->correctSize($width, $height, $this->width, $this->height);
+            $width_  = $width;
+            $height_ = $height;
         }
 
-        if($nWidth && $nHeight && ($nWidth != $this->nWidth || $nHeight != $this->nHeight)) {
-            $aPosition = array(
-                'dstX' => $nLeft,
-                'dstY' => $nTop,
+        if ($width && $height && ((float)$width !== (float)$this->width || (float)$height !== (float)$this->height)) {
+            $position = [
+                'dstX' => $left,
+                'dstY' => $top,
                 'srcX' => 0,
                 'srcY' => 0,
-                'dstW' => $nWidth_,
-                'dstH' => $nHeight_,
-                'srcW' => $this->nWidth,
-                'srcH' => $this->nHeight,
-            );
-            $this->_replaceImage($nWidth, $nHeight, $aPosition, null, $nFixRatio == 2 ? $mBgrColor : null);
+                'dstW' => $width_,
+                'dstH' => $height_,
+                'srcW' => $this->width,
+                'srcH' => $this->height,
+            ];
+            $this->_replaceImage($width, $height, $position, null, (int)$fixRatio === 2 ? $bgrColor : null);
         } // if convert image
         return $this;
-    } // function scal
+    }
 
-    /**
-     * Croping Image
-     * @param numeric $nLeft Left point of cropping area
-     * @param numeric $nTop Top point of cropping area
-     * @param numeric $nWidth Width of cropping area
-     * @param numeric $nHeight Height of cropping area
-     * @return \fan\core\service\image_modify
-     */
-    public function crop($nLeft, $nTop, $nWidth, $nHeight)
+    public function crop(int|float $left, int|float $top, int|float $width, int|float $height): static
     {
-        if($nLeft < 0 || $nLeft > $this->nWidth) {
-            $nLeft = 0;
+        if ($left < 0 || $left > $this->width) {
+            $left = 0;
         }
-        if($nTop < 0 || $nTop > $this->nHeight) {
-            $nTop = 0;
+        if ($top < 0 || $top > $this->height) {
+            $top = 0;
         }
-        if($nLeft + $nWidth > $this->nWidth || $nWidth==0) {
-            $nWidth  = $this->nWidth - $nLeft;
+        if ($left + $width > $this->width || (float)$width === 0.0) {
+            $width  = $this->width - $left;
         }
-        if($nTop + $nHeight > $this->nHeight || $nHeight==0) {
-            $nHeight = $this->nHeight - $nTop;
+        if ($top + $height > $this->height || (float)$height === 0.0) {
+            $height = $this->height - $top;
         }
 
-        if($nWidth != $this->nWidth || $nHeight != $this->nHeight) {
-            $aPosition = array(
+        if ((float)$width !== (float)$this->width || (float)$height !== (float)$this->height) {
+            $position = [
                 'dstX' => 0,
                 'dstY' => 0,
-                'srcX' => $nLeft,
-                'srcY' => $nTop,
-                'dstW' => $nWidth,
-                'dstH' => $nHeight,
-                'srcW' => $nWidth,
-                'srcH' => $nHeight,
-            );
-            $this->_replaceImage($nWidth, $nHeight, $aPosition);
+                'srcX' => $left,
+                'srcY' => $top,
+                'dstW' => $width,
+                'dstH' => $height,
+                'srcW' => $width,
+                'srcH' => $height,
+            ];
+            $this->_replaceImage($width, $height, $position);
         }
         return $this;
-    } // function crop
+    }
 
-    /**
-     * Rotate Image
-     * @param numeric $nAngle Angle of rotate in degrees
-     * @param integer|string|array $mBgrColor Background color
-     * @param numeric $nFix : 0 - not change size, 1-fix width, 2-fix height, 3-fix width and height
-     * @return \fan\core\service\image_modify
-     */
-    public function rotate($nAngle, $mBgrColor = 0xFFFFFF, $nFix = 0)
+    public function rotate(int|float $angle, int|string|array $bgrColor = 0xFFFFFF, int|float $fix = 0): static
     {
-        while(abs($nAngle) > 360){
-            $nAngle = $nAngle > 0 ? $nAngle - 360 : $nAngle + 360;
-        } // while $nAngle > 360
-        if($nAngle != 0) {
-            $oImgTmp = imagerotate($this->oImage, $nAngle, $this->adaptColor($mBgrColor));
-            if($nFix) {
-                $nWidth  = ($nFix == 1 || $nFix == 3) ? $this->nWidth  : 0;
-                $nHeight = ($nFix == 2 || $nFix == 3) ? $this->nHeight : 0;
-                $nTempWidth  = imagesx($oImgTmp);
-                $nTempHeight = imagesy($oImgTmp);
-                $this->_correctSize($nWidth, $nHeight, $nTempWidth, $nTempHeight);
-                $aPosition = array(
+        while (abs($angle) > 360){
+            $angle = $angle > 0 ? $angle - 360 : $angle + 360;
+        } // while $angle > 360
+        if ((float)$angle !== 0.0) {
+            $imgTmp = imagerotate($this->image, (float)$angle, $this->adaptColor($bgrColor));
+            if ($fix) {
+                $fix = (int)$fix;
+                $width  = ($fix === 1 || $fix === 3) ? $this->width  : 0;
+                $height = ($fix === 2 || $fix === 3) ? $this->height : 0;
+                $tempWidth  = imagesx($imgTmp);
+                $tempHeight = imagesy($imgTmp);
+                $this->correctSize($width, $height, $tempWidth, $tempHeight);
+                $position = [
                     'dstX' => 0,
                     'dstY' => 0,
                     'srcX' => 0,
                     'srcY' => 0,
-                    'dstW' => $nWidth,
-                    'dstH' => $nHeight,
-                    'srcW' => $nTempWidth,
-                    'srcH' => $nTempHeight,
-                );
-                $this->_replaceImage($nWidth, $nHeight, $aPosition, $oImgTmp);
+                    'dstW' => $width,
+                    'dstH' => $height,
+                    'srcW' => $tempWidth,
+                    'srcH' => $tempHeight,
+                ];
+                $this->_replaceImage($width, $height, $position, $imgTmp);
             } else {
-                $this->oImage = $oImgTmp;
+                $this->image = $imgTmp;
             } // Fix size
         } // if convert image
         return $this;
-    } // function rotate
+    }
 
-    /**
-     * Image Border
-     * @param numeric $nDepth Border width
-     * @param integer|string|array $mBrdColor Border color
-     * @param bolean $bInline : false - outline border, true - inline
-     * @return \fan\core\service\image_modify
-     */
-    public function border($nDepth, $mBrdColor = 0x000000, $bInline = false)
+    public function border(int|float $depth, int|string|array $brdColor = 0x000000, bool $inline = false): static
     {
-        if($nDepth > 0) {
-            if(!$bInline) {
-                $oSrcImg = $this->oImage;
-                $nWidth  = $this->nWidth;
-                $nHeight = $this->nHeight;
-                $this->nWidth  += $nDepth * 2;
-                $this->nHeight += $nDepth * 2;
-                $this->oImage = imagecreatetruecolor($this->nWidth, $this->nHeight);
-                imagecopyresampled($this->oImage, $oSrcImg, $nDepth, $nDepth, 0, 0, $nWidth, $nHeight, $nWidth, $nHeight);
+        if ($depth > 0) {
+            if (!$inline) {
+                $srcImg = $this->image;
+                $width  = $this->width;
+                $height = $this->height;
+                $this->width  += $depth * 2;
+                $this->height += $depth * 2;
+                $this->image = imagecreatetruecolor((int)$this->width, (int)$this->height);
+                imagecopyresampled($this->image, $srcImg, (int)$depth, (int)$depth, 0, 0, (int)$width, (int)$height, (int)$width, (int)$height);
             }
-            $nColor = $this->adaptColor($mBrdColor);
-            imagefilledrectangle($this->oImage, 0, 0, $this->nWidth, $nDepth - 1, $nColor);
-            imagefilledrectangle($this->oImage, 0, 0, $nDepth - 1, $this->nHeight, $nColor);
-            imagefilledrectangle($this->oImage, 0, $this->nHeight - $nDepth, $this->nWidth, $this->nHeight, $nColor);
-            imagefilledrectangle($this->oImage, $this->nWidth - $nDepth, 0,  $this->nWidth, $this->nHeight, $nColor);
+            $color = $this->adaptColor($brdColor);
+            imagefilledrectangle($this->image, 0, 0, (int)$this->width, (int)($depth - 1), $color);
+            imagefilledrectangle($this->image, 0, 0, (int)($depth - 1), (int)$this->height, $color);
+            imagefilledrectangle($this->image, 0, (int)($this->height - $depth), (int)$this->width, (int)$this->height, $color);
+            imagefilledrectangle($this->image, (int)($this->width - $depth), 0, (int)$this->width, (int)$this->height, $color);
         }
         return $this;
-    } // function border
+    }
 
-    /**
-     * Colorize Image
-     * @param integer|string|array $mColor
-     * @return \fan\core\service\image_modify
-     */
-    public function colorize($mColor)
+    public function colorize(int|string|array $color): static
     {
-        $nColor = $this->adaptColor($mColor);
-        imagefilter($this->oImage, IMG_FILTER_COLORIZE, $nColor >> 16, ($nColor >> 8) & 0xFF, $nColor & 0xFF);
+        $color = $this->adaptColor($color);
+        imagefilter($this->image, IMG_FILTER_COLORIZE, $color >> 16, ($color >> 8) & 0xFF, $color & 0xFF);
         return $this;
-    } // function colorize
+    }
 
-    /**
-     * Blur Image
-     * @return \fan\core\service\image_modify
-     */
-    public function blur()
+    public function blur(): static
     {
-        imagefilter($this->oImage, IMG_FILTER_GAUSSIAN_BLUR);
+        imagefilter($this->image, IMG_FILTER_GAUSSIAN_BLUR);
         return $this;
-    } // function blur
+    }
 
-    /**
-     * Grayscale Image
-     * @return \fan\core\service\image_modify
-     */
-    public function grayscale()
+    public function grayscale(): static
     {
-        imagefilter($this->oImage, IMG_FILTER_GRAYSCALE);
+        imagefilter($this->image, IMG_FILTER_GRAYSCALE);
         return $this;
-    } // function grayscale
+    }
 
-    /**
-     * Sepia Image
-     * @return \fan\core\service\image_modify
-     */
-    public function sepia()
+    public function sepia(): static
     {
-        imagefilter($this->oImage, IMG_FILTER_GRAYSCALE);
-        imagefilter($this->oImage, IMG_FILTER_COLORIZE, 50, 25, 5);
+        imagefilter($this->image, IMG_FILTER_GRAYSCALE);
+        imagefilter($this->image, IMG_FILTER_COLORIZE, 50, 25, 5);
         return $this;
-    } // function sepia
+    }
 
-    /**
-     * Drawing watermark
-     * @param string $sMarkerMode mode of markering
-     * @param numeric $nOpacity opacity of markering
-     * @return \fan\core\service\image_modify
-     */
-    public function markering($sMarkerMode = 'left_bottom', $nOpacity = 10)
+    public function markering(string $markerMode = 'left_bottom', int|float $opacity = 10): static
     {
-        $sPathToPic = \bootstrap::parsePath($this->oConfig['WATERMARK_PATH']);
+        $pathToPic = (string)\bootstrap::parsePath((string)$this->config['WATERMARK_PATH']);
 
-        $aParam = getimagesize($sPathToPic);
-        if ($aParam) {
-            $nWidthMark  = $aParam[0];
-            $nHeightMark = $aParam[1];
+        $param = getimagesize($pathToPic);
+        if ($param) {
+            $widthMark  = $param[0];
+            $heightMark = $param[1];
 
-            switch ($sMarkerMode) {
+            switch ($markerMode) {
                 case 'left_bottom': {
-                    $nPosX = 10;
-                    $nPosY = $this->nHeight - $nHeightMark - 10;
+                    $posX = 10;
+                    $posY = $this->height - $heightMark - 10;
                     break;
                 }
                 case 'right_bottom': {
-                    $nPosX = $this->nWidth  - $nWidthMark  - 10;
-                    $nPosY = $this->nHeight - $nHeightMark - 10;
+                    $posX = $this->width  - $widthMark  - 10;
+                    $posY = $this->height - $heightMark - 10;
                     break;
                 }
                 case 'left_top': {
-                    $nPosX = 10;
-                    $nPosY = 10;
+                    $posX = 10;
+                    $posY = 10;
                     break;
                 }
                 case 'right_top': {
-                    $nPosX = $this->nWidth - $nWidthMark - 10;
-                    $nPosY = 10;
+                    $posX = $this->width - $widthMark - 10;
+                    $posY = 10;
                     break;
                 }
                 case 'center': {
-                    $nPosX = intval($this->nWidth  / 2 - $nWidthMark  / 2);
-                    $nPosY = intval($this->nHeight / 2 - $nHeightMark / 2);
+                    $posX = intval($this->width  / 2 - $widthMark  / 2);
+                    $posY = intval($this->height / 2 - $heightMark / 2);
                     break;
                 }
                 default: { // 'left_bottom'
-                    $nPosX = 10;
-                    $nPosY = $this->nHeight - $nHeightMark - 10;
+                    $posX = 10;
+                    $posY = $this->height - $heightMark - 10;
                     break;
                 }
             }
 
-            $sType = null;
-            switch ($aParam[2]) {
+            $type = null;
+            switch ($param[2]) {
                 case 1: {
-                    $sType = 'gif';
+                    $type = 'gif';
                     break;
                 }
                 case 2: {
-                    $sType = 'jpeg';
+                    $type = 'jpeg';
                     break;
                 }
                 case 3: {
-                    $sType = 'png';
+                    $type = 'png';
                     break;
                 }
             }
-            $sFunc      = 'imagecreatefrom' . $sType;
-            $oImgMarker = $sFunc($sPathToPic);
-            imagecopymerge($this->oImage, $oImgMarker, $nPosX, $nPosY, 0, 0, $nWidthMark, $nHeightMark, $nOpacity);
-            imagedestroy($oImgMarker);
+            $func      = 'imagecreatefrom' . $type;
+            $imgMarker = $func($pathToPic);
+            imagecopymerge($this->image, $imgMarker, (int)$posX, (int)$posY, 0, 0, (int)$widthMark, (int)$heightMark, (int)$opacity);
+            imagedestroy($imgMarker);
         }
         return $this;
-    } // function markering
+    }
 
-    /**
-     * Adapt color data to image functions
-     * @param integer|string|array $mColor
-     * @return int
-     */
-    public function adaptColor($mColor)
+    public function adaptColor(int|string|array $color): int
     {
-        if (is_array($mColor)) {
-            $aColor = array('r' => 0, 'g' => 0, 'b' => 0);
-            foreach ($aColor as $k1 => &$v) {
+        if (is_array($color)) {
+            $sourceColor = $color;
+            $color = ['r' => 0, 'g' => 0, 'b' => 0];
+            foreach ($color as $k1 => &$v) {
                 $k2 = strtoupper($k1);
-                if (isset($mColor[$k1])) {
-                    $v = $mColor[$k1];
-                } elseif (isset($mColor[$k2])) {
-                    $v = $mColor[$k2];
+                if (isset($sourceColor[$k1])) {
+                    $v = $sourceColor[$k1];
+                } elseif (isset($sourceColor[$k2])) {
+                    $v = $sourceColor[$k2];
                 } else {
-                    trigger_error('Color key ' . $k2 . ' isn\'t defined.');
+                    throw new \InvalidArgumentException('Color key ' . $k2 . ' isn\'t defined.');
                 }
                 if (is_string($v)) {
                     $v = hexdec($v);
                 }
-                $v = abs(round($v)) % 0xFF;
+                $v = (int)abs(round((float)$v)) % 0xFF;
             }
         } else {
-            if (is_string($mColor)) {
-                $mColor = hexdec($mColor);
+            if (is_string($color)) {
+                $color = hexdec($color);
             }
-            $v = abs(round($mColor)) % 0xFFFFFF;
-            $aColor = array(
-                'r' => $mColor >> 16,
-                'g' => ($mColor >> 8) & 0xFF,
-                'b' => $mColor & 0xFF
-            );
+            $color = (int)abs(round((float)$color)) % 0xFFFFFF;
+            $color = [
+                'r' => $color >> 16,
+                'g' => ($color >> 8) & 0xFF,
+                'b' => $color & 0xFF
+            ];
         }
-        $nResult = imagecolorallocate($this->oImage, $aColor['r'], $aColor['g'], $aColor['b']);
-        if ($nResult === false) {
-            trigger_error('Incorrect value of color ' . var_export($mColor, true));
-            return 0;
+        $result = imagecolorallocate($this->image, (int)$color['r'], (int)$color['g'], (int)$color['b']);
+        if ($result === false) {
+            throw new \UnexpectedValueException('Incorrect value of color ' . var_export($color, true));
         }
-        return $nResult;
-    } // function adaptColor
+        return $result;
+    }
 
     // ---------- Finish methods ---------- \\
-    /**
-     * Output Image Type
-     * @return string
-     */
-    public function getType()
+    public function getType(): ?string
     {
-        return $this->sType;
-    } // function getType
+        return $this->type;
+    }
 
-    /**
-     * Output Image
-     * @return array
-     */
-    public function getImageInfo($nTimeExpires = 0, $bWithContent = true)
+    public function getImageInfo(int $timeExpires = 0, bool $withContent = true): array
     {
-        $sContent = $this->getImage();
-        $imgPath  = pathinfo($this->sSourcePath);
+        $content = (string)$this->getImage();
+        $imgPath  = pathinfo((string)$this->sourcePath);
 
-        return array(
-            'sourcePath' => $this->sSourcePath,
-            'content'    => $bWithContent ? $sContent : null,
-            'type'       => $this->sType,
-            'headers' => array(
-                'contentType' => 'image/' . $this->sType,
+        return [
+            'sourcePath' => $this->sourcePath,
+            'content'    => $withContent ? $content : null,
+            'type'       => $this->type,
+            'headers' => [
+                'contentType' => 'image/' . $this->type,
                 'filename'    => $imgPath['basename'],
-                'length'      => strlen($sContent),
+                'length'      => strlen($content),
                 'legthRange'  => 'bytes',
                 'modified'    => time(),
-                'cacheLimit'  => $nTimeExpires,
-            ),
-        );
-    } // function getImageInfo
+                'cacheLimit'  => (int)$timeExpires,
+            ],
+        ];
+    }
 
-    /**
-     * Get Image
-     * @return string Image content
-     */
-    public function getImage()
+    public function getImage(): string|false
     {
         ob_start();
         $this->saveAsNew(null);
-        $sOutput = ob_get_contents();
-        @ob_end_clean();
-        return $sOutput;
-    } // function getImage
+        $output = ob_get_contents();
+        if (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        return $output;
+    }
 
-    /**
-     * Save as new Image
-     * @param string $sNewFile Path to new image
-     * @return \fan\core\service\image_modify
-     */
-    public function saveAsNew($sNewFile)
+    public function saveAsNew(?string $newFile = null): static
     {
-        $sFunc = 'image' . $this->sType;
-        if(in_array($sFunc, array('imagejpeg', 'imagepng'))) {
-            if ($sFunc == 'imagepng' && $this->nQuality > 10) {
-                $this->nQuality = round($this->nQuality/10);
+        $func = 'image' . $this->type;
+        if (in_array($func, ['imagejpeg', 'imagepng'])) {
+            if ($func === 'imagepng' && $this->quality > 10) {
+                $this->quality = round($this->quality/10);
             }
-            $sFunc($this->oImage, $sNewFile, $this->nQuality);
-        } elseif($this->sType && function_exists($sFunc)) {
-            $sFunc($this->oImage, $sNewFile);
+            $func($this->image, $newFile, (int)$this->quality);
+        } elseif ($this->type && function_exists($func)) {
+            $func($this->image, $newFile);
         } else {
-            throw new fatalException($this, 'Incorrect image type (' . $this->sType . ').');
+            throw new fatalException($this, 'Incorrect image type (' . $this->type . ').');
         }
         return $this;
-    } // function saveAsNew
+    }
 
-    /**
-     * Save and replase current Image
-     * @param string $sExt Additional extantion for save old image (null - it is not saved bakup)
-     * @return \fan\core\service\image_modify
-     */
-    public function saveAndReplace($sExt = 'bak')
+    public function saveAndReplace(mixed $ext = 'bak'): static
     {
-        if(!is_null($sExt)) {
-            $imgPath = pathinfo($this->sSourcePath);
-            rename($this->sSourcePath, $imgPath['dirname'] . '/' . $imgPath['filename'] . '.' . $sExt . '.' . $imgPath['extension']);
+        if (!is_null($ext)) {
+            $imgPath = pathinfo((string)$this->sourcePath);
+            rename((string)$this->sourcePath, $imgPath['dirname'] . '/' . $imgPath['filename'] . '.' . (string)$ext . '.' . $imgPath['extension']);
         }
-        $this->saveAsNew($this->sSourcePath);
+        $this->saveAsNew($this->sourcePath);
         return $this;
-    } // function saveAndReplace
+    }
 
     // ======== Private/Protected methods ======== \\
 
     /**
-     * Get value of coordinate
-     * @param array $aCoord
-     * @param string $sKey
-     * @param numeric $nDefault
-     * @return numeric
+     * @param int|float $default Fallback value returned when no explicit value is available.
      */
-    protected function _getCoord($aCoord, $sKey, $nDefault = 0)
+    protected function _getCoord(array $coord, string $key, int|float $default = 0): mixed
     {
-        if (!isset($aCoord[$sKey])) {
-            $aTrace = debug_backtrace();
-            trigger_error(
-                    'Coordinate isn\'t set for ' . $sKey . '<br />' .
-                    (isset($aTrace[1]['file']) ? 'file "<nobr><b>'  . $aTrace[1]['file'] . '</b></nobr>", ' : 'No file') .
-                    (isset($aTrace[1]['line']) ? 'line <b>'         . $aTrace[1]['line'] . '</b>.' : ''),
-                    E_USER_ERROR
+        if (!isset($coord[$key])) {
+            $trace = debug_backtrace();
+            throw new \OutOfBoundsException(
+                    'Coordinate isn\'t set for ' . $key . '<br />' .
+                    (isset($trace[1]['file']) ? 'file "<nobr><b>'  . $trace[1]['file'] . '</b></nobr>", ' : 'No file') .
+                    (isset($trace[1]['line']) ? 'line <b>'         . $trace[1]['line'] . '</b>.' : '')
             );
         }
-        return array_val($aCoord, $sKey, $nDefault);
-    } // function _getCoord
+        return array_val($coord, $key, $default);
+    }
 
-    /**
-     * Get Difference beetwim two coordinates
-     * @param array $aCoord
-     * @param string $sKey1
-     * @param string $sKey2
-     * @return numeric
-     */
-    protected function _getCoordDiff($aCoord, $sKey1, $sKey2)
+    protected function _getCoordDiff(array $coord, string $key1, string $key2): int|float
     {
-        return abs($this->_getCoord($aCoord, $sKey1) - $this->_getCoord($aCoord, $sKey2));
-    } // function _getCoordDiff
+        return abs($this->_getCoord($coord, $key1) - $this->_getCoord($coord, $key2));
+    }
 
-    /**
-     * Replace base Image to another one
-     * @param numeric $nWidth
-     * @param numeric $nHeight
-     * @param array $aPosition
-     * @param resource $oSrcImg
-     * @param integer|string|array|null $mBgrColor
-     * @return \fan\core\service\image_modify
-     */
-    protected function _replaceImage($nWidth, $nHeight, $aPosition, $oSrcImg = null, $mBgrColor = null)
+    protected function _replaceImage(int|float $width, int|float $height, array $position, mixed $srcImg = null, int|string|array|null $bgrColor = null): static
     {
-        if (is_null($oSrcImg)) {
-            $oSrcImg = $this->oImage;
+        if (is_null($srcImg)) {
+            $srcImg = $this->image;
         }
-        $this->oImage = imagecreatetruecolor($nWidth, $nHeight);
-        if (!is_null($mBgrColor)) {
-            imagefilledrectangle($this->oImage, 0, 0, $nWidth, $nHeight, $this->adaptColor($mBgrColor));
+        $this->image = imagecreatetruecolor((int)$width, (int)$height);
+        if (!is_null($bgrColor)) {
+            imagefilledrectangle($this->image, 0, 0, (int)$width, (int)$height, $this->adaptColor($bgrColor));
         }
-        imagecopyresampled($this->oImage, $oSrcImg, $aPosition['dstX'], $aPosition['dstY'], $aPosition['srcX'], $aPosition['srcY'], $aPosition['dstW'], $aPosition['dstH'], $aPosition['srcW'], $aPosition['srcH']);
-        $this->nWidth  = $nWidth;
-        $this->nHeight = $nHeight;
+        imagecopyresampled($this->image, $srcImg, (int)$position['dstX'], (int)$position['dstY'], (int)$position['srcX'], (int)$position['srcY'], (int)$position['dstW'], (int)$position['dstH'], (int)$position['srcW'], (int)$position['srcH']);
+        $this->width  = $width;
+        $this->height = $height;
         return $this;
-    } // function _replaceImage
+    }
 
-    /**
-     * Proportional correction  Image
-     * Set $nHeight and $nWidth if it is NULL
-     * @param numeric $nWidth Width of image
-     * @param numeric $nHeight Height of image
-     * @return \fan\core\service\image_modify
-     */
-    private function _correctSize(&$nWidth, &$nHeight, $nOldWidth, $nOldHeight)
+    private function correctSize(&$width, &$height, $oldWidth, $oldHeight): static
     {
-        if(!$nWidth && $nHeight && $nOldHeight) {
-            $nWidth  = round($nHeight * $nOldWidth / $nOldHeight);
-        } elseif (!$nHeight && $nWidth && $nOldWidth) {
-            $nHeight = round($nWidth * $nOldHeight / $nOldWidth);
+        if (!$width && $height && $oldHeight) {
+            $width  = round($height * $oldWidth / $oldHeight);
+        } elseif (!$height && $width && $oldWidth) {
+            $height = round($width * $oldHeight / $oldWidth);
         }
         return $this;
-    } // function _correctSize
+    }
 
-} // class \fan\core\service\image_modify
-?>
+}

@@ -38,12 +38,6 @@ if (version_compare(PHP_VERSION, '5.1.2', '>=')) {
         spl_autoload_register('PHPMailerAutoload');
     }
 } else {
-    /**
-     * Fall back to traditional autoload for old PHP versions
-     * @param string $classname The name of the class to load
-     */
-    function __autoload($classname)
-    {
-        PHPMailerAutoload($classname);
-    }
+    // PHP-FAN requires PHP 5.3+, where spl_autoload_register() is available.
+    // Do not declare the legacy PHP autoload hook; PHP 8 no longer supports it.
 }

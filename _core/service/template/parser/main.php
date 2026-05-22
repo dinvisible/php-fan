@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\template\parser;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\template\parser;
 /**
  * Template parser engine main
  *
@@ -16,125 +19,76 @@
  */
 class main extends base
 {
-    /**
-     * @var array Defined tpl-tag list
-     */
-    protected $aTagList = array('assign', 'if', 'elseif', 'foreach', 'for', 'msg', 'uri', 'get_url');
+    protected array $tagList = ['assign', 'if', 'elseif', 'foreach', 'for', 'msg', 'uri', 'get_url'];
 
-    /**
-     * Parse assign code
-     * @param string $sData
-     * @return string
-     */
-    public function parse_assign($sData)
+    public function parse_assign(string $data): string
     {
-        $aParam = $this->getStandardParam($sData, array('var', 'value'), array('var'));
-        $sCode = '';
-        if (preg_match('/^[a-z]\w+/i', $aParam['var'], $aMatches)) {
-            $sCode .= '$' . $aMatches[0] . '=&$this->linkForAssign(\'' . $aMatches[0] . '\');';
+        $param = $this->getStandardParam($data, ['var', 'value'], ['var']);
+        $code = '';
+        if (preg_match('/^[a-z]\w+/i', $param['var'], $matches)) {
+            $code .= '$' . $matches[0] . '=&$this->linkForAssign(\'' . $matches[0] . '\');';
         }
-        return $sCode . '$' . $aParam['var'] . '=' . $aParam['value'] . ';' . "\n";
-    } // function parse_assign
+        return $code . '$' . $param['var'] . '=' . $param['value'] . ';' . "\n";
+    }
 
-    /**
-     * Parse "if" code
-     * @param string $sData
-     * @return string
-     */
-    public function parse_if($sData)
+    public function parse_if(string $data): string
     {
-        return 'if (' . $sData . "):\n";
-    } // function parse_if
+        return 'if (' . $data . "):\n";
+    }
 
-    /**
-     * Parse "elseif" code
-     * @param string $sData
-     * @return string
-     */
-    public function parse_elseif($sData)
+    public function parse_elseif(string $data): string
     {
-        return 'elseif (' . $sData . "):\n";
-    } // function parse_elseif
+        return 'elseif (' . $data . "):\n";
+    }
 
-    /**
-     * Parse "foreach" code
-     * @param string $sData
-     * @return string
-     */
-    public function parse_foreach($sData)
+    public function parse_foreach(string $data): string
     {
-        $aParam = $this->getStandardParam($sData, array('from', 'item'), array('item', 'key'));
-        $sCode = empty($aParam['name']) ? '' : '$this->setObjectData(\'foreach\', ' . $aParam['name'] . ', ' . $aParam['from'] . ');';
-        $sCode .= 'foreach (' . $aParam['from'] . ' as ' . (empty($aParam['key']) ? '' : '$' . $aParam['key'] . '=>') . '$' . $aParam['item'] . '):' . "\n";
-        if (!empty($aParam['name'])) {
-            $sCode .= '$this->setIteration(' . $aParam['name'] . ');' . "\n";
+        $param = $this->getStandardParam($data, ['from', 'item'], ['item', 'key']);
+        $code = empty($param['name']) ? '' : '$this->setObjectData(\'foreach\', ' . $param['name'] . ', ' . $param['from'] . ');';
+        $code .= 'foreach (' . $param['from'] . ' as ' . (empty($param['key']) ? '' : '$' . $param['key'] . '=>') . '$' . $param['item'] . '):' . "\n";
+        if (!empty($param['name'])) {
+            $code .= '$this->setIteration(' . $param['name'] . ');' . "\n";
         }
-        return $sCode;
-    } // function parse_foreach
+        return $code;
+    }
 
-    /**
-     * Parse "for" code
-     * @param string $sData
-     * @return string
-     */
-    public function parse_for($sData)
+    public function parse_for(string $data): string
     {
-        $aParam = $this->getStandardParam($sData);
-        $sCode  = empty($aParam['name']) ? '' : '$this->setObjectData(\'for\', ' . $aParam['name'] . ');';
-        $sCode .= 'for (' . (empty($aParam['start']) ? '' : $aParam['start']) . ';';
-        $sCode .= (empty($aParam['condition']) ? '' : $aParam['condition']) . ';';
-        $sCode .= (empty($aParam['each']) ? '' : $aParam['each']) . '):' . "\n";
-        if (!empty($aParam['name'])) {
-            $sCode .= '$this->setIteration(' . $aParam['name'] . ');' . "\n";
+        $param = $this->getStandardParam($data);
+        $code  = empty($param['name']) ? '' : '$this->setObjectData(\'for\', ' . $param['name'] . ');';
+        $code .= 'for (' . (empty($param['start']) ? '' : $param['start']) . ';';
+        $code .= (empty($param['condition']) ? '' : $param['condition']) . ';';
+        $code .= (empty($param['each']) ? '' : $param['each']) . '):' . "\n";
+        if (!empty($param['name'])) {
+            $code .= '$this->setIteration(' . $param['name'] . ');' . "\n";
         }
-        return $sCode;
-    } // function parse_for
+        return $code;
+    }
 
-    /**
-     * Parse "msg" code
-     * @param string $sData
-     * @return string
-     */
-    public function parse_msg($sData)
+    public function parse_msg(string $data): string
     {
-        return '$sReturnHtmlVal.=msg(' . implode(',', $this->getSimpleParam($sData)) . ");\n";
-    } // function parse_msg
+        return '$returnHtmlVal.=msg(' . implode(',', $this->getSimpleParam($data)) . ");\n";
+    }
 
-    /**
-     * Parse "uri" code
-     * @param string $sData
-     * @return string
-     */
-    public function parse_uri($sData)
+    public function parse_uri(string $data): string
     {
-        return '$sReturnHtmlVal.=$this->oBlock->getTab()->getURI(' . implode(',', $this->getSimpleParam($sData)) . ");\n";
-    } // function parse_url
+        return '$returnHtmlVal.=$this->block->getTab()->getURI(' . implode(',', $this->getSimpleParam($data)) . ");\n";
+    }
 
-    /**
-     * Parse getURI
-     * @param string $sData
-     * @return string
-     */
-    public function parse_getURI($sData)
+    public function parse_getURI(string $data): string
     {
-        return $this->parse_get_url($sData);
-    } // function parse_getURI
+        return $this->parse_get_url($data);
+    }
 
-    /**
-     * Parse get_url
-     * @param string $sData
-     * @return string
-     */
-    public function parse_get_url($sData)
+    public function parse_get_url(string $data): string
     {
-        $aParam = $this->getStandardParam($sData, array('url'), array('type'));
-        if (!isset($aParam['type'])) {
-            $aParam['type'] = 'link';
+        $param = $this->getStandardParam($data, ['url'], ['type']);
+        if (!isset($param['type'])) {
+            $param['type'] = 'link';
         }
-        $aParam['use_sid']  = array_key_exists('use_sid',  $aParam) ? (empty($aParam['use_sid'])  ? 'false' : 'true') : 'null';
-        $aParam['protocol'] = array_key_exists('protocol', $aParam) ? (empty($aParam['protocol']) ? 'false' : 'true') : 'null';
-        return '$sReturnHtmlVal.=\fan\project\service\tab::instance()->getURI(' . $aParam['url'] . ',\'' . $aParam['type'] . '\',' . $aParam['use_sid'] . ',' . $aParam['protocol'] . ");\n";
-    } // function parse_get_url
+        $param['use_sid']  = array_key_exists('use_sid',  $param) ? (empty($param['use_sid'])  ? 'false' : 'true') : 'null';
+        $param['protocol'] = array_key_exists('protocol', $param) ? (empty($param['protocol']) ? 'false' : 'true') : 'null';
+        return '$returnHtmlVal.=service_container()->get(\'tab\')->getURI(' . $param['url'] . ',\'' . $param['type'] . '\',' . $param['use_sid'] . ',' . $param['protocol'] . ");\n";
+    }
 
-} // class \fan\core\service\template\parser\main
-?>
+}

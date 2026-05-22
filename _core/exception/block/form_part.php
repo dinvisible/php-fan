@@ -1,4 +1,8 @@
-<?php namespace fan\core\exception\block;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\exception\block;
 /**
  * Exception a block fatal error
  *
@@ -20,54 +24,30 @@ class form_part extends local
      * Parsed form block
      * @var \fan\core\block\base
      */
-    protected $oFormPart = null;
+    protected ?object $formPart = null;
 
-    /**
-     * @var string Public error message
-     */
-    protected $aErrorMsg = null;
+    protected ?array $errorMsg = null;
 
-    /**
-     * Exception's constructor
-     * @param block_html_form_base $oBlock Object - instance of form block
-     * @param array $aErrorMsg Error message
-     * @param integer $nCode Error Code
-     * @param \Exception $oPrevious Previous Exception
-     */
-    public function __construct(\fan\core\block\base $oBlock, $aErrorMsg, $nCode = E_USER_WARNING, $oPrevious = null)
+    public function __construct(\fan\core\block\base $block, array $errorMsg, int $code = E_USER_WARNING, ?\Throwable $previous = null)
     {
-        $this->oFormPart = $oBlock;
-        $this->aErrorMsg = $aErrorMsg;
-        parent::__construct($oBlock, 'Form part error', $nCode, $oPrevious);
-    } // function __construct
+        $this->formPart = $block;
+        $this->errorMsg = $errorMsg;
+        parent::__construct($block, 'Form part error', $code, $previous);
+    }
 
-    /**
-     * Get Block Name
-     * @return string
-     */
-    public function getBlockName()
+    public function getBlockName(): string
     {
-        return $this->oFormPart->getBlockName();
-    } // function getBlockName
+        return $this->formPart->getBlockName();
+    }
 
-    /**
-     * Get array of Error Messages
-     * @return array
-     */
-    public function getErrorMessages()
+    public function getErrorMessages(): ?array
     {
-        return $this->aErrorMsg;
-    } // function getErrorMessages
+        return $this->errorMsg;
+    }
 
-    /**
-     * Get operation for Db (nothing) when exception occured
-     * @param string $sDbOper
-     * @return null|string
-     */
-    protected function _defineDbOper($sDbOper = 'nothing')
+    protected function _defineDbOper(?string $dbOper = 'nothing'): ?string
     {
-        return parent::_defineDbOper($sDbOper);
-    } // function _defineDbOper
+        return parent::_defineDbOper($dbOper);
+    }
 
-} // class \fan\core\exception\block\form_part
-?>
+}

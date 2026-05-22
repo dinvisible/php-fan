@@ -1,38 +1,29 @@
-<?php namespace fan\app\__tools\design;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\app\__tools\design;
 /**
  * counter_subnav block for tools
  * @version 05.02.005 (12.02.2015)
  */
 class counter_subnav extends \fan\project\block\common\simple
 {
-    /**
-     * @var string Main key element
-     */
-    protected $sMainKey = null;
-    /**
-     * Init block
-     */
-    public function init()
+    protected ?string $mainKey = null;
+    public function init(): void
     {
-        $oTab = $this->oTab;
+        $tab = $this->tab;
 
-        $aMainRequest = $this->getRequest()->getAll('M');;
-        $this->sMainKey = $aMainRequest[0];
-        $sCurrent = array_val($aMainRequest, 1);
+        $mainRequest = $this->getRequest()->getAll('M');;
+        $this->mainKey = $mainRequest[0];
+        $current = array_val($mainRequest, 1);
 
-        $this->view->sCurrent = $sCurrent;
+        $this->view->current = $current;
     }
 
-    /**
-     * Get Nav Url
-     * @param string $sKey
-     * @param string $sAddUrl
-     * @return string
-     */
-    public function getNavUrl($sKey, $sAddUrl = '')
+    public function getNavUrl(string $key, string $addUrl = ''): string
     {
-        return $this->oTab->getURI('~/' . $this->sMainKey . '/' . $sKey . $sAddUrl . '.html', 'link', null, null);
+        return $this->tab->getURI('~/' . $this->mainKey . '/' . $key . $addUrl . '.html', 'link', null, null);
     }
 
-} // class \fan\app\__tools\design\counter_subnav
-?>
+}

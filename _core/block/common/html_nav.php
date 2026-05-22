@@ -1,4 +1,8 @@
-<?php namespace fan\core\block\common;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\block\common;
 /**
  * Base class for all kind of meta nav
  *
@@ -21,77 +25,51 @@ abstract class html_nav extends \fan\core\block\base
      * Current Request
      * @var array
      */
-    protected $aCurrentRequest = array();
+    protected array $currentRequest = [];
 
-    /**
-     * Init block
-     */
-    public function init()
+    public function init(): void
     {
-        $this->view->aNavList = $this->_getNav();
-    } // function init
+        $this->view->navList = $this->_getNav();
+    }
 
-    /**
-     * Get nav from data base
-     * @param string $sKey - group key of meta file
-     * @return object array
-     */
-    protected function _getNav($sKey = 'nav')
+    protected function _getNav(mixed $key = 'nav'): array
     {
-        return $this->_parseNav($this->getMeta($sKey, array(), true));
-    } // function _getNav
+        return $this->_parseNav((array)$this->getMeta($key, [], true));
+    }
 
-    /**
-     * Parse Nav (recursive)
-     * @param array $aNav
-     * @return array
-     */
-    protected function _parseNav($aNav)
+    protected function _parseNav(array $nav): array
     {
-        $aResult = array();
-        foreach ($aNav as $k => $v){
+        $result = [];
+        foreach ($nav as $k => $v){
             if (!isset($v['role']) || role($v['role'])) {
-                $aResult[$k] = array(
+                $result[$k] = [
                     'nav_name'  => array_val($v, 'nav_name', '&nbsp;'),
-                    'url_value' => $this->_getNavURI($v['url_value'], array_val($v, 'url_type', 'local'), array_val($v, 'protocol', '')),
-                    'current'   => isset($v['nav_key'])   ? $this->_checkCurrentElement($v['nav_key']) : false,
-                    'children'  => !empty($v['children']) ? $this->_parseNav($v['children']) : array(),
-                );
+                    'url_value' => $this->_getNavURI((string)$v['url_value'], (string)array_val($v, 'url_type', 'local'), (string)array_val($v, 'protocol', '')),
+                    'current'   => isset($v['nav_key'])   ? $this->_checkCurrentElement((string)$v['nav_key']) : false,
+                    'children'  => !empty($v['children']) ? $this->_parseNav($v['children']) : [],
+                ];
             }
         }
-        return $aResult;
-    } // function _parseNav
+        return $result;
+    }
 
-    /**
-     * Get nav URL subject to type and protocol
-     * @param string $sUrl
-     * @param string $sType
-     * @param string $sProtocol
-     * @return string
-     */
-    protected function _getNavURI($sUrl, $sType = 'local', $sProtocol = null)
+    protected function _getNavURI(string $url, string $type = 'local', ?string $protocol = null): string
     {
-        if ($sType == 'dummy') {
+        if ($type === 'dummy') {
             return '#';
         }
-        if ($sType == 'foreign') {
-            return $sUrl;
+        if ($type === 'foreign') {
+            return $url;
         }
-        return $this->oTab->getURI($sUrl, 'link', null, $sProtocol);
-    } // function _getNavURI
+        return $this->tab->getURI($url, 'link', null, $protocol);
+    }
 
-    /**
-     * Check current element of nav
-     * Compare elements by "AND"
-     * @param string $sKey
-     * @return boolean
-     */
-    protected function _checkCurrentElement($sKey)
+    protected function _checkCurrentElement(string $key): bool
     {
-        $aRequest = $this->_getCurrentRequest();
-        $bRet = false;
-        foreach (explode(',', $sKey) as $v) {
-            @list($k1, $k2) = explode(':', $v, 2);
+        $request = $this->_getCurrentRequest();
+        $ret = false;
+        foreach (explode(',', $key) as $v) {
+            [$k1, $k2] = array_pad(explode(':', $v, 2), 2, null);
             if (!$k2) {
                 $k2 = trim($k1);
                 $k1 = 0;
@@ -99,45 +77,39 @@ abstract class html_nav extends \fan\core\block\base
                 $k1 = (int)trim($k1);
                 $k2 = trim($k2);
             }
-            if (isset($aRequest[$k1])) {
-                if ($aRequest[$k1] != $k2) {
+            if (isset($request[$k1])) {
+                if ((string)$request[$k1] !== $k2) {
                     return false;
                 }
-                $bRet = true;
+                $ret = true;
             }
         }
-        return $bRet;
-    } // function _checkCurrentElement
+        return $ret;
+    }
 
-    /**
-     * Get Current Request
-     * @param boolean $bForce
-     * @return array
-     */
-    protected function _getCurrentRequest($bForce = false)
+    protected function _getCurrentRequest(bool $force = false): array
     {
-        if (empty($this->aCurrentRequest) || $bForce) {
-            $sCurReq  = $this->oTab->getCurrentURI(false, false, false, true);
-            $aRequest = explode('/', trim($sCurReq, '/'));
-            if ($aRequest[0] == 'static_pages') {
-                array_shift($aRequest);
+        if (empty($this->currentRequest) || $force) {
+            $curReq  = $this->tab->getCurrentURI(false, false, false, true);
+            $request = explode('/', trim($curReq, '/'));
+            if (($request[0] ?? '') === 'static_pages') {
+                array_shift($request);
             }
             if ($this->getMeta('allowUrlPrefix', false)) {
-                $oMatcher = service('matcher');
-                /* @var $oMatcher \fan\core\service\matcher */
-                $sPrefix = $oMatcher->getCurrentItem()->parsed->app_prefix;
-                if ($sPrefix) {
-                    foreach (explode('/', $sPrefix) as $v) {
+                $matcher = service('matcher');
+                /* @var $matcher \fan\core\service\matcher */
+                $prefix = (string)$matcher->getCurrentItem()->parsed->app_prefix;
+                if ($prefix) {
+                    foreach (explode('/', $prefix) as $v) {
                         if ($v) {
-                            array_unshift($aRequest, $v);
+                            array_unshift($request, $v);
                         }
                     }
                 }
             }
-            $this->aCurrentRequest = $aRequest;
+            $this->currentRequest = $request;
         }
-        return $this->aCurrentRequest;
-    } // function _getCurrentRequest
+        return $this->currentRequest;
+    }
 
-} // class \fan\core\block\common\html_nav
-?>
+}

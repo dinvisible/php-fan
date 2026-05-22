@@ -1,4 +1,8 @@
-<?php namespace fan\core\exception\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\exception\service;
 /**
  * Exception an error 500
  *
@@ -19,105 +23,62 @@ class database extends fatal
     /**
      * @var numeric Code of Service database Operation
      */
-    protected $nOperCode;
-    /**
-     * @var string Service database Operation
-     */
-    protected $sOperMessage;
+    protected int|float|null $operCode = null;
+    protected ?string $operMessage = null;
 
-    /**
-     * @var string Service database Error Num
-     */
-    protected $nErrorNum;
+    protected int|float|null $errorNum = null;
 
-    /**
-     * @var string Service database Error Message
-     */
-    protected $sErrorMessage;
+    protected ?string $errorMessage = null;
 
-    /**
-     * @var string Service database Parsed SQL
-     */
-    protected $sParsedSql;
+    protected ?string $parsedSql = null;
 
-    /**
-     * Exception's constructor
-     * @param \fan\core\service\database $oDatabase
-     * @param numeric $nOperCode
-     * @param string  $sOperMessage
-     * @param numeric $nErrorCode
-     * @param string  $sErrorMessage
-     * @param string  $sParsedSql
-     */
-    public function __construct(\fan\core\service\database $oDatabase, $nOperCode, $sOperMessage, $nErrorCode, $sErrorMessage, $sParsedSql)
+    public function __construct(\fan\core\service\database $database, int|float|null $operCode, string $operMessage, int|float|null $errorCode, string $errorMessage, ?string $parsedSql)
     {
-        $this->nOperCode    = $nOperCode;
-        $this->sOperMessage = $sOperMessage;
-        $this->nErrorNum    = $nErrorCode;
-        $this->sShowErrMsg  = $sErrorMessage;
-        $this->sParsedSql   = $sParsedSql;
+        $this->operCode    = $operCode;
+        $this->operMessage = $operMessage;
+        $this->errorNum    = $errorCode;
+        $this->showErrMsg  = $errorMessage;
+        $this->parsedSql   = $parsedSql;
 
-        $sLogErrMsg = $sOperMessage . "\n" . trim($sErrorMessage) . (empty($nErrorCode) ? '' : "\nError No: " . $nErrorCode . '.');
-        parent::__construct($oDatabase, $sLogErrMsg, E_USER_WARNING, null);
+        $logErrMsg = $operMessage . "\n" . trim($errorMessage) . (empty($errorCode) ? '' : "\nError No: " . $errorCode . '.');
+        parent::__construct($database, $logErrMsg, E_USER_WARNING, null);
     }
 
-    /**
-     * Get Code of Operation
-     * @return numeric
-     */
-    public function getOperationCode()
+    public function getOperationCode(): int|float|null
     {
-        return $this->nOperCode;
-    } // function getOperationCode
+        return $this->operCode;
+    }
 
-    /**
-     * Get Operation
-     * @return string
-     */
-    public function getOperation()
+    public function getOperation(): ?string
     {
-        return $this->sOperMessage;
-    } // function getOperation
+        return $this->operMessage;
+    }
 
-    /**
-     * Get ErrorNum
-     * @return string
-     */
-    public function getErrorNum()
+    public function getErrorNum(): int|float|null
     {
-        return $this->nErrorNum;
-    } // function getErrorNum
+        return $this->errorNum;
+    }
 
-    /**
-     * Get ParsedSql
-     * @return string
-     */
-    public function getParsedSql()
+    public function getParsedSql(): ?string
     {
-        return $this->sParsedSql;
-    } // function getParsedSql
+        return $this->parsedSql;
+    }
 
 
-    /**
-     * Get Instance of service
-     * @param string $sLogType
-     * @return \fan\core\base\service
-     */
-    protected function _logErrorMessage($sLogType)
+    protected function _logErrorMessage(string $logType): static
     {
-        if ($this->nOperCode < 3) {
-            parent::_logErrorMessage($sLogType);
-        } elseif ($sLogType != 'nothing') {
-            \fan\project\service\error::instance()->logDatabaseError(
-                    $this->oService->getConnectionName(),
-                    $this->sOperMessage,
-                    $this->sShowErrMsg,
-                    $this->nErrorNum,
-                    $this->sParsedSql
+        if ($this->operCode < 3) {
+            parent::_logErrorMessage($logType);
+        } elseif ((string)$logType !== 'nothing') {
+            $this->containerService('error')->logDatabaseError(
+                    $this->service->getConnectionName(),
+                    $this->operMessage,
+                    $this->showErrMsg,
+                    $this->errorNum,
+                    $this->parsedSql
             );
         }
         return $this;
     }
 
-} // class \fan\core\exception\service\database
-?>
+}

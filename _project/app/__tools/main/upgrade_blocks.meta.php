@@ -1,20 +1,23 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Upgrade blocks tools meta
  * @version 05.02.005 (12.02.2015)
  */
-return array(
-    'own' => array(
+return [
+    'own' => [
         'title' => 'Tool for convert admin files from PHP-FAN4 to PHP-FAN5',
 /*
-        'externalCss' => array( // css files
-            'style' => array('~/entity.css'),
-        ),
+        'externalCss' => [ // css files
+            'style' => ['~/entity.css'],
+        ],
 */
-        'src' => array(
+        'src' => [
             'path' => '{PROJECT}/app/admin',
             'ns'   => 'fan\app\admin',
-            'extends' => array(
+            'extends' => [
                 'block_loader_admin_structure'    => '\fan\project\block\admin\structure',
                 'block_loader_admin_data_table'   => '\fan\project\block\admin\data_table',
                 'block_loader_admin_data_form'    => '\fan\project\block\admin\data_form',
@@ -28,9 +31,9 @@ return array(
                 'block_html_form_base'            => '\fan\project\block\form\injector',
                 'block_form_base_input'           => '\fan\project\block\form\injector',
                 'entity_base'                     => '\fan\project\base\model\entity',
-            ),
-            'direct_replace' => array(
-                'php' => array(
+            ],
+            'direct_replace' => [
+                'php' => [
                     '/(?<=\W)array_merge_recursive_spec(?=\W)/' => 'array_merge_recursive_alt',
                     '/getMetaVar/'                => 'getMeta',
                     '/load_runner\:\:parse_path/' => '\bootstrap::parsePath',
@@ -40,28 +43,27 @@ return array(
                     '/\-\>setTemplateVar\s*\(/' => '->_setViewVar(',
                     '/\-\>getBlock\s*\(/'       => '->_getBlock(',
                     '/\-\>parseForm\s*\(/'      => '->_parseForm(',
-                ),
-                'meta' => array(
+                ],
+                'meta' => [
                     '/(?<=\W)array_merge_recursive_spec(?=\W)/' => 'array_merge_recursive_alt',
                     '/(?<=\W)d4mf\(/' => '$this->_makeActiveMeta(',
-                ),
-                'tpl' => array(
+                ],
+                'tpl' => [
                     //'' => '',
-                ),
-            ),
-        ), //src
+                ],
+            ],
+        ], //src
 
         'dontCrawl' => true,
 
-        'cache' => array(
+        'cache' => [
             'mode' => 1,
-        ),
-        'roles' => array (
-            array (
+        ],
+        'roles' => [
+            [
                 'condition'    => 'tools_access',
                 'transfer_out' => '~/',
-            ),
-        ),
-    ),
-);
-?>
+            ],
+        ],
+    ],
+];

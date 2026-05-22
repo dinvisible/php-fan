@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\tab;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\tab;
 
 /**
  * Description of delegate
@@ -17,39 +20,34 @@
  */
 abstract class engine
 {
+    use \fan\core\di\container_aware_trait;
+
     /**
      * Facade of service
      * @var fan\core\base\service
      */
-    protected $oFacade = null;
+    protected ?object $facade = null;
 
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Set Facade
-     * @param \fan\core\base\service $oFacade
-     */
-    public function setFacade(\fan\core\base\service $oFacade)
+    public function setFacade(\fan\core\base\service $facade): static
     {
-        if (empty($this->oFacade)) {
-            $this->oFacade = $oFacade;
+        if (empty($this->facade)) {
+            $this->facade = $facade;
         }
         return $this;
-    } // function setFacade
+    }
 
     // ======== Private/Protected methods ======== \\
     /**
-     * Make Exception
-     * @param type $sMessage
      * @throws \fan\project\exception\service\fatal
      */
-    protected function _makeException($sMessage)
+    protected function _makeException(mixed $message): never
     {
-        throw new \fan\project\exception\service\fatal($this->oFacade, $sMessage);
-    } // function _makeException
+        throw new \fan\project\exception\service\fatal($this->facade, (string)$message);
+    }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
-} // class \fan\core\service\tab\engine
-?>
+}

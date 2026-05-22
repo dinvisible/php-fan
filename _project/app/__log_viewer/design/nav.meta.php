@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Meta data of main nav
  *
@@ -14,17 +17,16 @@
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.005 (12.02.2015)
  */
-return array(
-    'own' => array(
-        'tplVars' => array( // variable, which sets in template automaticaly
-            'aNav' => array(
-                array('key' => 'error',     'name' => 'Error log'),
-                array('key' => 'data',      'name' => 'Data log'),
-                array('key' => 'message',   'name' => 'Message log'),
-                array('key' => 'bootstrap', 'name' => 'Bootstrap log'),
-            ),
-            'sCurrent' => 'error',
-        ),
-    ),
-);
-?>
+return [
+    'own' => [
+        'tplVars' => [ // variable, which sets in template automaticaly
+            'nav' => [
+                ['key' => 'error',     'name' => 'Error log'],
+                ['key' => 'data',      'name' => 'Data log'],
+                ['key' => 'message',   'name' => 'Message log'],
+                ['key' => 'bootstrap', 'name' => 'Bootstrap log'],
+            ],
+            'current' => 'error',
+        ],
+    ],
+];

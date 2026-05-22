@@ -1,4 +1,8 @@
-<?php namespace fan\core\bootstrap;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\bootstrap;
 /**
  * Description of loader
  *
@@ -26,19 +30,19 @@ class loader implements \ArrayAccess
     /**
      * Default directory separator
      */
-    const DEFAULT_DIR_SEPARATOR = '/';
+    public const DEFAULT_DIR_SEPARATOR = '/';
 
     /**
      * Ini-config data
      * @var array
      */
-    protected $aConfig;
+    protected ?array $config = null;
 
     /**
      * Default Config values
      * @var array
      */
-    protected $aDefaultConfig = array(
+    protected array $defaultConfig = [
         'dir_separator' => '/',
         'app_dir'   => '{PROJECT_DIR}/app/',
         'model_dir' => '{PROJECT_DIR}/model/',
@@ -46,65 +50,62 @@ class loader implements \ArrayAccess
         'main_dir'  => '{CAPP_DIR}/main/',
         'temp_dir'  => '{PROJECT_DIR}/../temp_data/',
         'zend_dir'  => '{PROJECT_DIR}/../libraries/Zend/',
-    );
+    ];
 
     /**
      * Namespace keys - correspondence to directories
      * @var array
      */
-    protected $aNsKeys = array(
+    protected array $nsKeys = [
         'core'    => null, // Core directory
         'project' => null, // Project directory
         'app'     => null, // All applications directory
         'model'   => null, // Model directory
-    );
+    ];
 
     /**
      * Extra direrectory keys
      * @var array
      */
-    protected $aExtraKeys = array(
+    protected array $extraKeys = [
         'capp' => null, // Current application directory
         'main' => null, // Current directory for Main-blocks
         'temp' => null, // Directory for temporary files
-    );
+    ];
 
     /**
      * Path to direrectory of last loaded blocks
      * @var array
      */
-    protected $aLastBlock = array();
+    protected array $lastBlock = [];
 
     /**
      * Flag - show process of autoloading is active
      * @var boolean
      */
-    protected $bLoading = false;
+    protected bool $loading = false;
 
     /**
      * Count of arguments for function "class_alias"
      * @var boolean
      */
-    protected $iCntAliasArg = 0;
+    protected int $cntAliasArg = 0;
 
-    /**
-     * Construct of class
-     * @param array $aConfig
-     */
-    public function __construct($aConfig)
+    public function __construct($config)
     {
-        $this->aConfig = array_merge($this->aDefaultConfig, $aConfig);
+        $config = is_array($config) ? $config : [];
+        $this->config = array_merge($this->defaultConfig, $config);
 
         if (!defined('DIR_SEPARATOR')) {
-            $sSeparator = isset($aConfig['dir_separator']) ? $aConfig['dir_separator'] : self::DEFAULT_DIR_SEPARATOR;
-            define('DIR_SEPARATOR', $sSeparator);
+            $separator = isset($config['dir_separator']) ? (string)$config['dir_separator'] : self::DEFAULT_DIR_SEPARATOR;
+            define('DIR_SEPARATOR', $separator);
         }
 
-        $this->aNsKeys['core']    = $this->getRealPath(CORE_DIR, false);
-        $this->aNsKeys['project'] = $this->getRealPath(PROJECT_DIR, false);
+        $this->nsKeys['core']    = $this->getRealPath(CORE_DIR, false);
+        $this->nsKeys['project'] = $this->getRealPath(PROJECT_DIR, false);
 
         if (function_exists('class_alias')) {
-            $this->iCntAliasArg = array_val($aConfig, 'cnt_alias_arg', 3);
+            $this->cntAliasArg = array_val($config, 'cnt_alias_arg', 3);
         }
 
         $this->_setAppDir()           // Set Applications Directory by path from bootstrap-config
@@ -118,489 +119,390 @@ class loader implements \ArrayAccess
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Load File by path to file
-     * Return data from file
-     * @param string $sPath
-     * @param integer $iHandleError Flag of handling error: 0 - do nothing, 1 - set warning, 2 - make Rxception
-     * @param integer $iWay Way of loading: 0 - include, 1 - include_once, 2 - require, 3 - require_onse
-     * @return mixed
-     */
-    public function loadFile($sPath, $iHandleError = 0, $iWay = 0)
+    public function loadFile(string $path, int $handleError = 0, int $way = 0): mixed
     {
-        $sConvPath = $this->checkPath($sPath);
-        if ($sConvPath) {
-            if(is_readable($sConvPath)) {
-                switch ($iWay) {
+        $convPath = $this->checkPath($path);
+        if ($convPath) {
+            if (is_readable($convPath)) {
+                switch ($way) {
                 case 0:
-                    return include      $sConvPath;
+                    return include      $convPath;
                 case 1:
-                    return include_once $sConvPath;
+                    return include_once $convPath;
                 case 2:
-                    return require      $sConvPath;
+                    return require      $convPath;
                 case 3:
-                    return require_once $sConvPath;
+                    return require_once $convPath;
                 default:
-                    $sErrorMsg = 'Set incorrect way "' . $iWay . '" for load file';
+                    $errorMsg = 'Set incorrect way "' . $way . '" for load file';
                 }
             } else {
-                $sErrorMsg = 'File "' . $sPath . '" isn\'t readable';
+                $errorMsg = 'File "' . $path . '" isn\'t readable';
             }
         } else {
-            $sErrorMsg = 'File "' . $sPath . '" doesn\'t exists';
+            $errorMsg = 'File "' . $path . '" doesn\'t exists';
         }
-        if ($iHandleError == 1) {
-            trigger_error($sErrorMsg, E_USER_WARNING);
-        } elseif ($iHandleError > 1) {
-            throw new \fan\project\exception\fatal($sErrorMsg);
+        if ((int)$handleError === 1) {
+            throw new \RuntimeException($errorMsg);
+        } elseif ($handleError > 1) {
+            throw new \fan\project\exception\fatal($errorMsg);
         }
         return null;
-    } // function loadFile
+    }
 
-    /**
-     *
-     * @param mixed $mFunction
-     * @param boolean $bThrow
-     * @param boolean $bPrepend
-     */
-    public function registerAutoload($mFunction, $bPrepend = false)
+    public function registerAutoload(mixed $function, bool $prepend = false): void
     {
         try {
-            spl_autoload_register($mFunction, true, $bPrepend);
+            spl_autoload_register($function, true, $prepend);
         } catch (Exception $e) {
             \bootstrap::logError('Can\'t register autoloader: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
         }
-    } // function registerAutoload
+    }
 
-    /**
-     *
-     * @param mixed $mFunction
-     */
-    public function unregisterAutoload($mFunction)
+    public function unregisterAutoload(mixed $function): void
     {
-        spl_autoload_unregister($mFunction);
-    } // function unregisterAutoload
+        spl_autoload_unregister($function);
+    }
 
-    /**
-     * Load Class by name (with namespace from root)
-     * Return true if class is loaded
-     * @param string $sClass
-     * @param boolean $bMakeAlias - allow to make alias in project namespace from core namespace
-     * @return boolean
-     */
-    public function loadClass($sClass, $bMakeAlias = true)
+    public function loadClass(string $class, bool $makeAlias = true): bool
     {
-        //global $aPoints, $nStart; $aPoints[$sClass] = microtime(true) - $nStart;
-        $sClass = trim($sClass, '\\');
-        if (class_exists($sClass, false) || interface_exists($sClass, false)) {
+        //global $points, $start; $points[$class] = microtime(true) - $start;
+        $class = trim($class, '\\');
+        if ($this->_symbolExists($class)) {
             return true;
         }
 
-        if (substr($sClass, 0, 4) != 'fan\\') {
-            //trigger_error('Load unknown class "' . $sClass. '"', E_USER_WARNING); // It is conflicted with another loaders
+        if (substr($class, 0, 4) !== 'fan\\') {
+            // Ignore classes outside the framework namespace to avoid conflicting with other loaders.
             return false;
         }
 
-        if (substr($sClass, 0, 8) == 'fan\app\\') {
-            return $this->loadBlockByClass($sClass);
+        if (substr($class, 0, 8) === 'fan\app\\') {
+            return $this->loadBlockByClass($class);
         }
 
-        list($sKey, $sPath, $aParts) = $this->getPathByNS($sClass, false);
-        if (empty($sPath)) {
+        list($key, $path, $parts) = $this->getPathByNS($class, false);
+        if (empty($path)) {
             return false;
         }
-        $sPath .= '.php';
+        $path .= '.php';
 
-        $sPrimePath = $this->aNsKeys[$sKey] . $sPath;
-        if (is_readable($sPrimePath)) {
-            $this->_requireFile($sPrimePath);
-            if (class_exists($sClass, false) || interface_exists($sClass, false)) {
+        $primePath = $this->nsKeys[$key] . $path;
+        if (is_readable($primePath)) {
+            $this->_requireFile($primePath);
+            if ($this->_symbolExists($class)) {
                 return true;
             }
-            trigger_error('Class "' . $sClass . '" isn\'t found in the file "' . $sPrimePath . '"', E_USER_WARNING);
-            return false;
+            throw new \UnexpectedValueException('Class "' . $class . '" isn\'t found in the file "' . $primePath . '"');
         }
 
-        $sSecondPath = $this->aNsKeys['core'] . $sPath;
-        if ($bMakeAlias && $sKey == 'project' && is_readable($sSecondPath)) {
-            $sOriginal = 'fan\core\\' . implode('\\', $aParts);
-            $this->_requireFile($sSecondPath);
-            if (!class_exists($sOriginal, false) && !interface_exists($sOriginal, false)) {
-                trigger_error('Class "' . $sOriginal . '" isn\'t found in the file "' . $sSecondPath . '"', E_USER_WARNING);
-                return false;
+        $secondPath = $this->nsKeys['core'] . $path;
+        if ($makeAlias && $key === 'project' && is_readable($secondPath)) {
+            $original = 'fan\core\\' . implode('\\', $parts);
+            $this->_requireFile($secondPath);
+            if (!$this->_symbolExists($original)) {
+                throw new \UnexpectedValueException('Class "' . $original . '" isn\'t found in the file "' . $secondPath . '"');
             }
-            if ($this->iCntAliasArg > 2) {
-                class_alias($sOriginal, $sClass, false);
-            } elseif ($this->iCntAliasArg > 0) {
-                class_alias($sOriginal, $sClass);
+            if ($this->cntAliasArg > 2) {
+                class_alias($original, $class, false);
             } else {
-                $f = create_function('', 'class ' . $sClass . ' extends ' . $sOriginal . ' {}');
-                $f();
+                class_alias($original, $class);
             }
             return true;
         }
 
         return false;
-    } // function loadClass
+    }
 
-    /**
-     * Load block by main request
-     * @param sring $sAppName
-     * @param array $aMainRequest
-     * @return sring - class name
-     */
-    public function loadBlockByMR($sAppName, $aMainRequest)
+    public function loadBlockByMR(string $appName, array $mainRequest): ?string
     {
-        if (empty($aMainRequest)) {
+        if (empty($mainRequest)) {
             return null;
         }
-        $sPath = str_replace(
+        $path = str_replace(
                 '{CAPP_DIR}',
-                $this->aNsKeys['app'] . DIR_SEPARATOR . $sAppName,
-                $this->aConfig['main_dir']
+                $this->nsKeys['app'] . DIR_SEPARATOR . $appName,
+                $this->config['main_dir']
         );
-        $sPath .= implode(DIR_SEPARATOR, $aMainRequest) . '.php';
-        return $this->loadBlockByPath($sPath);
-    } // function loadBlockByMR
+        $path .= implode(DIR_SEPARATOR, $mainRequest) . '.php';
+        return $this->loadBlockByPath($path);
+    }
 
-    /**
-     * Load usual block by full class-name
-     * @param sring $sClass
-     * @return sring - class name
-     */
-    public function loadBlockByClass($sClass)
+    public function loadBlockByClass(string $class): ?string
     {
-        $sClass = trim($sClass, '\\');
-        if (substr($sClass, 0, 8) != 'fan\app\\') {
-            trigger_error('Block class "' . $sClass . '" has incorrect prefix.', E_USER_WARNING);
-            return null;
+        $class = trim($class, '\\');
+        if (substr($class, 0, 8) !== 'fan\app\\') {
+            throw new \InvalidArgumentException('Block class "' . $class . '" has incorrect prefix.');
         }
 
-        $aKey = explode('\\', substr($sClass, 8));
-        if (count($aKey) != 3) {
-            trigger_error('Block class "' . $sClass . '" has incorrect name.', E_USER_WARNING);
-            return null;
+        $key = explode('\\', substr($class, 8));
+        if (count($key) !== 3) {
+            throw new \InvalidArgumentException('Block class "' . $class . '" has incorrect name.');
         }
 
-        $sFile = $aKey[2] . '.php';
-        if (isset($this->aLastBlock[$aKey[0]][$aKey[1]])) {
-            $sPath = $this->aLastBlock[$aKey[0]][$aKey[1]] . DIR_SEPARATOR . $sFile;
-            if (is_file($sPath)) {
-                return $this->loadBlockByPath($sPath);
+        $file = $key[2] . '.php';
+        if (isset($this->lastBlock[$key[0]][$key[1]])) {
+            $path = $this->lastBlock[$key[0]][$key[1]] . DIR_SEPARATOR . $file;
+            if (is_file($path)) {
+                return $this->loadBlockByPath($path);
             }
         }
 
-        $sDir  = $this->aNsKeys['app'] . DIR_SEPARATOR . $aKey[0] . DIR_SEPARATOR . $aKey[1];
-        $sPath = $this->_findBlock($sDir, $sFile);
-        if (!empty($sPath)) {
-            return $this->loadBlockByPath($sPath);
+        $dir  = $this->nsKeys['app'] . DIR_SEPARATOR . $key[0] . DIR_SEPARATOR . $key[1];
+        $path = $this->_findBlock($dir, $file);
+        if (!empty($path)) {
+            return $this->loadBlockByPath($path);
         }
         return null;
-    } // function loadBlockByClass
+    }
 
-    /**
-     * Load Block By Phisical Path (at the disc) or Path with placeholders
-     * @param type $sSrcPath
-     * @return sring - class name
-     */
-    public function loadBlockByPath($sSrcPath)
+    public function loadBlockByPath($srcPath): string
     {
-        $sPath = $this->checkPath($sSrcPath);
-        if (empty($sPath) || !is_readable($sPath)) {
-            trigger_error('Incorrect block path "' . $sSrcPath . '".', E_USER_WARNING);
-            return null;
+        $srcPath = (string)$srcPath;
+        $path = $this->checkPath($srcPath);
+        if (empty($path) || !is_readable($path)) {
+            throw new \RuntimeException('Incorrect block path "' . $srcPath . '".');
         }
 
-        $sApp = $this->aNsKeys['app'];
-        if (substr($sPath, 0, strlen($sApp)) != $sApp) {
-            trigger_error('Class file "' . $sPath . '" is out of app directory.', E_USER_WARNING);
-            return null;
+        $app = (string)$this->nsKeys['app'];
+        if (substr($path, 0, strlen($app)) !== $app) {
+            throw new \RuntimeException('Class file "' . $path . '" is out of app directory.');
         }
-        $aKey = explode(DIR_SEPARATOR, substr($sPath, strlen($sApp) + 1));
-        if (count($aKey) < 3) {
-            trigger_error('Block path "' . $sPath . '" isn\'t full.', E_USER_WARNING);
-            return null;
+        $key = explode(DIR_SEPARATOR, substr($path, strlen($app) + 1));
+        if (count($key) < 3) {
+            throw new \RuntimeException('Block path "' . $path . '" isn\'t full.');
         }
-        $this->aLastBlock[$aKey[0]][$aKey[1]] = substr($sPath, 0, -strlen(end($aKey)) - 1);
+        $this->lastBlock[$key[0]][$key[1]] = substr($path, 0, -strlen(end($key)) - 1);
 
-        $this->_requireFile($sPath);
-        $sClass = '\fan\app\\' . $aKey[0] . '\\' . $aKey[1] . '\\' . substr(end($aKey), 0, -4);
-        if (!class_exists($sClass, false)) {
-            trigger_error('Class "' . $sClass . '" isn\'t found in the file "' . $sPath . '"', E_USER_WARNING);
-            return null;
+        $this->_requireFile($path);
+        $class = '\fan\app\\' . $key[0] . '\\' . $key[1] . '\\' . substr(end($key), 0, -4);
+        if (!class_exists($class, false)) {
+            throw new \UnexpectedValueException('Class "' . $class . '" isn\'t found in the file "' . $path . '"');
         }
 
-        return $sClass;
-    } // function loadBlockByPath
+        return $class;
+    }
 
-    /**
-     * Get path to file/dir by namespace
-     * @param string $sNS
-     * @param boolean $bFullPath
-     * @return string|array
-     */
-    public function getPathByNS($sNS, $bFullPath = true)
+    public function getPathByNS(string $ns, bool $fullPath = true): string|array|null
     {
-        $sNS = trim($sNS, '\\');
-        if (substr($sNS, 0, 4) == 'fan\\') {
-            $sNS = substr($sNS, 4);
+        $ns = trim($ns, '\\');
+        if (substr($ns, 0, 4) === 'fan\\') {
+            $ns = substr($ns, 4);
         }
 
-        $aParts = explode('\\', $sNS);
-        $sKey   = array_shift($aParts);
-        if (!in_array($sKey, array_keys($this->aNsKeys))) {
-            return $bFullPath ? null : array($sKey, null, $aParts);
+        $parts = explode('\\', $ns);
+        $key   = array_shift($parts);
+        if (!in_array($key, array_keys($this->nsKeys))) {
+            return $fullPath ? null : [$key, null, $parts];
         }
-        $sPath = DIR_SEPARATOR . implode(DIR_SEPARATOR, $aParts);
-        return $bFullPath ? $this->aNsKeys[$sKey] . $sPath : array($sKey, $sPath, $aParts);
-    } // function getPathByNS
+        $path = DIR_SEPARATOR . implode(DIR_SEPARATOR, $parts);
+        return $fullPath ? $this->nsKeys[$key] . $path : [$key, $path, $parts];
+    }
 
     /**
-     * Parse Path
-     * Replace placeholders in $sPath to real Data
-     * @param string $sPath
-     * @return string
+     * Transforms path between supported representations.
      */
-    public function parsePath($sPath)
+    public function parsePath(string $path): string
     {
         foreach ($this->_getMixedKeys() as $k => $v) {
-            $nCount = 0;
+            $count = 0;
             $k = strtoupper($k);
-            $sPath = str_replace(array('{' . $k . '}', '{' . $k . '_DIR}'), array($v, $v), $sPath, $nCount);
-            if ($nCount > 0) {
+            $path = str_replace(['{' . $k . '}', '{' . $k . '_DIR}'], [(string)$v, (string)$v], $path, $count);
+            if ($count > 0) {
                 break;
             }
         }
-        return $sPath;
+        return $path;
     }
 
-    /**
-     * Parse ang check Path
-     * Replace placeholders in $sPath to real Data
-     * @param string $sPath
-     * @return string
-     */
-    public function checkPath($sPath)
+    public function checkPath(string $path): ?string
     {
-        $sPath = $this->parsePath($sPath);
-        return $this->getRealPath($sPath, true);
+        $path = $this->parsePath($path);
+        return $this->getRealPath($path, true);
     }
 
-    /**
-     * Get real file/directory path
-     * @param string $sPath
-     * @param boolean $bIsFile
-     * @return string | null
-     */
-    public function getRealPath($sPath, $bIsFile = true)
+    public function getRealPath(string $path, bool $isFile = true): ?string
     {
-        return ($bIsFile ? is_file($sPath) : is_dir($sPath)) ?
-                str_replace(array('/', '\\'), array(DIR_SEPARATOR, DIR_SEPARATOR), realpath($sPath)) :
-                null;
-    } // function getRealPath
+        $realPath = ($isFile ? is_file($path) : is_dir($path)) ? realpath($path) : false;
+        return is_string($realPath) ? str_replace(['/', '\\'], [DIR_SEPARATOR, DIR_SEPARATOR], $realPath) : null;
+    }
 
-    /**
-     * Define new application parameters
-     * @param \fan\core\service\application $oApp
-     */
-    public function defineNewApp(\fan\core\service\application $oApp)
+    public function defineNewApp(\fan\core\service\application $app): void
     {
-        $sAppName = $oApp->getAppName();
-        if (empty($sAppName)) {
-            $this->aExtraKeys['capp'] = null;
-            $this->aExtraKeys['main'] = null;
+        $appName = $app->getAppName();
+        if (empty($appName)) {
+            $this->extraKeys['capp'] = null;
+            $this->extraKeys['main'] = null;
             return;
         }
-        $aMask = array(
-            '{CORE_DIR}'    => $this->aNsKeys['core'],
-            '{PROJECT_DIR}' => $this->aNsKeys['project'],
-            '{APP_DIR}'     => $this->aNsKeys['app'],
-            '{APP_NAME}'    => $sAppName,
-        );
-        $this->aExtraKeys['capp'] = $this->getRealPath(
-                str_replace(array_keys($aMask), array_values($aMask), $this->aConfig['capp_dir']),
+        $mask = [
+            '{CORE_DIR}'    => $this->nsKeys['core'],
+            '{PROJECT_DIR}' => $this->nsKeys['project'],
+            '{APP_DIR}'     => $this->nsKeys['app'],
+            '{APP_NAME}'    => $appName,
+        ];
+        $this->extraKeys['capp'] = $this->getRealPath(
+                str_replace(array_keys($mask), array_values($mask), $this->config['capp_dir']),
                 false
         );
 
-        $aMask['{CAPP_DIR}']   = $this->aExtraKeys['capp'];
-        $this->aExtraKeys['main'] =  $this->getRealPath(
-                str_replace(array_keys($aMask), array_values($aMask), $this->aConfig['main_dir']),
+        $mask['{CAPP_DIR}']   = $this->extraKeys['capp'];
+        $this->extraKeys['main'] =  $this->getRealPath(
+                str_replace(array_keys($mask), array_values($mask), $this->config['main_dir']),
                 false
         );
-    } // function defineNewApp
+    }
 
-    /**
-     * Return true if process Auto-loading is active
-     * @return bulean
-     */
-    public function isLoading()
+    public function isLoading(): bool
     {
-        return $this->bLoading;
-    } // function isLoading
+        return $this->loading;
+    }
 
-    /**
-     * Register autolod of classes Zend2
-     * @param string $sZendPath
-     * @param boolean $bPrepend
-     */
-    public function registerZend2($sZendPath = null, $bPrepend = false)
+    public function registerZend2(mixed $zendPath = null, bool $prepend = false): void
     {
-        if (is_null($sZendPath)) {
-            $sZendPath = $this->parsePath($this->aConfig['zend_dir']);
+        if (is_null($zendPath)) {
+            $zendPath = $this->parsePath($this->config['zend_dir']);
         }
-        $sZendPath = trim(str_replace('\\', '/', $sZendPath), '/');
-        set_include_path(substr($sZendPath, -5) == '/Zend' ? substr($sZendPath, 0, -5) : $sZendPath);
-        require_once $sZendPath . '/Loader/Autoloader.php';
+        $zendPath = trim(str_replace('\\', '/', (string)$zendPath), '/');
+        set_include_path(substr($zendPath, -5) === '/Zend' ? substr($zendPath, 0, -5) : $zendPath);
+        \fan\project\adapter\zend_autoloader::load($zendPath);
 
-        $this->registerAutoload(array('Zend_Loader_Autoloader', 'autoload'), $bPrepend);
-    } // function registerZend2
+        $this->registerAutoload(['Zend_Loader_Autoloader', 'autoload'], $prepend);
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Set Applications Directory
-     * @return \fan\core\bootstrap\loader
-     */
-    protected function _setAppDir()
+    protected function _setAppDir(): static
     {
-        $sPath = $this->parsePath($this->aConfig['app_dir']);
-        $this->aNsKeys['app'] = $this->getRealPath($sPath, false);
+        $path = $this->parsePath($this->config['app_dir']);
+        $this->nsKeys['app'] = $this->getRealPath($path, false);
         return $this;
-    } // function _setAppDir
+    }
 
-    /**
-     * Set Model Directory
-     * @return \fan\core\bootstrap\loader
-     */
-    protected function _setModelDir()
+    protected function _setModelDir(): static
     {
-        $sPath = $this->parsePath($this->aConfig['model_dir']);
-        $this->aNsKeys['model'] = $this->getRealPath($sPath, false);
+        $path = $this->parsePath($this->config['model_dir']);
+        $this->nsKeys['model'] = $this->getRealPath($path, false);
         return $this;
-    } // function _setModelDir
+    }
 
-    /**
-     * Set Temporary Directory
-     * @return \fan\core\bootstrap\loader
-     */
-    protected function _setTemporaryDir()
+    protected function _setTemporaryDir(): static
     {
-        $sPath = $this->parsePath($this->aConfig['temp_dir']);
-        $this->aExtraKeys['temp'] = $this->getRealPath($sPath, false);
+        $path = $this->parsePath($this->config['temp_dir']);
+        $this->extraKeys['temp'] = $this->getRealPath($path, false);
         return $this;
-    } // function _setTemporaryDir
+    }
 
-    /**
-     * Set Basic Loader
-     * @return \fan\core\bootstrap\loader
-     */
-    protected function _setBasicLoader()
+    protected function _setBasicLoader(): static
     {
-        $this->registerAutoload(array($this, 'loadClass'));
+        $this->registerAutoload([$this, 'loadClass']);
         return $this;
-    } // function _setBasicLoader
+    }
 
-    /**
-     * Set Additional Loader(s)
-     * @return \fan\core\bootstrap\loader
-     */
-    protected function _setAdditionalLoader()
+    protected function _setAdditionalLoader(): static
     {
-        foreach ($this->aConfig as $k => $v) {
-            if (substr($k, 0, 11) != 'add_loader.') {
+        foreach ($this->config as $k => $v) {
+            $method = (string)$v;
+            if (substr((string)$k, 0, 11) !== 'add_loader.') {
                 continue;
-            } elseif (method_exists($this, $v)) {
-                $this->$v();
+            } elseif (method_exists($this, $method)) {
+                $this->$method();
             } else {
-                trigger_error('Incorrect method name "' . $v . '" for activate autoloader.', E_USER_WARNING);
+                throw new \BadMethodCallException('Incorrect method name "' . $method . '" for activate autoloader.');
             }
         }
         return $this;
-    } // function _setAdditionalLoader
+    }
+
+    protected function _getMixedKeys(): array
+    {
+        return array_merge($this->nsKeys, $this->extraKeys);
+    }
 
     /**
-     * Get Mixed Keys NS and Extra
-     * @return array
+     * @param string $file File path or file descriptor handled by the operation.
      */
-    protected function _getMixedKeys()
+    protected function _findBlock(string $dir, string $file): ?string
     {
-        return array_merge($this->aNsKeys, $this->aExtraKeys);
-    } // function _getMixedKeys
-
-    /**
-     * Find Block
-     * @param string $sDir
-     * @param string $sFile
-     * @return string
-     */
-    protected function _findBlock($sDir, $sFile)
-    {
-        if (is_file($sDir . DIR_SEPARATOR . $sFile)) {
-            return $sDir . DIR_SEPARATOR . $sFile;
+        if (is_file($dir . DIR_SEPARATOR . $file)) {
+            return $dir . DIR_SEPARATOR . $file;
         }
 
-        $aDir = scandir($sDir);
-        foreach ($aDir as $v) {
-            $sNewDir = $sDir . DIR_SEPARATOR . $v;
-            if ($v != '.' && $v != '..' && is_dir($sNewDir) && is_readable($sNewDir)) {
-                $sNewFile = $this->_findBlock($sNewDir, $sFile);
-                if (!empty($sNewFile)) {
-                    return $sNewFile;
+        $entries = scandir($dir);
+        if ($entries === false) {
+            return null;
+        }
+        foreach ($entries as $v) {
+            $newDir = $dir . DIR_SEPARATOR . $v;
+            if ($v !== '.' && $v !== '..' && is_dir($newDir) && is_readable($newDir)) {
+                $newFile = $this->_findBlock($newDir, $file);
+                if (!empty($newFile)) {
+                    return $newFile;
                 }
             }
         }
 
         return null;
-    } // function _findBlock
+    }
 
-    /**
-     * Require Once File and set flag of loading
-     * @param string $sPath
-     * @return \fan\core\bootstrap\loader
-     */
-    protected function _requireFile($sPath)
+    protected function _requireFile(string $path): static
     {
-        $this->bLoading = true;
-        require_once $sPath;
-        $this->bLoading = false;
+        $this->loading = true;
+        require_once $path;
+        $this->loading = false;
         return $this;
-    } // function _requireFile
+    }
+
+    protected function _symbolExists(string $name): bool
+    {
+        return class_exists($name, false) || interface_exists($name, false) || trait_exists($name, false);
+    }
 
     // ======== The magic methods ======== \\
 
-    public function __set($sKey, $mValue)
+    /**
+     * Handles dynamic property writes for this current component.
+     *
+     * @param mixed $value Value that should be applied or transformed.
+     */
+    public function __set($key, $value): void
     {
-        return $this->offsetSet($sKey, $mValue);
+        $this->offsetSet($key, $value);
     }
 
-    public function __get($sKey)
+    /**
+     * Handles dynamic property reads for this current component.
+     */
+    public function __get($key): mixed
     {
-        return $this->offsetGet($sKey);
+        return $this->offsetGet($key);
     }
 
     // ======== Required Interface methods ======== \\
 
-    public function offsetSet($sKey, $mValue)
+    /**
+     * @param mixed $value Value that should be applied or transformed.
+     */
+    public function offsetSet($key, mixed $value): void
     {
-        trigger_error('Error. It is forbidden to set directly the value of property "' . $sKey . '".', E_USER_ERROR);
+        throw new \LogicException('Error. It is forbidden to set directly the value of property "' . $key . '".');
     }
 
-    public function offsetExists($sKey)
+    public function offsetExists($key): bool
     {
-        $aKeys = $this->_getMixedKeys();
-        return isset($aKeys[$sKey]);
+        $keys = $this->_getMixedKeys();
+        return isset($keys[$key]);
     }
 
-    public function offsetUnset($sKey)
+    public function offsetUnset($key): void
     {
-        trigger_error('Error. It is forbidden to unset the value of property "' . $sKey . '".', E_USER_ERROR);
+        throw new \LogicException('Error. It is forbidden to unset the value of property "' . $key . '".');
     }
 
-    public function offsetGet($sKey)
+    public function offsetGet($key): mixed
     {
-        $aKeys = $this->_getMixedKeys();
-        return isset($aKeys[$sKey]) ? $aKeys[$sKey] : null;
+        $keys = $this->_getMixedKeys();
+        return isset($keys[$key]) ? $keys[$key] : null;
     }
 
-} // class \fan\core\bootstrap\loader
-?>
+}

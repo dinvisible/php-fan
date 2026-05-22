@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\captcha;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\captcha;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Description of captcha-engine
@@ -21,48 +24,39 @@ abstract class base
      * Service User
      * @var \fan\core\service\captcha
      */
-    protected $oFacade;
+    protected ?object $facade = null;
 
     /**
      * Row of config
      * @var \fan\core\service\config\row
      */
-    protected $oConfig;
+    protected ?object $config = null;
 
     // ======== Static methods ======== \\
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Set Facade
-     * @param \fan\core\service\captcha $oFacade
-     */
-    public function setFacade(\fan\core\service\captcha $oFacade)
+    public function setFacade(\fan\core\service\captcha $facade): static
     {
-        if (empty($this->oFacade)) {
-            $this->oFacade = $oFacade;
+        if (empty($this->facade)) {
+            $this->facade = $facade;
         }
         return $this;
-    } // function setFacade
+    }
 
-    /**
-     * Set Config
-     * @param \fan\core\service\config\row $oConfig
-     */
-    public function setConfig(\fan\core\service\config\row $oConfig)
+    public function setConfig(\fan\core\service\config\row $config): static
     {
-        if (empty($this->oConfig)) {
-            if (empty($oConfig)) {
-                throw new fatalException($this->oFacade, 'Captcha Engine has empty config!');
+        if (empty($this->config)) {
+            if (empty($config)) {
+                throw new fatalException($this->facade, 'Captcha Engine has empty config!');
             }
-            $this->oConfig = $oConfig;
+            $this->config = $config;
         }
         return $this;
-    } // function setConfig
+    }
 
     // ======== Private/Protected methods ======== \\
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\service\captcha\base
-?>
+}

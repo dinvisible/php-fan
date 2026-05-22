@@ -1,4 +1,8 @@
-<?php namespace fan\core\service\config;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service\config;
 /**
  * Description of ini
  *
@@ -20,8 +24,7 @@ class arr extends base
      * File extention
      * @var string
      */
-    protected $sFileExtention = 'php';
+    protected string $fileExtention = 'php';
 
     //put your code here
-} // class \fan\core\service\config\arr
-?>
+}

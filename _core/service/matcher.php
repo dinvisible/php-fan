@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 /**
  * Description of matcher
  *
@@ -19,189 +22,117 @@ class matcher extends \fan\core\base\service\single
     /**
      * @var \fan\core\service\matcher\stack Stack of requested URI
      */
-    protected $oStack;
+    protected ?object $stack = null;
 
     // ============= Init Data ============= \\
-    /**
-     * Matcher constructor
-     * @param boolean $bAllowIni
-     */
-    protected function __construct($bAllowIni = true)
+    protected function __construct(bool $allowIni = true)
     {
-        $this->oStack = $this->_getEngine('stack');
-        parent::__construct($bAllowIni);
-    } // function __construct
+        $this->stack = $this->_getEngine('stack');
+        parent::__construct($allowIni);
+    }
 
     /**
-     * Set Uniform Resource Indicator
-     * @param string $sRequest
-     * @param string $sHost
-     * @return \fan\core\service\matcher
+     * @param string $request Request object or payload handled by the operation.
      */
-    public function setUri($sRequest, $sHost = null, $bShiftCurrent = true)
+    public function setUri(string $request, ?string $host = null, bool $shiftCurrent = true): static
     {
-        $this->oStack->setNewItem($sRequest, $sHost, $bShiftCurrent);
+        $this->stack->setNewItem($request, $host, $shiftCurrent);
         $this->_broadcastMessage('setNewUri', $this);
         return $this;
-    } // function setUri
+    }
 
     /**
-     * Set Command Line Interface
-     * @param type $sFile
-     * @param type $sPath
-     * @return \fan\core\service\matcher
+     * @param mixed $file File path or file descriptor handled by the operation.
      */
-    public function setCli($sFile, $sPath = null)
+    public function setCli(string $file, ?string $path = null): static
     {
-        $this->oStack->setNewItem($sFile, $sPath, false);
+        $this->stack->setNewItem($file, $path, false);
         $this->_broadcastMessage('setNewUri', $this);
         return $this;
-    } // function setCli
+    }
 
     // ============= Get Current/Last indexes ============= \\
-    /**
-     * Get Last stack Index
-     * @return integer
-     */
-    public function getLastIndex()
+    public function getLastIndex(): int
     {
-        return $this->oStack->getLastIndex();
-    } // function getUriIndex
+        return $this->stack->getLastIndex();
+    }
 
-    /**
-     * Get Current stack Index
-     * @return integer
-     */
-    public function getCurrentIndex()
+    public function getCurrentIndex(): int
     {
-        return $this->oStack->getCurrentIndex();
-    } // function getCurrentIndex
+        return $this->stack->getCurrentIndex();
+    }
 
     // ============= Get Common Data ============= \\
-    /**
-     * Get Stack of Transfers
-     * @return \fan\core\service\matcher\stack
-     */
-    public function getStack()
+    public function getStack(): \fan\core\service\matcher\stack
     {
-        return $this->oStack;
-    } // function getStack
+        return $this->stack;
+    }
 
     /**
-     * Get item of stack by number
-     * @param integer $nNumber
-     * @return \fan\core\service\matcher\item
      * @throws \fan\project\exception\service\fatal
      */
-    public function getItem($nNumber)
+    public function getItem(int $number): \fan\core\service\matcher\item
     {
-        if (!isset($this->oStack[$nNumber])) {
-            throw new \fan\project\exception\service\fatal($this, 'Requested item number "' . $nNumber . '" isn\'t set');;
+        if (!isset($this->stack[$number])) {
+            throw new \fan\project\exception\service\fatal($this, 'Requested item number "' . $number . '" isn\'t set');;
         }
-        return $this->oStack[$nNumber];
-    } // function getItem
+        return $this->stack[$number];
+    }
 
-    /**
-     * Get Last item of stack
-     * @return \fan\core\service\matcher\item
-     */
-    public function getLastItem()
+    public function getLastItem(): \fan\core\service\matcher\item
     {
-        return $this->getItem($this->getLastIndex());
-    } // function getLastItem
+        return $this->getItem((int)$this->getLastIndex());
+    }
 
-    /**
-     * Get Current item of stack
-     * @return \fan\core\service\matcher\item
-     */
-    public function getCurrentItem()
+    public function getCurrentItem(): \fan\core\service\matcher\item
     {
-        return $this->getItem($this->getCurrentIndex());
-    } // function getCurrentItem
+        return $this->getItem((int)$this->getCurrentIndex());
+    }
 
     // ============= Get URI ============= \\
-    /**
-     * Get URI by number
-     * @param integer $nNumber
-     * @return \fan\core\service\matcher\item\uri
-     */
-
-    public function getUri($nNumber)
+    public function getUri(int $number): \fan\core\service\matcher\item\uri
     {
-        $oItem = $this->getItem($nNumber);
-        return $oItem['uri'];
-    } // function getUri
+        $item = $this->getItem($number);
+        return $item['uri'];
+    }
 
-    /**
-     * Get last URI
-     * @return \fan\core\service\matcher\item\uri
-     */
-    public function getLastUri()
+    public function getLastUri(): \fan\core\service\matcher\item\uri
     {
-        return $this->getUri($this->getLastIndex());
-    } // function getLastUri
+        return $this->getUri((int)$this->getLastIndex());
+    }
 
-    /**
-     * Get Current URI
-     * @return \fan\core\service\matcher\item\uri
-     */
-    public function getCurrentUri()
+    public function getCurrentUri(): \fan\core\service\matcher\item\uri
     {
-        return $this->getUri($this->getCurrentIndex());
-    } // function getCurrentUri
+        return $this->getUri((int)$this->getCurrentIndex());
+    }
 
     // ============= Get Handler ============= \\
-    /**
-     * Get Handler by number
-     * @param integer $nNumber
-     * @param boolean $bForceDefine
-     * @return \fan\core\service\matcher\item\handler
-     */
-    public function getHandler($nNumber, $bForceDefine = false)
+    public function getHandler(int $number, bool $forceDefine = false): \fan\core\service\matcher\item\handler
     {
-        $oItem = $this->getItem($nNumber);
-        return $oItem->getHandler($bForceDefine);
-    } // function getHandler
+        $item = $this->getItem($number);
+        return $item->getHandler($forceDefine);
+    }
 
-    /**
-     * Get Current Handler
-     * @param boolean $bForceDefine
-     * @return \fan\core\service\matcher\item\handler
-     */
-    public function getCurrentHandler($bForceDefine = false)
+    public function getCurrentHandler(bool $forceDefine = false): \fan\core\service\matcher\item\handler
     {
-        return $this->getHandler($this->getCurrentIndex(), $bForceDefine);
-    } // function getCurrentHandler
+        return $this->getHandler((int)$this->getCurrentIndex(), $forceDefine);
+    }
 
     // ============= Get Parsed data ============= \\
-    /**
-     * Get Parsed Data by number
-     * @param integer $nNumber
-     * @return \fan\core\service\matcher\item\parsed
-     */
-    public function getParsedData($nNumber)
+    public function getParsedData(int $number): \fan\core\service\matcher\item\parsed
     {
-        $oItem = $this->getItem($nNumber);
-        return $oItem['parsed'];
-    } // function getParsedData
+        $item = $this->getItem($number);
+        return $item['parsed'];
+    }
 
-    /**
-     * Get Last URI
-     * @return \fan\core\service\matcher\item\parsed
-     */
-    public function getLastParsedData()
+    public function getLastParsedData(): \fan\core\service\matcher\item\parsed
     {
-        return $this->getParsedData($this->getLastIndex());
-    } // function getLastParsedData
+        return $this->getParsedData((int)$this->getLastIndex());
+    }
 
-    /**
-     * Get Current URI
-     * @return \fan\core\service\matcher\item\parsed
-     */
-    public function getCurrentParsedData()
+    public function getCurrentParsedData(): \fan\core\service\matcher\item\parsed
     {
-        return $this->getParsedData($this->getCurrentIndex());
-    } // function getCurrentParsedData
+        return $this->getParsedData((int)$this->getCurrentIndex());
+    }
 
-} // class \fan\core\service\matcher
-?>
+}

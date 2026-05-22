@@ -1,4 +1,7 @@
-<?php namespace fan\core\view\router;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view\router;
 /**
  * Default view router of Block data
  *
@@ -20,15 +23,14 @@ class simple extends \fan\core\view\router
      * Routers array
      * @var array
      */
-    protected $aKeepers = array(
+    protected array $keepers = [
         'data' => null,
-    );
+    ];
     /**
      * Default Routers Key
      * @var string
      */
-    protected $sDefaultKey = 'data';
+    protected ?string $defaultKey = 'data';
 
     // ======== Main Interface methods ======== \\
-} // class \fan\core\view\router\simple
-?>
+}

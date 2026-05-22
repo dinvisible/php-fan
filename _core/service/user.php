@@ -1,4 +1,8 @@
-<?php namespace fan\core\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 use \fan\project\exception\error500 as error500;
 /**
@@ -32,75 +36,69 @@ use \fan\project\exception\error500 as error500;
  * @method string getJoinDate()
  * @method string getVisitDate()
  * @method array|object getAllData()
- * @method \fan\core\service\user setLogin()      setLogin(string $sLogin)
- * @method \fan\core\service\user setNickName()   setNickName(string $sNickName)
- * @method \fan\core\service\user setFirstName()  setFirstName(string $sFirstName)
- * @method \fan\core\service\user setPatronymic() setPatronymic(string $sPatronymic)
- * @method \fan\core\service\user setLastName()   setLastName(string $sLastName)
- * @method \fan\core\service\user setTitle()      setTitle(string $sTitle)
- * @method \fan\core\service\user setGender()     setGender(string $sGender)
- * @method \fan\core\service\user setEmail()      setEmail(string $sEmail)
- * @method \fan\core\service\user setPhone()      setPhone(string $sPhone)
- * @method \fan\core\service\user setLocale()     setLocale(string $sLocale)
- * @method \fan\core\service\user setAddress()    setAddress(string|array $aAddress)
- * @method \fan\core\service\user setStatus()     setStatus(string $sStatus)
- * @method \fan\core\service\user setVisitDate()  setVisitDate(string $sDate)
- * @method \fan\core\service\user setPassword()   setPassword(string $sPassword)
+ * @method \fan\core\service\user setLogin()      setLogin(string $login)
+ * @method \fan\core\service\user setNickName()   setNickName(string $nickName)
+ * @method \fan\core\service\user setFirstName()  setFirstName(string $firstName)
+ * @method \fan\core\service\user setPatronymic() setPatronymic(string $patronymic)
+ * @method \fan\core\service\user setLastName()   setLastName(string $lastName)
+ * @method \fan\core\service\user setTitle()      setTitle(string $title)
+ * @method \fan\core\service\user setGender()     setGender(string $gender)
+ * @method \fan\core\service\user setEmail()      setEmail(string $email)
+ * @method \fan\core\service\user setPhone()      setPhone(string $phone)
+ * @method \fan\core\service\user setLocale()     setLocale(string $locale)
+ * @method \fan\core\service\user setAddress()    setAddress(string|array $address)
+ * @method \fan\core\service\user setStatus()     setStatus(string $status)
+ * @method \fan\core\service\user setVisitDate()  setVisitDate(string $date)
+ * @method \fan\core\service\user setPassword()   setPassword(string $password)
  * @method string getPassword()
- * @method boolean checkPassword(string $sPassword)
+ * @method boolean checkPassword(string $password)
  * @method \fan\core\service\user load()
  * @method \fan\core\service\user save()
  * @method boolean isValid()
  * @method boolean isNew()
  * @method boolean isChanged()
  */
-class user extends \fan\core\base\service\multi implements \Serializable
+class user extends \fan\core\base\service\multi
 {
     /**
      *
      */
-    const SES_NAMESPACE = 'user';
+    public const SES_NAMESPACE = 'user';
 
-    /**
-     * @var array Service's Instances
-     */
-    private static $aInstances = array();
+    private static array $instances = [];
 
     /**
      * @var \fan\core\service\session
      */
-    private static $oSession = null;
+    private static ?object $session = null;
 
     /**
      * @var \fan\core\service\user[]
      */
-    private static $aCurrentUsers = null;
+    private static ?array $currentUsers = null;
 
     /**
      * Priority User Space for application
      * @var array
      */
-    private static $aPrioritySpace = null;
+    private static ?array $prioritySpace = null;
 
     /**
+     * Current user space resolved for the running application.
      * @var string
      */
-    protected $sUserSpace = null;
-    /**
-     * @var mixed
-     */
-    protected $mIdentifyer = null;
+    private static ?string $currentUserSpace = null;
+
+    protected ?string $userSpace = null;
+    protected mixed $identifyer = null;
 
     /**
      * @var \fan\core\service\user\base
      */
-    protected $oUserData = null;
+    protected ?object $userData = null;
 
-    /**
-     * @var array
-     */
-    protected $aDelegateRule = array(
-        'userData' => array(
+    protected array $delegateRule = [
+        'userData' => [
             // --- Getters method --- \\
             'getId',                                                     // Main identifier
             'getLogin',    'getNickName',  'getFullName', 'getFirstName', 'getPatronymic', 'getLastName', // Name data
@@ -121,66 +119,52 @@ class user extends \fan\core\base\service\multi implements \Serializable
             'setPassword', 'getPassword', 'checkPassword',
             'load',        'save',
             'isValid',     'isNew',       'isChanged',
-        ),
-    );
+        ],
+    ];
 
-    /**
-     * Constructor of Service of user
-     * @param mixed $mIdentifyer
-     * @param string $sUserSpace
-     */
-    protected function __construct($mIdentifyer, $sUserSpace)
+    protected function __construct(mixed $identifyer, string $userSpace)
     {
-        $this->sUserSpace  = $sUserSpace;
-        $this->mIdentifyer = $mIdentifyer;
+        $this->userSpace  = (string)$userSpace;
+        $this->identifyer = $identifyer;
 
         parent::__construct();
 
-        $oSpaceConfig = $this->_getSpaceConfig();
-        $sEngine = $this->_getEngine($oSpaceConfig['ENGINE'], false);
-        $this->oUserData = new $sEngine($mIdentifyer);
-        $this->oUserData->setFacade($this)->setConfig($oSpaceConfig)->load();
+        $spaceConfig = $this->_getSpaceConfig();
+        $engine = $this->_getEngine((string)$spaceConfig['ENGINE'], false);
+        $this->userData = new $engine($identifyer);
+        $this->userData->setFacade($this)->setConfig($spaceConfig)->load();
 
-        $this->_subscribeForService('application', 'setAppName', array($this, 'onSetAppName'));
-    } // function __construct
+        $this->_subscribeForService('application', 'setAppName', [$this, 'onSetAppName']);
+    }
 
 
     // ======== Static methods ======== \\
-    /**
-     * Get instance of service of user
-     * @param mixed $mIdentifyer Identifyer of user
-     * @param string $sReqSpace RequestedUser-space
-     * @return \fan\core\service\user
-     */
-    public static function instance($mIdentifyer, $sReqSpace = null)
+    public static function instance(mixed $identifyer, ?string $reqSpace = null): static
     {
-        $sUserSpace = self::_verifySpace($sReqSpace);
-        if (is_null(self::$aCurrentUsers)) {
+        $userSpace = self::_verifySpace($reqSpace);
+        $instanceKey = self::_getInstanceKey($identifyer);
+        if (is_null(self::$currentUsers)) {
             self::_getCurrentUsers(); // If first call - pull users from session
         }
 
-        if (!isset(self::$aInstances[$sUserSpace][$mIdentifyer])) {
-            new \fan\project\service\user($mIdentifyer, $sUserSpace);
+        if (!isset(self::$instances[$userSpace][$instanceKey])) {
+            new \fan\project\service\user($identifyer, $userSpace);
         }
-        return self::$aInstances[$sUserSpace][$mIdentifyer];
-    } // function instance
+        return self::$instances[$userSpace][$instanceKey];
+    }
 
-    /**
-     * Check Logout condition and return current user OR null
-     * @return null|\fan\core\service\user
-     */
-    public static function checkLogout()
+    public static function checkLogout(): ?\fan\core\service\user
     {
-        $oUser = self::getCurrent();
-        if (!empty($oUser)) {
-            $sField = $oUser->getConfig('LOGOUT_FIELD');
-            if (!empty($sField)) {
-                $sOrder  = $oUser->getConfig('LOGOUT_ORDER', 'GP');
-                $bLogout = \fan\project\service\request::instance()->get($sField, $sOrder);
-                if (!empty($bLogout)) {
-                    for($i = 0; $i < 100 && !empty($oUser); $i++) {
-                        $oUser->logout();
-                        $oUser = self::getCurrent();
+        $user = self::getCurrent();
+        if (!empty($user)) {
+            $field = $user->getConfig('LOGOUT_FIELD');
+            if (!empty($field)) {
+                $order  = (string)$user->getConfig('LOGOUT_ORDER', 'GP');
+                $logout = self::staticContainerService('request')->get((string)$field, $order);
+                if (!empty($logout)) {
+                    for ($i = 0; $i < 100 && !empty($user); $i++) {
+                        $user->logout();
+                        $user = self::getCurrent();
                     }
                     if ($i > 99) {
                         throw new error500('Too many iteration for logout user.');
@@ -189,475 +173,402 @@ class user extends \fan\core\base\service\multi implements \Serializable
                 }
             }
         }
-        return $oUser;
-    } // function checkLogout
+        return $user;
+    }
 
-    /**
-     * Get instance of service of Current user
-     * @param string $sReqSpace Requested User-space
-     * @return \fan\core\service\user|null
-     */
-    public static function getCurrent($sReqSpace = null)
+    public static function getCurrent(?string $reqSpace = null): ?\fan\core\service\user
     {
-        $sUserSpace = self::_verifySpace($sReqSpace);
-        $aCurUsers  = self::_getCurrentUsers();
-        return isset($aCurUsers[$sUserSpace]) ? $aCurUsers[$sUserSpace] : null;
-    } // function getCurrent
+        $userSpace = self::_verifySpace($reqSpace);
+        $curUsers  = self::_getCurrentUsers();
+        return isset($curUsers[$userSpace]) ? $curUsers[$userSpace] : null;
+    }
 
     /**
-     * Get current "User Space" by Application name
-     * @return string
      * @throws error500
      */
-    public static function getCurrentSpace()
+    public static function getCurrentSpace(): string
     {
-        $oConfig   = \fan\project\service\config::instance()->get('user');
-        $sAppName  = \fan\project\service\application::instance()->getAppName();
-        $aCurUsers = self::_getCurrentUsers();
+        $config   = self::staticContainerService('config')->get('user');
+        $appName  = self::staticContainerService('application')->getAppName();
+        $curUsers = self::_getCurrentUsers();
 
         // If is Priority Space and has current user - use it
-        if (isset(self::$aPrioritySpace[$sAppName])) {
-            $sPrioritySp = self::$aPrioritySpace[$sAppName];
-            if (isset($aCurUsers[$sPrioritySp])) {
-                return $sPrioritySp;
+        if (isset(self::$prioritySpace[$appName])) {
+            $prioritySp = self::$prioritySpace[$appName];
+            if (isset($curUsers[$prioritySp])) {
+                return $prioritySp;
             }
         }
 
         // Use Space with first registered user
-        $sFirstSp  = null;
-        foreach ($oConfig->get('space', array()) as $k => $v) {
-            if (in_array($sAppName, adduceToArray($v->APPLICATIONS))) {
-                if (isset($aCurUsers[$k])) {
+        $firstSp  = null;
+        foreach ($config->get('space', []) as $k => $v) {
+            if (in_array($appName, adduceToArray($v->APPLICATIONS))) {
+                if (isset($curUsers[$k])) {
                     return $k;
-                } elseif (empty($sFirstSp)) {
-                    $sFirstSp = $k;
+                } elseif (empty($firstSp)) {
+                    $firstSp = $k;
                 }
             }
         }
 
         // Use Priority or First Space for current application
-        if (!empty($sPrioritySp)) {
-            return $sPrioritySp;
+        if (!empty($prioritySp)) {
+            return $prioritySp;
         }
-        if (!empty($sFirstSp)) {
-            return $sFirstSp;
+        if (!empty($firstSp)) {
+            return $firstSp;
         }
 
         // Use Default Space if another one is not defined
-        $sUserSpace = $oConfig->get('DEFAULT_SPACE');
-        if (empty($sUserSpace)) {
+        $userSpace = $config->get('DEFAULT_SPACE');
+        if (empty($userSpace)) {
             throw new error500('Default user space is not set.');
         }
-        return $sUserSpace;
-    } // function getCurrentSpace
+        return $userSpace;
+    }
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Set Current User
-     * @return boolean
-     */
-    public function setCurrent()
+    public function setCurrent(): bool
     {
-        if (empty($this->oUserData) || !$this->oUserData->isValid()) {
+        if (empty($this->userData) || !$this->userData->isValid()) {
             return false;
         }
         if (!$this->isCurrent()) {
-            self::$aCurrentUsers[$this->sUserSpace] = $this;
-            self::_getSession()->set('currents', self::$aCurrentUsers);
+            self::$currentUsers[$this->userSpace] = $this;
+            self::_getSession()->set('currents', self::$currentUsers);
             if ($this->_isCorrespondApp()) {
                 $this->_broadcastMessage('currentUser', $this);
             }
         }
         return true;
-    } // function setCurrent
+    }
 
-    /**
-     * Check Current User
-     * @return boolean
-     */
-    public function isCurrent()
+    public function isCurrent(): bool
     {
-        $aCurUsers = self::_getCurrentUsers();
-        return isset($aCurUsers[$this->sUserSpace]) && $aCurUsers[$this->sUserSpace] === $this;
-    } // function isCurrent
+        $curUsers = self::_getCurrentUsers();
+        return isset($curUsers[$this->userSpace]) && $curUsers[$this->userSpace] === $this;
+    }
 
-    /**
-     * Set Priority User Space by current Valid User
-     * @return boolean
-     */
-    public function setPrioritySpace($sAppName = null)
+    public function setPrioritySpace(?string $appName = null): bool
     {
         if ($this->isValid()) {
-            $sAppName = $this->_isCorrespondApp($sAppName);
-            if (!empty($sAppName)) {
-                self::$aPrioritySpace[$sAppName] = $this->sUserSpace;
-                self::_getSession()->set('priority', self::$aPrioritySpace);
+            $appName = $this->_isCorrespondApp($appName);
+            if (!empty($appName)) {
+                self::$prioritySpace[$appName] = $this->userSpace;
+                self::_getSession()->set('priority', self::$prioritySpace);
                 return true;
             }
         }
         return false;
-    } // function setPrioritySpace
+    }
 
-    /**
-     * Make logout of Current User
-     * @return boolean
-     */
-    public function logout()
+    public function logout(): bool
     {
         if ($this->isCurrent()) {
-            unset(self::$aCurrentUsers[$this->sUserSpace]);
-            self::_getSession()->set('currents', self::$aCurrentUsers);
+            unset(self::$currentUsers[$this->userSpace]);
+            self::_getSession()->set('currents', self::$currentUsers);
             if ($this->_isCorrespondApp()) {
-                $this->oUserData->logout();
-                $oUser = self::getCurrent();
-                if (empty($oUser)) {
+                $this->userData->logout();
+                $user = self::getCurrent();
+                if (empty($user)) {
                     $this->_broadcastMessage('logoutUser', $this);
                 } else {
-                    $this->_broadcastMessage('currentUser', $oUser);
+                    $this->_broadcastMessage('currentUser', $user);
                 }
             }
             return true;
         }
         return false;
-    } // function logout
+    }
 
-    /**
-     * Get User Roles
-     * If don't "Force" - returns just list of "Curren User" else All user's roles
-     * @param boolean $bForce
-     * @return array
-     */
-    public function getRoles($bForce = false)
+    public function getRoles(bool $force = false): array
     {
-        return $this->oUserData->getRoles($bForce);
-    } // function getRoles
+        return $this->userData->getRoles($force);
+    }
 
-    /**
-     * Add User Role
-     * @param string $mRole
-     * @param number $sExpiredTime - Date/time of expired in mysql-format ("Y-m-d H:i:s")
-     * @return \fan\core\service\user
-     */
-    public function addRole($mRole, $sExpiredTime = null)
+    public function addRole(string $role, int|float|null $expiredTime = null): static
     {
-        $aCurRoles = $this->getRoles(true);
-        $aCurRoles[$mRole] = $sExpiredTime;
-        return $this->setRoles($aCurRoles);
-    } // function addRole
+        $curRoles = $this->getRoles(true);
+        $curRoles[$role] = $expiredTime;
+        return $this->setRoles($curRoles);
+    }
 
-    /**
-     * Remove User Role(s) - just names of role(s) only
-     * @param string|array $mRole
-     * @return \fan\core\service\user
-     */
-    public function removeRole($mRole)
+    public function removeRole(string|array $role): static
     {
-        $aCurRoles = $this->getRoles(true);
-        if (array_key_exists($mRole, $aCurRoles)) {
-            unset($aCurRoles[$mRole]);
+        $curRoles = $this->getRoles(true);
+        foreach (adduceToArray($role) as $roleName) {
+            if (array_key_exists($roleName, $curRoles)) {
+                unset($curRoles[$roleName]);
+            }
         }
-        return $this->setRoles($aCurRoles);
-    } // function removeRole
+        return $this->setRoles($curRoles);
+    }
 
-    /**
-     * Set User Roles
-     *   where array: role_name => expire time
-     * @param array $aNewRoles
-     * @return \fan\core\service\user
-     */
-    public function setRoles(array $aNewRoles)
+    public function setRoles(array $newRoles): static
     {
-        $aCurRoles = $this->getRoles(true);
-        $sCurDate  = date('Y-m-d H:i:s');
+        $curRoles = $this->getRoles(true);
+        $curDate  = date('Y-m-d H:i:s');
 
-        foreach ($aNewRoles as $k => $v) {
-            if (!is_null($v) && strcmp($v, $sCurDate) < 0) {
-                unset($aNewRoles[$k]);
+        foreach ($newRoles as $k => $v) {
+            if (!is_null($v) && strcmp((string)$v, $curDate) < 0) {
+                unset($newRoles[$k]);
             }
         }
 
-        if (array_diff_assoc($aNewRoles, $aCurRoles) || array_diff_assoc($aCurRoles, $aNewRoles)) {
-            $this->oUserData->setRoles($aNewRoles);
+        if (array_diff_assoc($newRoles, $curRoles) || array_diff_assoc($curRoles, $newRoles)) {
+            $this->userData->setRoles($newRoles);
             if ($this->isCurrent()) {
                 $this->_broadcastMessage('changeRoles', $this);
             }
         }
         return $this;
-    } // function setRoles
+    }
 
-    /**
-     * Get User Space
-     * @return string
-     */
-    public function getUserSpace()
+    public function getUserSpace(): ?string
     {
-        return $this->sUserSpace;
-    } // function getUserSpace
+        return $this->userSpace;
+    }
 
-    /**
-     * Make Hash for Password
-     * @param string $sPassword
-     * @return string
-     */
-    public function makePasswordHash($sPassword)
+    public function makePasswordHash(string $password): string
     {
-        return $this->oUserData->makePasswordHash($sPassword);
-    } // function makePasswordHash
+        return $this->userData->makePasswordHash($password);
+    }
 
-    /**
-     * Set Data
-     * @param array $aData
-     * @return \fan\core\service\user
-     */
-    public function setData($aData)
+    public function setData(array $data): static
     {
-        foreach ($aData as $k => $v) {
-            $this->set($k, $v);
+        foreach ($data as $k => $v) {
+            $this->set((string)$k, $v);
         }
         return $this;
-    } // function setData
+    }
 
-    /**
-     * Get Data
-     * @return array
-     */
-    public function getData()
+    public function getData(): array
     {
         return $this->toArray();
-    } // function getData
+    }
 
-    /**
-     * Conver Data to array
-     * @return array
-     */
-    public function toArray()
+    public function toArray(): array
     {
-        return $this->oUserData->getAllData();
-    } // function toArray
+        return $this->userData->getAllData();
+    }
 
-    /**
-     * Get Data
-     * @return \fan\core\service\user\base
-     */
-    public function getEngine()
+    public function getEngine(): ?\fan\core\service\user\base
     {
-        return $this->oUserData;
-    } // function getEngine
+        return $this->userData;
+    }
 
-    /**
-     * On event - Set Application Name
-     * @param string $sAppName
-     */
-    public function onSetAppName($sAppName)
+    public function onSetAppName(string $appName): void
     {
-        if ($this->sUserSpace == self::$sCurrentUserSpace && !$this->_isCorrespondApp($sAppName)) {
-            self::$sCurrentUserSpace = null;
+        if ((string)$this->userSpace === (string)self::$currentUserSpace && !$this->_isCorrespondApp($appName)) {
+            self::$currentUserSpace = null;
             self::getCurrent();
         }
-    } // function onSetAppName
+    }
 
     /**
-     * Set any parameter
-     * @param string $sKey
-     * @param mixed $mValue
-     * @return \fan\core\service\user
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function set($sKey, $mValue)
+    public function set(string $key, mixed $value): static
     {
-        list($oObject, $sMethod) = $this->_checkKey('set', $sKey);
-        if (!empty($oObject)) {
-            $oObject->$sMethod($mValue);
+        list($object, $method) = $this->_checkKey('set', $key);
+        if (!empty($object)) {
+            $object->$method($value);
         }
         return $this;
-    } // function set
-    /**
-     * Get any parameter
-     * @param string $sKey
-     * @return mixed
-     */
-    public function get($sKey)
+    }
+    public function get(string $key): mixed
     {
-        list($oObject, $sMethod) = $this->_checkKey('get', $sKey);
-        return empty($oObject) ? null : $oObject->$sMethod();
-    } // function get
+        list($object, $method) = $this->_checkKey('get', $key);
+        return empty($object) ? null : $object->$method();
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Save service's Instance
-     * @return \fan\core\service\user
-     */
-    protected function _saveInstance()
+    protected function _saveInstance(): static
     {
-        self::$aInstances[$this->sUserSpace][$this->mIdentifyer] = $this;
+        self::$instances[(string)$this->userSpace][self::_getInstanceKey($this->identifyer)] = $this;
         return $this;
-    } // function _saveInstance
+    }
 
-    /**
-     * Get list of current users by all User Spaces
-     * If it is not set - restore them from session
-     * @return \fan\core\service\user[]
-     */
-    protected static function _getCurrentUsers()
+    protected static function _getCurrentUsers(): array
     {
-        if (is_null(self::$aCurrentUsers)) {
-            $oSes = self::_getSession();
-            self::$aCurrentUsers  = $oSes->get('currents', array());
-            self::$aPrioritySpace = $oSes->get('priority', array());
-            foreach (self::$aCurrentUsers as $k => $v) {
-                if (!isset(self::$aInstances[$k][$v->mIdentifyer])) {
-                    self::$aInstances[$k][$v->mIdentifyer] = $v;
+        if (is_null(self::$currentUsers)) {
+            $ses = self::_getSession();
+            self::$currentUsers  = $ses->get('currents', []);
+            self::$prioritySpace = $ses->get('priority', []);
+            foreach (self::$currentUsers as $k => $v) {
+                $instanceKey = self::_getInstanceKey($v->identifyer);
+                if (!isset(self::$instances[$k][$instanceKey])) {
+                    self::$instances[$k][$instanceKey] = $v;
                 }
             }
         }
 
-        return self::$aCurrentUsers;
-    } // function _getCurrentUsers
+        return self::$currentUsers;
+    }
 
     /**
-     * If User Space is Defined - verify it
-     * Else get current User Space
-     * @param type $sUserSpace
-     * @return type
      * @throws error500
      */
-    protected static function _verifySpace($sUserSpace)
+    protected static function _verifySpace(?string $userSpace): string
     {
-        if (empty($sUserSpace)) {
+        if (empty($userSpace)) {
             return self::getCurrentSpace();
         }
-        $oConfig = \fan\project\service\config::instance();
-        if (!$oConfig->get(array('user', 'space', $sUserSpace))) {
-            throw new error500('Incorrect identifyer of user space - "' . $sUserSpace . '".');
+        $userSpace = (string)$userSpace;
+        $config = self::staticContainerService('config');
+        if (!$config->get(['user', 'space', $userSpace])) {
+            throw new error500('Incorrect identifyer of user space - "' . $userSpace . '".');
         }
-        return $sUserSpace;
-    } // function _verifySpace
+        return $userSpace;
+    }
 
-    /**
-     * Get Session
-     * @return \fan\core\service\session
-     */
-    protected static function _getSession()
+    protected static function _getSession(): \fan\core\service\session
     {
-        if (empty(self::$oSession)) {
-            self::$oSession = \fan\project\service\session::instance(self::SES_NAMESPACE, 'system');
+        if (empty(self::$session)) {
+            self::$session = self::staticContainerService('session', self::SES_NAMESPACE, 'system');
         }
-        return self::$oSession;
-    } // function _getSession
+        return self::$session;
+    }
 
-    /**
-     * Get delegate class
-     * @param string $sClass
-     * @return object
-     */
-    protected function _getDelegate($sClass)
+    protected function _getDelegate(mixed $class): mixed
     {
-        if ($sClass == 'userData') {
-            return $this->oUserData;
+        if ((string)$class === 'userData') {
+            return $this->userData;
         }
-        return parent::_getDelegate($sClass);
-    } // function _getDelegate
+        return parent::_getDelegate($class);
+    }
 
-    /**
-     * Get Config of Current User Space
-     * @return \fan\core\service\config\row
-     */
-    protected function _getSpaceConfig()
+    protected function _getSpaceConfig(): \fan\core\service\config\row
     {
-        return $this->oConfig->get(array('space', $this->sUserSpace));
-    } // function _getSpaceConfig
+        return $this->config->get(['space', $this->userSpace]);
+    }
 
-    /**
-     * Is User Space correspond to Application
-     * @return boolean
-     */
-    protected function _isCorrespondApp($sAppName = null)
+    protected function _isCorrespondApp(?string $appName = null): ?string
     {
-        if (empty($sAppName)) {
-            $sAppName = \fan\project\service\application::instance()->getAppName();
+        if (empty($appName)) {
+            $appName = $this->containerService('application')->getAppName();
         }
-        $aSpaceConfig = $this->_getSpaceConfig()->toArray();
-        return in_array($sAppName, $aSpaceConfig['APPLICATIONS']) ? $sAppName : null;
-    } // function _isCorrespondApp
+        $appName = (string)$appName;
+        $spaceConfig = $this->_getSpaceConfig()->toArray();
+        return in_array($appName, $spaceConfig['APPLICATIONS']) ? $appName : null;
+    }
 
     /**
-     * Convert data to Array
-     * @param type $mData
-     * @return type
      * @throws fatalException
      */
-    protected function _convertToArray($mData)
+    protected function _convertToArray(mixed $data): array
     {
-        if (is_array($mData)) {
-            return $mData;
+        if (is_array($data)) {
+            return $data;
         }
-        if (is_string($mData)) {
-            return array($mData);
+        if (is_string($data)) {
+            return [$data];
         }
-        if (is_object($mData) && method_exists($mData, 'toArray')) {
-            return $mData->toArray();
+        if (is_object($data) && method_exists($data, 'toArray')) {
+            return $data->toArray();
         }
-        throw new fatalException($this, 'Incorrect data format "' . gettype($mData) . '"');
-    } // function _convertToArray
+        throw new fatalException($this, 'Incorrect data format "' . gettype($data) . '"');
+    }
 
-    protected function _checkKey($sType, $sKey)
+    protected function _checkKey(string $type, string $key): array
     {
-        $aData = $this->oUserData->getAllData();
-        if (!array_key_exists($sKey, $aData)) {
-            return array(null, null);
+        $data = $this->userData->getAllData();
+        $type = (string)$type;
+        $key = (string)$key;
+        if (!array_key_exists($key, $data)) {
+            return [null, null];
         }
 
-        $aTmp    = array_map('ucfirst', explode('_', $sKey));
-        $sMethod = $sType . implode('', $aTmp);
+        $tmp    = array_map('ucfirst', explode('_', $key));
+        $method = $type . implode('', $tmp);
 
-        $oObject = method_exists($this, $sMethod) ? $this : $this->oUserData;
-        return array($oObject, $sMethod);
-    } // function _checkKey
+        $object = method_exists($this, $method) ? $this : $this->userData;
+        return [$object, $method];
+    }
 
     // ======== The magic methods ======== \\
     /**
-     * Magic method for set property
-     * @param string $sKey
-     * @param mixed $mValue
+     * Handles dynamic property writes for this current component.
+     *
+     * @param mixed $value Value that should be applied or transformed.
      */
-    public function __set($sKey, $mValue)
+    public function __set(string $key, mixed $value): void
     {
-        $this->set($sKey, $mValue);
-    } // function __set
+        $this->set((string)$key, $value);
+    }
     /**
-     * Magic method for set property
-     * @param string $sKey
-     * @return mixed
+     * Handles dynamic property reads for this current component.
      */
-    public function __get($sKey)
+    public function __get(string $key): mixed
     {
-        return $this->get($sKey, $sValue);
-    } // function __get
+        return $this->get((string)$key);
+    }
 
     // ======== Required Interface methods ======== \\
 
-    public function serialize()
+    public function serialize(): string
     {
-        return serialize(array(
-            'user_space' => $this->sUserSpace,
-            'identifyer' => $this->mIdentifyer,
-            'user_data'  => serialize($this->oUserData),
-        ));
+        return \fan\core\adapter\safe_serializer::encodePhpSnapshot($this->__serialize());
     }
 
-    public function unserialize($sData)
+    public function __serialize(): array
     {
-        $aData = unserialize($sData);
+        return [
+            'user_space' => $this->userSpace,
+            'identifyer' => $this->identifyer,
+            'user_data'  => $this->userData,
+        ];
+    }
 
-        $this->sUserSpace  = $aData['user_space'];
-        $this->mIdentifyer = $aData['identifyer'];
+    public function unserialize(string $data): void
+    {
+        $data = \fan\core\adapter\safe_serializer::decodePhpSnapshot((string)$data, []);
+        if (!is_array($data)) {
+            throw new \UnexpectedValueException('User snapshot must decode to an array.');
+        }
+
+        $this->__unserialize($data);
+    }
+
+    public function __unserialize(array $data): void
+    {
+        $this->userSpace  = (string)$data['user_space'];
+        $this->identifyer = $data['identifyer'];
         $this->_saveInstance()->_setConfig()->resetEnabled();
 
-        $this->oUserData = unserialize($aData['user_data']);
-        $this->oUserData->setFacade($this)->setConfig($this->_getSpaceConfig());
+        $this->userData = $this->restoreUserData($data['user_data']);
+        $this->userData->setFacade($this)->setConfig($this->_getSpaceConfig());
+    }
+
+    /**
+     * Normalizes arbitrary user identifiers into a stable storage key.
+     *
+     * @param mixed $identifyer User identifier supplied by the caller.
+     *
+     * @return int|string Key that can be used in static instance maps.
+     */
+    private static function _getInstanceKey(mixed $identifyer): int|string
+    {
+        return is_int($identifyer) || is_string($identifyer) ?
+            $identifyer :
+            \fan\core\adapter\safe_serializer::stableKey($identifyer);
+    }
+
+    private function restoreUserData(mixed $userData): \fan\core\service\user\base
+    {
+        if (is_string($userData)) {
+            $userData = \fan\core\adapter\safe_serializer::decodePhpSnapshot($userData);
+        }
+
+        if (!$userData instanceof \fan\core\service\user\base) {
+            throw new \UnexpectedValueException('User data snapshot must decode to a user data object.');
+        }
+
+        return $userData;
     }
 
 
-} // class \fan\core\service\user
-?>
+}

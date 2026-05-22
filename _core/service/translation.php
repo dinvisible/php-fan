@@ -1,4 +1,8 @@
-<?php namespace fan\core\service;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\service;
 use project\exception\service\fatal as fatalException;
 /**
  * Description of translation
@@ -21,392 +25,311 @@ class translation extends \fan\core\base\service\single
      * Combi-message buffer
      * @var array
      */
-    private $aCombiArr = array();
+    private array $combiArr = [];
     /**
      * Combi-message language
      * @var string
      */
-    private $sCombiLng = null;
+    private ?string $combiLng = null;
 
     /**
      * @var \fan\core\service\locale
      */
-    private $oLocale;
-    /**
-     * @var array Editable Language keys
-     */
-    protected $aEditableLng  = array();
+    private ?object $locale = null;
+    protected array $editableLng  = [];
 
-    /**
-     * @var array short messages
-     */
-    protected $aMessages  = array();
+    protected array $messages  = [];
 
-    /**
-     * @var array short message use tags
-     */
-    protected $aMsgUseTag = array();
-    /**
-     * @var array short message tags
-     */
-    protected $aTags      = array();
-    /**
-     * @var array short message referers
-     */
-    protected $aReferers  = array();
+    protected array $msgUseTag = [];
+    protected array $tags      = [];
+    protected array $referers  = [];
 
-    /**
-     * @var array List of methods for call in the destructor
-     */
-    protected $aForCall  = array();
+    protected array $forCall  = [];
 
-    /**
-     * service's constructor
-     * @param boolean $bAllowIni
-     */
-    protected function __construct($bAllowIni = true)
+    protected function __construct(bool $allowIni = true)
     {
-        parent::__construct($bAllowIni);
-        $this->oLocale      = service('locale');
-        $this->aEditableLng = array_keys($this->oLocale->getAvailableLanguages());
-    } // function __construct
+        parent::__construct($allowIni);
+        $this->locale      = $this->containerService('locale');
+        $this->editableLng = array_keys((array)$this->locale->getAvailableLanguages());
+    }
 
-    /**
-     * Service's destructor
-     */
     public function __destruct()
     {
-        foreach ($this->aForCall as $m => $v) {
+        foreach ($this->forCall as $m => $v) {
             $this->$m();
         }
-    } // function __destruct
+    }
 
     // ======== Static methods ======== \\
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Get current language key
-     * @return string
-     */
-    public function getCombiPart()
+    public function getCombiPart(): ?string
     {
-        if (!$this->aCombiArr) {
+        if (!$this->combiArr) {
             return null;
         }
-        $sKey = array_shift($this->aCombiArr);
-        return $this->getMessage($sKey, $this->sCombiLng);
-    } // function getCombiPart
+        $key = array_shift($this->combiArr);
+        return $this->getMessage($key, $this->combiLng);
+    }
 
-    /**
-     * Get combined text by several keys of short massages
-     * @param string $aKeyList Keys
-     * @param string $sLng The Language Code
-     * @return string
-     */
-    public function getCombiMessage($aKeyList, $sLng = null)
+    public function getCombiMessage(array|string $keyList, ?string $lng = null): ?string
     {
-        if (empty($sLng)) {
-            $sLng = $this->oLocale->getLanguage();
+        if (empty($lng)) {
+            $lng = (string)$this->locale->getLanguage();
         }
-        $this->sCombiLng = $sLng;
-        $sKey = array_shift($aKeyList);
-        $this->aCombiArr = empty($aKeyList) ? array() : $aKeyList;
-        return $this->getMessage($sKey, $sLng);
-    } // function getCombiMessage
+        $keyList = is_array($keyList) ? $keyList : preg_split('/\s*,\s*/', $keyList, -1, PREG_SPLIT_NO_EMPTY);
+        $this->combiLng = $lng;
+        $key = array_shift($keyList);
+        $this->combiArr = empty($keyList) ? [] : $keyList;
+        return $this->getMessage((string)$key, $lng);
+    }
 
-    /**
-     * Get combined text by several prases
-     * @param string $aPhrases
-     * @return string
-     */
-    public function getCombiMessageAlt($aPhrases)
+    public function getCombiMessageAlt(array|string $phrases): string
     {
-        $sResult = array_shift($aPhrases);
-        while (strstr($sResult, '{combi_part}') && !empty($aPhrases)) {
-            $sResult = preg_replace('/\{combi_part\}/i', array_shift($aPhrases), $sResult, 1);
+        $phrases = is_array($phrases) ? $phrases : preg_split('/\s*,\s*/', $phrases, -1, PREG_SPLIT_NO_EMPTY);
+        $result = array_shift($phrases);
+        while (strstr((string)$result, '{combi_part}') && !empty($phrases)) {
+            $result = preg_replace('/\{combi_part\}/i', (string)array_shift($phrases), (string)$result, 1);
         }
-        return $sResult;
-    } // function getCombiMessageAlt
+        return (string)$result;
+    }
 
-    /**
-     * Set Editable Languageges (for admin-sys)
-     * @param string $aEditableLng The Language List
-     */
-    public function setEditableLng($aEditableLng)
+    public function setEditableLng(array|string $editableLng): void
     {
-        foreach ($aEditableLng as $sLng) {
-            $this->getMessageArr($sLng);
+        $editableLng = is_array($editableLng) ? $editableLng : [$editableLng];
+        foreach ($editableLng as $lng) {
+            $this->getMessageArr((string)$lng);
         }
-        $this->aEditableLng = $aEditableLng;
-    } // function setEditableLng
+        $this->editableLng = $editableLng;
+    }
 
-    /**
-     * Get text by Current Language
-     * @param string $sKey The Key
-     * @param string $sLanguage The Language Code
-     * @param boolean $bEnableML Flag: Enable Multi-Language
-     */
-    public function getMessage($sKey, $sLanguage = null, $bEnableML = true)
+    public function getMessage(string $key, ?string $language = null, bool $enableML = true): ?string
     {
-        if (!$sKey) {
+        if (!$key) {
             return $this->isEnabled() ? null : '';
         }
 
-        $bEnableML = $bEnableML && $this->isEnabled();
-        if ($bEnableML) {
-            $sKeyF = $this->_formatKey($sKey);
-            if (empty($sKeyF)) {
-                throw new fatalException($this, 'Incorrect Key. You can\'t create message with key "' . $sKey . '"');
+        $enableML = $enableML && $this->isEnabled();
+        if ($enableML) {
+            $keyF = $this->_formatKey($key);
+            if (empty($keyF)) {
+                throw new fatalException($this, 'Incorrect Key. You can\'t create message with key "' . $key . '"');
             }
 
-            $aAvailableLng = $this->oLocale->getAvailableLanguages();
-            if (!$sLanguage || !isset($aAvailableLng[$sLanguage])) {
-                $sLanguage = $this->oLocale->isEnabled() ? $this->oLocale->getLanguage() : $this->oLocale->getDefaultLanguage();
+            $availableLng = $this->locale->getAvailableLanguages();
+            if (!$language || !isset($availableLng[$language])) {
+                $language = $this->locale->isEnabled() ? $this->locale->getLanguage() : $this->locale->getDefaultLanguage();
             }
 
-            if (!isset($this->aMessages[$sLanguage])) {
-                $this->getMessageArr($sLanguage);
+            if (!isset($this->messages[$language])) {
+                $this->getMessageArr($language);
             }
-            if (!isset($this->aMessages[$sLanguage][$sKeyF])) {
-                $this->_setNewMessage($sKeyF, $sKey);
-                $bIsNewMsg = true;
+            if (!isset($this->messages[$language][$keyF])) {
+                $this->_setNewMessage($keyF, $key);
+                $isNewMsg = true;
             }
 
-            $sRet  = isset($this->aMessages[$sLanguage][$sKeyF]) ? $this->aMessages[$sLanguage][$sKeyF] : null;
-            $isTag = !empty($this->aMsgUseTag[$sKeyF]);
+            $ret  = isset($this->messages[$language][$keyF]) ? $this->messages[$language][$keyF] : null;
+            $isTag = !empty($this->msgUseTag[$keyF]);
         } else {
-            $sRet = $sKey;
-            $isTag = strstr($sRet, '{') != false;
+            $ret = $key;
+            $isTag = strstr($ret, '{') !== false;
         }
 
         if ($isTag) {
-            $aTags = $this->getTagArr();
-            $aMatches = null;
-            if (preg_match_all('/\{([^\}]+)\}/', $sRet, $aMatches)) {
-                foreach ($aMatches[1] as $k => $v) {
-                    if (isset($aTags[$v])) {
-                        $sRet = substr_replace($sRet, $this->_getTag($v), strpos($sRet, $aMatches[0][$k]), strlen($aMatches[0][$k]));
+            $tags = $this->getTagArr();
+            $matches = null;
+            if (preg_match_all('/\{([^\}]+)\}/', $ret, $matches)) {
+                foreach ($matches[1] as $k => $v) {
+                    if (isset($tags[$v])) {
+                        $ret = substr_replace($ret, $this->_getTag($v), strpos($ret, $matches[0][$k]), strlen($matches[0][$k]));
                     }
                 }
             }
         }
 
-        if ($bEnableML && class_exists('\fan\core\service\tab', false) && service('tab')->isDebugAllowed()) {
-            $this->_setReferer($sKeyF);
-            $nLen = strpos($sKeyF, '_');
-            if ($nLen > 0) {
-                $sPref = substr($sKeyF, 0, $nLen);
-                if (!$this->getConfig(array('MSG_PREFIX', $sPref), false)) {
-                    trigger_error('Incorrect prefix "' . $sKeyF . '" of message key.', E_USER_NOTICE);
+        if ($enableML && class_exists('\fan\core\service\tab', false) && $this->containerService('tab')->isDebugAllowed()) {
+            $this->_setReferer($keyF);
+            $len = strpos($keyF, '_');
+            if ($len > 0) {
+                $pref = substr($keyF, 0, $len);
+                if (!$this->getConfig(['MSG_PREFIX', $pref], false)) {
+                    throw new \UnexpectedValueException('Incorrect prefix "' . $keyF . '" of message key.');
                 }
             } else {
-                trigger_error('Prefix is\'t set for message key "' . $sKeyF . '".', E_USER_NOTICE);
+                throw new \UnexpectedValueException('Prefix is\'t set for message key "' . $keyF . '".');
             }
         }
-        return $sRet;
-    } // function getMessage
+        return $ret;
+    }
 
-    /**
-     * Get message for all available languages
-     * @return array
-     */
-    public function getAllMessages()
+    public function getAllMessages(): array
     {
-        foreach ($this->aEditableLng as $sLng) {
-            $this->getMessageArr($sLng);
+        foreach ($this->editableLng as $lng) {
+            $this->getMessageArr($lng);
         }
-        return $this->aMessages;
-    } // function getAllMessages
+        return $this->messages;
+    }
 
-    /**
-     * Get message array
-     * @return array
-     */
-    public function getMessageArr($sLng)
+    public function getMessageArr(string $lng): array
     {
-        if (empty($this->aMessages[$sLng])) {
-            $sPath = $this->_getFilePath('MESSAGES_PATH', array('{LNG}' => $sLng));
-            if (is_readable($sPath)) {
-                $this->aMessages[$sLng] = include($sPath);
+        $lng = (string)$lng;
+        if (empty($this->messages[$lng])) {
+            $path = $this->_getFilePath('MESSAGES_PATH', ['{LNG}' => $lng]);
+            if (is_readable($path)) {
+                $this->messages[$lng] = (array)\fan\project\adapter\php_array_file::load($path);
             } else {
-                trigger_error('Undefined message file "' . $sPath . '".', E_USER_WARNING);
-                $this->aMessages[$sLng] = array();
+                throw new \RuntimeException('Undefined message file "' . $path . '".');
             }
         }
-        $aRet = $this->aMessages[$sLng];
+        $ret = $this->messages[$lng];
         foreach ($this->getMsgUseTag() as $k => $v) {
-            unset($aRet[$k]);
+            unset($ret[$k]);
         }
-        return $aRet;
-    } // function getMessageArr
+        return $ret;
+    }
 
-    /**
-     * Get message use tags array
-     * @return array
-     */
-    public function getMsgUseTag()
+    public function getMsgUseTag(): array
     {
-        if (empty($this->aMsgUseTag)) {
-            $sPath = $this->_getFilePath('USE_TAGS_PATH');
-            if (is_readable($sPath)) {
-                $this->aMsgUseTag = include($sPath);
+        if (empty($this->msgUseTag)) {
+            $path = $this->_getFilePath('USE_TAGS_PATH');
+            if (is_readable($path)) {
+                $this->msgUseTag = \fan\project\adapter\php_array_file::load($path);
             } else {
-                trigger_error('Undefined message file "' . $sPath . '".', E_USER_WARNING);
+                throw new \RuntimeException('Undefined message file "' . $path . '".');
             }
         }
-        return $this->aMsgUseTag;
-    } // function getMsgUseTag
+        return $this->msgUseTag;
+    }
 
-    /**
-     * Edit message array
-     * @return array
-     */
-    public function editMessageArr($sKey, $aData, $bSave = true)
+    public function editMessageArr(string $key, array $data, bool $save = true): void
     {
         $this->getAllMessages();
 
-        $bIsTag = false;
-        foreach ($aData as $k => $v) {
-            $this->aMessages[$k][$sKey] = $v;
-            if(strchr($v, '{')) {
-                $this->aMsgUseTag[$sKey] = true;
-                $bIsTag = true;
-                $this->aForCall['_saveMsgUseTag'] = 1;
+        $isTag = false;
+        $key = (string)$key;
+        foreach ((array)$data as $k => $v) {
+            $this->messages[$k][$key] = $v;
+            if (strchr((string)$v, '{')) {
+                $this->msgUseTag[$key] = true;
+                $isTag = true;
+                $this->forCall['_saveMsgUseTag'] = 1;
             }
         }
-        if (!$bIsTag && isset($this->aMsgUseTag[$sKey])) {
-            unset($this->aMsgUseTag[$sKey]);
-            $this->aForCall['_saveMsgUseTag'] = 1;
+        if (!$isTag && isset($this->msgUseTag[$key])) {
+            unset($this->msgUseTag[$key]);
+            $this->forCall['_saveMsgUseTag'] = 1;
         }
-        if ($bSave) {
-            $this->aForCall['_saveMessageArr'] = 1;
+        if ($save) {
+            $this->forCall['_saveMessageArr'] = 1;
         }
-    } // function editMessageArr
+    }
 
-    /**
-     * Delete short message
-     * @param string $sKey The Key
-     */
-    public function deleteMessage($sKey)
+    public function deleteMessage(string $key): void
     {
         $isDel = false;
-        $sKeyF = $this->_formatKey($sKey);
-        foreach ($this->aEditableLng as $sLng) {
-            $this->getMessageArr($sLng);
-            if (isset($this->aMessages[$sLng][$sKeyF])) {
-                unset($this->aMessages[$sLng][$sKeyF]);
+        $keyF = $this->_formatKey($key);
+        foreach ($this->editableLng as $lng) {
+            $this->getMessageArr($lng);
+            if (isset($this->messages[$lng][$keyF])) {
+                unset($this->messages[$lng][$keyF]);
                 $isDel = true;
             }
         }
         if ($isDel) {
-            $this->aForCall['_saveMessageArr'] = 1;
-            if (isset($this->aMsgUseTag[$sKeyF])) {
-                unset($this->aMsgUseTag[$sKeyF]);
-                $this->aForCall['_saveMsgUseTag'] = 1;
+            $this->forCall['_saveMessageArr'] = 1;
+            if (isset($this->msgUseTag[$keyF])) {
+                unset($this->msgUseTag[$keyF]);
+                $this->forCall['_saveMsgUseTag'] = 1;
             }
-            $aRef = $this->getRefererArr($sKey);
-            if ($aRef) {
-                unset($this->aReferers[$sKeyF]);
-                $this->aForCall['_saveRefererArr'] = 1;
+            $ref = $this->getRefererArr($key);
+            if ($ref) {
+                unset($this->referers[$keyF]);
+                $this->forCall['_saveRefererArr'] = 1;
             }
         }
-    } // function deleteMessage
+    }
 
-    /**
-     * Get tag array
-     * @return array
-     */
-    public function getTagArr()
+    public function getTagArr(): array
     {
-        if (!$this->aTags) {
-            $sPath = $this->_getFilePath('TAGS_PATH');
-            $this->aTags = is_readable($sPath) ? include($sPath) : array();
+        if (!$this->tags) {
+            $path = $this->_getFilePath('TAGS_PATH');
+            $this->tags = \fan\project\adapter\php_array_file::load($path, []);
         }
-        return $this->aTags;
-    } // function getTagArr
+        return $this->tags;
+    }
 
-    /**
-     * Get referer array
-     * @return array
-     */
-    public function getRefererArr($sKey = NULL)
+    public function getRefererArr(?string $key = null): ?array
     {
-        if (!$this->aReferers) {
-            $sPath = $this->_getFilePath('REFERERS_PATH');
-            $this->aReferers = is_readable($sPath) ? include($sPath) : array();
-            $sLng  = $this->oLocale->getAvailableLanguages();
-            if ($sLng == $this->oLocale->getDefaultLanguage()) {
-                $this->getMessageArr($sLng);
-                foreach ($this->aReferers as $k => $v) {
-                    if (!isset($this->aMessages[$sLng][$k])) {
-                        unset($this->aReferers[$k]);
-                        $this->aForCall['_saveRefererArr'] = 1;
+        if (!$this->referers) {
+            $path = $this->_getFilePath('REFERERS_PATH');
+            $this->referers = \fan\project\adapter\php_array_file::load($path, []);
+            $lng  = $this->locale->getAvailableLanguages();
+            if ((string)$lng === (string)$this->locale->getDefaultLanguage()) {
+                $this->getMessageArr($lng);
+                foreach ($this->referers as $k => $v) {
+                    if (!isset($this->messages[$lng][$k])) {
+                        unset($this->referers[$k]);
+                        $this->forCall['_saveRefererArr'] = 1;
                     }
                 }
             }
         }
-        return $sKey ? (isset($this->aReferers[$sKey]) ? $this->aReferers[$sKey] : null) : $this->aReferers;
-    } // function getRefererArr
+        $key = is_scalar($key) ? (string)$key : null;
+        return $key ? (isset($this->referers[$key]) ? $this->referers[$key] : null) : $this->referers;
+    }
 
-    /**
-     * Edit message array
-     * @return array
-     */
-    public function editTagArr($sKey, $aData, $bSave = true)
+    public function editTagArr(string $key, array $data, bool $save = true): void
     {
-        $this->getMessageArr();
-        if (isset($aData['tag'])) {
-            $this->aTags[$sKey]['tag'] = $aData['tag'];
-            if (strchr($aData['tag'], '{')) {
-                $this->aTags[$sKey]['isFunc'] = true;
-            } elseif (isset($this->aTags[$sKey]['isFunc'])) {
-                unset($this->aTags[$sKey]['isFunc']);
+        $this->getTagArr();
+        $key = (string)$key;
+        $data = (array)$data;
+        if (isset($data['tag'])) {
+            $this->tags[$key]['tag'] = $data['tag'];
+            if (strchr((string)$data['tag'], '{')) {
+                $this->tags[$key]['isFunc'] = true;
+            } elseif (isset($this->tags[$key]['isFunc'])) {
+                unset($this->tags[$key]['isFunc']);
             }
         }
-        if (isset($aData['link'])) {
-            if ($aData['link']) {
-                $this->aTags[$sKey]['link'] = $aData['link'];
-            } elseif (isset($this->aTags[$sKey]['link'])) {
-                unset($this->aTags[$sKey]['link']);
+        if (isset($data['link'])) {
+            if ($data['link']) {
+                $this->tags[$key]['link'] = $data['link'];
+            } elseif (isset($this->tags[$key]['link'])) {
+                unset($this->tags[$key]['link']);
             }
         }
-        if ($bSave) {
-            $this->aForCall['_saveTagArr'] = 1;
+        if ($save) {
+            $this->forCall['_saveTagArr'] = 1;
         }
-    } // function editTagArr
+    }
 
     /**
-     * Check is Url contain URL
-     * @param string $sUrl - Sourse Url
-     * @return array modified URL
+     * @param string $url URL used as the external request target.
      */
-    public function checkUrlLng($sUrl)
+    public function checkUrlLng(string $url): ?array
     {
-        $sRegExp = '/^((\/\/?)(' . implode('|', array_keys($this->aAvailableLng)) . '))\//';
-        if (preg_match($sRegExp, $sUrl, $aMatches)) {
-            return $aMatches;
+        $regExp = '/^((\/\/?)(' . implode('|', array_keys((array)$this->locale->getAvailableLanguages())) . '))\//';
+        if (preg_match($regExp, $url, $matches)) {
+            return $matches;
         }
         return null;
-    } // function checkUrlLng
+    }
 
     // ======== Private/Protected methods ======== \\
 
-    /**
-     * Format message key
-     * @param string $sKey The Key
-     */
-    protected function _formatKey($sKey)
+    protected function _formatKey(string $key): string
     {
-        if (preg_match('/^\w+$/', $sKey)) {
-            $sKey = strtoupper($sKey);
+        if (preg_match('/^\w+$/', $key)) {
+            $key = strtoupper($key);
         } else {
-            $sKey = preg_replace('/\<[^\>]+\>/', ' ', $sKey);
-            $sKey = preg_replace('/[^a-zа-я0-9]+/iu', ' ', $sKey);
-            $sKey = preg_replace('/\s+/', '_', trim($sKey));
-            $sKey = mb_strtoupper($sKey);
+            $key = (string)preg_replace('/\<[^\>]+\>/', ' ', $key);
+            $key = (string)preg_replace('/[^a-zа-я0-9]+/iu', ' ', $key);
+            $key = (string)preg_replace('/\s+/', '_', trim($key));
+            $key = mb_strtoupper($key);
             if ($this->getConfig('MSG_KEY_ENGL_ONLY', true)) {
-                $sKey = strtr($sKey, array(
+                $key = strtr($key, [
                     'А' => 'A',  'Б' => 'B',  'В' => 'V',
                     'Г' => 'G',  'Д' => 'D',  'Е' => 'E', 'Є' => 'Ye',
                     'Ё' => 'Yo', 'Ж' => 'Zh', 'З' => 'Z', 'І' => 'I',
@@ -418,155 +341,123 @@ class translation extends \fan\core\base\service\single
                     'Ч' => 'Ch', 'Ш' => 'Sh', 'Щ' => 'Shch',
                     'Ь' => '\'', 'Ы' => 'Y',  'Ъ' => '"',
                     'Э' => 'E',  'Ю' => 'Yu', 'Я' => 'Ya',
-                ));
-                $sKey = iconv('UTF-8', 'ISO-8859-1//IGNORE', $sKey);
+                ]);
+                $key = (string)iconv('UTF-8', 'ISO-8859-1//IGNORE', $key);
             }
         }
-        return $sKey;
-    } // function _formatKey
+        return $key;
+    }
 
-    /**
-     * Get full path to data-file
-     * @param string $sKey The Key
-     * @return string
-     */
-    protected function _getFilePath($sKey, $aRepl = null)
+    protected function _getFilePath(string $key, ?array $repl = null): string
     {
-        $sPath = $this->getConfig($sKey);
-        if (empty($sPath)) {
-            throw new fatalException($this, 'Incorrect Key. Key for path "' . $sKey . '" doesn\'t set');
+        $path = (string)$this->getConfig($key);
+        if (empty($path)) {
+            throw new fatalException($this, 'Incorrect Key. Key for path "' . $key . '" doesn\'t set');
         }
-        if ($aRepl) {
-            $sPath = strtr($sPath, $aRepl);
+        if ($repl) {
+            $path = strtr($path, (array)$repl);
         }
-        return \bootstrap::parsePath($sPath);
-    } // function _getFilePath
+        return \bootstrap::parsePath($path);
+    }
 
-    /**
-     * Get tag for short message
-     * @param string $sKey The Key
-     * @return string
-     */
-    protected function _getTag($sKey)
+    protected function _getTag(string $key): string
     {
-        $sRet = $this->aTags[$sKey]['tag'];
-        $aMatches1 = $aMatches2 = null;
-        if (!empty($this->aTags[$sKey]['isFunc']) && preg_match_all('/\{([^\}]+)\}/', $sRet, $aMatches1)) {
-            foreach ($aMatches1[1] as $k => $v) {
-                list($sClass, $sMethod, $sArg) = explode(':', $v, 3);
-                if (preg_match('/^service\|(\w+)$/', $sClass, $aMatches2) && class_exists('\fan\project\service\\' . $aMatches2[1])) {
-                    $mCallback = array(service($aMatches2[1]), $sMethod);
-                } elseif (class_exists($sClass)) {
-                    $mCallback = array($sClass, $sMethod);
+        $ret = (string)$this->tags[$key]['tag'];
+        $matches1 = $matches2 = null;
+        if (!empty($this->tags[$key]['isFunc']) && preg_match_all('/\{([^\}]+)\}/', $ret, $matches1)) {
+            foreach ($matches1[1] as $k => $v) {
+                [$class, $method, $arg] = array_pad(explode(':', (string)$v, 3), 3, '');
+                if (preg_match('/^service\|(\w+)$/', $class, $matches2) && class_exists('\fan\project\service\\' . $matches2[1])) {
+                    $callback = [service($matches2[1]), $method];
+                } elseif (class_exists($class)) {
+                    $callback = [$class, $method];
                 }
-                if (!empty($mCallback) && is_callable($mCallback)) {
-                    $sRet = str_replace($aMatches1[0][$k], call_user_func($mCallback, $sArg), $sRet);
+                if (!empty($callback) && is_callable($callback)) {
+                    $ret = str_replace($matches1[0][$k], (string)call_user_func($callback, $arg), $ret);
                 } else {
-                    service('error')->logErrorMessage('Message tag "' . $sKey . '" is not callable.', 'Incorect message tag', '', true, false);
+                    $this->containerService('error')->logErrorMessage('Message tag "' . $key . '" is not callable.', 'Incorect message tag', '', true, false);
                 }
             }
         }
-        return $sRet;
-    } // function _getTag
+        return $ret;
+    }
 
-    /**
-     * Set tag for short message
-     * @param string $sKey The Key
-     */
-    protected function _setReferer($sKey)
+    protected function _setReferer(string $key): void
     {
         $this->getRefererArr();
 
-        list($sStage, $sPath) = getCurBlockInfo();
-        if(!$sPath) {
-            $sPath = 'Unknown!';
+        list($stage, $path) = getCurBlockInfo();
+        if (!$path) {
+            $path = 'Unknown!';
         }
-        if (!isset($this->aReferers[$sKey][$sPath][$sStage])) {
-            $oSource = service('matcher')->getItem(0)->source;
-            $this->aReferers[$sKey][$sPath][$sStage] = $_SERVER['REQUEST_METHOD'] . ': ' . $oSource;
-            $this->aForCall['_saveRefererArr'] = 1;
+        if (!isset($this->referers[$key][$path][$stage])) {
+            $source = service('matcher')->getItem(0)->source;
+            $this->referers[$key][$path][$stage] = (string)($_SERVER['REQUEST_METHOD'] ?? '') . ': ' . (string)$source;
+            $this->forCall['_saveRefererArr'] = 1;
         }
-    } // function _setReferer
+    }
 
-    /**
-     * Set new short message
-     * @param string $sKeyF The Key
-     * @param string $sKey
-     */
-    protected function _setNewMessage($sKeyF, $sKey)
+    protected function _setNewMessage(string $keyF, string $key): void
     {
-        foreach ($this->aEditableLng as $sLng) {
-            $this->getMessageArr($sLng);
-            $this->aMessages[$sLng][$sKeyF] = '[' . $sKey . ']';
+        foreach ($this->editableLng as $lng) {
+            $this->getMessageArr($lng);
+            $this->messages[$lng][$keyF] = '[' . $key . ']';
         }
-        $this->aForCall['_saveMessageArr'] = 1;
-    } // function _setNewMessage
+        $this->forCall['_saveMessageArr'] = 1;
+    }
 
-    /**
-     * Save message array
-     */
-    protected function _saveMessageArr()
+    protected function _saveMessageArr(): void
     {
-        foreach ($this->aEditableLng as $sLng) {
-            if (isset ($this->aMessages[$sLng])) {
-                ksort($this->aMessages[$sLng]);
-                file_put_contents($this->_getFilePath('MESSAGES_PATH', array('{LNG}' => $sLng)), '<?php
+        foreach ($this->editableLng as $lng) {
+            if (isset ($this->messages[$lng])) {
+                ksort($this->messages[$lng]);
+                file_put_contents($this->_getFilePath('MESSAGES_PATH', ['{LNG}' => $lng]), '<?php
 /*
- * Short messages array for language "' . $sLng . '"
+ * Short messages array for language "' . $lng . '"
  */
-return ' . var_export($this->aMessages[$sLng], true) . ';
+return ' . var_export($this->messages[$lng], true) . ';
 ?>');
             } else {
-                trigger_error('Unavailable message array for save. Language = "' . $sLng . '"', E_USER_NOTICE);
+                throw new \UnexpectedValueException('Unavailable message array for save. Language = "' . $lng . '"');
             }
         }
-    } // function _saveMessageArr
+    }
 
-    /**
-     * Save array of messages used tags
-     */
-    protected function _saveMsgUseTag()
+    protected function _saveMsgUseTag(): void
     {
-        ksort($this->aMsgUseTag);
+        ksort($this->msgUseTag);
         file_put_contents($this->_getFilePath('USE_TAGS_PATH'), '<?php
 /*
  * Array of messages used tags
  */
-return ' . var_export($this->aMsgUseTag, true) . ';
+return ' . var_export($this->msgUseTag, true) . ';
 ?>');
-    } // function _saveMsgUseTag
+    }
 
-    /**
-     * Save tag array
-     */
-    protected function _saveTagArr()
+    protected function _saveTagArr(): void
     {
-        ksort($this->aTags);
+        ksort($this->tags);
         file_put_contents($this->_getFilePath('TAGS_PATH'), '<?php
 /*
  * Tags array
  */
-return ' . var_export($this->aTags, true) . ';
+return ' . var_export($this->tags, true) . ';
 ?>');
-    } // function _saveTagArr
+    }
 
-    /**
-     * Save referer array
-     */
-    protected function _saveRefererArr()
+    protected function _saveRefererArr(): void
     {
-        ksort($this->aReferers);
+        ksort($this->referers);
         file_put_contents($this->_getFilePath('REFERERS_PATH'), '<?php
 /*
  * Referer array
  */
-return ' . var_export($this->aReferers, true) . ';
+return ' . var_export($this->referers, true) . ';
 ?>');
-    } // function _saveRefererArr
+    }
 
     // ======== The magic methods ======== \\
 
     // ======== Required Interface methods ======== \\
 
-} // class \fan\core\service\translation
-?>
+}

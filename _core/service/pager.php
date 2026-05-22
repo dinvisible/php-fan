@@ -1,4 +1,7 @@
-<?php namespace fan\core\service;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service;
 use fan\project\exception\service\fatal as fatalException;
 /**
  * Pager service
@@ -21,306 +24,226 @@ class pager extends \fan\core\base\service\multi
      * Service's Instances
      * @var \fan\core\service\pager[]
      */
-    private static $aInstances = array();
+    private static array $instances = [];
 
     /**
      * Form Id
      * @var \fan\core\block\base
      */
-    private $oBlock;
+    private ?object $block = null;
 
     /**
      * Page nummber
      * @var numeric
      */
-    protected $nPageNum = null;
+    protected int|float|null $pageNum = null;
     /**
      * Total quantity of pages
      * @var numeric
      */
-    protected $nPageQtt = null;
+    protected int|float|null $pageQtt = null;
 
     /**
      * Quantity items per page
      * @var numeric
      */
-    protected $nItemPerPage = null;
+    protected int|float|null $itemPerPage = null;
     /**
      * Total quantity of items
      * @var numeric
      */
-    protected $nItemQtt = null;
+    protected int|float|null $itemQtt = null;
 
-    /**
-     * Service's constructor
-     * @param \fan\core\block\base $oBlock
-     */
-    protected function __construct(\fan\core\block\base $oBlock)
+    protected function __construct(\fan\core\block\base $block)
     {
         parent::__construct(true);
-        $this->oBlock = $oBlock;
-    } // function __construct
+        $this->block = $block;
+    }
 
     // ======== Static methods ======== \\
-    /**
-     * Get instance of pager
-     * @param string|\fan\core\block\base $mBlock
-     * @return \fan\core\service\pager
-     */
-    public static function instance($mBlock)
+    public static function instance(string|\fan\core\block\base $block): static
     {
-        if (is_string($mBlock)) {
-            $mBlock = service('tab')->getTabBlock($mBlock);
-        } elseif (!is_object($mBlock) || !($mBlock instanceof \fan\core\block\base)) {
+        if (is_string($block)) {
+            $block = self::staticContainerService('tab')->getTabBlock($block);
+        } elseif (!is_object($block) || !($block instanceof \fan\core\block\base)) {
             throw new \fan\core\exception\error500('Incorect call service pager. Please point block of data or its name.');
         }
 
-        $sName = $mBlock->getBlockName();
-        if (!isset(self::$aInstances[$sName])) {
-            self::$aInstances[$sName] = new self($mBlock);
+        $name = $block->getBlockName();
+        if (!isset(self::$instances[$name])) {
+            self::$instances[$name] = new self($block);
         }
-        return self::$aInstances[$sName];
-    } // function instance
+        return self::$instances[$name];
+    }
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Set current page number
-     * @param numeric $nPageNum
-     * @param boolean $bForce
-     * @return \fan\core\service\pager
-     */
-    public function setPageNum($nPageNum, $bForce = false)
+    public function setPageNum(int|float $pageNum, bool $force = false): static
     {
-        $nPageNum = round($nPageNum);
-        if ($nPageNum < 1) {
-            $nPageNum = 1;
+        $pageNum = round($pageNum);
+        if ($pageNum < 1) {
+            $pageNum = 1;
         }
-        if (!is_null($this->nPageQtt) && $nPageNum > $this->nPageQtt) {
-            if ($bForce) {
-                $this->nPageQtt = $nPageNum;
+        if (!is_null($this->pageQtt) && $pageNum > $this->pageQtt) {
+            if ($force) {
+                $this->pageQtt = $pageNum;
             } else {
-                $nPageNum = $this->nPageQtt;
+                $pageNum = $this->pageQtt;
             }
         }
-        $this->nPageNum = $nPageNum;
+        $this->pageNum = $pageNum;
         return $this;
-    } // function setPageNum
-    /**
-     * Get current page number
-     * @return numeric
-     */
-    public function getPageNum()
+    }
+    public function getPageNum(): int|float|null
     {
-        return $this->nPageNum;
-    } // function getPageNum
+        return $this->pageNum;
+    }
 
-    /**
-     * Set quantity of total pages
-     * @param numeric $nPageQtt
-     * @param boolean $bForce
-     * @return \fan\core\service\pager
-     */
-    public function setPageQtt($nPageQtt, $bForce = true)
+    public function setPageQtt(int|float $pageQtt, bool $force = true): static
     {
-        $nPageQtt = round($nPageQtt);
-        if ($nPageQtt < 1) {
-            $nPageQtt = 1;
+        $pageQtt = round($pageQtt);
+        if ($pageQtt < 1) {
+            $pageQtt = 1;
         }
-        if (!is_null($this->nPageNum) && $nPageQtt < $this->nPageNum) {
-            if ($bForce) {
-                $this->nPageNum = $nPageQtt;
+        if (!is_null($this->pageNum) && $pageQtt < $this->pageNum) {
+            if ($force) {
+                $this->pageNum = $pageQtt;
             } else {
-                $nPageQtt = $this->nPageNum;
+                $pageQtt = $this->pageNum;
             }
         }
-        $this->nPageQtt = $nPageQtt;
+        $this->pageQtt = $pageQtt;
         return $this;
-    } // function setPageQtt
-    /**
-     * Get quantity of total pages
-     * @return numeric
-     */
-    public function getPageQtt()
+    }
+    public function getPageQtt(): int|float|null
     {
-        return $this->nPageQtt;
-    } // function getPageQtt
+        return $this->pageQtt;
+    }
 
-    /**
-     * Set quantity of items per page
-     * @param numeric $nItemPerPage
-     * @return \fan\core\service\pager
-     */
-    public function setItemPerPage($nItemPerPage)
+    public function setItemPerPage(int|float $itemPerPage): static
     {
-        $nItemPerPage = round($nItemPerPage);
-        if ($nItemPerPage < 1) {
-            $nItemPerPage = $this->getConfig('DEFAULT_ITEM_PER_PAGE', 10);
+        $itemPerPage = round($itemPerPage);
+        if ($itemPerPage < 1) {
+            $itemPerPage = $this->getConfig('DEFAULT_ITEM_PER_PAGE', 10);
         }
-        $this->nItemPerPage = $nItemPerPage;
+        $this->itemPerPage = $itemPerPage;
         return $this;
-    } // function setItemPerPage
-    /**
-     * Get quantity of items per page
-     * @return numeric
-     */
-    public function getItemPerPage()
+    }
+    public function getItemPerPage(): mixed
     {
-        return is_null($this->nItemPerPage) ? $this->getConfig('DEFAULT_ITEM_PER_PAGE', 10) : $this->nItemPerPage;
-    } // function getItemPerPage
+        return is_null($this->itemPerPage) ? $this->getConfig('DEFAULT_ITEM_PER_PAGE', 10) : $this->itemPerPage;
+    }
 
-    public function setItemQtt($nItemQtt, $bDefinePageNum = true)
+    public function setItemQtt(int|float|string $itemQtt, bool $definePageNum = true): static
     {
-        $this->nItemQtt = round($nItemQtt);
-        if ($bDefinePageNum) {
+        $this->itemQtt = round((float)$itemQtt);
+        if ($definePageNum) {
             $this->_definePageNum()
                     ->_defineItemPerPage()
                     ->_definePageQtt();
         }
         return $this;
-    } // function setItemQtt
-    /**
-     * Get quantity of items per page
-     * @return numeric
-     */
-    public function getItemQtt()
+    }
+    public function getItemQtt(): int|float|null
     {
-        return $this->nItemQtt;
-    } // function getItemQtt
+        return $this->itemQtt;
+    }
 
-    /**
-     * Get offset value
-     * @return numeric
-     */
-    public function getOffset()
+    public function getOffset(): int|float
     {
         return ($this->getPageNum() - 1) * $this->getItemPerPage();
-    } // function getOffset
+    }
 
     /**
-     * Get Items By Parameters (entity_key and sql_key geg from meta-data)
-     * @param mixed $mParam
-     * @param string $sOrderBy
-     * @return \fan\core\base\model\rowset
      * @throws fatalException
      */
-    public function getItemsByParam($mParam = array(), $sOrderBy = '')
+    public function getItemsByParam(mixed $param = [], string $orderBy = ''): \fan\core\base\model\rowset
     {
-        $oMeta = $this->oBlock->getMeta('pager');
-        if (!is_object($oMeta) || $oMeta['entity_key'] == '') {
+        $meta = $this->block->getMeta('pager');
+        if (!is_object($meta) || (string)$meta['entity_key'] === '') {
             throw new fatalException($this, 'Entity key is not set.');
         }
-        $oEtt    = ge($oMeta['entity_key']);
-        $sSqlKey = $oMeta['sql_key'];
-        return $this->getItemsByKey($oEtt, $sSqlKey, $mParam, $sOrderBy);
-    } // function getItemsByParam
+        $ett    = ge($meta['entity_key']);
+        $sqlKey = $meta['sql_key'];
+        return $this->getItemsByKey($ett, $sqlKey, $param, $orderBy);
+    }
 
-    /**
-     * Get Items By Entity-key, SQL-key and Parameters
-     * @param string|\fan\core\base\model\entity $mEtt
-     * @param string $sSqlKey
-     * @param mixed $mParam
-     * @param string $sOrderBy
-     * @return \fan\core\base\model\rowset
-     */
-    public function getItemsByKey($mEtt, $sSqlKey = '', $mParam = array(), $sOrderBy = '')
+    public function getItemsByKey(string|\fan\core\base\model\entity $ett, string $sqlKey = '', mixed $param = [], string $orderBy = ''): \fan\core\base\model\rowset
     {
-        $oEtt = is_object($mEtt) && $mEtt instanceof \fan\core\base\model\entity ? $mEtt : ge($mEtt);
+        $ett = is_object($ett) && $ett instanceof \fan\core\base\model\entity ? $ett : ge($ett);
 
         $this->_definePageNum()
                 ->_defineItemPerPage()
-                ->_countItemByEtt($mParam, $oEtt, $sSqlKey)
+                ->_countItemByEtt($param, $ett, $sqlKey)
                 ->_definePageQtt();
 
-        $nQtt    = $this->getItemPerPage();
-        $nOffset = $this->getOffset();
-        $oItems  = empty($sSqlKey) ?
-                $oEtt->getRowsetByParam($mParam, $nQtt, $nOffset, $sOrderBy) :
-                $oEtt->getRowsetByKey($sSqlKey, $mParam, $nQtt, $nOffset, $sOrderBy);
-        return $oItems;
-    } // function getItemsByKey
+        $qtt    = $this->getItemPerPage();
+        $offset = $this->getOffset();
+        $items  = empty($sqlKey) ?
+                $ett->getRowsetByParam($param, $qtt, $offset, $orderBy) :
+                $ett->getRowsetByKey($sqlKey, $param, $qtt, $offset, $orderBy);
+        return $items;
+    }
 
-    /**
-     * Get page url
-     * @return string
-     */
-    public function getPageUri($iPage, $bAddExt = true, $bAddSid = null, $bProtocol = null)
+    public function getPageUri(int|string $page, mixed $addExt = true, mixed $addSid = null, mixed $protocol = null): string
     {
-        $sKey = $this->getConfig('PAGE_REQUEST_KEY', 'page');
-        $aModifier = array(
-            'exclude' => array(
-                'A' => array($sKey),
-                'G' => array($sKey),
-            )
-        );
-        $sBy = $this->oBlock->getMeta(array('pager', 'paging_by'));
-        if (empty($sBy)) {
-            $sBy = $this->getConfig('PAGING_BY', 'GET');
+        $key = $this->getConfig('PAGE_REQUEST_KEY', 'page');
+        $modifier = [
+            'exclude' => [
+                'A' => [$key],
+                'G' => [$key],
+            ]
+        ];
+        $by = $this->block->getMeta(['pager', 'paging_by']);
+        if (empty($by)) {
+            $by = $this->getConfig('PAGING_BY', 'GET');
         }
-        $aModifier['include'][strtolower($sBy) == 'add' ? 'A' : 'G'][$sKey] = $iPage;
+        $modifier['include'][strtolower((string)$by) === 'add' ? 'A' : 'G'][$key] = $page;
 
-        return service('tab')->getModifiedCurrentURI($aModifier, $bAddExt, $bAddSid, $bProtocol);
-    } // function getPageUri
+        return $this->containerService('tab')->getModifiedCurrentURI($modifier, $addExt, $addSid, $protocol);
+    }
 
     // ======== Private/Protected methods ======== \\
-    /**
-     * Count Items by Entity
-     * @param mixed $mParam
-     * @param string|\fan\core\base\model\entity $mEtt
-     * @param string $sSqlKey
-     * @return \fan\core\service\pager
-     */
-    protected function _countItemByEtt($mParam, $mEtt, $sSqlKey = null)
+    protected function _countItemByEtt(mixed $param, string|\fan\core\base\model\entity $ett, ?string $sqlKey = null): static
     {
-        $oEtt = is_object($mEtt) ? $mEtt : ge($mEtt);
-        $this->nItemQtt = empty($sSqlKey) ?
-                $oEtt->getCountByParam($mParam) :
-                $oEtt->getCountByKey($sSqlKey, $mParam);
+        $ett = is_object($ett) ? $ett : ge($ett);
+        $this->itemQtt = empty($sqlKey) ?
+                $ett->getCountByParam($param) :
+                $ett->getCountByKey($sqlKey, $param);
         return $this;
-    } // function _countItemByEtt
+    }
 
-    /**
-     * Define current page number
-     * @param boolean $bForce
-     * @return \fan\core\service\pager
-     */
-    protected function _definePageNum($bForce = false)
+    protected function _definePageNum(bool $force = false): static
     {
-        if (is_null($this->nPageNum) || $bForce) {
-            $sKey  = $this->getConfig('PAGE_REQUEST_KEY', 'page');
-            $sSrc  = $this->getConfig('PAGE_REQUEST_SRC', 'AG');
-            $nPage = (int)service('request')->get($sKey, $sSrc, 1);
-            $this->setPageNum($nPage);
+        if (is_null($this->pageNum) || $force) {
+            $key  = $this->getConfig('PAGE_REQUEST_KEY', 'page');
+            $src  = $this->getConfig('PAGE_REQUEST_SRC', 'AG');
+            $page = (int)$this->containerService('request')->get($key, $src, 1);
+            $this->setPageNum($page);
         }
         return $this;
-    } // function _definePageNum
+    }
 
-    /**
-     * Define Quantity Items Per Page by Meta
-     * @param boolean $bForce
-     * @return \fan\core\service\pager
-     */
-    protected function _defineItemPerPage($bForce = false)
+    protected function _defineItemPerPage(bool $force = false): static
     {
-        if (is_null($this->nItemPerPage) || $bForce) {
-            $nQtt = (int)$this->oBlock->getMeta(array('pager', 'item_per_page'));
+        if (is_null($this->itemPerPage) || $force) {
+            $qtt = (int)$this->block->getMeta(['pager', 'item_per_page']);
             //ToDo: Pay attantion on quatifyer
-            $this->setItemPerPage($nQtt);
+            $this->setItemPerPage($qtt);
         }
         return $this;
-    } // function _defineItemPerPage
+    }
 
-    protected function _definePageQtt($bForce = false)
+    protected function _definePageQtt(bool $force = false): static
     {
-        if (is_null($this->nPageQtt) || $bForce) {
-            $nPageQtt = ceil($this->getItemQtt() / $this->getItemPerPage());
-            $this->setPageQtt($nPageQtt);
+        if (is_null($this->pageQtt) || $force) {
+            $pageQtt = ceil($this->getItemQtt() / $this->getItemPerPage());
+            $this->setPageQtt($pageQtt);
         }
         return $this;
-    } // function _definePageQtt
+    }
 
     // ======== The magic methods ======== \\
 
     // ======== Required Interface methods ======== \\
-} // class \fan\core\service\pager
-?>
+}

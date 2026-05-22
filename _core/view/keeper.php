@@ -1,4 +1,7 @@
-<?php namespace fan\core\view;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\view;
 /**
  * View data-keeper
  *
@@ -19,81 +22,49 @@ class keeper extends \fan\core\base\data
     /**
      * @var \fan\core\view\router
      */
-    protected $oRouter;
+    protected ?object $router = null;
 
-    /**
-     * View meta constructor
-     * @param fan\core\block\base $oRouter
-     */
-    public function __construct(\fan\core\view\router $oRouter)
+    public function __construct(\fan\core\view\router $router)
     {
-        $this->oRouter = $oRouter;
-        $this->_setSetter($oRouter);
-        $this->_setSetter($oRouter->getBlock());
-        $this->bMultiLevel = false;
-    } // function __construct
+        $this->router = $router;
+        $this->_setSetter($router);
+        $this->_setSetter($router->getBlock());
+        $this->multiLevel = false;
+    }
 
     // ======== Main Interface methods ======== \\
 
-    /**
-     * Get value of data
-     * @param string|array $mKey
-     * @param mixed $mDefault
-     * @param boolean $bLogError
-     * @return mixed
-     */
-    public function get($mKey = null, $mDefault = null, $bLogError = true)
+    public function get(mixed $key = null, mixed $default = null, bool $logError = true): mixed
     {
-        return is_null($mKey) ? $this->toArray() : parent::get($mKey, $mDefault, $bLogError);
-    } // function get
+        return is_null($key) ? $this->toArray() : parent::get($key, $default, $logError);
+    }
 
-    /**
-     * Set value of data
-     * @param string|number $mKey
-     * @param mixed $mValue
-     * @param boolean $bRewriteExisting - rewrite exists value
-     * @param boolean $bConvArray - convert array to object of this class (null is true for Multi-Level data)
-     * @return \fan\core\view\keeper
-     */
-    public function set($mKey, $mValue, $bRewriteExisting = true, $bConvArray = null)
+    public function set(mixed $key, mixed $value, bool $rewriteExisting = true, ?bool $convArray = null): static
     {
-        if (is_null($mKey) && $this->isFullRewrite()) {
-            $this->aData = $mValue;
+        if (is_null($key) && $this->isFullRewrite()) {
+            $this->data = $value;
         } else {
-            parent::set($mKey, $mValue, $bRewriteExisting, $bConvArray);
+            parent::set($key, $value, $rewriteExisting, $convArray);
         }
         return $this;
     }
 
-    /**
-     * Clear view data
-     * @return \fan\core\view\keeper
-     */
-    public function clear()
+    public function clear(): static
     {
         if ($this->_checkSetter()) {
-            $this->aData = array();
+            $this->data = [];
         }
         return $this;
     }
 
-    /**
-     * Get router
-     * @return \fan\core\view\router
-     */
-    public function getRouter()
+    public function getRouter(): \fan\core\view\router
     {
-        return $this->oRouter;
+        return $this->router;
     }
 
-    /**
-     * Get block-owner
-     * @return \fan\core\block\base
-     */
-    public function getBlock()
+    public function getBlock(): \fan\core\block\base
     {
-        return $this->oRouter->getBlock();
+        return $this->router->getBlock();
     }
 
-} // class \fan\core\view\keeper
-?>
+}

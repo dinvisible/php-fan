@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\template\type;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\template\type;
 /**
  *
  * This file is part PHP-FAN (php-framework from Alexandr Nosov)
@@ -19,97 +22,55 @@ abstract class image extends base
      * Basic parameters: src, width, height, alt, href
      * @var array
      */
-    protected $aBaseParam;
+    protected ?array $baseParam = null;
 
-    /**
-     * Get Engine List
-     * @return array
-     */
-    public static function getEngineList()
+    public static function getEngineList(): array
     {
-        return array('main');
+        return ['main'];
     }
 
-    /**
-     * Get Auto-parse data
-     * @return array
-     */
-    public static function getAutoParseTag()
+    public static function getAutoParseTag(): array
     {
-        return array(
-            'img'              => array('method' => 'makeImgTag'),
-            'top_signature'    => array('method' => 'makeTopSign'),
-            'bottom_signature' => array('method' => 'makeBotSign'),
-        );
+        return [
+            'img'              => ['method' => 'makeImgTag'],
+            'top_signature'    => ['method' => 'makeTopSign'],
+            'bottom_signature' => ['method' => 'makeBotSign'],
+        ];
     }
 
-    /**
-     * Set basic template data
-     * @param array $aParam
-     */
-    public function setBaseParam($aParam)
+    public function setBaseParam(array $param): void
     {
-        $this->aBaseParam = $aParam;
-        $this->assign('sBaseClass', isset($aParam['class']) ? $aParam['class'] : null);
-        $this->assign('sImgLnk', isset($aParam['link']['full_url']) ? $aParam['link']['full_url'] : null);
-    } // function setBaseData
+        $this->baseParam = $param;
+        $this->assign('sBaseClass', isset($param['class']) ? $param['class'] : null);
+        $this->assign('sImgLnk', isset($param['link']['full_url']) ? $param['link']['full_url'] : null);
+    }
 
-    /**
-     * Get hidden field form key
-     * @return string
-     * /
-    public function getSpecial()
+    public function makeImgTag(array $data = []): string
     {
-        return 'Some special data';
-    } // function getSpecial */
-
-    /**
-     * Make Image Tag
-     * @param array $aData
-     * @return string
-     */
-    public function makeImgTag($aData = array())
-    {
-        $aImage = $this->aBaseParam['img'];
-        $sAttr = '';
-        foreach (array('class', 'style', 'lang', 'dir', 'alt', 'title') as $k) {
-            if (isset($aImage[$k])) {
-                $sAttr .= ' ' . $k . '="' . $aImage[$k] . '"';
-            } elseif (isset($aData[$k])) {
-                $sAttr .= ' ' . $k . '="' . $aData[$k] . '"';
+        $image = $this->baseParam['img'];
+        $attr = '';
+        foreach (['class', 'style', 'lang', 'dir', 'alt', 'title'] as $k) {
+            if (isset($image[$k])) {
+                $attr .= ' ' . $k . '="' . $image[$k] . '"';
+            } elseif (isset($data[$k])) {
+                $attr .= ' ' . $k . '="' . $data[$k] . '"';
             }
         }
-        return '<img src="' . $aImage['full_url'] . '" width="' . $aImage['width'] . '" height="' . $aImage['height'] . '"' . $sAttr . ' />';
-    } // function getImgTag
+        return '<img src="' . $image['full_url'] . '" width="' . $image['width'] . '" height="' . $image['height'] . '"' . $attr . ' />';
+    }
 
-    /**
-     * Make Top Signature
-     * @param array $aData
-     * @return string
-     */
-    public function makeTopSign($aData = array())
+    public function makeTopSign(array $data = []): string
     {
-        return (@$this->aBaseParam['signature']['position'] == 'top') ? $this->makeTopSign($aData) : '';
-    } // function makeTopSign
+        return (string)($this->baseParam['signature']['position'] ?? '') === 'top' ? $this->makeTopSign($data) : '';
+    }
 
-    /**
-     * Make Bottom Signature
-     * @param array $aData
-     * @return string
-     */
-    public function makeBotSign($aData = array())
+    public function makeBotSign(array $data = []): string
     {
-        return (@$this->aBaseParam['signature']['position'] == 'bottom') ? $this->makeTopSign($aData) : '';
-    } // function makeBotSign
+        return (string)($this->baseParam['signature']['position'] ?? '') === 'bottom' ? $this->makeTopSign($data) : '';
+    }
 
-    /**
-     * Make Top Signature
-     * @param array $aData
-     * @return string
-     */
-    protected function makeSignature($aData)
+    protected function makeSignature(array $data): string
     {
-        return $this->aBaseParam['signature']['text'] ? '<span' . (@$aData['class'] ? ' class="' . $aData['class'] . '"' : '') . '>' . $this->aBaseParam['signature']['text'] . '</span>' : '';
-    } // function makeSignature
-} // class \fan\core\service\template\type\image
-?>
+        return $this->baseParam['signature']['text'] ? '<span' . (!empty($data['class']) ? ' class="' . $data['class'] . '"' : '') . '>' . $this->baseParam['signature']['text'] . '</span>' : '';
+    }
+}

@@ -1,20 +1,22 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Footer content meta
  * @version 05.02.001 (10.03.2014)
  */
 
-return array(
-    'own' => array(
+return [
+    'own' => [
         /*
-        'staticContent' => array(
+        'staticContent' => [
             'producerData' => 'producerData',
-        ),
+        ],
          */
 
-        'cache' => array(
+        'cache' => [
             'mode' => 1,
-        ),
-    ), //'own'
-);
-?>
+        ],
+    ], //'own'
+];

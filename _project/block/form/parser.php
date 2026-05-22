@@ -1,4 +1,8 @@
-<?php namespace fan\project\block\form;
+<?php
+
+declare(strict_types=1);
+
+namespace fan\project\block\form;
 /**
  * Form-parser block abstract
  *
@@ -17,5 +21,4 @@
  */
 abstract class parser extends \fan\core\block\form\parser
 {
-} // class \fan\project\block\form\parser
-?>
+}

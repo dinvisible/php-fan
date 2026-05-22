@@ -1,4 +1,7 @@
-<?php namespace fan\core\service\matcher;
+<?php
+declare(strict_types=1);
+
+namespace fan\core\service\matcher;
 /**
  * Description of stack
  *
@@ -20,71 +23,48 @@ class stack extends \ArrayIterator
      * Facade of service
      * @var fan\core\base\service
      */
-    protected $oFacade = null;
-    /**
-     * @var integer Index of current URI
-     */
-    protected $iCurrent = 0;
+    protected ?object $facade = null;
+    protected int $current = 0;
 
-    /**
-     * Set Facade
-     * @param \fan\core\base\service $oFacade
-     * @return stack
-     */
-    public function setFacade(\fan\core\base\service $oFacade)
+    public function setFacade(\fan\core\base\service $facade): static
     {
-        $this->oFacade = $oFacade;
+        $this->facade = $facade;
 
         return $this;
-    } // function setFacade
+    }
 
-    /**
-     * Set New Item of Stack
-     * @param string $sRequest
-     * @param string $sPosition
-     * @return stack
-     */
-    public function setNewItem($sRequest, $sPosition = null, $bShiftCurrent = true)
+    public function setNewItem(string $request, ?string $position = null, bool $shiftCurrent = true): static
     {
-        $iIndex = count($this);
-        if ($bShiftCurrent) {
-            $this->iCurrent = $iIndex;
+        $index = count($this);
+        if ($shiftCurrent) {
+            $this->current = $index;
         }
 
-        $oItem = new \fan\project\service\matcher\item($iIndex);
-        $this[$iIndex] = $oItem;
-        $oItem->setFacade($this->oFacade);
+        $item = new \fan\project\service\matcher\item($index);
+        $this[$index] = $item;
+        $item->setFacade($this->facade);
 
         if (\bootstrap::isCli()) {
-            $oItem->initCli($sRequest, $sPosition);
+            $item->initCli($request, (string)$position);
             // Pre-Parse Request
-            //$oItem->preParseRequest($bShiftCurrent);
+            //$item->preParseRequest($shiftCurrent);
         } else {
-            $oItem->initOut($sRequest, $sPosition);
+            $item->initOut($request, (string)$position);
             // Pre-Parse Request
-            $oItem->preParseRequest($bShiftCurrent);
+            $item->preParseRequest($shiftCurrent);
         }
 
         return $this;
-    } // function setNewItem
+    }
 
-    /**
-     * Get Current Index of Uri
-     * @return integer
-     */
-    public function getLastIndex()
+    public function getLastIndex(): int
     {
         return count($this) - 1;
-    } // function getLastIndex
+    }
 
-    /**
-     * Get Current Index of Uri
-     * @return integer
-     */
-    public function getCurrentIndex()
+    public function getCurrentIndex(): int
     {
-        return $this->iCurrent;
-    } // function getCurrentIndex
+        return $this->current;
+    }
 
-} // class \fan\core\service\matcher\stack
-?>
+}
