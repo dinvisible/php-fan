@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\project\block\error;
+use fan\core\block\error\error403 as error_error403;
+
 /**
  * Block for show error 403
  *
@@ -18,7 +20,7 @@ namespace fan\project\block\error;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.007 (31.08.2015)
  */
-class error403 extends \fan\core\block\error\error403
+class error403 extends error_error403
 {
     public function init(): void
     {

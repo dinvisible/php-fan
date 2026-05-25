@@ -2,7 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\base\service\single;
+
 /**
  * Description of header
  *
@@ -31,8 +32,14 @@ use fan\project\exception\service\fatal as fatalException;
  * @property string  $cacheLimit
  *
  */
-class header extends \fan\core\base\service\single
+class header extends single
 {
+    protected ?object $input = null;
+
+    protected ?object $headerWriter = null;
+
+    private \Closure $recursiveMerger;
+
     /**
      * Mapping of methods for send headers
      * @var array
@@ -83,9 +90,24 @@ class header extends \fan\core\base\service\single
      */
     protected array $headerData = [];
 
-    protected function __construct(bool $allowIni = true)
+    public function __construct(
+        bool $allowIni = true,
+        ?object $input = null,
+        ?object $headerWriter = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?callable $recursiveMerger = null
+    )
     {
-        parent::__construct($allowIni);
+        $this->input = $input;
+        $this->headerWriter = $headerWriter;
+        $this->recursiveMerger = \Closure::fromCallable(
+            $recursiveMerger ?? static function (mixed ...$values): mixed {
+                throw new \RuntimeException('Recursive merger is not configured for header service.');
+            }
+        );
+        parent::__construct($allowIni, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
 
         $this->clearHeaders();
     }
@@ -132,7 +154,7 @@ class header extends \fan\core\base\service\single
     public function sendHeaders(): array
     {
         $fileName = $lineNum = null;
-        if (headers_sent($fileName, $lineNum)) {
+        if ($this->headerWriter()->sent($fileName, $lineNum)) {
             throw new \RuntimeException('Headers have been sent in "' . $fileName . '" at the line ' . $lineNum);
         }
 
@@ -142,7 +164,7 @@ class header extends \fan\core\base\service\single
 
         foreach ($this->_prepareFunctions() as $k => $v) {
             $arg = $this->_orderArguments($v);
-            call_user_func_array([$this, $k], $arg);
+            $this->{$k}(...$arg);
         }
 
         return $this->clearHeaders();
@@ -152,10 +174,19 @@ class header extends \fan\core\base\service\single
     {
         $ret = $this->headerData;
         $this->headerData = [
-            'protocol' => empty($_SERVER['SERVER_PROTOCOL']) ? 'HTTP/1.1' : $_SERVER['SERVER_PROTOCOL'],
+            'protocol' => (string)$this->input()->serverValue('SERVER_PROTOCOL', 'HTTP/1.1'),
         ];
         $this->setResponseType();
         return $ret;
+    }
+
+    private function input(): object
+    {
+        if ($this->input !== null) {
+            return $this->input;
+        }
+
+        throw new \RuntimeException('Request input service is not configured for header service.');
     }
 
     // ------ Sepecial header setter/getter ------ \\
@@ -184,7 +215,7 @@ class header extends \fan\core\base\service\single
     // ------ Senders of header ------ \\
     public function sendResponseType(?int $code = null, ?string $protocol = null): void
     {
-        header($this->_getResponseText($code ?? (int)$this->getResponseCode(), $protocol ?? $this->getProtocol()));
+        $this->sendHeader($this->_getResponseText($code ?? (int)$this->getResponseCode(), $protocol ?? $this->getProtocol()));
     }
 
     /**
@@ -196,19 +227,19 @@ class header extends \fan\core\base\service\single
             if (empty($value)) {
                 $value = 'text/html';
             }
-            header('Content-Type: ' . $value . (empty($encoding) ? '' : '; ' . $encoding));
+            $this->sendHeader('Content-Type: ' . $value . (empty($encoding) ? '' : '; ' . $encoding));
         }
         return $this;
     }
 
-    public function sendLength(string $len, ?string $ranges = null): static
+    public function sendLength(int|float|string|null $len, ?string $ranges = null): static
     {
         if (!empty($len)) {
             if (empty($ranges)) {
                 $ranges = 'bytes';
             }
-            header('Accept-Ranges: ' . $ranges);
-            header('Content-Length: ' . $len);
+            $this->sendHeader('Accept-Ranges: ' . $ranges);
+            $this->sendHeader('Content-Length: ' . (string)$len);
         }
         return $this;
     }
@@ -216,18 +247,18 @@ class header extends \fan\core\base\service\single
     public function sendTime(int|float|null $modified = NULL, int|float|null $expired = NULL): static
     {
         if (!is_null($modified)) {
-            header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $modified) . ' GMT');
+            $this->sendHeader('Last-Modified: ' . gmdate('D, d M Y H:i:s', $modified) . ' GMT');
         }
         if (!is_null($expired)) {
-            header('Expires: ' . gmdate('D, d M Y H:i:s', $expired) . ' GMT');
-            header('Cache-Control: post-check=1,pre-check=1');
+            $this->sendHeader('Expires: ' . gmdate('D, d M Y H:i:s', $expired) . ' GMT');
+            $this->sendHeader('Cache-Control: post-check=1,pre-check=1');
         }
         return $this;
     }
 
     public function sendFilename(string $fileName, bool $isInline = true): static
     {
-        header('Content-Disposition: ' . ($isInline ? 'inline' : 'attachment') . '; filename="' . ($fileName ? $fileName : 'no_name') . '"');
+        $this->sendHeader('Content-Disposition: ' . ($isInline ? 'inline' : 'attachment') . '; filename="' . ($fileName ? $fileName : 'no_name') . '"');
         return $this;
     }
 
@@ -240,12 +271,12 @@ class header extends \fan\core\base\service\single
         } else {
             // Disable cache
             $this->sendTime($time);
-            header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
+            $this->sendHeader('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
 
             if ($this->getProtocol() === 'HTTP/1.0') {
-                header('Pragma: no-cache');
+                $this->sendHeader('Pragma: no-cache');
             } else {
-                header('Cache-Control: no-cache, must-revalidate, post-check=0, pre-check=0'); //  max-age=0
+                $this->sendHeader('Cache-Control: no-cache, must-revalidate, post-check=0, pre-check=0'); //  max-age=0
             }
         }
         return $this;
@@ -256,7 +287,7 @@ class header extends \fan\core\base\service\single
      */
     public function sendLocation(string $url, bool $continueExec = false): static
     {
-        header('Location: ' . str_replace('&amp;', '&', $url));
+        $this->sendHeader('Location: ' . str_replace('&amp;', '&', $url));
         if (!$continueExec) {
             exit;
         }
@@ -268,7 +299,7 @@ class header extends \fan\core\base\service\single
      */
     public function sendLocation301(string $url, bool $continueExec = false): static
     {
-        header('Location: ' . str_replace('&amp;', '&', $url), true, 301);
+        $this->sendHeader('Location: ' . str_replace('&amp;', '&', $url), true, 301);
         if (!$continueExec) {
             exit;
         }
@@ -280,7 +311,7 @@ class header extends \fan\core\base\service\single
      */
     public function sendArbitrary(string $type, string $value, string $extraData = ''): static
     {
-        header($type . ': ' . $value . (empty($extraData) ? '' : '; ' . $extraData));
+        $this->sendHeader($type . ': ' . $value . (empty($extraData) ? '' : '; ' . $extraData));
         return $this;
     }
 
@@ -318,7 +349,7 @@ class header extends \fan\core\base\service\single
     {
         $parameters = $this->_getSendMethodMap();
         if (!isset($parameters[$param])) {
-            throw new fatalException($this, 'Incorrect header parameter "' . $param . '" for stack');
+            throw $this->createServiceFatalException('Incorrect header parameter "' . $param . '" for stack');
         }
         $this->headerData[$param] = $value;
         return $this;
@@ -366,13 +397,14 @@ class header extends \fan\core\base\service\single
         if (!isset($this->responseCodes[$code])) {
             if ($code >= 100 && $code <= 599) {
                 $class = $this->_getEngine('code', false);
-                $this->responseCodes = array_merge_recursive_alt(
+                $codesMethod = 'getCodes' . substr((string)$code, 0, 1);
+                $this->responseCodes = ($this->recursiveMerger())(
                         $this->responseCodes,
-                        call_user_func([$class, 'getCodes' . substr($code, 0, 1)])
+                        $class::$codesMethod()
                 );
             }
             if (!isset($this->responseCodes[$code])) {
-                throw new fatalException($this, 'Unknown response code "' . $code . '"');
+                throw $this->createServiceFatalException('Unknown response code "' . $code . '"');
             }
         }
         return $this;
@@ -385,6 +417,31 @@ class header extends \fan\core\base\service\single
             $this->sendResponseType($code, null);
         }
         return $this;
+    }
+
+    private function sendHeader(string $header, bool $replace = true, int $responseCode = 0): void
+    {
+        $this->headerWriter()->send($header, $replace, $responseCode);
+    }
+
+    private function headerWriter(): object
+    {
+        if ($this->headerWriter === null || !method_exists($this->headerWriter, 'send') || !method_exists($this->headerWriter, 'sent')) {
+            throw new \RuntimeException('Header writer is not configured for header service.');
+        }
+
+        return $this->headerWriter;
+    }
+
+    private function recursiveMerger(): callable
+    {
+        if (!isset($this->recursiveMerger)) {
+            $this->recursiveMerger = \Closure::fromCallable(static function (mixed ...$values): mixed {
+                throw new \RuntimeException('Recursive merger is not configured for header service.');
+            });
+        }
+
+        return $this->recursiveMerger;
     }
 
     // ======== The magic methods ======== \\

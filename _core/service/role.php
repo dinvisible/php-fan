@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace fan\core\service;
 use fan\core\base\expression_evaluator;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\base\service\single;
+use fan\core\service\user;
+
 /**
  * Description of Role
  *
@@ -20,7 +22,7 @@ use fan\project\exception\service\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-class role extends \fan\core\base\service\single
+class role extends single
 {
     /**
      * Key for mark common User space
@@ -81,24 +83,54 @@ class role extends \fan\core\base\service\single
     private array $allRoles = [];
 
     /**
+     * @var callable|null
+     */
+    private $roleCurrentUserFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $roleSessionFactory = null;
+
+    private ?object $roleErrorLogger = null;
+
+    /**
+     * @var callable|null
+     */
+    private $roleUserSpaceProvider = null;
+
+    /**
+     * @var callable|null
+     */
+    private $roleDateFactory = null;
+
+    /**
      * Current User Space
      * @var string
      */
     protected ?string $userSpace = null;
 
-    protected function __construct()
+    public function __construct(
+        ?callable $currentUserFactory = null,
+        ?callable $sessionFactory = null,
+        ?object $errorLogger = null,
+        ?callable $userSpaceProvider = null,
+        ?callable $dateFactory = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null
+    )
     {
-        parent::__construct();
+        parent::__construct(true, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
+        $this->setRoleDependencies($currentUserFactory, $sessionFactory, $errorLogger, $userSpaceProvider, $dateFactory);
 
         // Define Current User and his (static) roles
-        $this->currentUser = $this->config->get('CHECK_LOGOUT', true) ?
-                \fan\project\service\user::checkLogout() :
-                \fan\project\service\user::getCurrent();
+        $this->currentUser = $this->roleCurrentUser((bool)$this->config->get('CHECK_LOGOUT', true));
         $this->userSpace = $this->_getUserSpace();
         $this->_setStaticRoles();
 
         // Define Session roles
-        $ses = $this->containerService('session', 'role', 'system');
+        $ses = $this->roleSession();
         $this->sessionRoles =& $ses->getByLink('session',       []);
         $this->fixQttRoles  =& $ses->getByLink('fix_qtt_roles', []);
         $this->_removeSessionExpired();
@@ -128,6 +160,23 @@ class role extends \fan\core\base\service\single
     // ======== Static methods ======== \\
 
     // ======== Main Interface methods ======== \\
+
+    public function setRoleDependencies(
+        ?callable $currentUserFactory = null,
+        ?callable $sessionFactory = null,
+        ?object $errorLogger = null,
+        ?callable $userSpaceProvider = null,
+        ?callable $dateFactory = null
+    ): static
+    {
+        $this->roleCurrentUserFactory = $currentUserFactory;
+        $this->roleSessionFactory = $sessionFactory;
+        $this->roleErrorLogger = $errorLogger;
+        $this->roleUserSpaceProvider = $userSpaceProvider;
+        $this->roleDateFactory = $dateFactory;
+
+        return $this;
+    }
 
     public function getRoles(): array
     {
@@ -215,12 +264,12 @@ class role extends \fan\core\base\service\single
 
 
 
-    public function getCurrentUser(): ?\fan\core\service\user
+    public function getCurrentUser(): ?user
     {
         return $this->currentUser;
     }
 
-    public function setStaticRoles(mixed $newRoles, int|float|null $expiredTime = null): ?\fan\core\service\user
+    public function setStaticRoles(mixed $newRoles, int|float|null $expiredTime = null): ?user
     {
         $user = $this->getCurrentUser();
         if (!empty($user) && !empty($newRoles)) {
@@ -245,14 +294,14 @@ class role extends \fan\core\base\service\single
             return true;
         }
         if (!is_string($rolesRule)) {
-            $this->containerService('error')->logErrorMessage(var_export($rolesRule, false), 'Role is not string');
+            $this->roleErrorLogger()->logErrorMessage(var_export($rolesRule, false), 'Role is not string');
             return false;
         }
 
         try {
             return (bool)expression_evaluator::evaluate($rolesRule, fn($role) => $this->isRole($role));
         } catch (\InvalidArgumentException $e) {
-            $this->containerService('error')->logErrorMessage($rolesRule, 'Incorrect role set');
+            $this->roleErrorLogger()->logErrorMessage($rolesRule, 'Incorrect role set');
             return false;
         }
     }
@@ -262,7 +311,7 @@ class role extends \fan\core\base\service\single
         return in_array($role, $this->allRoles);
     }
 
-    public function onCurrentUserSet(\fan\core\service\user $user): void
+    public function onCurrentUserSet(user $user): void
     {
         if ($this->getCurrentUser() !== $user) {
             $this->currentUser = $user;
@@ -271,7 +320,7 @@ class role extends \fan\core\base\service\single
         }
     }
 
-    public function onUserRolesChange(\fan\core\service\user $user): void
+    public function onUserRolesChange(user $user): void
     {
         if ($this->getCurrentUser() === $user) {
             $this->_setStaticRoles();
@@ -294,7 +343,7 @@ class role extends \fan\core\base\service\single
     // ======== Private/Protected methods ======== \\
 
     /**
-     * @throws fatalException
+     * @throws \Throwable
      */
     protected function _convValToArray(mixed $val, ?string $exceptionMessage = null): array
     {
@@ -316,7 +365,7 @@ class role extends \fan\core\base\service\single
             }
         }
         if (!empty($exceptionMessage)) {
-            throw new fatalException($this, $exceptionMessage);
+            throw $this->createServiceFatalException($exceptionMessage);
         }
         return [];
     }
@@ -403,7 +452,11 @@ class role extends \fan\core\base\service\single
 
     protected function _getUserSpace(): string
     {
-        return \fan\project\service\user::getCurrentSpace();
+        if (!is_callable($this->roleUserSpaceProvider)) {
+            throw new \RuntimeException('User space provider is not configured for role service.');
+        }
+
+        return (string)($this->roleUserSpaceProvider)();
     }
 
     protected function _defineExpiredDate(int|float|string|null $expiredTime): ?string
@@ -412,9 +465,45 @@ class role extends \fan\core\base\service\single
             return null;
         }
         if (is_numeric($expiredTime)) {
-            return \fan\project\service\date::instance(date('Y-m-d H:i:s'), 'mysql')->shiftDate($expiredTime);
+            return $this->roleDate(date('Y-m-d H:i:s'), 'mysql')->shiftDate($expiredTime);
         }
-        return \fan\project\service\date::instance(date($expiredTime))->get('mysql');
+        return $this->roleDate(date($expiredTime))->get('mysql');
+    }
+
+    private function roleCurrentUser(bool $checkLogout): mixed
+    {
+        if (!is_callable($this->roleCurrentUserFactory)) {
+            throw new \RuntimeException('Current user factory is not configured for role service.');
+        }
+
+        return ($this->roleCurrentUserFactory)($checkLogout);
+    }
+
+    private function roleSession(): object
+    {
+        if (!is_callable($this->roleSessionFactory)) {
+            throw new \RuntimeException('Session service factory is not configured for role service.');
+        }
+
+        return ($this->roleSessionFactory)('role', 'system');
+    }
+
+    private function roleErrorLogger(): object
+    {
+        if ($this->roleErrorLogger === null) {
+            throw new \RuntimeException('Error logger is not configured for role service.');
+        }
+
+        return $this->roleErrorLogger;
+    }
+
+    private function roleDate(string $date, mixed $format = null): object
+    {
+        if (!is_callable($this->roleDateFactory)) {
+            throw new \RuntimeException('Date service factory is not configured for role service.');
+        }
+
+        return ($this->roleDateFactory)($date, $format);
     }
 
     // ======== The magic methods ======== \\

@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS `file_data` (
   `src_name` varchar(128) COLLATE utf8_unicode_ci NOT NULL,
   `mime_type` varchar(64) COLLATE utf8_unicode_ci NOT NULL,
   `description` text COLLATE utf8_unicode_ci NOT NULL,
-  `file_type` enum('image','flash','video','other') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'other',
+  `file_type` enum('image','other') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'other',
   `is_accessible` tinyint(1) NOT NULL DEFAULT '1',
   `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
   `create_date` datetime DEFAULT NULL,
@@ -137,21 +137,6 @@ CREATE TABLE IF NOT EXISTS `file_personal_access` (
   KEY `file_personal_access_FKIndex1` (`id_file_data`),
   KEY `file_personal_access_FKIndex2` (`id_member`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci PACK_KEYS=0 AUTO_INCREMENT=1 ;
-
--- --------------------------------------------------------
-
---
--- Структура таблицы `flash`
---
-
-CREATE TABLE IF NOT EXISTS `flash` (
-  `id_file_data` bigint(20) unsigned NOT NULL,
-  `width` smallint(5) unsigned DEFAULT NULL,
-  `height` smallint(5) unsigned DEFAULT NULL,
-  `bgcolor` varchar(6) COLLATE utf8_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id_file_data`),
-  KEY `flash_FKIndex1` (`id_file_data`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci PACK_KEYS=0;
 
 -- --------------------------------------------------------
 
@@ -315,20 +300,6 @@ CREATE TABLE IF NOT EXISTS `timer_program` (
 -- --------------------------------------------------------
 
 --
--- Структура таблицы `video`
---
-
-CREATE TABLE IF NOT EXISTS `video` (
-  `id_file_data` bigint(20) unsigned NOT NULL,
-  `width` smallint(5) unsigned DEFAULT NULL,
-  `height` smallint(5) unsigned DEFAULT NULL,
-  `duration` mediumint(8) unsigned DEFAULT NULL,
-  `sound` enum('none','mono','stereo') COLLATE utf8_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id_file_data`),
-  KEY `video_FKIndex1` (`id_file_data`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci PACK_KEYS=0;
-
---
 -- Ограничения внешнего ключа сохраненных таблиц
 --
 
@@ -364,12 +335,6 @@ ALTER TABLE `file_data`
 ALTER TABLE `file_personal_access`
   ADD CONSTRAINT `fk_file_personal_access_n1` FOREIGN KEY (`id_file_data`) REFERENCES `file_data` (`id_file_data`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_file_personal_access_n2` FOREIGN KEY (`id_member`) REFERENCES `member` (`id_member`) ON DELETE CASCADE ON UPDATE CASCADE;
-
---
--- Ограничения внешнего ключа таблицы `flash`
---
-ALTER TABLE `flash`
-  ADD CONSTRAINT `fk_flash_n1` FOREIGN KEY (`id_file_data`) REFERENCES `file_data` (`id_file_data`) ON UPDATE CASCADE;
 
 --
 -- Ограничения внешнего ключа таблицы `image`
@@ -408,12 +373,6 @@ ALTER TABLE `role_embed_role`
 --
 ALTER TABLE `test_subtable`
   ADD CONSTRAINT `fk_test_subtable_n1` FOREIGN KEY (`id_test_primary`) REFERENCES `test_primary` (`id_test_primary`) ON UPDATE CASCADE;
-
---
--- Ограничения внешнего ключа таблицы `video`
---
-ALTER TABLE `video`
-  ADD CONSTRAINT `fk_video_n1` FOREIGN KEY (`id_file_data`) REFERENCES `file_data` (`id_file_data`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;

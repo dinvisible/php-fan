@@ -22,5 +22,5 @@ return [
   'MENU_ABOUT' => 'Про нас',
   'MENU_NEWS' => 'Новини',
   'NOTE_FIELDS_MARKED_AS_REQUIRED_FOR_FILL' => 'Поля, позначені як "{b} * {/ b}", обов\'язкові для заповнення.',
-  'NOTE_UPLOAD_FILE_LIMIT' => 'Розмір файлів, що не повинен перевищувати {video-size} Kb.',
+  'NOTE_UPLOAD_FILE_LIMIT' => 'Розмір файлів, що не повинен перевищувати {file-size} Kb.',
 ];

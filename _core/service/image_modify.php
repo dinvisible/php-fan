@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\base\service\multi;
+
+
 /**
  * Service Image Processor
  *
@@ -19,13 +21,8 @@ use fan\project\exception\service\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-class image_modify extends \fan\core\base\service\multi
+class image_modify extends multi
 {
-    /**
-     * @var \fan\core\service\image_modify[] Service's Instances
-     */
-    private static ?array $instances = null;
-
     protected ?string $sourcePath = null;
     /**
      * @var numeric width of Source Image
@@ -61,28 +58,44 @@ class image_modify extends \fan\core\base\service\multi
         16 => 'xbm',
     ];
 
-    protected function __construct(?string $sourcePath, array $createParam)
+    protected ?object $runtime = null;
+    protected ?object $state = null;
+    protected ?object $imageMetadataReader = null;
+    protected ?object $imageResourceFactory = null;
+    protected ?object $imageCanvasOperations = null;
+    protected ?object $imageOutputWriter = null;
+    protected ?object $imageSourceFileStorage = null;
+    protected mixed $arrayValueReader = null;
+
+    public function __construct(
+        ?string $sourcePath,
+        array $createParam,
+        ?object $state = null,
+        ?object $runtime = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?object $imageMetadataReader = null,
+        ?object $imageResourceFactory = null,
+        ?object $imageCanvasOperations = null,
+        ?object $imageOutputWriter = null,
+        ?object $imageSourceFileStorage = null,
+        ?callable $arrayValueReader = null
+        )
     {
-        parent::__construct(empty(self::$instances));
+        $this->state = $state ?? throw new \RuntimeException('Image modify state is not configured for image modify service.');
+        $this->runtime = $runtime;
+        $this->imageMetadataReader = $imageMetadataReader ?? throw new \RuntimeException('Image metadata reader is not configured for image modify service.');
+        $this->imageResourceFactory = $imageResourceFactory ?? throw new \RuntimeException('Image resource factory is not configured for image modify service.');
+        $this->imageCanvasOperations = $imageCanvasOperations ?? throw new \RuntimeException('Image canvas operations are not configured for image modify service.');
+        $this->imageOutputWriter = $imageOutputWriter ?? throw new \RuntimeException('Image output writer is not configured for image modify service.');
+        $this->imageSourceFileStorage = $imageSourceFileStorage ?? throw new \RuntimeException('Image source file storage is not configured for image modify service.');
+        $this->arrayValueReader = $arrayValueReader ?? throw new \RuntimeException('Array value reader is not configured for image modify service.');
+        parent::__construct(!$this->state->hasInstances(), $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
 
         if (!empty($sourcePath) || !empty($createParam)) {
             $this->setSource($sourcePath, $createParam);
         }
-    }
-
-    // ======== Static methods ======== \\
-
-    public static function instance(?string $sourcePath = null, array $createParam = [], bool $saveInstance = true): static
-    {
-        $name = self::checkName(get_called_class());
-        if (!$saveInstance || !isset(self::$instances[$name])) {
-            $instance = new $name($sourcePath, $createParam);
-            if (!$saveInstance) {
-                return $instance;
-            }
-            self::$instances[$name] = $instance;
-        }
-        return self::$instances[$name];
     }
 
     // ======== Main Interface methods ======== \\
@@ -102,20 +115,20 @@ class image_modify extends \fan\core\base\service\multi
             }
             // If $sourcePath is not empty set basic image by source
             if (!empty($sourcePath)) {
-                $sourcePath = (string)\bootstrap::parsePath((string)$sourcePath);
-                if (!file_exists($sourcePath)) {
-                    $sourcePath = (string)\bootstrap::parsePath((string)$this->getConfig('BASIC_PATH')) . $sourcePath;
+                $sourcePath = (string)$this->runtime()->parsePath((string)$sourcePath);
+                if (!$this->imageSourceFileStorage()->exists($sourcePath)) {
+                    $sourcePath = (string)$this->runtime()->parsePath((string)$this->getConfig('BASIC_PATH')) . $sourcePath;
                 }
                 $this->sourcePath = $sourcePath;
 
                 // Check - file exists and readable
-                if (is_readable($sourcePath)) {
-                    if (!exif_imagetype($sourcePath)) {
-                        throw new fatalException($this, 'Incorrect image file format "' . $sourcePath . '".');
+                if ($this->imageSourceFileStorage()->isReadable($sourcePath)) {
+                    if (!$this->imageResourceFactory()->type($sourcePath)) {
+                        throw $this->createServiceFatalException('Incorrect image file format "' . $sourcePath . '".');
                     }
-                    $this->sourceParam = getimagesize($sourcePath);
+                    $this->sourceParam = $this->imageMetadataReader()->size($sourcePath);
                 } else {
-                    throw new fatalException($this, 'Image-file "' . $this->sourcePath . '" isn\'t ' . (file_exists($sourcePath) ? 'readable.' : 'exist.'));
+                    throw $this->createServiceFatalException('Image-file "' . $this->sourcePath . '" isn\'t ' . ($this->imageSourceFileStorage()->exists($sourcePath) ? 'readable.' : 'exist.'));
                 }
 
                 // Set parameters by source
@@ -124,8 +137,7 @@ class image_modify extends \fan\core\base\service\multi
                     $this->type = $type;
                 }
 
-                $func = 'imagecreatefrom' . $type;
-                $this->image = $func($sourcePath);
+                $this->image = $this->imageResourceFactory()->createFromType($sourcePath, $type);
 
                 $this->sourceWidth = (int)$this->sourceParam[0];
                 if (empty($this->width)) {
@@ -140,9 +152,9 @@ class image_modify extends \fan\core\base\service\multi
         // If $sourcePath is not set - create blank image
         if (empty($sourcePath)) {
             if ($this->sourceWidth < 1 || $this->sourceHeight < 1) {
-                throw new fatalException($this, 'Image size doesn\'t set (' . $this->sourceWidth . 'x' . $this->sourceHeight . ').');
+                throw $this->createServiceFatalException('Image size doesn\'t set (' . $this->sourceWidth . 'x' . $this->sourceHeight . ').');
             }
-            $this->image = imagecreatetruecolor((int)$this->sourceWidth, (int)$this->sourceHeight);
+            $this->image = $this->imageCanvasOperations()->createTrueColor((int)$this->sourceWidth, (int)$this->sourceHeight);
         }
 
         return $this;
@@ -174,7 +186,7 @@ class image_modify extends \fan\core\base\service\multi
 
     public function setTransparent(int|string|array $color): static
     {
-        imagecolortransparent($this->image, $this->adaptColor($color));
+        $this->imageCanvasOperations()->colorTransparent($this->image, $this->adaptColor($color));
         return $this;
     }
 
@@ -211,7 +223,7 @@ class image_modify extends \fan\core\base\service\multi
             $height = $this->height;
         }
         if ($width < 1 || $height < 1) {
-            throw new fatalException($this, 'Image size doesn\'t set (' . $width . 'x' . $height . ').');
+            throw $this->createServiceFatalException('Image size doesn\'t set (' . $width . 'x' . $height . ').');
         }
 
         $left = round(($width - $this->width) / 2);
@@ -316,13 +328,13 @@ class image_modify extends \fan\core\base\service\multi
             $angle = $angle > 0 ? $angle - 360 : $angle + 360;
         } // while $angle > 360
         if ((float)$angle !== 0.0) {
-            $imgTmp = imagerotate($this->image, (float)$angle, $this->adaptColor($bgrColor));
+            $imgTmp = $this->imageCanvasOperations()->rotate($this->image, (float)$angle, $this->adaptColor($bgrColor));
             if ($fix) {
                 $fix = (int)$fix;
                 $width  = ($fix === 1 || $fix === 3) ? $this->width  : 0;
                 $height = ($fix === 2 || $fix === 3) ? $this->height : 0;
-                $tempWidth  = imagesx($imgTmp);
-                $tempHeight = imagesy($imgTmp);
+                $tempWidth  = $this->imageCanvasOperations()->width($imgTmp);
+                $tempHeight = $this->imageCanvasOperations()->height($imgTmp);
                 $this->correctSize($width, $height, $tempWidth, $tempHeight);
                 $position = [
                     'dstX' => 0,
@@ -351,14 +363,14 @@ class image_modify extends \fan\core\base\service\multi
                 $height = $this->height;
                 $this->width  += $depth * 2;
                 $this->height += $depth * 2;
-                $this->image = imagecreatetruecolor((int)$this->width, (int)$this->height);
-                imagecopyresampled($this->image, $srcImg, (int)$depth, (int)$depth, 0, 0, (int)$width, (int)$height, (int)$width, (int)$height);
+                $this->image = $this->imageCanvasOperations()->createTrueColor((int)$this->width, (int)$this->height);
+                $this->imageCanvasOperations()->copyResampled($this->image, $srcImg, (int)$depth, (int)$depth, 0, 0, (int)$width, (int)$height, (int)$width, (int)$height);
             }
             $color = $this->adaptColor($brdColor);
-            imagefilledrectangle($this->image, 0, 0, (int)$this->width, (int)($depth - 1), $color);
-            imagefilledrectangle($this->image, 0, 0, (int)($depth - 1), (int)$this->height, $color);
-            imagefilledrectangle($this->image, 0, (int)($this->height - $depth), (int)$this->width, (int)$this->height, $color);
-            imagefilledrectangle($this->image, (int)($this->width - $depth), 0, (int)$this->width, (int)$this->height, $color);
+            $this->imageCanvasOperations()->fillRectangle($this->image, 0, 0, (int)$this->width, (int)($depth - 1), $color);
+            $this->imageCanvasOperations()->fillRectangle($this->image, 0, 0, (int)($depth - 1), (int)$this->height, $color);
+            $this->imageCanvasOperations()->fillRectangle($this->image, 0, (int)($this->height - $depth), (int)$this->width, (int)$this->height, $color);
+            $this->imageCanvasOperations()->fillRectangle($this->image, (int)($this->width - $depth), 0, (int)$this->width, (int)$this->height, $color);
         }
         return $this;
     }
@@ -366,34 +378,34 @@ class image_modify extends \fan\core\base\service\multi
     public function colorize(int|string|array $color): static
     {
         $color = $this->adaptColor($color);
-        imagefilter($this->image, IMG_FILTER_COLORIZE, $color >> 16, ($color >> 8) & 0xFF, $color & 0xFF);
+        $this->imageCanvasOperations()->filter($this->image, IMG_FILTER_COLORIZE, $color >> 16, ($color >> 8) & 0xFF, $color & 0xFF);
         return $this;
     }
 
     public function blur(): static
     {
-        imagefilter($this->image, IMG_FILTER_GAUSSIAN_BLUR);
+        $this->imageCanvasOperations()->filter($this->image, IMG_FILTER_GAUSSIAN_BLUR);
         return $this;
     }
 
     public function grayscale(): static
     {
-        imagefilter($this->image, IMG_FILTER_GRAYSCALE);
+        $this->imageCanvasOperations()->filter($this->image, IMG_FILTER_GRAYSCALE);
         return $this;
     }
 
     public function sepia(): static
     {
-        imagefilter($this->image, IMG_FILTER_GRAYSCALE);
-        imagefilter($this->image, IMG_FILTER_COLORIZE, 50, 25, 5);
+        $this->imageCanvasOperations()->filter($this->image, IMG_FILTER_GRAYSCALE);
+        $this->imageCanvasOperations()->filter($this->image, IMG_FILTER_COLORIZE, 50, 25, 5);
         return $this;
     }
 
     public function markering(string $markerMode = 'left_bottom', int|float $opacity = 10): static
     {
-        $pathToPic = (string)\bootstrap::parsePath((string)$this->config['WATERMARK_PATH']);
+        $pathToPic = (string)$this->runtime()->parsePath((string)$this->config['WATERMARK_PATH']);
 
-        $param = getimagesize($pathToPic);
+        $param = $this->imageMetadataReader()->size($pathToPic);
         if ($param) {
             $widthMark  = $param[0];
             $heightMark = $param[1];
@@ -446,12 +458,38 @@ class image_modify extends \fan\core\base\service\multi
                     break;
                 }
             }
-            $func      = 'imagecreatefrom' . $type;
-            $imgMarker = $func($pathToPic);
-            imagecopymerge($this->image, $imgMarker, (int)$posX, (int)$posY, 0, 0, (int)$widthMark, (int)$heightMark, (int)$opacity);
-            imagedestroy($imgMarker);
+            $imgMarker = $this->imageResourceFactory()->createFromType($pathToPic, (string)$type);
+            $this->imageCanvasOperations()->copyMerge($this->image, $imgMarker, (int)$posX, (int)$posY, 0, 0, (int)$widthMark, (int)$heightMark, (int)$opacity);
+            if (PHP_VERSION_ID < 80000) {
+                imagedestroy($imgMarker);
+            }
         }
         return $this;
+    }
+
+    private function imageMetadataReader(): object
+    {
+        return $this->imageMetadataReader ?? throw new \RuntimeException('Image metadata reader is not configured for image modify service.');
+    }
+
+    private function imageResourceFactory(): object
+    {
+        return $this->imageResourceFactory ?? throw new \RuntimeException('Image resource factory is not configured for image modify service.');
+    }
+
+    protected function imageCanvasOperations(): object
+    {
+        return $this->imageCanvasOperations ?? throw new \RuntimeException('Image canvas operations are not configured for image modify service.');
+    }
+
+    protected function imageOutputWriter(): object
+    {
+        return $this->imageOutputWriter ?? throw new \RuntimeException('Image output writer is not configured for image modify service.');
+    }
+
+    protected function imageSourceFileStorage(): object
+    {
+        return $this->imageSourceFileStorage ?? throw new \RuntimeException('Image source file storage is not configured for image modify service.');
     }
 
     public function adaptColor(int|string|array $color): int
@@ -484,7 +522,7 @@ class image_modify extends \fan\core\base\service\multi
                 'b' => $color & 0xFF
             ];
         }
-        $result = imagecolorallocate($this->image, (int)$color['r'], (int)$color['g'], (int)$color['b']);
+        $result = $this->imageCanvasOperations()->colorAllocate($this->image, (int)$color['r'], (int)$color['g'], (int)$color['b']);
         if ($result === false) {
             throw new \UnexpectedValueException('Incorrect value of color ' . var_export($color, true));
         }
@@ -530,16 +568,8 @@ class image_modify extends \fan\core\base\service\multi
 
     public function saveAsNew(?string $newFile = null): static
     {
-        $func = 'image' . $this->type;
-        if (in_array($func, ['imagejpeg', 'imagepng'])) {
-            if ($func === 'imagepng' && $this->quality > 10) {
-                $this->quality = round($this->quality/10);
-            }
-            $func($this->image, $newFile, (int)$this->quality);
-        } elseif ($this->type && function_exists($func)) {
-            $func($this->image, $newFile);
-        } else {
-            throw new fatalException($this, 'Incorrect image type (' . $this->type . ').');
+        if (!$this->imageOutputWriter()->write($this->image, $this->type, $newFile, $this->quality)) {
+            throw $this->createServiceFatalException('Incorrect image type (' . $this->type . ').');
         }
         return $this;
     }
@@ -548,7 +578,10 @@ class image_modify extends \fan\core\base\service\multi
     {
         if (!is_null($ext)) {
             $imgPath = pathinfo((string)$this->sourcePath);
-            rename((string)$this->sourcePath, $imgPath['dirname'] . '/' . $imgPath['filename'] . '.' . (string)$ext . '.' . $imgPath['extension']);
+            $this->imageSourceFileStorage()->rename(
+                (string)$this->sourcePath,
+                $imgPath['dirname'] . '/' . $imgPath['filename'] . '.' . (string)$ext . '.' . $imgPath['extension']
+            );
         }
         $this->saveAsNew($this->sourcePath);
         return $this;
@@ -569,7 +602,7 @@ class image_modify extends \fan\core\base\service\multi
                     (isset($trace[1]['line']) ? 'line <b>'         . $trace[1]['line'] . '</b>.' : '')
             );
         }
-        return array_val($coord, $key, $default);
+        return $this->arrayValueReader()($coord, $key, $default);
     }
 
     protected function _getCoordDiff(array $coord, string $key1, string $key2): int|float
@@ -582,14 +615,32 @@ class image_modify extends \fan\core\base\service\multi
         if (is_null($srcImg)) {
             $srcImg = $this->image;
         }
-        $this->image = imagecreatetruecolor((int)$width, (int)$height);
+        $this->image = $this->imageCanvasOperations()->createTrueColor((int)$width, (int)$height);
         if (!is_null($bgrColor)) {
-            imagefilledrectangle($this->image, 0, 0, (int)$width, (int)$height, $this->adaptColor($bgrColor));
+            $this->imageCanvasOperations()->fillRectangle($this->image, 0, 0, (int)$width, (int)$height, $this->adaptColor($bgrColor));
         }
-        imagecopyresampled($this->image, $srcImg, (int)$position['dstX'], (int)$position['dstY'], (int)$position['srcX'], (int)$position['srcY'], (int)$position['dstW'], (int)$position['dstH'], (int)$position['srcW'], (int)$position['srcH']);
+        $this->imageCanvasOperations()->copyResampled($this->image, $srcImg, (int)$position['dstX'], (int)$position['dstY'], (int)$position['srcX'], (int)$position['srcY'], (int)$position['dstW'], (int)$position['dstH'], (int)$position['srcW'], (int)$position['srcH']);
         $this->width  = $width;
         $this->height = $height;
         return $this;
+    }
+
+    protected function runtime(): object
+    {
+        if ($this->runtime !== null) {
+            return $this->runtime;
+        }
+
+        throw new \RuntimeException('Bootstrap runtime service is not configured for image service.');
+    }
+
+    protected function arrayValueReader(): callable
+    {
+        if (!is_callable($this->arrayValueReader)) {
+            throw new \RuntimeException('Array value reader is not configured for image modify service.');
+        }
+
+        return $this->arrayValueReader;
     }
 
     private function correctSize(&$width, &$height, $oldWidth, $oldHeight): static

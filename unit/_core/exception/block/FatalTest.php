@@ -7,6 +7,9 @@ use FanTest\_core\block\FakeTab;
 use FanTest\_core\block\TestableBaseBlock;
 use FanTest\_core\exception\FakeErrorService;
 use FanTest\_core\exception\FakeRequestService;
+use fan\core\exception\block\fatal;
+use PHPUnit\Framework\TestCase;
+
 
 require_once __DIR__ . '/../../../mock/_core/exception/ExceptionDoubles.php';
 require_once __DIR__ . '/../../../mock/_core/block/FrameworkStubs.php';
@@ -16,7 +19,7 @@ require_once __DIR__ . '/../../../../_core/exception/base.php';
 require_once __DIR__ . '/../../../../_core/exception/block/local.php';
 require_once __DIR__ . '/../../../../_core/exception/block/fatal.php';
 
-class ExceptionBlockFatalTest extends \PHPUnit\Framework\TestCase
+class ExceptionBlockFatalTest extends TestCase
 {
     private FakeErrorService $errorService;
 
@@ -24,7 +27,6 @@ class ExceptionBlockFatalTest extends \PHPUnit\Framework\TestCase
     {
         FakeServiceRegistry::reset();
         TestableBaseBlock::useMeta([]);
-        \fan\project\service\database::reset();
 
         $this->errorService = new FakeErrorService();
         FakeServiceRegistry::set('request', new FakeRequestService());
@@ -34,16 +36,51 @@ class ExceptionBlockFatalTest extends \PHPUnit\Framework\TestCase
     public function testBlockFatalKeepsBlockRollsBackAndLogsBlockClass(): void
     {
         $block = new TestableBaseBlock('content', new FakeTab(), null, [], false);
+        $headerWriter = new BlockFatalHeaderWriterDouble();
 
-        $exception = new \fan\core\exception\block\fatal($block, 'Block render failed', E_USER_ERROR);
+        $exception = new fatal(
+            $block,
+            'Block render failed',
+            E_USER_ERROR,
+            exceptionDatabaseConnections: FakeServiceRegistry::get('database_connections'),
+            exceptionRequestService: FakeServiceRegistry::get('request'),
+            exceptionErrorService: $this->errorService,
+            exceptionHeaderWriter: $headerWriter
+        );
 
+        $this->assertSame(['HTTP/1.1 500 Internal Server Error'], $headerWriter->headers);
         $this->assertSame($block, $exception->getBlock());
         $this->assertSame('Block render failed', $exception->getMessage());
         $this->assertSame('rollback', $exception->getDbOper());
-        $this->assertSame([['rollback', true]], \fan\project\service\database::$calls);
+        $this->assertSame([['rollback', true]], FakeServiceRegistry::get('database_connections')->calls);
         $this->assertSame(
             [['Block render failed', 'Block\'s exception (CLASS: ' . get_class($block) . ').', 'GET /unit-test']],
             $this->errorService->exceptionMessages
         );
+    }
+
+    public function testBlockFatalSourceDoesNotCallNativeHeaderDirectly(): void
+    {
+        $source = file_get_contents(__DIR__ . '/../../../../_core/exception/block/fatal.php');
+
+        $this->assertIsString($source);
+        $this->assertStringNotContainsString('headers_sent(', $source);
+        $this->assertStringNotContainsString('header(', $source);
+        $this->assertStringContainsString('sendInternalServerErrorHeader()', $source);
+    }
+}
+
+final class BlockFatalHeaderWriterDouble
+{
+    public array $headers = [];
+
+    public function sent(?string &$file = null, ?int &$line = null): bool
+    {
+        return false;
+    }
+
+    public function send(string $header, bool $replace = true, int $responseCode = 0): void
+    {
+        $this->headers[] = $header;
     }
 }

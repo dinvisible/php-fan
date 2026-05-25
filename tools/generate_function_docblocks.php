@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 $root = dirname(__DIR__);
-$sourceRoots = ['_core', '_project', 'htdocs', 'cli', 'tools', 'unit'];
+$sourceRoots = ['_core', '_project', 'htdocs', 'tools', 'unit'];
 $excludedPrefixes = [
     $root . '/libraries/',
     $root . '/vendor/',

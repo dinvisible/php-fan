@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 namespace fan\core\plain;
+use fan\core\base\model\file_data\row as file_data_row;
+use fan\core\service\config\row;
+use fan\core\service\plain;
+
 //use fan\project\exception\plain\fatal as fatalException;
 /**
  * Base access for plain files (uploaded to the server) class
@@ -22,8 +26,6 @@ namespace fan\core\plain;
 
 class db_file
 {
-    use \fan\core\di\container_aware_trait;
-
     /**
      * Handler object
      * @var \fan\core\service\plain
@@ -74,10 +76,13 @@ class db_file
      */
     protected ?object $row = null;
 
-    public function __construct(\fan\core\service\plain $handler, $key)
+    protected ?object $context = null;
+
+    public function __construct(plain $handler, $key, ?object $context = null)
     {
         $this->handler = $handler;
         $this->key     = (string)$key;
+        $this->context = $context;
     }
 
     // ======== Static methods ======== \\
@@ -86,13 +91,13 @@ class db_file
     public function outputContent(): void
     {
         if (!empty($this->streamId)) {
-            if (rewind($this->streamId) === false) {
+            if ($this->context()->fileStorage()->rewindStream($this->streamId) === false) {
                 //ToDo: Save Error Message there
-            } elseif (fpassthru($this->streamId) === false) {
+            } elseif ($this->context()->fileStorage()->passThroughStream($this->streamId) === false) {
                 //ToDo: Save Error Message there
             }
         } elseif (!empty($this->filePath)) {
-            readfile($this->filePath);
+            $this->context()->fileStorage()->outputFile($this->filePath);
         } else {
             //ToDo: Save Error Message there
             echo 'Error file source';
@@ -104,7 +109,7 @@ class db_file
         return $this->_prepare()->_init()->_getContent();
     } // getFile
 
-    public function setConfig(\fan\core\service\config\row $config): static
+    public function setConfig(row $config): static
     {
         if (empty($this->config)) {
             $this->config = $config;
@@ -126,7 +131,7 @@ class db_file
 
     protected function _prepare(): static
     {
-        $sr  = $this->containerService('request');
+        $sr  = $this->context()->request();
         $this->id = $sr->get('id', 'AGP');
         if (empty($this->id)) {
             $this->id = $sr->get(0, 'A');
@@ -144,7 +149,7 @@ class db_file
     protected function _init(): static
     {
         if (!empty($this->app)) {
-            $this->containerService('application')->setAppName($this->app);
+            $this->context()->setApplicationName($this->app);
         }
 
         $data = $this->_getFileData();
@@ -157,15 +162,13 @@ class db_file
             }
         }
 
-        if (class_exists('\fan\core\service\database', false)) {
-            \fan\project\service\database::close();
-        }
+        $this->context()->closeDatabaseConnections();
         if (!empty($this->filePath) || !empty($this->plainContent)) {
             return $this;
         }
 
         if (!$this->handler->isError()) {
-            $this->handler->setErrorMessage(msg('ERROR_REQUESTED_FILE_IS_NOT_FOUND'));
+            $this->handler->setErrorMessage($this->context()->message('ERROR_REQUESTED_FILE_IS_NOT_FOUND'));
         }
         return $this;
     }
@@ -175,13 +178,13 @@ class db_file
         if (empty($this->id)) {
             return null;
         }
-        $cache = $this->containerService('cache', 'file_store');
+        $cache = $this->context()->cache('file_store');
         $cacheKey = (string)$this->id;
         $data  = $cache->get($cacheKey);
         if (!empty($data)) {
-            if (!is_readable($data['filePath'])) {
+            if (!$this->context()->fileStorage()->isReadable($data['filePath'])) {
                 $cache->delete($cacheKey);
-            } elseif (!empty($data) && (int)$data['fileDate'] === (int)filemtime($data['filePath']) && (int)$data['headers']['length'] === (int)filesize($data['filePath'])) {
+            } elseif (!empty($data) && (int)$data['fileDate'] === (int)$this->context()->fileStorage()->modifiedTime($data['filePath']) && (int)$data['headers']['length'] === (int)$this->context()->fileStorage()->size($data['filePath'])) {
                 return $data;
             }
         }
@@ -191,20 +194,20 @@ class db_file
 
         if ($row) {
             if (!$row->checkAccess()) {
-                $this->handler->setErrorMessage(msg('ERROR_YOU_DO_NOT_HAVE_PERMISSION'), 403);
+                $this->handler->setErrorMessage($this->context()->message('ERROR_YOU_DO_NOT_HAVE_PERMISSION'), 403);
                 return null;
             } else {
-                $filePath = \bootstrap::parsePath((string)$row->getFilePath());
-                if (!is_readable($filePath)) {
+                $filePath = $this->context()->parsePath((string)$row->getFilePath());
+                if (!$this->context()->fileStorage()->isReadable($filePath)) {
                     return null;
                 }
                 $data = [
                     'filePath' => $filePath,
-                    'fileDate' => filemtime($filePath),
+                    'fileDate' => $this->context()->fileStorage()->modifiedTime($filePath),
                     'headers' => [
                         'contentType' => $row->get_mime_type(),
                         'filename'    => $row->get_src_name(),
-                        'length'      => filesize($filePath),
+                        'length'      => $this->context()->fileStorage()->size($filePath),
                         'legthRange'  => 'bytes',
                         'modified'    => strtotime($row->get_update_date()),
                     ],
@@ -217,10 +220,10 @@ class db_file
         return null;
     }
 
-    protected function _getRow($idIsEncrypt = null): ?\fan\core\base\model\file_data\row
+    protected function _getRow($idIsEncrypt = null): ?file_data_row
     {
         if (is_null($this->row)) {
-            $this->row = gr($this->containerService('entity')->getFileNsSuffix() . 'file_data');
+            $this->row = $this->context()->fileDataRow();
             if (is_null($idIsEncrypt)) {
                 $this->row->loadById($this->id, false); // !is_numeric($this->id)
                 if (!$this->row->checkIsLoad()) {
@@ -231,6 +234,29 @@ class db_file
             }
         }
         return $this->row->checkIsLoad() && (is_null($this->fileType) || (string)$this->row->get_file_type() === (string)$this->fileType) ? $this->row : null;
+    }
+
+    protected function context(): object
+    {
+        if ($this->context !== null) {
+            return $this->context;
+        }
+
+        throw new \RuntimeException('Plain file context is not configured for db_file controller.');
+    }
+
+    protected function createPlainFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        if (!method_exists($this->context(), 'createPlainFatalException')) {
+            throw new \RuntimeException('Plain fatal exception factory is not configured for db_file controller.');
+        }
+
+        $exception = $this->context()->createPlainFatalException($this, $message, $code, $previous);
+        if (!$exception instanceof \Throwable) {
+            throw new \UnexpectedValueException('Plain fatal exception factory must return a throwable object.');
+        }
+
+        return $exception;
     }
 
     // ======== The magic methods ======== \\

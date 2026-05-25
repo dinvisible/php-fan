@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 namespace fan\core\block\admin;
+use fan\core\base\model\entity;
+use fan\core\base\model\row;
+
 /**
  * Admin table data class for loader block
  *
@@ -60,10 +63,12 @@ class data_table extends data
     /**
      * Transforms data between supported representations.
      */
-    public function parseData(array $edit, array $insert): ?static
+    public function parseData(mixed $edit, mixed $insert): ?static
     {
+        $edit = is_array($edit) ? $edit : [];
+        $insert = is_array($insert) ? $insert : [];
         $ettAcces = $this->getMeta('check_access4edit');
-        $fields   = adduceToArray($this->getMeta(['table_struct', 'columns']));
+        $fields   = ($this->arrayAdducer())($this->getMeta(['table_struct', 'columns']));
         foreach ($edit as $id => $v){
             $ett = $this->loadEntityById($id);
             if ($ettAcces && !$ett->$ettAcces($v)) {
@@ -77,13 +82,13 @@ class data_table extends data
         }
         $convId = $this->getMeta(['addParam', 'convId'], []);
         if ($this->getMeta(['table_struct', 'newData'], true) || $convId) {
-            $addFields = array_keys(adduceToArray($this->getMeta(['addParam', 'default_val'], [])));
+            $addFields = array_keys(($this->arrayAdducer())($this->getMeta(['addParam', 'default_val'], [])));
             if (!empty($convId[1])) {
                 $addFields[] = $convId[1];
             }
             foreach ($insert as $ik => $v){
                 if (!$convId || isset($v[$convId[1] ?? null])) {
-                    $ett = gr((string)$this->getMeta('entity'));
+                    $ett = $this->entityService()->get((string)$this->getMeta('entity'))->getNewRow();
                     foreach ($this->getMeta(['addParam', 'default_val'], []) as $k => $add) {
                         if (!array_key_exists($k, $v)) {
                             $v[$k] = $add;
@@ -100,8 +105,9 @@ class data_table extends data
         return $this;
     }
 
-    public function deleteData(array $del): void
+    public function deleteData(mixed $del): void
     {
+        $del = is_array($del) ? $del : [];
         if ($this->getMeta(['table_struct', 'showDel'], true)) {
             $ettAcces = $this->getMeta('check_access4delete');
             foreach ($del as $id => $v){
@@ -127,11 +133,11 @@ class data_table extends data
         $tplCols  = [];
         $metaCols = $this->getMeta(['table_struct', 'columns'], []);
         foreach ($metaCols as $k => $v) {
-            $tplCols[$v['field']] = adduceToArray($v);
+            $tplCols[$v['field']] = ($this->arrayAdducer())($v);
         }
         $this->setTemplateVar('columns', $tplCols);
 
-        $opRight  = adduceToArray($this->getMeta('open_right'));
+        $opRight  = ($this->arrayAdducer())($this->getMeta('open_right'));
         if ($opRight) {
             foreach ($opRight as $f => &$o) {
                 if (!empty($o['key'])) {
@@ -147,12 +153,12 @@ class data_table extends data
             $this->setTemplateVar('aOpRight', $opRight);
         }
 
-        $hdOrder = adduceToArray($this->getMeta('order'));
+        $hdOrder = ($this->arrayAdducer())($this->getMeta('order'));
         if ($hdOrder) {
             $this->setTemplateVar('hdOrder', $hdOrder);
             foreach ($this->getMeta(['table_struct', 'columns'], []) as $v) {
                 if (isset($v['field']) && isset($hdOrder[$v['field']])) {
-                    $this->addParam['label'][$v['field']] = isset($v['head']) ? adduceToArray($v['head']) : null;
+                    $this->addParam['label'][$v['field']] = isset($v['head']) ? ($this->arrayAdducer())($v['head']) : null;
                 }
             }
         }
@@ -187,7 +193,7 @@ class data_table extends data
         $orderData = isset($data['order']) ? $data['order'] : $this->getMeta('order');
         $order = '';
         if ($orderData) {
-            foreach (adduceToArray($orderData) as $k => $v) {
+            foreach (($this->arrayAdducer())($orderData) as $k => $v) {
                 if ($v) {
                     $order .= $k . ((int)$v === 1 ? ' ASC' : ' DESC') . ',';
                 }
@@ -200,7 +206,7 @@ class data_table extends data
         if (empty($data['page'])) {
             $data['page'] = 1;
         }
-        $ett = ge((string)$this->getMeta('entity'));
+        $ett = $this->entityService()->get((string)$this->getMeta('entity'));
         list($qtt, $offset) = $this->definePager($data['page'], $ett, $ettKey);
 
         $id = $ett->getDescription()->getPrimeryKey();
@@ -212,7 +218,7 @@ class data_table extends data
         return $this->getArrayAssoc($ett, $ettKey, $fld, $qtt, $offset, $order, !$this->getMeta('editId', false));
     }
 
-    protected function getArrayAssoc(\fan\core\base\model\entity $ett, ?string $ettKey, array $fld, int|float $qtt, int|float $offset, string $order, bool $excludeId = true): array
+    protected function getArrayAssoc(entity $ett, ?string $ettKey, array $fld, int|float $qtt, int|float $offset, string $order, bool $excludeId = true): array
     {
         /* @var $rowset \fan\core\model\rowset */
         $rowset = $ettKey ?
@@ -234,12 +240,12 @@ class data_table extends data
     /**
      * @param int|float $id Unique identifier used to locate the target item.
      */
-    protected function loadEntityById(int|float|string $id): \fan\core\base\model\row
+    protected function loadEntityById(int|float|string $id): row
     {
-        return gr((string)$this->getMeta('entity'), $id);
+        return $this->entityService()->get((string)$this->getMeta('entity'))->getRowById($id);
     }
 
-    protected function definePager(int|float|string $page, \fan\core\base\model\entity $ett, ?string $ettKey): array
+    protected function definePager(int|float|string $page, entity $ett, ?string $ettKey): array
     {
         if (!$page) {
             $qtt = $offset = -1;

@@ -2,7 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\base\model;
-use fan\project\exception\model\entity\fatal as fatalException;
+use fan\core\base\model\entity;
+
 /**
  * Loader of Source SQL-requests for \fan\core\service\entity\designer\request
  *
@@ -32,9 +33,15 @@ class request
      */
     protected ?object $entity = null;
 
-    public function __construct(\fan\core\base\model\entity $entity)
+    private ?object $reflector = null;
+
+    private ?object $fileStorage = null;
+
+    public function __construct(entity $entity, ?object $reflector = null, ?object $fileStorage = null)
     {
         $this->entity = $entity;
+        $this->reflector = $reflector;
+        $this->fileStorage = $fileStorage;
     }
 
     // ======== The magic methods ======== \\
@@ -48,18 +55,16 @@ class request
     {
         return $this->get((string)$key);
     }
-    /**
-     * @throws fatalException
-     */
     public function __call(string $method, array $args): mixed
     {
         $method = (string)$method;
         if (substr($method, 0, 4) === 'set_') {
             $this->set(substr($method, 4), (string)($args[0] ?? ''));
+            return $this;
         } elseif (substr($method, 0, 4) === 'get_') {
             return $this->get(substr($method, 4));
         } else {
-            throw new fatalException($this->getEntity(), 'Incorrect call of instance SQL-request loader!');
+            throw $this->createRequestFatalException('Incorrect call of instance SQL-request loader!');
         }
     }
 
@@ -94,7 +99,7 @@ class request
         return $this->sql;
     }
 
-    public function getEntity(): \fan\core\base\model\entity
+    public function getEntity(): entity
     {
         return $this->entity;
     }
@@ -103,21 +108,48 @@ class request
     protected function _loadSQL(string $key): ?string
     {
         $fileName = $this->_checkSQLfile($key);
-        return is_null($fileName) ? null : (string)file_get_contents($fileName);
+        if ($fileName === null) {
+            return null;
+        }
+
+        $content = $this->fileStorage()->read($fileName);
+
+        return $content === false ? null : $content;
     }
 
     protected function _checkSQLfile(string $key): ?string
     {
         $entity = $this->getEntity();
         $dirName = $entity->getService()->getSqlDir();
-        foreach (service('reflector')->getParentPaths($entity) as $v) {
+        foreach ($this->reflector()->getParentPaths($entity) as $v) {
             $fileName  = pathinfo($v, PATHINFO_DIRNAME) . '/';
             $fileName .= $dirName . '/' . $key . '.sql';
-            if (file_exists($fileName)) {
+            if ($this->fileStorage()->exists($fileName)) {
                 return $fileName;
             }
         }
         return null;
+    }
+
+    private function reflector(): object
+    {
+        return $this->reflector ?? throw new \RuntimeException('Reflector service is not configured for model request.');
+    }
+
+    private function fileStorage(): object
+    {
+        return $this->fileStorage ?? throw new \RuntimeException('Model request file storage is not configured.');
+    }
+
+    private function createRequestFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        $exception = $this->getEntity()->createRequestFatalException($message, $code, $previous);
+        if (!$exception instanceof \Throwable) {
+            $actual = is_object($exception) ? get_class($exception) : gettype($exception);
+            throw new \UnexpectedValueException('Model request exception factory returned "' . $actual . '".');
+        }
+
+        return $exception;
     }
 
 }

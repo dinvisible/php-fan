@@ -3,7 +3,11 @@
 declare(strict_types=1);
 
 namespace fan\core\base\model;
-use fan\project\exception\model\entity\fatal as fatalException;
+use fan\core\base\model\entity;
+use fan\core\base\model\row as model_row;
+use fan\core\base\model\rowset;
+use fan\core\di\container_interface;
+
 /**
  * Description of row
  *
@@ -21,8 +25,6 @@ use fan\project\exception\model\entity\fatal as fatalException;
  */
 class row implements \ArrayAccess
 {
-    use \fan\core\di\container_aware_trait;
-
     /**
      * Saved data
      * @var array
@@ -76,19 +78,145 @@ class row implements \ArrayAccess
      */
     protected bool $showError = true;
 
+    private mixed $errorFactory = null;
+
+    private mixed $localeFactory = null;
+
+    private mixed $entityFactory = null;
+
+    private \Closure $snapshotEncoder;
+
+    private \Closure $snapshotDecoder;
+
+    private mixed $modelRowExceptionFactory = null;
+
+    private \Closure $arrayLikeChecker;
+
+    private \Closure $namespaceResolver;
+
     public function __construct(
-        \fan\core\base\model\entity $entity,
+        entity $entity,
         array &$data = [],
-        ?\fan\core\base\model\rowset $rowset = null,
-        ?\fan\core\di\container_interface $serviceContainer = null
+        ?rowset $rowset = null,
+        ?container_interface $serviceContainer = null,
+        ?callable $snapshotEncoder = null,
+        ?callable $snapshotDecoder = null,
+        ?callable $modelRowExceptionFactory = null,
+        ?callable $arrayLikeChecker = null,
+        ?callable $namespaceResolver = null
     )
     {
-        $this->setServiceContainer($serviceContainer);
         $this->entity = $entity;
         $this->rowset = $rowset;
+        $this->snapshotEncoder = \Closure::fromCallable(
+            $snapshotEncoder ?? static function (mixed $state): string {
+                throw new \RuntimeException('Snapshot encoder is not configured for model row.');
+            }
+        );
+        $this->snapshotDecoder = \Closure::fromCallable(
+            $snapshotDecoder ?? static function (string $payload, mixed $default = null): mixed {
+                throw new \RuntimeException('Snapshot decoder is not configured for model row.');
+            }
+        );
+        if ($modelRowExceptionFactory !== null) {
+            $this->modelRowExceptionFactory = $modelRowExceptionFactory;
+        }
+        $this->arrayLikeChecker = \Closure::fromCallable(
+            $arrayLikeChecker ?? static fn(mixed $value): bool => is_array($value) || $value instanceof \ArrayAccess
+        );
+        $this->namespaceResolver = \Closure::fromCallable(
+            $namespaceResolver ?? static fn(object|string $object, int $depth = 1): string => self::nativeNamespaceName($object, $depth)
+        );
+        $this->setDependenciesFromEntityService($entity);
         $this->_fixLoadedData($data);
 
         $this->_restoreProperties();
+    }
+
+    public function setRowDependencies(
+        ?callable $errorFactory = null,
+        ?callable $localeFactory = null,
+        ?callable $entityFactory = null,
+        ?callable $snapshotEncoder = null,
+        ?callable $snapshotDecoder = null,
+        ?callable $modelRowExceptionFactory = null,
+        ?callable $arrayLikeChecker = null,
+        ?callable $namespaceResolver = null
+    ): static {
+        if ($errorFactory !== null) {
+            $this->errorFactory = $errorFactory;
+        }
+        if ($localeFactory !== null) {
+            $this->localeFactory = $localeFactory;
+        }
+        if ($entityFactory !== null) {
+            $this->entityFactory = $entityFactory;
+        }
+        if ($snapshotEncoder !== null) {
+            $this->snapshotEncoder = \Closure::fromCallable($snapshotEncoder);
+        }
+        if ($snapshotDecoder !== null) {
+            $this->snapshotDecoder = \Closure::fromCallable($snapshotDecoder);
+        }
+        if ($modelRowExceptionFactory !== null) {
+            $this->modelRowExceptionFactory = $modelRowExceptionFactory;
+        }
+        if ($arrayLikeChecker !== null) {
+            $this->arrayLikeChecker = \Closure::fromCallable($arrayLikeChecker);
+        }
+        if ($namespaceResolver !== null) {
+            $this->namespaceResolver = \Closure::fromCallable($namespaceResolver);
+        }
+
+        return $this;
+    }
+
+    protected function setDependenciesFromEntityService(entity $entity): void
+    {
+        try {
+            $service = $entity->getService();
+        } catch (\Throwable) {
+            return;
+        }
+        if (method_exists($service, 'getRowDependencies')) {
+            $this->setRowDependencies(...$service->getRowDependencies());
+        }
+    }
+
+    private function errorService(): object
+    {
+        return $this->errorFactory !== null ? ($this->errorFactory)() : throw new \RuntimeException('Error service is not configured for model row.');
+    }
+
+    private function localeService(): object
+    {
+        return $this->localeFactory !== null ? ($this->localeFactory)() : throw new \RuntimeException('Locale service is not configured for model row.');
+    }
+
+    private function entityService(mixed $collection = 0): object
+    {
+        return $this->entityFactory !== null ? ($this->entityFactory)($collection) : throw new \RuntimeException('Entity service is not configured for model row.');
+    }
+
+    protected function createModelRowFatalException(string $message, ?entity $entity = null, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        if (!is_callable($this->modelRowExceptionFactory)) {
+            throw new \RuntimeException('Model row exception factory is not configured for model row.');
+        }
+
+        $exception = ($this->modelRowExceptionFactory)(
+            '\fan\project\exception\model\entity\fatal',
+            $entity ?? $this->getEntity(),
+            $message,
+            $code,
+            $previous
+        );
+        if (!$exception instanceof \Throwable) {
+            $actual = is_object($exception) ? get_class($exception) : gettype($exception);
+            throw new \UnexpectedValueException('Model row exception factory returned "' . $actual . '".');
+        }
+
+        return $exception;
     }
 
     // ======== Methods for redefine in children classes ======== \\
@@ -157,12 +285,12 @@ class row implements \ArrayAccess
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\model\entity\fatal
      */
     public function initIdOnly(mixed $rowId): static
     {
         if ($this->isDataLoad) {
-            throw new fatalException($this->getEntity(), 'Call "initIdOnly"-method for loaded data!');
+            throw $this->createModelRowFatalException('Call "initIdOnly"-method for loaded data!');
         }
         $primeryKey = $this->getEntity()->description->getPrimeryKey();
         if (is_string($primeryKey)) {
@@ -273,9 +401,9 @@ class row implements \ArrayAccess
                 $info = $this->_getFullFieldsInfo();
                 $keys = empty($info) ? [] : array_keys($info);
             }
-        } elseif (!is_array_alt($keys)) {
+        } elseif (!$this->isArrayLike($keys)) {
             if (!is_scalar($keys)) {
-                throw new fatalException($this->getEntity(), 'Incorrect Field Keys.');
+                throw $this->createModelRowFatalException('Incorrect Field Keys.');
             }
             $keys = [$keys];
         }
@@ -285,6 +413,36 @@ class row implements \ArrayAccess
             $result[$k] = $this->get($k, null, $this->isDataLoad);
         }
         return $result;
+    }
+
+    private function isArrayLike(mixed $value): bool
+    {
+        return ($this->arrayLikeChecker)($value);
+    }
+
+    protected function namespaceName(object|string $object, int $depth = 1): string
+    {
+        $namespace = ($this->namespaceResolver)($object, $depth);
+        if (!is_string($namespace)) {
+            throw new \UnexpectedValueException('Namespace resolver must return a string.');
+        }
+
+        return $namespace;
+    }
+
+    private static function nativeNamespaceName(object|string $object, int $depth = 1): string
+    {
+        if ($depth < 0 || $depth > 40) {
+            return '';
+        }
+
+        $name = is_object($object) ? get_class($object) : $object;
+        for ($i = 0; $i < $depth; $i++) {
+            $position = strrpos($name, '\\');
+            $name = $position > 0 ? substr($name, 0, $position) : '';
+        }
+
+        return $name;
     }
 
     public function setFields(mixed $fields, bool $isSave = false): static
@@ -300,9 +458,9 @@ class row implements \ArrayAccess
         return $this;
     }
 
-    public function getTopRow(string $byField, bool $logEmptyVal = false): ?\fan\core\base\model\row
+    public function getTopRow(string $byField, bool $logEmptyVal = false): ?model_row
     {
-        $err = $this->containerService('error');
+        $err = $this->errorService();
         /* @var $err \fan\core\service\error */
         $errHeader = 'Error while get Top Row';
         $val = $this->get($byField, null, false);
@@ -335,9 +493,9 @@ class row implements \ArrayAccess
         return $topEtt->getRowByParam([$v['ref_field'] => $val]);
     }
 
-    public function getBottomRowset(string|int|float $tableName, int|float $qtt = -1, int|float $offset = -1, string $orderBy = ''): ?\fan\core\base\model\rowset
+    public function getBottomRowset(string|int|float $tableName, int|float $qtt = -1, int|float $offset = -1, string $orderBy = ''): ?rowset
     {
-        $err = $this->containerService('error');
+        $err = $this->errorService();
         /* @var $err \fan\core\service\error */
         $errHeader = 'Error while get Bottom Rowset';
 
@@ -392,7 +550,6 @@ class row implements \ArrayAccess
                 $this->_runAfterInsert($changed);
             }
             $this->_runAfterSave($changed);
-            //\fan\project\service\cache::instance()->clearCacheByEntity($this);
         }
         return $this;
     }
@@ -415,10 +572,9 @@ class row implements \ArrayAccess
 
                 $this->_resetProperty(false);
                 $this->_runAfterDelete($delId);
-                //\fan\project\service\cache::instance()->clearCacheByEntity($this);
                 return true;
             } else {
-                throw new fatalException($this->getEntity(), 'Can\'t get source ID for delete row.');
+                throw $this->createModelRowFatalException('Can\'t get source ID for delete row.');
             }
         }
         return false;
@@ -439,7 +595,7 @@ class row implements \ArrayAccess
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\model\entity\fatal
      */
     public function setId(mixed $idVal): void
     {
@@ -447,7 +603,7 @@ class row implements \ArrayAccess
         if (is_array($idKey)) {
             foreach ($idVal as $k => $v) {
                 if (!in_array($k, $idKey)) {
-                    throw new fatalException($this, 'Incorrect id name (as array)!');
+                    throw $this->createModelRowFatalException('Incorrect id name (as array)!');
                 }
 
                 $this->_setFieldValue($k, $v);
@@ -457,11 +613,11 @@ class row implements \ArrayAccess
         }
     }
 
-    public function getEntity(): \fan\core\base\model\entity
+    public function getEntity(): entity
     {
         return $this->entity;
     }
-    public function getRowset(): ?\fan\core\base\model\rowset
+    public function getRowset(): ?rowset
     {
         return $this->rowset;
     }
@@ -562,13 +718,13 @@ class row implements \ArrayAccess
 
             //ToDo: if ($this->cacheIt) {}
         } elseif ($this->showError) {
-            $this->containerService('error')->logErrorMessage($errMsg, 'Data isn\'t inserted.', 'Entity name: ' . $ett->getName(true) . "\n\n" . $query . "\nData: " . var_export($adjParam, true));
+            $this->errorService()->logErrorMessage($errMsg, 'Data isn\'t inserted.', 'Entity name: ' . $ett->getName(true) . "\n\n" . $query . "\nData: " . var_export($adjParam, true));
         }
         return $this;
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\model\entity\fatal
      */
     protected function _updateRow(): static
     {
@@ -579,7 +735,7 @@ class row implements \ArrayAccess
         $ett     = $this->getEntity();
         $idValue = $this->getId(false, true);
         if (empty($idValue)) {
-            throw new fatalException($ett, 'Update impossible. ID isn\'t set!');
+            throw $this->createModelRowFatalException('Update impossible. ID isn\'t set!', $ett);
         }
 
         $connect  = $ett->getConnection();
@@ -593,13 +749,13 @@ class row implements \ArrayAccess
         if (!$errMsg) {
             $this->changed = [];
         } elseif ($this->showError) {
-            $this->containerService('error')->logErrorMessage($errMsg, 'Data isn\'t updated.', 'Entity name: ' . $ett->getName(true) . "\n\n" . $query . "\nData: " . var_export($adjParam, true));
+            $this->errorService()->logErrorMessage($errMsg, 'Data isn\'t updated.', 'Entity name: ' . $ett->getName(true) . "\n\n" . $query . "\nData: " . var_export($adjParam, true));
         }
         return $this;
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\model\entity\fatal
      */
     protected function _getFieldInfo(string $fieldName, bool $allowException = true, bool $forse = false): array
     {
@@ -608,7 +764,7 @@ class row implements \ArrayAccess
             $errorMessage  = 'Incorrect field name "' . $fieldName . '" for ';
             $errorMessage .= empty($this->entity) ? 'unknown table.' : 'table "' . $this->entity->getTableName() . '".';
             if ($allowException) {
-                throw new fatalException($this->getEntity(), $errorMessage);
+                throw $this->createModelRowFatalException($errorMessage);
             }
             throw new \OutOfBoundsException($errorMessage);
         }
@@ -661,15 +817,17 @@ class row implements \ArrayAccess
                 $value = $isNumber ? 0 : ($isString ? '' : null);
             } elseif ($isString) {
                 if (is_array($value)) {
-                    $this->containerService('error')->logErrorMessage('Value of field "' . $fieldName . '" can\'t be set as Array', 'Error set value of row', '', true, false);
+                    $this->errorService()->logErrorMessage('Value of field "' . $fieldName . '" can\'t be set as Array', 'Error set value of row', '', true, false);
                     $value = '';
                 } else {
                     $value = (string)$value;
                 }
                 if (isset($fieldInfo['length'])) {
                     $isUtf8 = (string)$fieldInfo['charset'] === 'utf8';
-                    if (call_user_func($isUtf8 ? 'mb_strlen' : 'strlen', $value) > $fieldInfo['length']) {
-                        $value = call_user_func($isUtf8 ? 'mb_substr' : 'substr', $value, 0, $fieldInfo['length']);
+                    $lengthFunction = $isUtf8 ? 'mb_strlen' : 'strlen';
+                    $substringFunction = $isUtf8 ? 'mb_substr' : 'substr';
+                    if ($lengthFunction($value) > $fieldInfo['length']) {
+                        $value = $substringFunction($value, 0, $fieldInfo['length']);
                         //ToDo: Notify about truncated data, by Config parameter
                     }
                 }
@@ -712,7 +870,7 @@ class row implements \ArrayAccess
     protected function _getCurrentLocal(): string
     {
         if (!$this->currentLocal) {
-            $this->currentLocal = '_' . $this->containerService('locale')->getLanguage();
+            $this->currentLocal = '_' . $this->localeService()->getLanguage();
         }
         return $this->currentLocal;
     }
@@ -721,21 +879,21 @@ class row implements \ArrayAccess
     protected function _getDefaultLocal(): string
     {
         if (!$this->defaultLocal) {
-            $this->defaultLocal = '_' . $this->containerService('locale')->getDefaultLanguage();
+            $this->defaultLocal = '_' . $this->localeService()->getDefaultLanguage();
         }
         return $this->defaultLocal;
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\model\entity\fatal
      */
     protected function _checkGetWrongValue(string $fieldName): void
     {
         if ($this->initIdOnly && !array_key_exists($fieldName, $this->changed)) {
-            throw new fatalException($this->getEntity(), 'This instance has been created for UPDATE DB-row. You can\'t read "' . $fieldName . '" because it contains wrong value now! ');
+            throw $this->createModelRowFatalException('This instance has been created for UPDATE DB-row. You can\'t read "' . $fieldName . '" because it contains wrong value now! ');
         }
         if (!array_key_exists($fieldName, $this->data)) {
-            throw new fatalException($this->getEntity(), 'Call for unset field "' . $fieldName . '"! ' . "\n Exist fields:" . var_export($this->data, true));
+            throw $this->createModelRowFatalException('Call for unset field "' . $fieldName . '"! ' . "\n Exist fields:" . var_export($this->data, true));
         }
     }
 
@@ -786,7 +944,7 @@ class row implements \ArrayAccess
         } elseif (substr($method, 0, 4) === 'get_') {
             return $this->get(substr($method, 4), isset($args[0]) ? $args[0] : null, isset($args[1]) ? $args[1] : true);
         } else {
-            throw new fatalException($this->getEntity(), 'Incorrect call of entity method: "' . $method . '"');
+            throw $this->createModelRowFatalException('Incorrect call of entity method: "' . $method . '"');
         }
     }
 
@@ -828,7 +986,7 @@ class row implements \ArrayAccess
 
     public function serialize(): string
     {
-        return \fan\core\adapter\safe_serializer::encodePhpSnapshot($this->__serialize());
+        return ($this->snapshotEncoder())($this->__serialize());
     }
 
     public function __serialize(): array
@@ -845,7 +1003,7 @@ class row implements \ArrayAccess
 
     public function unserialize(string $data): void
     {
-        $data = \fan\core\adapter\safe_serializer::decodePhpSnapshot((string)$data, []);
+        $data = ($this->snapshotDecoder())((string)$data, []);
         if (!is_array($data)) {
             throw new \UnexpectedValueException('Model row snapshot must decode to an array.');
         }
@@ -867,12 +1025,38 @@ class row implements \ArrayAccess
         $this->initIdOnly = $data['initIdOnly'];
 
         $param = $data['mainParam'];
-        $serv  = $this->containerService('entity', $param['collection']);
+        $serv  = $this->entityService($param['collection']);
         $this->entity = empty($param['name']) ?
                 $serv->getAnonymous($param['class'], $param['param']) :
                 $serv->get($param['name'], $param['param']);
         $this->entity->setConnectionName((string)$param['connection']['name'])->setConnectionKey($param['connection']['key']);
 
         $this->_restoreProperties();
+    }
+
+    private function snapshotEncoder(): callable
+    {
+        if (!isset($this->snapshotEncoder)) {
+            $this->snapshotEncoder = \Closure::fromCallable(
+                static function (mixed $state): string {
+                    throw new \RuntimeException('Snapshot encoder is not configured for model row.');
+                }
+            );
+        }
+
+        return $this->snapshotEncoder;
+    }
+
+    private function snapshotDecoder(): callable
+    {
+        if (!isset($this->snapshotDecoder)) {
+            $this->snapshotDecoder = \Closure::fromCallable(
+                static function (string $payload, mixed $default = null): mixed {
+                    throw new \RuntimeException('Snapshot decoder is not configured for model row.');
+                }
+            );
+        }
+
+        return $this->snapshotDecoder;
     }
 }

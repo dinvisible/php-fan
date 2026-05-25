@@ -1,8 +1,10 @@
 <?php
 
 declare(strict_types=1);
+use PHPUnit\Framework\TestCase;
 
-class AppBlockClassNamingTest extends \PHPUnit\Framework\TestCase
+
+class AppBlockClassNamingTest extends TestCase
 {
     public function testProjectAppBlockClassNamesMatchFileNames(): void
     {

@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service\tab;
+use fan\core\base\service;
+
 
 /**
  * Description of delegate
@@ -20,8 +22,6 @@ namespace fan\core\service\tab;
  */
 abstract class engine
 {
-    use \fan\core\di\container_aware_trait;
-
     /**
      * Facade of service
      * @var fan\core\base\service
@@ -31,7 +31,7 @@ abstract class engine
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
 
-    public function setFacade(\fan\core\base\service $facade): static
+    public function setFacade(service $facade): static
     {
         if (empty($this->facade)) {
             $this->facade = $facade;
@@ -45,7 +45,11 @@ abstract class engine
      */
     protected function _makeException(mixed $message): never
     {
-        throw new \fan\project\exception\service\fatal($this->facade, (string)$message);
+        if ($this->facade !== null && method_exists($this->facade, 'createServiceFatalExceptionForSubObject')) {
+            throw $this->facade->createServiceFatalExceptionForSubObject((string)$message);
+        }
+
+        throw new \RuntimeException('Service exception factory is not configured for tab engine.');
     }
 
     // ======== The magic methods ======== \\

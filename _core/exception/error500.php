@@ -20,13 +20,21 @@ namespace fan\core\exception;
  */
 class error500 extends base
 {
-    public function __construct(string $logErrMsg, int $code = E_USER_ERROR, ?\Throwable $previous = null)
+    public function __construct(
+        string $logErrMsg,
+        int $code = E_USER_ERROR,
+        ?\Throwable $previous = null,
+        ?object $exceptionDatabaseConnections = null,
+        ?object $exceptionRuntimeLogger = null,
+        ?object $exceptionRequestService = null,
+        ?object $exceptionErrorService = null,
+        ?object $exceptionHeaderWriter = null
+    )
     {
-        if (!headers_sent()) {
-            header('HTTP/1.1 500 Internal Server Error');
-        }
+        $this->setExceptionDependencies($exceptionDatabaseConnections, $exceptionRuntimeLogger, $exceptionRequestService, $exceptionErrorService, $exceptionHeaderWriter);
+        $this->sendInternalServerErrorHeader();
 
-        parent::__construct($logErrMsg, $code, $previous);
+        parent::__construct($logErrMsg, $code, $previous, $exceptionDatabaseConnections, $exceptionRuntimeLogger, $exceptionRequestService, $exceptionErrorService, $exceptionHeaderWriter);
 
         $this->_logByService($logErrMsg, 'Error 500');
     }

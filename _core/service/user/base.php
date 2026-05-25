@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 namespace fan\core\service\user;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\service\config\row;
+use fan\core\service\user;
+
 /**
  * Basic class engine of user-data
  *
@@ -103,9 +105,55 @@ abstract class base
      */
     protected array $changed = [];
 
-    public function __construct(mixed $identifyer)
+    private ?object $errorLogger = null;
+
+    private ?object $requestInput = null;
+
+    private \Closure $snapshotEncoder;
+
+    private \Closure $snapshotDecoder;
+
+    private \Closure $arrayValueReader;
+
+    private \Closure $arrayAdducer;
+
+    private \Closure $classNameResolver;
+
+    public function __construct(
+        mixed $identifyer,
+        ?callable $snapshotEncoder = null,
+        ?callable $snapshotDecoder = null,
+        ?callable $arrayValueReader = null,
+        ?callable $arrayAdducer = null,
+        ?callable $classNameResolver = null
+    )
     {
         $this->identifyer = $identifyer;
+        $this->snapshotEncoder = \Closure::fromCallable(
+            $snapshotEncoder ?? static function (mixed $state): string {
+                throw new \RuntimeException('Snapshot encoder is not configured for user engine.');
+            }
+        );
+        $this->snapshotDecoder = \Closure::fromCallable(
+            $snapshotDecoder ?? static function (string $payload, mixed $default = null): mixed {
+                throw new \RuntimeException('Snapshot decoder is not configured for user engine.');
+            }
+        );
+        $this->arrayValueReader = \Closure::fromCallable(
+            $arrayValueReader ?? static function (array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed {
+                throw new \RuntimeException('Array value reader is not configured for user engine.');
+            }
+        );
+        $this->arrayAdducer = \Closure::fromCallable(
+            $arrayAdducer ?? static function (mixed $value): array {
+                throw new \RuntimeException('Array adducer is not configured for user engine.');
+            }
+        );
+        $this->classNameResolver = \Closure::fromCallable(
+            $classNameResolver ?? static function (object $object): string {
+                throw new \RuntimeException('Class name resolver is not configured for user engine.');
+            }
+        );
     }
 
     // ======== Static methods ======== \\
@@ -113,7 +161,38 @@ abstract class base
     // ======== Main Interface methods ======== \\
     abstract public function makePasswordHash(string $password): string;
 
-    public function setFacade(\fan\core\service\user $facade): static
+    public function setEngineDependencies(
+        ?object $errorLogger = null,
+        ?object $requestInput = null,
+        ?callable $snapshotEncoder = null,
+        ?callable $snapshotDecoder = null,
+        ?callable $arrayValueReader = null,
+        ?callable $arrayAdducer = null,
+        ?callable $classNameResolver = null
+    ): static
+    {
+        $this->errorLogger = $errorLogger;
+        $this->requestInput = $requestInput;
+        if ($snapshotEncoder !== null) {
+            $this->snapshotEncoder = \Closure::fromCallable($snapshotEncoder);
+        }
+        if ($snapshotDecoder !== null) {
+            $this->snapshotDecoder = \Closure::fromCallable($snapshotDecoder);
+        }
+        if ($arrayValueReader !== null) {
+            $this->arrayValueReader = \Closure::fromCallable($arrayValueReader);
+        }
+        if ($arrayAdducer !== null) {
+            $this->arrayAdducer = \Closure::fromCallable($arrayAdducer);
+        }
+        if ($classNameResolver !== null) {
+            $this->classNameResolver = \Closure::fromCallable($classNameResolver);
+        }
+
+        return $this;
+    }
+
+    public function setFacade(user $facade): static
     {
         if (empty($this->facade)) {
             $this->facade = $facade;
@@ -121,21 +200,13 @@ abstract class base
         return $this;
     }
 
-    public function setConfig(\fan\core\service\config\row $config): static
+    public function setConfig(row $config): static
     {
         if (empty($this->config)) {
             if (empty($config)) {
-                throw new fatalException($this->facade, 'User Engine has empty config!');
+                throw $this->createUserFatalException('User Engine has empty config!');
             }
             $this->config = $config;
-/*
-            if (empty($this->data)) {
-                $ident = adduceToArray($this->config['IDENTIFYERS']);
-                if (count($ident) == 1) {
-                    $this->data[$ident[0]] = $this->identifyer;
-                }
-            }
- */
         }
         return $this;
     }
@@ -144,7 +215,7 @@ abstract class base
 
     public function getId(): mixed
     {
-        return array_val($this->data, 'id', $this->identifyer);
+        return $this->arrayValueReader()($this->data, 'id', $this->identifyer);
     }
 
     public function getFullName(bool $withTitle = true): string
@@ -174,7 +245,7 @@ abstract class base
     }
 
     // --- Setters method --- \\
-    public function setVisitDate(mixed $date = null): ?\fan\core\service\user
+    public function setVisitDate(mixed $date = null): ?user
     {
         if (is_null($date)) {
             $date = date('Y-m-d');
@@ -186,7 +257,7 @@ abstract class base
     }
 
     // --- Verifying/manipulation method --- \\
-    public function setPassword(string $password): ?\fan\core\service\user
+    public function setPassword(string $password): ?user
     {
         $hash = $this->makePasswordHash($password);
         if (!isset($this->data['password']) || (string)$this->data['password'] !== $hash) {
@@ -210,14 +281,14 @@ abstract class base
                 $errMsg = 'Error password for "' . $this->identifyer . '".';
                 $note   = 'Hash: ' . $hash . "\n" . 'NS: ' . $this->facade->getUserSpace();
             }
-            $errMsg .= "\nTime: " . date('Y-m-d H:i:s') . "\nClient IP: " . ($_SERVER['REMOTE_ADDR'] ?? '');
-            $this->facade->getContainerService('error')->logErrorMessage($errMsg, 'Error authentication', $note);
+            $errMsg .= "\nTime: " . date('Y-m-d H:i:s') . "\nClient IP: " . $this->requestInput()->serverValue('REMOTE_ADDR', '');
+            $this->errorLogger()->logErrorMessage($errMsg, 'Error authentication', $note);
         }
 
         return $this->isValid;
     }
 
-    public function load(): ?\fan\core\service\user
+    public function load(): ?user
     {
         $this->isValid = false;
         if ($this->_loadData()) {
@@ -226,12 +297,12 @@ abstract class base
         }
         return $this->facade;
     }
-    public function logout(): ?\fan\core\service\user
+    public function logout(): ?user
     {
         return $this->facade;
     }
 
-    public function save(): ?\fan\core\service\user
+    public function save(): ?user
     {
         if ($this->isNew) {
             $this->data['join_date'] = $this->changed['join_date'] = date('Y-m-d H:i:s');
@@ -263,6 +334,30 @@ abstract class base
     abstract protected function _saveData(): bool;
     abstract protected function _validateForSave(): bool;
 
+    protected function requestInput(): object
+    {
+        return $this->requestInput ?? throw new \RuntimeException('Request input service is not configured for user engine.');
+    }
+
+    protected function errorLogger(): object
+    {
+        return $this->errorLogger ?? throw new \RuntimeException('Error service is not configured for user engine.');
+    }
+
+    protected function createUserFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        if (!method_exists($this->facade, 'createUserFatalException')) {
+            throw new \RuntimeException('User fatal exception factory is not configured for user engine.');
+        }
+
+        $exception = $this->facade->createUserFatalException($message, $code, $previous);
+        if (!$exception instanceof \Throwable) {
+            throw new \UnexpectedValueException('User fatal exception factory must return a throwable object.');
+        }
+
+        return $exception;
+    }
+
     protected function _getKeyList(): array
     {
         return [
@@ -286,9 +381,9 @@ abstract class base
         ];
     }
 
-    protected function _set(string $key, mixed $val): ?\fan\core\service\user
+    protected function _set(string $key, mixed $val): ?user
     {
-        if ((!isset($this->data[$key]) && !is_null($val)) || array_val($this->data, $key) !== $val) {
+        if ((!isset($this->data[$key]) && !is_null($val)) || $this->arrayValueReader()($this->data, $key) !== $val) {
             $this->changed[$key] = $val;
         }
         $this->data[$key] = $val;
@@ -307,9 +402,6 @@ abstract class base
 
     // ======== The magic methods ======== \\
 
-    /**
-     * @throws fatalException
-     */
     public function __call(string $method, array $args): mixed
     {
         $method = (string)$method;
@@ -319,14 +411,14 @@ abstract class base
         } elseif (substr($method, 0, 3) === 'get') {
             return $this->_get($key);
         }
-        throw new fatalException($this->facade, 'Incorrect call of User Engine!');
+        throw $this->createUserFatalException('Incorrect call of User Engine!');
     }
 
     // ======== Required Interface methods ======== \\
 
     public function serialize(): string
     {
-        return \fan\core\adapter\safe_serializer::encodePhpSnapshot($this->__serialize());
+        return ($this->snapshotEncoder())($this->__serialize());
     }
 
     public function __serialize(): array
@@ -344,7 +436,7 @@ abstract class base
 
     public function unserialize(string $data): void
     {
-        $data = \fan\core\adapter\safe_serializer::decodePhpSnapshot((string)$data, []);
+        $data = ($this->snapshotDecoder())((string)$data, []);
         if (!is_array($data)) {
             throw new \UnexpectedValueException('User data snapshot must decode to an array.');
         }
@@ -369,7 +461,7 @@ abstract class base
         }
 
         if (is_string($data)) {
-            $data = \fan\core\adapter\safe_serializer::decodePhpSnapshot($data, []);
+            $data = ($this->snapshotDecoder())($data, []);
         }
 
         if (!is_array($data)) {
@@ -377,6 +469,71 @@ abstract class base
         }
 
         return $data;
+    }
+
+    private function snapshotEncoder(): callable
+    {
+        if (!isset($this->snapshotEncoder)) {
+            $this->snapshotEncoder = \Closure::fromCallable(
+                static function (mixed $state): string {
+                    throw new \RuntimeException('Snapshot encoder is not configured for user engine.');
+                }
+            );
+        }
+
+        return $this->snapshotEncoder;
+    }
+
+    private function snapshotDecoder(): callable
+    {
+        if (!isset($this->snapshotDecoder)) {
+            $this->snapshotDecoder = \Closure::fromCallable(
+                static function (string $payload, mixed $default = null): mixed {
+                    throw new \RuntimeException('Snapshot decoder is not configured for user engine.');
+                }
+            );
+        }
+
+        return $this->snapshotDecoder;
+    }
+
+    protected function arrayValueReader(): callable
+    {
+        if (!isset($this->arrayValueReader)) {
+            $this->arrayValueReader = \Closure::fromCallable(
+                static function (array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed {
+                    throw new \RuntimeException('Array value reader is not configured for user engine.');
+                }
+            );
+        }
+
+        return $this->arrayValueReader;
+    }
+
+    protected function arrayAdducer(): callable
+    {
+        if (!isset($this->arrayAdducer)) {
+            $this->arrayAdducer = \Closure::fromCallable(
+                static function (mixed $value): array {
+                    throw new \RuntimeException('Array adducer is not configured for user engine.');
+                }
+            );
+        }
+
+        return $this->arrayAdducer;
+    }
+
+    protected function className(object $object): string
+    {
+        if (!isset($this->classNameResolver)) {
+            $this->classNameResolver = \Closure::fromCallable(
+                static function (object $object): string {
+                    throw new \RuntimeException('Class name resolver is not configured for user engine.');
+                }
+            );
+        }
+
+        return (string)($this->classNameResolver)($object);
     }
 
 }

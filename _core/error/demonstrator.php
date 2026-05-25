@@ -46,6 +46,7 @@ class demonstrator
 
     protected ?string $dataFile = null;
     protected ?string $tplFile = null;
+    protected ?string $tplName = null;
 
     protected array $tplVars = [];
 
@@ -56,10 +57,72 @@ class demonstrator
         'ContentLength' => null,
     ];
 
-    public function __construct($tplVars = [], $tplName = 'error_500')
+    private ?object $input = null;
+
+    private $phpArrayFileLoader = null;
+
+    private ?object $headerWriter = null;
+
+    private ?object $errorLogWriter = null;
+
+    private ?object $fileStorage = null;
+
+    public function __construct(
+        $tplVars = [],
+        $tplName = 'error_500',
+        ?object $input = null,
+        ?callable $phpArrayFileLoader = null,
+        ?object $headerWriter = null,
+        ?object $errorLogWriter = null,
+        ?object $fileStorage = null
+    )
     {
+        $this->input = $input;
+        if ($phpArrayFileLoader !== null) {
+            $this->setPhpArrayFileLoader($phpArrayFileLoader);
+        }
+        if ($headerWriter !== null) {
+            $this->setHeaderWriter($headerWriter);
+        }
+        if ($errorLogWriter !== null) {
+            $this->setErrorLogWriter($errorLogWriter);
+        }
+        if ($fileStorage !== null) {
+            $this->setFileStorage($fileStorage);
+        }
         $this->setTplVars($tplVars)
              ->setTplName((string)$tplName);
+    }
+
+    public function setPhpArrayFileLoader(callable $phpArrayFileLoader): static
+    {
+        $this->phpArrayFileLoader = $phpArrayFileLoader;
+
+        return $this;
+    }
+
+    public function setHeaderWriter(object $headerWriter): static
+    {
+        $this->headerWriter = $headerWriter;
+
+        return $this;
+    }
+
+    public function setErrorLogWriter(object $errorLogWriter): static
+    {
+        $this->errorLogWriter = $errorLogWriter;
+
+        return $this;
+    }
+
+    public function setFileStorage(object $fileStorage): static
+    {
+        $this->fileStorage = $fileStorage;
+        if ($this->tplName !== null && $this->tplFile === null) {
+            $this->setTplName($this->tplName);
+        }
+
+        return $this;
     }
 
 
@@ -79,6 +142,11 @@ class demonstrator
 
     public function setTplName(mixed $tplFile = null): static
     {
+        $this->tplName = $tplFile === null ? null : (string)$tplFile;
+        if ($this->fileStorage === null) {
+            return $this;
+        }
+
         if (empty($tplFile)) {
             $math = [
                 str_replace(['{CORE_DIR}', '{TPL_NAME}'], [CORE_DIR, self::DEFAULT_NAME], self::CORE_TEMPLATE),
@@ -93,7 +161,7 @@ class demonstrator
             ];
         }
         foreach ($math as $v) {
-            if (file_exists($v)) {
+            if ($this->fileStorage()->exists($v)) {
                 $this->dataFile = substr($v, 0, -4) . 'php';
                 $this->tplFile  = $v;
                 break;
@@ -118,15 +186,16 @@ class demonstrator
         if (!isset($this->contentTypes[$type])) {
             $type = 'text';
         } elseif ($type === 'xhtml') {
-            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-            if (strstr($userAgent, 'Opera') || isset($_REQUEST['notX'])) {
+            $userAgent = (string)$this->input()->serverValue('HTTP_USER_AGENT', '');
+            $accept = (string)$this->input()->serverValue('HTTP_ACCEPT', '');
+            if (strstr($userAgent, 'Opera') || $this->input()->requestValue('notX') !== null) {
                 $type = 'html';
-            } elseif (preg_match('/application\/xhtml\+xml(?:\s*\;\s*q=(1|0\.[0-9]+))?/i', $_SERVER['HTTP_ACCEPT'] ?? '', $matches1)) {
+            } elseif (preg_match('/application\/xhtml\+xml(?:\s*\;\s*q=(1|0\.[0-9]+))?/i', $accept, $matches1)) {
                 $matches1[1] = isset($matches1[1]) ? floatval($matches1[1]) : 1;
 
-                if (preg_match('/text\/html(?:\s*\;\s*q=(1|0\.[0-9]+))?/i', $_SERVER['HTTP_ACCEPT'], $matches2)) {
+                if (preg_match('/text\/html(?:\s*\;\s*q=(1|0\.[0-9]+))?/i', $accept, $matches2)) {
                     $matches2[1] = isset($matches2[1]) ? floatval($matches2[1]) : 1;
-                } elseif (preg_match('/\*\/\*(?:\s*\;\s*q=(1|0\.[0-9]+))?/i', $_SERVER['HTTP_ACCEPT'], $matches2)) {
+                } elseif (preg_match('/\*\/\*(?:\s*\;\s*q=(1|0\.[0-9]+))?/i', $accept, $matches2)) {
                     $matches2[1] = isset($matches2[1]) ? floatval($matches2[1]) : 1;
                 } else {
                     $matches2[1] = 0;
@@ -154,13 +223,14 @@ class demonstrator
 
     public function outputHeaders(): void
     {
-        if (!headers_sent()) {
+        $headerWriter = $this->headerWriter();
+        if (!$headerWriter->sent()) {
             foreach ($this->headers as $v) {
                 if (!empty($v)) {
-                    if (headers_sent($file, $line)) {
-                        error_log('Cannot send error demonstrator header "' . $v . '": headers already sent in "' . $file . '" on line ' . $line . '.');
+                    if ($headerWriter->sent($file, $line)) {
+                        $this->errorLogWriter()->write('Cannot send error demonstrator header "' . $v . '": headers already sent in "' . $file . '" on line ' . $line . '.');
                     } else {
-                        header($v);
+                        $headerWriter->send($v);
                     }
                 }
             }
@@ -173,13 +243,53 @@ class demonstrator
         if (empty($this->tplFile)) {
             return null;
         }
-        $data   = empty($this->dataFile) || !file_exists($this->dataFile) ? [] : (array)\fan\project\adapter\php_array_file::load($this->dataFile, []);
-        $result = (string)file_get_contents($this->tplFile);
+        $data   = empty($this->dataFile) || !$this->fileStorage()->exists($this->dataFile) ? [] : (array)$this->loadPhpArrayFile($this->dataFile, []);
+        $result = (string)$this->fileStorage()->read($this->tplFile);
         foreach ($data as $k => $v) {
             $result = str_replace('{{' . strtoupper((string)$k) . '}}', (string)$v, $result);
         }
         $this->headers['ContentLength'] = 'Content-Length: ' . strlen($result);
         return $result;
+    }
+
+    private function headerWriter(): object
+    {
+        if ($this->headerWriter === null) {
+            throw new \RuntimeException('Header writer dependency is not configured for error demonstrator.');
+        }
+
+        return $this->headerWriter;
+    }
+
+    private function errorLogWriter(): object
+    {
+        if ($this->errorLogWriter === null) {
+            throw new \RuntimeException('Error log writer dependency is not configured for error demonstrator.');
+        }
+
+        return $this->errorLogWriter;
+    }
+
+    private function fileStorage(): object
+    {
+        if ($this->fileStorage === null) {
+            throw new \RuntimeException('File storage dependency is not configured for error demonstrator.');
+        }
+
+        return $this->fileStorage;
+    }
+
+    private function loadPhpArrayFile(string $path, mixed $default = null): mixed
+    {
+        if (!$this->fileStorage()->exists($path)) {
+            return $default;
+        }
+
+        if (!is_callable($this->phpArrayFileLoader)) {
+            throw new \RuntimeException('PHP-array file loader is not configured for error demonstrator.');
+        }
+
+        return ($this->phpArrayFileLoader)($path, $default, $this);
     }
 
     public function showTplContent(): ?string
@@ -193,7 +303,7 @@ class demonstrator
     public function setDoctype(): string
     {
         if ($this->contentType === 'xhtml') {
-            if (!strstr($_SERVER['HTTP_USER_AGENT'] ?? '', 'MSIE 6')) {
+            if (!strstr((string)$this->input()->serverValue('HTTP_USER_AGENT', ''), 'MSIE 6')) {
                 return '<?xml version="1.0" encoding="' . $this->charset . '"?>';
             }
             return '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">';
@@ -201,6 +311,11 @@ class demonstrator
             return '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">';
         }
         return '';
+    }
+
+    private function input(): object
+    {
+        return $this->input ?? throw new \RuntimeException('Input dependency is not configured for error demonstrator.');
     }
 
     public function convArrayToSting(mixed $src, string $glue = "\n"): string

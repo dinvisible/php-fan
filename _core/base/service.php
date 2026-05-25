@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 namespace fan\core\base;
+use fan\core\service\service_listener_state;
+use fan\core\service\service_single_state;
 
-use fan\core\di\container_interface;
-use fan\project\exception\service\fatal as fatalException;
 
 /**
  * Base abstract service.
@@ -24,13 +24,6 @@ use fan\project\exception\service\fatal as fatalException;
  */
 abstract class service
 {
-    use \fan\core\di\container_aware_trait;
-
-    /**
-     * @var array<string, array<string, callable[]>>
-     */
-    private static array $listeners = [];
-
     /**
      * @var \fan\core\service\config\row|null
      */
@@ -60,12 +53,58 @@ abstract class service
      */
     private ?string $exceptionLog = null;
 
-    protected function __construct($allowIni = true, ?container_interface $serviceContainer = null)
+    private ?object $serviceBootstrapRuntime = null;
+    private ?object $serviceConfigurator = null;
+
+    /**
+     * @var callable|null
+     */
+    private $serviceCacheFactory = null;
+    /**
+     * @var callable|null
+     */
+    private $serviceEngineFactory = null;
+    /**
+     * @var callable|null
+     */
+    private $serviceExceptionFactory = null;
+    /**
+     * @var callable|null
+     */
+    private $classNameResolver = null;
+    /**
+     * @var callable|null
+     */
+    private $arrayValueReader = null;
+    private ?service_dependencies $serviceDependencies = null;
+    private ?service_listener_state $serviceListenerState = null;
+    private ?service_single_state $serviceSingleState = null;
+
+    protected function __construct(
+        $allowIni = true,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?callable $serviceEngineFactory = null,
+        ?callable $serviceExceptionFactory = null,
+        ?callable $classNameResolver = null,
+        ?callable $arrayValueReader = null
+    )
     {
-        $this->setServiceContainer($serviceContainer);
+        $this->setServiceDependencies(
+            $serviceBootstrapRuntime,
+            $serviceConfigurator,
+            $serviceCacheFactory,
+            null,
+            null,
+            $serviceEngineFactory,
+            $serviceExceptionFactory,
+            $classNameResolver,
+            $arrayValueReader
+        );
 
         if ($allowIni) {
-            \bootstrap::getInitializer()->setServiceParam(get_class($this));
+            $this->serviceBootstrapRuntime()->getInitializer()->setServiceParam(get_class($this));
         }
 
         $this->_saveInstance()
@@ -82,9 +121,49 @@ abstract class service
 
     abstract public function isSingleton(): bool;
 
-    public function getContainerService(string $serviceName, mixed ...$arguments): mixed
+    public function setServiceDependencies(
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?service_listener_state $serviceListenerState = null,
+        ?service_single_state $serviceSingleState = null,
+        ?callable $serviceEngineFactory = null,
+        ?callable $serviceExceptionFactory = null,
+        ?callable $classNameResolver = null,
+        ?callable $arrayValueReader = null
+    ): static
     {
-        return $this->containerService($serviceName, ...$arguments);
+        $dependencies = $serviceBootstrapRuntime instanceof service_dependencies
+            ? $serviceBootstrapRuntime
+            : service_dependencies::fromLegacy(
+                $serviceBootstrapRuntime,
+                $serviceConfigurator,
+                $serviceCacheFactory,
+                $serviceListenerState,
+                $serviceSingleState,
+                $serviceEngineFactory,
+                $serviceExceptionFactory,
+                $classNameResolver,
+                $arrayValueReader
+            );
+
+        $this->applyServiceDependencies($dependencies);
+
+        return $this;
+    }
+
+    private function applyServiceDependencies(service_dependencies $dependencies): void
+    {
+        $this->serviceDependencies = $dependencies;
+        $this->serviceBootstrapRuntime = $dependencies->serviceBootstrapRuntime();
+        $this->serviceConfigurator = $dependencies->serviceConfigurator();
+        $this->serviceCacheFactory = $dependencies->serviceCacheFactory();
+        $this->serviceEngineFactory = $dependencies->serviceEngineFactory();
+        $this->serviceExceptionFactory = $dependencies->serviceExceptionFactory();
+        $this->classNameResolver = $dependencies->classNameResolver();
+        $this->arrayValueReader = $dependencies->arrayValueReader();
+        $this->serviceListenerState = $dependencies->serviceListenerState();
+        $this->serviceSingleState = $dependencies->serviceSingleState();
     }
 
     public function isEnabled(): bool
@@ -94,7 +173,7 @@ abstract class service
 
     public function resetEnabled(): static
     {
-        $this->_getConfigurator()->reset(get_class_name($this), 'ENABLED');
+        $this->_getConfigurator()->reset($this->serviceClassName(), 'ENABLED');
 
         return $this;
     }
@@ -147,7 +226,7 @@ abstract class service
      */
     public function addListener(string $eventName, callable $callBack): self
     {
-        $this->_subscribeForService(get_class_name($this), $eventName, $callBack);
+        $this->_subscribeForService($this->serviceClassName(), $eventName, $callBack);
 
         return $this;
     }
@@ -155,6 +234,13 @@ abstract class service
     protected function _saveInstance(): static
     {
         return $this;
+    }
+
+    protected function _singleState(): service_single_state
+    {
+        return $this->serviceSingleState ?? throw new \RuntimeException(
+            'Service single state is not configured for ' . get_class($this) . '.'
+        );
     }
 
     protected function _setConfig(): static
@@ -166,18 +252,18 @@ abstract class service
 
     protected function _getCacheData(string $key, mixed $default = null): mixed
     {
-        $cache = $this->containerService('cache', 'service_data');
+        $cache = $this->serviceCache();
         /* @var $cache \fan\core\service\cache */
-        $data = $cache->get(get_class_name($this), []);
+        $data = $cache->get($this->serviceClassName(), []);
 
-        return array_val($data, $key, $default);
+        return $this->arrayValueReader()($data, $key, $default);
     }
 
     protected function _setCacheData(string $key, mixed $value): self
     {
-        $cache = $this->containerService('cache', 'service_data');
+        $cache = $this->serviceCache();
         /* @var $cache \fan\core\service\cache */
-        $name = get_class_name($this);
+        $name = $this->serviceClassName();
         $data = $cache->get($name, []);
         $data[$key] = $value;
         $cache->set($name, $data);
@@ -187,7 +273,7 @@ abstract class service
 
     protected function _getConfigurator(): object
     {
-        return $this->containerService('config', 'service');
+        return $this->serviceConfigurator();
     }
 
     protected function _getEngine($name, $object = true): mixed
@@ -198,7 +284,7 @@ abstract class service
             $class = 'fan\project\\' . substr($class, 9);
         }
 
-        if (!\bootstrap::loadClass($class, true)) {
+        if (!$this->serviceBootstrapRuntime()->loadClass($class, true)) {
             return null;
         }
 
@@ -207,7 +293,10 @@ abstract class service
             return $class;
         }
 
-        $object = new $class();
+        $object = ($this->serviceEngineFactory())($class);
+        if (!is_object($object)) {
+            throw new \UnexpectedValueException('Service engine factory must return an object.');
+        }
         if (method_exists($object, 'setFacade')) {
             $object->setFacade($this);
         }
@@ -226,7 +315,7 @@ abstract class service
 
         $this->delegate[$class] = $this->_getEngine('delegate\\' . $class);
         if (empty($this->delegate[$class])) {
-            throw new fatalException($this, 'Delegate service class "' . $class . '" isn\'t found!');
+            throw $this->createServiceFatalException('Delegate service class "' . $class . '" isn\'t found!');
         }
 
         return $this->delegate[$class];
@@ -250,7 +339,7 @@ abstract class service
             $this->exceptionDbOper = $exceptionDbOper;
         }
 
-        throw new fatalException($this, $logErrMsg, $code, $previous);
+        throw $this->createServiceFatalException($logErrMsg, $code, $previous);
     }
 
     /**
@@ -261,27 +350,105 @@ abstract class service
     protected function _subscribeForService(string $serviceName, string $eventName, callable $callBack): void
     {
         if (!is_callable($callBack)) {
-            throw new fatalException($this, 'Incorrect callback-function for subscribing.');
+            throw $this->createServiceFatalException('Incorrect callback-function for subscribing.');
         }
 
-        if (!isset(self::$listeners[$serviceName][$eventName])) {
-            self::$listeners[$serviceName][$eventName] = [];
-        }
-
-        self::$listeners[$serviceName][$eventName][] = $callBack;
+        $this->serviceListenerState()->subscribe($serviceName, $eventName, $callBack);
     }
 
     protected function _broadcastMessage(string $eventName, mixed $data): void
     {
-        $serviceName = get_class_name($this);
+        $serviceName = $this->serviceClassName();
 
-        if (!isset(self::$listeners[$serviceName][$eventName])) {
-            return;
+        foreach ($this->serviceListenerState()->listenersFor($serviceName, $eventName) as $callBack) {
+            $callBack($data);
+        }
+    }
+
+    protected function serviceBootstrapRuntime(): object
+    {
+        if ($this->serviceBootstrapRuntime !== null) {
+            return $this->serviceBootstrapRuntime;
         }
 
-        foreach (self::$listeners[$serviceName][$eventName] as $callBack) {
-            call_user_func($callBack, $data);
+        throw new \RuntimeException('Bootstrap runtime service is not configured for ' . get_class($this) . '.');
+    }
+
+    protected function serviceConfigurator(): object
+    {
+        if ($this->serviceConfigurator !== null) {
+            return $this->serviceConfigurator;
         }
+
+        throw new \RuntimeException('Config service is not configured for ' . get_class($this) . '.');
+    }
+
+    protected function serviceCache(): object
+    {
+        if ($this->serviceCacheFactory !== null) {
+            return ($this->serviceCacheFactory)('service_data');
+        }
+
+        throw new \RuntimeException('Service data cache factory is not configured for ' . get_class($this) . '.');
+    }
+
+    protected function serviceEngineFactory(): callable
+    {
+        if ($this->serviceEngineFactory !== null) {
+            return $this->serviceEngineFactory;
+        }
+
+        throw new \RuntimeException('Service engine factory is not configured for ' . get_class($this) . '.');
+    }
+
+    protected function serviceClassName(): string
+    {
+        if (!is_callable($this->classNameResolver)) {
+            throw new \RuntimeException('Class name resolver is not configured for ' . get_class($this) . '.');
+        }
+
+        $className = ($this->classNameResolver)($this);
+        if (!is_string($className) || $className === '') {
+            throw new \UnexpectedValueException('Class name resolver must return a non-empty string.');
+        }
+
+        return $className;
+    }
+
+    protected function arrayValueReader(): callable
+    {
+        if (is_callable($this->arrayValueReader)) {
+            return $this->arrayValueReader;
+        }
+
+        throw new \RuntimeException('Array value reader is not configured for ' . get_class($this) . '.');
+    }
+
+    protected function createServiceFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        if (!is_callable($this->serviceExceptionFactory)) {
+            throw new \RuntimeException('Service exception factory is not configured for ' . get_class($this) . '.');
+        }
+
+        $exception = ($this->serviceExceptionFactory)(
+            '\fan\project\exception\service\fatal',
+            $this,
+            $message,
+            $code,
+            $previous
+        );
+        if (!$exception instanceof \Throwable) {
+            throw new \UnexpectedValueException('Service exception factory must return a throwable object.');
+        }
+
+        return $exception;
+    }
+
+    protected function serviceListenerState(): service_listener_state
+    {
+        return $this->serviceListenerState ?? throw new \RuntimeException(
+            'Service listener state is not configured for ' . get_class($this) . '.'
+        );
     }
 
     /**
@@ -298,11 +465,13 @@ abstract class service
 
             return null === $delegate
                 ? null
-                : call_user_func_array([$delegate, $method], empty($args) ? [] : $args);
+                : $delegate->{$method}(...(empty($args) ? [] : $args));
         }
 
         if (!$this->_extensionCall($method, $args)) {
-            throw new fatalException($this, 'Incorrect call of service - unknown method "' . $method . '"!');
+            throw $this->createServiceFatalException('Incorrect call of service - unknown method "' . $method . '"!');
         }
+
+        return null;
     }
 }

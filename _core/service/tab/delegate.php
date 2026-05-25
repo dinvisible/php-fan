@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service\tab;
+use fan\core\base\service;
+
 
 /**
  * Description of delegate
@@ -29,7 +31,7 @@ abstract class delegate extends engine
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
 
-    public function setFacade(\fan\core\base\service $facade): static
+    public function setFacade(service $facade): static
     {
         parent::setFacade($facade);
         $this->config = $facade->getConfig();

@@ -29,6 +29,11 @@ final class safe_serializer
         return str_starts_with($payload, self::JSON_PREFIX);
     }
 
+    public static function looksLikeLegacyPhpPayload(string $payload): bool
+    {
+        return preg_match('/^(?:N;|[bid]:|s:\d+:"|a:\d+:\{|O:\d+:"|C:\d+:"|R:\d+;|r:\d+;)/', $payload) === 1;
+    }
+
     public static function decodeJsonPayload(string $payload): mixed
     {
         return json_decode(
@@ -47,7 +52,8 @@ final class safe_serializer
         string $payload,
         mixed $default = null,
         ?callable $onError = null,
-        bool $returnOriginalOnLegacyFailure = false
+        bool $returnOriginalOnLegacyFailure = false,
+        ?object $warningCapture = null
     ): mixed {
         if (self::isJsonPayload($payload)) {
             try {
@@ -60,7 +66,14 @@ final class safe_serializer
             }
         }
 
-        return self::decodeLegacyPhpPayload($payload, $default, false, $onError, $returnOriginalOnLegacyFailure);
+        return self::decodeLegacyPhpPayload(
+            $payload,
+            $default,
+            false,
+            $onError,
+            $returnOriginalOnLegacyFailure,
+            $warningCapture
+        );
     }
 
     /**
@@ -75,9 +88,14 @@ final class safe_serializer
     /**
      * Decodes internal PHP snapshots that may contain framework objects.
      */
-    public static function decodePhpSnapshot(string $payload, mixed $default = null, ?callable $onError = null): mixed
+    public static function decodePhpSnapshot(
+        string $payload,
+        mixed $default = null,
+        ?callable $onError = null,
+        ?object $warningCapture = null
+    ): mixed
     {
-        return self::decodeLegacyPhpPayload($payload, $default, true, $onError);
+        return self::decodeLegacyPhpPayload($payload, $default, true, $onError, false, $warningCapture);
     }
 
     /**
@@ -130,18 +148,19 @@ final class safe_serializer
         mixed $default,
         bool|array $allowedClasses,
         ?callable $onError,
-        bool $returnOriginalOnFailure = false
+        bool $returnOriginalOnFailure = false,
+        ?object $warningCapture = null
     ): mixed {
         $message = null;
-        set_error_handler(static function (int $severity, string $error) use (&$message): bool {
-            $message = $error;
-            return true;
-        });
-        try {
-            $result = unserialize($payload, ['allowed_classes' => $allowedClasses]);
-        } finally {
-            restore_error_handler();
+        if ($warningCapture === null) {
+            throw new \RuntimeException('Warning capture dependency is not configured for safe serializer.');
         }
+        $result = $warningCapture->run(static fn(): mixed => unserialize(
+            $payload,
+            ['allowed_classes' => $allowedClasses]
+        ), static function (string $error) use (&$message): void {
+            $message = $error;
+        });
 
         if ($result === false && $payload !== 'b:0;') {
             if ($message !== null && $onError !== null) {

@@ -3,7 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service\config;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\service\config;
+
 /**
  * Description of base
  *
@@ -37,7 +38,9 @@ abstract class base
      */
     protected string $fileExtention = '';
 
-    public function setFacade(\fan\core\service\config $facade): static
+    private ?object $fileStorage = null;
+
+    public function setFacade(config $facade): static
     {
         if (empty($this->facade)) {
             $this->facade = $facade;
@@ -45,21 +48,28 @@ abstract class base
         return $this;
     }
 
+    public function setFileStorage(object $fileStorage): static
+    {
+        $this->fileStorage = $fileStorage;
+
+        return $this;
+    }
+
     public function getFilePath(string $fileName, bool $checkExist = true): ?string
     {
         $filePath = $this->sourceDir . $fileName . (empty($this->fileExtention) ? '' : '.' . $this->fileExtention);
-        if (file_exists($filePath)) {
+        if ($this->fileStorage()->exists($filePath)) {
             return $filePath;
         }
         if ($checkExist) {
-            throw new fatalException($this->facade, 'Configuration file "' . $filePath . '" is not found!');
+            throw $this->createConfigFatalException('Configuration file "' . $filePath . '" is not found!');
         }
         return null;
     }
 
     public function loadFile(?string $filePath): array
     {
-        if ($filePath !== null && file_exists($filePath)) {
+        if ($filePath !== null && $this->fileStorage()->exists($filePath)) {
             return $this->_loadSourceData($filePath);
         }
         return [];
@@ -74,5 +84,24 @@ abstract class base
     protected function _loadSourceData(string $srcFilePath): array
     {
         return [];
+    }
+
+    private function fileStorage(): object
+    {
+        return $this->fileStorage ?? throw new \RuntimeException('Config source file storage is not configured.');
+    }
+
+    private function createConfigFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        if ($this->facade === null || !method_exists($this->facade, 'createConfigFatalException')) {
+            throw new \RuntimeException('Config facade exception factory is not configured for config engine.');
+        }
+
+        $exception = $this->facade->createConfigFatalException($message, $code, $previous);
+        if (!$exception instanceof \Throwable) {
+            throw new \UnexpectedValueException('Config facade exception factory must return a throwable object.');
+        }
+
+        return $exception;
     }
 }

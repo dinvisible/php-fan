@@ -33,7 +33,9 @@ class delayed
 
     public function getValue(): mixed
     {
-        return call_user_func_array([$this->obj, $this->method], $this->arguments);
+        $callable = [$this->obj, $this->method];
+
+        return $callable(...$this->arguments);
     }
 
 }

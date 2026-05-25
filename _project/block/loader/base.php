@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\project\block\loader;
+use fan\core\block\loader\base as loader_base;
+
 /**
  * Base abstract loader block
  *
@@ -19,6 +21,6 @@ namespace fan\project\block\loader;
  * @version of file: 05.02.001 (10.03.2014)
  * @abstract
  */
-abstract class base extends \fan\core\block\loader\base
+abstract class base extends loader_base
 {
 }

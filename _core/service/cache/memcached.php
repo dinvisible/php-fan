@@ -2,9 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service\cache;
-use fan\project\exception\service\fatal as fatalException;
 /**
- * ADOdb wrapper for template engine
+ * Memcached cache engine
  *
  * This file is part PHP-FAN (php-framework from Alexandr Nosov)
  * Copyright (C) 2005-2007 Alexandr Nosov, http://www.alex.4n.com.ua/

@@ -2,6 +2,12 @@
 declare(strict_types=1);
 
 namespace fan\core\view\router;
+use fan\core\block\base;
+use fan\core\view\keeper;
+use fan\core\view\keeper\loader\json as loader_json;
+use fan\core\view\keeper\loader\text;
+use fan\core\view\router;
+
 /**
  * View router of Block for Loader-type
  *
@@ -20,18 +26,9 @@ namespace fan\core\view\router;
  *
  * IMPORTANT: this view has common area for text and json data, but independed for html
  */
-class loader extends \fan\core\view\router
+class loader extends router
 {
-    /**
-     * JSON-keeper
-     * @var \fan\core\view\keeper\loader\json
-     */
-    protected static ?\fan\core\view\keeper\loader\json $json = null;
-    /**
-     * TEXT-keeper
-     * @var \fan\core\view\keeper\loader\text
-     */
-    protected static ?\fan\core\view\keeper\loader\text $text = null;
+    private loader_state $loaderState;
 
     /**
      * Routers array
@@ -47,6 +44,19 @@ class loader extends \fan\core\view\router
      * @var string
      */
     protected ?string $defaultKey = 'html';
+
+    public function __construct(
+        base $block,
+        ?loader_state $loaderState = null,
+        ?callable $keeperFactory = null,
+        ?callable $blockExceptionFactory = null,
+        ?callable $arrayAdducer = null
+    )
+    {
+        $this->loaderState = $loaderState ?? throw new \RuntimeException('Loader state is not configured for loader view router.');
+
+        parent::__construct($block, $keeperFactory, $blockExceptionFactory, $arrayAdducer);
+    }
 
     // ======== Main Interface methods ======== \\
     public function set(mixed $key, mixed $value): static
@@ -80,7 +90,7 @@ class loader extends \fan\core\view\router
         return $this;
     }
 
-    public function isFullRewrite(\fan\core\view\keeper $keeper): bool
+    public function isFullRewrite(keeper $keeper): bool
     {
         foreach ($this->keepers as $k => $v) {
             if ($v === $keeper) {
@@ -91,23 +101,13 @@ class loader extends \fan\core\view\router
     }
 
     // ======== Private/Protected methods ======== \\
-    protected function _getJsonKeeper(): \fan\core\view\keeper\loader\json
+    protected function _getJsonKeeper(): loader_json
     {
-        if (empty(self::$json)) {
-            self::$json = new \fan\project\view\keeper\loader\json($this);
-        } else {
-            self::$json->addRouter($this);
-        }
-        return self::$json;
+        return $this->loaderState->jsonKeeper($this);
     }
 
-    protected function _getTextKeeper(): \fan\core\view\keeper\loader\text
+    protected function _getTextKeeper(): text
     {
-        if (empty(self::$text)) {
-            self::$text = new \fan\project\view\keeper\loader\text($this);
-        } else {
-            self::$text->addRouter($this);
-        }
-        return self::$text;
+        return $this->loaderState->textKeeper($this);
     }
 }

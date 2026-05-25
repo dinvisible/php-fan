@@ -1,8 +1,10 @@
 <?php
 
 declare(strict_types=1);
+use PHPUnit\Framework\TestCase;
 
-class TemplateFilesTest extends \PHPUnit\Framework\TestCase
+
+class TemplateFilesTest extends TestCase
 {
     public function testDefaultTemplateRendersTextResponseFromTplVars(): void
     {

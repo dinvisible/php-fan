@@ -22,7 +22,7 @@ class structure extends base
 {
     public function init(): void
     {
-        $this->containerService('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
+        $this->roleService()->setSessionRoles('admin', $this->getMeta('login_timeout'));
 
         $data = $this->getData();
         $json = [];

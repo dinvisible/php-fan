@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\block\common;
+use fan\core\block\base;
+
 /**
  * Base class for all kind of meta nav
  *
@@ -19,7 +21,7 @@ namespace fan\core\block\common;
  * @version of file: 02.025
  * @abstract
  */
-abstract class html_nav extends \fan\core\block\base
+abstract class html_nav extends base
 {
     /**
      * Current Request
@@ -40,11 +42,12 @@ abstract class html_nav extends \fan\core\block\base
     protected function _parseNav(array $nav): array
     {
         $result = [];
+        $arrayValueReader = $this->arrayValueReader();
         foreach ($nav as $k => $v){
-            if (!isset($v['role']) || role($v['role'])) {
+            if (!isset($v['role']) || $this->roleService()->check($v['role'])) {
                 $result[$k] = [
-                    'nav_name'  => array_val($v, 'nav_name', '&nbsp;'),
-                    'url_value' => $this->_getNavURI((string)$v['url_value'], (string)array_val($v, 'url_type', 'local'), (string)array_val($v, 'protocol', '')),
+                    'nav_name'  => $arrayValueReader($v, 'nav_name', '&nbsp;'),
+                    'url_value' => $this->_getNavURI((string)$v['url_value'], (string)$arrayValueReader($v, 'url_type', 'local'), (string)$arrayValueReader($v, 'protocol', '')),
                     'current'   => isset($v['nav_key'])   ? $this->_checkCurrentElement((string)$v['nav_key']) : false,
                     'children'  => !empty($v['children']) ? $this->_parseNav($v['children']) : [],
                 ];
@@ -96,7 +99,7 @@ abstract class html_nav extends \fan\core\block\base
                 array_shift($request);
             }
             if ($this->getMeta('allowUrlPrefix', false)) {
-                $matcher = service('matcher');
+                $matcher = $this->matcherService();
                 /* @var $matcher \fan\core\service\matcher */
                 $prefix = (string)$matcher->getCurrentItem()->parsed->app_prefix;
                 if ($prefix) {

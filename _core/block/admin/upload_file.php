@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 namespace fan\core\block\admin;
+use fan\core\base\model\row;
+use fan\core\block\base as block_base;
+
 /**
  * Admin upload file class for loader block
  *
@@ -20,16 +23,17 @@ namespace fan\core\block\admin;
  */
 class upload_file extends base
 {
+    use upload_size_limit_provider_aware_trait;
 
     protected ?array $file = [];
 
     protected string $error = '';
 
-    public function finishConstruct(?\fan\core\block\base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
+    public function finishConstruct(?block_base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
     {
         parent::finishConstruct($container, $containerMeta, $allowSetEmbedded);
 
-        $this->file = $this->containerService('request')->get('file', 'F');
+        $this->file = $this->requestService()->get('file', 'F');
         if (!is_array($this->file)) {
             $this->file = null;
             return;
@@ -42,7 +46,7 @@ class upload_file extends base
             $this->error = 'File was broken!';
         } elseif ($uploadError === UPLOAD_ERR_INI_SIZE || $uploadError === UPLOAD_ERR_FORM_SIZE) {
             $this->file = null;
-            $this->error = 'Incorrect file size (there is limit ' . ini_get('upload_max_filesize') . ')!';
+            $this->error = 'Incorrect file size (there is limit ' . $this->uploadSizeLimit() . ')!';
         } elseif (!$this->file['tmp_name'] || $this->file['error']) {
             $this->file = null;
         }
@@ -50,7 +54,7 @@ class upload_file extends base
 
     public function init(): void
     {
-        $this->containerService('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
+        $this->roleService()->setSessionRoles('admin', $this->getMeta('login_timeout'));
 
         if ($this->error) {
             $this->setText($this->error);
@@ -76,7 +80,10 @@ class upload_file extends base
             }
         }
 
-        $file = gr((string)$this->containerService('entity')->getFileNsSuffix() . 'file_data', $data['fileId'] ?? null);
+        $entityService = $this->entityService();
+        $file = $entityService
+            ->get((string)$entityService->getFileNsSuffix() . 'file_data')
+            ->getRowById($data['fileId'] ?? null);
         if ((string)$data['op'] === 'dl' && !empty($data['fileId'])) {
             if ($file->checkIsLoad()) {
                 if ($link) {
@@ -89,7 +96,7 @@ class upload_file extends base
                 $file->delete('file_data', $data['fileId']);
             }
         } elseif ((string)$data['op'] === 'ul' && $this->file) {
-            $file->setFormFile('file', [], 'other', (string)$this->containerService('request')->get('description', 'P', ''));
+            $file->setFormFile('file', [], 'other', (string)$this->requestService()->get('description', 'P', ''));
             $accessType = $this->getMeta('access_type', null);
             if (!is_null($accessType)) {
                 $file->setAccessType((string)$accessType);
@@ -116,7 +123,7 @@ class upload_file extends base
 
     public function checkMainTableId(mixed &$mainRow, array &$data, array $main, mixed $link): bool
     {
-        $mainRow = gr((string)$main['table_name'], $data['id'] ?? null);
+        $mainRow = $this->entityService()->get((string)$main['table_name'])->getRowById($data['id'] ?? null);
         if (!empty($data['fileId']) && !$link) {
             $method = 'get_' . $main['file_id'];
             return (string)$mainRow->$method(null, true) === (string)$data['fileId'];
@@ -127,10 +134,10 @@ class upload_file extends base
     public function checkLinkTableId(mixed &$linkRow, array &$data, array $main, array $link): bool
     {
         if (empty($data['fileId'])) {
-            $linkRow = gr((string)$link['table_name']);
+            $linkRow = $this->entityService()->get((string)$link['table_name'])->getNewRow();
             return true;
         } else {
-            $linkRow = gr((string)$link['table_name'], [$link['main_id'] => $data['id'], $link['file_id'] => $data['fileId']]);
+            $linkRow = $this->entityService()->get((string)$link['table_name'])->getRowById([$link['main_id'] => $data['id'], $link['file_id'] => $data['fileId']]);
             return $linkRow->checkIsLoad();
         }
     }
@@ -138,17 +145,17 @@ class upload_file extends base
     public function getFileLineData(array $data, array $link): array
     {
         $ret = [];
-        $lstId = ge((string)$link['table_name'])->getRowsetByParam([$link['main_id'] => $data['id']])->getColumn($link['file_id']);
+        $lstId = $this->entityService()->get((string)$link['table_name'])->getRowsetByParam([$link['main_id'] => $data['id']])->getColumn($link['file_id']);
         foreach ($lstId as $v) {
             $ret[] = $this->getFileData($v);
         }
         return $ret;
     }
 
-    public function getFileOneData(\fan\core\base\model\row $mainRow, array $main, mixed $link): ?array
+    public function getFileOneData(row $mainRow, array $main, mixed $link): ?array
     {
         if ($link) {
-            $lstId = ge((string)$link['table_name'])->getRowsetByParam($link['main_id'])->getColumn($link['file_id']);
+            $lstId = $this->entityService()->get((string)$link['table_name'])->getRowsetByParam($link['main_id'])->getColumn($link['file_id']);
             return $this->getFileData($lstId[0] ?? null);
         } else {
             $method = 'get_' . $main['file_id'];

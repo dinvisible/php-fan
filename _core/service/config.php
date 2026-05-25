@@ -3,7 +3,11 @@ declare(strict_types=1);
 
 namespace fan\core\service;
 use \fan\core\service\config\row as row;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\base\model\entity as model_entity;
+use fan\core\base\service;
+use fan\core\base\service\multi;
+use fan\core\service\config\base;
+
 /**
  * Configuration manager service
  *
@@ -19,31 +23,8 @@ use fan\project\exception\service\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.002 (31.03.2014)
  */
-final class config extends \fan\core\base\service\multi
+final class config extends multi
 {
-    protected static array $instances = [];
-    /**
-     * Service's Egines by file types
-     * @var array
-     */
-    protected static array $egines = [];
-    /**
-     * Instance of Cache servise
-     * @var \fan\core\service\cache
-     */
-    protected static ?object $cache = null;
-
-    /**
-     * Config of this Service
-     * @var \fan\core\service\config\row
-     */
-    private static ?object $thisConf = null;
-    /**
-     * List of Application-depended configuration files
-     * @var array
-     */
-    private static array $appDepended = [];
-
     private ?string $configType = null;
     private ?string $sourceType = null;
 
@@ -53,39 +34,110 @@ final class config extends \fan\core\base\service\multi
     private ?object $confData = null;
 
     /**
+     * @var callable|null
+     */
+    private $configFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $configCacheFactory = null;
+
+    private ?object $configRuntime = null;
+    private ?object $configState = null;
+
+    /**
+     * @var callable|null
+     */
+    private $phpArrayFileLoader = null;
+
+    /**
+     * @var callable|null
+     */
+    private $configRowFactory = null;
+
+    private ?object $sourceFileMetadata = null;
+
+    private ?object $sourceFileStorage = null;
+
+    private mixed $shortClassNameResolver = null;
+
+    /**
      * @throws \fan\project\exception\service\fatal
      */
-    protected function __construct(string $configType, string $sourceType)
+    public function __construct(
+        string $configType,
+        string $sourceType,
+        ?callable $configFactory = null,
+        ?callable $configCacheFactory = null,
+        ?object $configState = null,
+        ?object $runtime = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?callable $phpArrayFileLoader = null,
+        ?callable $configRowFactory = null,
+        ?object $sourceFileMetadata = null,
+        ?object $sourceFileStorage = null,
+        ?callable $shortClassNameResolver = null
+    )
     {
+        $this->setConfigDependencies($configFactory, $configCacheFactory, $runtime, $phpArrayFileLoader, $configRowFactory, $sourceFileMetadata, $sourceFileStorage, $shortClassNameResolver);
+        $this->configState = $configState;
+        $this->setServiceDependencies($serviceBootstrapRuntime ?? $runtime, $serviceConfigurator ?? $this, $serviceCacheFactory);
         $this->configType = $configType;
         $this->sourceType = $sourceType;
 
-        self::$instances[$configType] = $this;
+        $this->state()->setInstance($configType, $this);
 
         $method = $configType === 'service' ? '_initServiceConfig' : '_initOtherConfig';
         $this->$method();
 
-        parent::__construct();
+        parent::__construct(true, $serviceBootstrapRuntime ?? $runtime, $serviceConfigurator ?? $this, $serviceCacheFactory);
     }
 
-    // ======== Static methods ======== \\
-    public static function instance(string $configType = 'service', string $sourceType = 'ini'): static {
-        if (!isset(self::$instances[$configType])) {
-            new self($configType, $sourceType);
-        }
-
-        return self::$instances[$configType];
-    }
-
-    public static function mergeByApp(string $appName): void
+    public function mergeByApp(string $appName): void
     {
-        foreach (self::$appDepended as $k => $v) {
+        foreach ($this->state()->getAppDepended() as $k => $v) {
             $confFile = str_replace('{APP_NAME}', $appName, $v);
-            self::instance($k)->_mergeConfig($confFile, true, false);
+            $this->configService((string)$k)->_mergeConfig($confFile, true, false);
         }
     }
 
     // ======== Main Interface methods ======== \\
+    public function setConfigDependencies(
+        ?callable $configFactory = null,
+        ?callable $configCacheFactory = null,
+        ?object $runtime = null,
+        ?callable $phpArrayFileLoader = null,
+        ?callable $configRowFactory = null,
+        ?object $sourceFileMetadata = null,
+        ?object $sourceFileStorage = null,
+        ?callable $shortClassNameResolver = null
+    ): static
+    {
+        $this->configFactory = $configFactory;
+        $this->configCacheFactory = $configCacheFactory;
+        $this->configRuntime = $runtime;
+        if ($phpArrayFileLoader !== null) {
+            $this->phpArrayFileLoader = $phpArrayFileLoader;
+        }
+        if ($configRowFactory !== null) {
+            $this->configRowFactory = \Closure::fromCallable($configRowFactory);
+        }
+        if ($sourceFileMetadata !== null) {
+            $this->sourceFileMetadata = $sourceFileMetadata;
+        }
+        if ($sourceFileStorage !== null) {
+            $this->sourceFileStorage = $sourceFileStorage;
+        }
+        if ($shortClassNameResolver !== null) {
+            $this->shortClassNameResolver = \Closure::fromCallable($shortClassNameResolver);
+        }
+
+        return $this;
+    }
+
     public function get(string $name, string|array|null $key = null): mixed
     {
         $conf = $this->confData[$name];
@@ -118,10 +170,10 @@ final class config extends \fan\core\base\service\multi
         return $this;
     }
 
-    public function merge(array|\fan\core\service\config\row $data, bool $priority = true): static
+    public function merge(array|row $data, bool $priority = true): static
     {
         if (!is_array($data) && !$this->_isRow($data)) {
-            throw new fatalException($this, 'Incorrect data for merge configs');
+            throw $this->createServiceFatalException('Incorrect data for merge configs');
         }
         if (!empty($data)) {
             $this->confData->mergeData($data, $priority);
@@ -157,19 +209,14 @@ final class config extends \fan\core\base\service\multi
         return $this->configType;
     }
 
-    public function getServiceConfig(\fan\core\base\service $service): row
+    public function getServiceConfig(service $service): row
     {
-        $name = get_class_name($service);
+        $name = $this->shortClassName($service);
         if (empty($this->confData)) {
-            throw new fatalException($this, 'Data row isn\'t set for config "' . $this->configType . '"');
+            throw $this->createServiceFatalException('Data row isn\'t set for config "' . $this->configType . '"');
         }
         if (!$this->confData[$name]) {
             $this->confData->set($name, []);
-            /*
-            // ToDo: Check code above
-            $this->confData[$name] = new \fan\project\service\config\row([], $name, $this->confData);
-            $this->confData[$name]->setFacade($this);
-             */
         }
         $this->confData[$name]->setServiceOwner($service);
         return $this->confData[$name];
@@ -180,7 +227,7 @@ final class config extends \fan\core\base\service\multi
     public function getControllerConfig(mixed $ctrl, string $name): row
     {
         if (empty($this->confData)) {
-            throw new fatalException($this, 'Data row isn\'t set for config "' . $name . '"');
+            throw $this->createServiceFatalException('Data row isn\'t set for config "' . $name . '"');
         }
         if (!$this->confData[$name]) {
             $this->confData->set($name, []);
@@ -190,7 +237,7 @@ final class config extends \fan\core\base\service\multi
         }
         return $this->confData[$name];
     }
-    public function getEntityConfig(\fan\core\base\model\entity $entity, ?string $name = null): row
+    public function getEntityConfig(model_entity $entity, ?string $name = null): row
     {
         if (is_null($name)) {
             $name = $entity->getTableName();
@@ -209,35 +256,40 @@ final class config extends \fan\core\base\service\multi
         return $ettConf[$name];
     }
 
+    public function createConfigFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        return $this->createServiceFatalException($message, $code, $previous);
+    }
 
     // ======== Private/Protected methods ======== \\
     protected function _initServiceConfig(): static
     {
-        self::$cache    = \fan\project\service\cache::configInstance();
+        $this->state()->setCache($this->configCache());
 
-        $this->confData = new row($this->_getData('service'));
+        $this->confData = $this->configRow($this->_getData('service'));
         $this->confData->setFacade($this);
 
-        self::$thisConf = $this->getServiceConfig($this);
-        $this->config   = self::$thisConf;
+        $thisConfig = $this->getServiceConfig($this);
+        $this->state()->setThisConfig($thisConfig);
+        $this->config = $thisConfig;
 
         if ($this->config['app_file']) {
-            self::$appDepended = $this->config['app_file']->toArray();
+            $this->state()->setAppDepended($this->config['app_file']->toArray());
         }
-        $this->_subscribeForService('application', 'setAppName', [get_class($this), 'mergeByApp']);
+        $this->_subscribeForService('application', 'setAppName', [$this, 'mergeByApp']);
 
         return $this;
     }
 
     protected function _initOtherConfig(): static
     {
-        if (empty(self::$thisConf)) {
-            config::instance('service');
+        if (empty($this->state()->getThisConfig())) {
+            $this->configService('service');
         }
-        $this->config   = clone self::$thisConf;
+        $this->config = clone $this->state()->getThisConfig();
 
         $fileName       = $this->getConfig(['file', $this->configType], $this->configType);
-        $this->confData = new row($this->_getData($fileName));
+        $this->confData = $this->configRow($this->_getData($fileName));
         $this->confData->setFacade($this);
 
         return $this;
@@ -247,17 +299,18 @@ final class config extends \fan\core\base\service\multi
     {
         $engine   = $this->_getConfigEngine();
         $filePath = $engine->getFilePath($fileName, $checkExist);
-        if (!empty(self::$cache)) {
-            $data = self::$cache->get($fileName);
-            if (!empty($data) && self::$cache->checkSourceFile($fileName, $filePath)) {
+        $cache = $this->state()->getCache();
+        if (!empty($cache)) {
+            $data = $cache->get($fileName);
+            if (!empty($data) && $cache->checkSourceFile($fileName, $filePath)) {
                 return $data;
             }
         }
 
         $data = $engine->loadFile($filePath, $this->configType);
-        if (!empty($data) && !empty(self::$cache)) {
-            self::$cache->set($fileName, $data);
-            self::$cache->setExtraMeta($fileName, 'file_size', filesize($filePath));
+        if (!empty($data) && !empty($cache)) {
+            $cache->set($fileName, $data);
+            $cache->setExtraMeta($fileName, 'file_size', $this->sourceFileMetadata()->size($filePath));
         }
 
         return $data;
@@ -268,20 +321,25 @@ final class config extends \fan\core\base\service\multi
         return $this;
     }
 
-    protected function _getConfigEngine(): \fan\core\service\config\base
+    protected function _getConfigEngine(): base
     {
         $type = $this->sourceType;
-        if (!isset(self::$egines[$type])) {
+        $engine = $this->state()->getEngine($type);
+        if ($engine === null) {
             $engine = parent::_getEngine($type, true);
             if (empty($engine)) {
-                throw new \fan\project\exception\service\fatal($this, 'Unknown engine type!');
+                throw $this->createServiceFatalException('Unknown engine type!');
             }
-            self::$egines[$type] = $engine;
             $engine->setDirPath(
-                \bootstrap::getGlobalPath('config_source', '{PROJECT_DIR}/conf')
+                $this->configRuntime()->getGlobalPath('config_source', '{PROJECT_DIR}/conf')
             );
+            $engine->setFileStorage($this->sourceFileStorage());
+            if (method_exists($engine, 'setPhpArrayFileLoader')) {
+                $engine->setPhpArrayFileLoader($this->phpArrayFileLoader());
+            }
+            $this->state()->setEngine($type, $engine);
         }
-        return self::$egines[$type];
+        return $engine;
     }
 
     protected function _mergeConfig(string $fileName, bool $resetConf, bool $checkExist): static
@@ -296,6 +354,99 @@ final class config extends \fan\core\base\service\multi
     protected function _isRow(mixed $obj): bool
     {
         return is_object($obj) && $obj instanceof row;
+    }
+
+    private function configService(string $configType, string $sourceType = 'arr'): object
+    {
+        if ($this->configFactory !== null) {
+            return ($this->configFactory)($configType, $sourceType);
+        }
+
+        throw new \RuntimeException('Config factory is not configured for config service.');
+    }
+
+    private function configCache(): ?object
+    {
+        if ($this->configCacheFactory !== null) {
+            $cache = ($this->configCacheFactory)();
+            return is_object($cache) ? $cache : null;
+        }
+
+        throw new \RuntimeException('Config cache factory is not configured for config service.');
+    }
+
+    private function configRuntime(): object
+    {
+        if ($this->configRuntime !== null) {
+            return $this->configRuntime;
+        }
+
+        throw new \RuntimeException('Bootstrap runtime service is not configured for config service.');
+    }
+
+    private function phpArrayFileLoader(): callable
+    {
+        if (is_callable($this->phpArrayFileLoader)) {
+            return $this->phpArrayFileLoader;
+        }
+
+        throw new \RuntimeException('PHP-array file loader is not configured for config service.');
+    }
+
+    private function configRow(mixed $data): row
+    {
+        if (!is_callable($this->configRowFactory)) {
+            throw new \RuntimeException('Config row factory is not configured for config service.');
+        }
+
+        $row = ($this->configRowFactory)($data);
+        if (!$row instanceof row) {
+            $actual = is_object($row) ? get_class($row) : gettype($row);
+            throw new \UnexpectedValueException('Config row factory returned "' . $actual . '".');
+        }
+
+        return $row;
+    }
+
+    private function state(): object
+    {
+        if ($this->configState !== null) {
+            return $this->configState;
+        }
+
+        throw new \RuntimeException('Config state is not configured for config service.');
+    }
+
+    private function sourceFileMetadata(): object
+    {
+        if ($this->sourceFileMetadata === null) {
+            throw new \RuntimeException('Source file metadata dependency is not configured for config service.');
+        }
+
+        return $this->sourceFileMetadata;
+    }
+
+    private function sourceFileStorage(): object
+    {
+        if ($this->sourceFileStorage === null) {
+            throw new \RuntimeException('Source file storage dependency is not configured for config service.');
+        }
+
+        return $this->sourceFileStorage;
+    }
+
+    private function shortClassName(object|string $object): string
+    {
+        if (!is_callable($this->shortClassNameResolver)) {
+            throw new \RuntimeException('Short class-name resolver is not configured for config service.');
+        }
+
+        $className = ($this->shortClassNameResolver)($object);
+        if (!is_string($className) || $className === '') {
+            throw new \UnexpectedValueException('Short class-name resolver must return a non-empty string.');
+        }
+
+        return $className;
     }
 
 }

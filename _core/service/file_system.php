@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
+use fan\core\base\service\multi;
+
 /**
  * File-system service
  *
@@ -17,10 +19,8 @@ namespace fan\core\service;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-class file_system extends \fan\core\base\service\multi
+class file_system extends multi
 {
-    private static ?array $instances = null;
-
     protected string $fullPath = '';
 
     protected ?bool $isFile = null;
@@ -32,27 +32,24 @@ class file_system extends \fan\core\base\service\multi
 
     protected mixed $param = '';
 
-    protected function __construct(string $fullPath)
+    private ?object $storage = null;
+
+    public function __construct(
+        string $fullPath,
+        ?object $storage = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null
+    )
     {
-        parent::__construct(false);
+        parent::__construct(false, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
+        $this->storage = $storage;
         $this->fullPath = (string)$fullPath;
-        if (file_exists($this->fullPath)) {
-            $this->isFile = is_file($this->fullPath);
+        if ($this->storage()->exists($this->fullPath)) {
+            $this->isFile = $this->storage()->isFile($this->fullPath);
         } else {
             throw new \RuntimeException('File "' . $this->fullPath . '" isn\'t found.');
         }
-    }
-
-    public static function instance(?string $srcPath = null): ?self
-    {
-        if (!$srcPath) {
-            return null;
-        }
-        $fullPath = \bootstrap::parsePath($srcPath);
-        if (!isset(self::$instances[$fullPath])) {
-            self::$instances[$fullPath] = new self($fullPath);
-        }
-        return self::$instances[$fullPath];
     }
 
     public function isFile(): ?bool
@@ -62,7 +59,7 @@ class file_system extends \fan\core\base\service\multi
 
     public function isRreadable(): bool
     {
-        return $this->isFile && is_readable($this->getFullPath());
+        return $this->isFile && $this->storage()->isReadable($this->getFullPath());
     }
 
     public function getFullPath(): string
@@ -73,6 +70,7 @@ class file_system extends \fan\core\base\service\multi
     public function setReadByPart(int|float $rowsQtt = 100, string $rowSeparator = "\n", string $colSeparator = "\t", mixed $openFile = true): static
     {
         if ($this->isRreadable()) {
+            $this->param = [];
             $this->param['rowsQtt']      = $rowsQtt;
             $this->param['rowSeparator'] = $rowSeparator;
             $this->param['colSeparator'] = $colSeparator;
@@ -87,14 +85,14 @@ class file_system extends \fan\core\base\service\multi
     public function openFile(): static
     {
         $this->closeFile();
-        $this->handle = fopen($this->fullPath, 'r');
+        $this->handle = $this->storage()->openRead($this->fullPath);
         return $this;
     }
 
     public function closeFile(): static
     {
         if ($this->handle) {
-            fclose($this->handle);
+            $this->storage()->close($this->handle);
             $this->handle = null;
         }
         return $this;
@@ -113,14 +111,14 @@ class file_system extends \fan\core\base\service\multi
 
         while (count($ret) < $qtt) {
             if ($this->handle && count($data) < $qtt) {
-                $tmp = fread($this->handle, $partSize);
+                $tmp = $this->storage()->read($this->handle, $partSize);
                 $srcEnc  = $this->getConfig('SOURCE_ENCODING');
                 $baseEnc = (string)$this->getConfig('BASE_ENCODING', 'UTF-8');
                 if ($srcEnc && (string)$srcEnc !== $baseEnc) {
                     $tmp = iconv((string)$srcEnc, $baseEnc, (string)$tmp);
                 }
-                if (feof($this->handle)) {
-                    fclose($this->handle);
+                if ($this->storage()->isEnd($this->handle)) {
+                    $this->storage()->close($this->handle);
                     $this->handle = null;
                 }
                 $tmp = explode((string)$this->param['rowSeparator'], (string)$tmp);
@@ -154,6 +152,15 @@ class file_system extends \fan\core\base\service\multi
             $ret[] = explode((string)$this->param['colSeparator'], (string)$v);
         }
         return $ret;
+    }
+
+    private function storage(): object
+    {
+        if ($this->storage === null) {
+            throw new \RuntimeException('File-system storage is not configured for file system service.');
+        }
+
+        return $this->storage;
     }
 
 }

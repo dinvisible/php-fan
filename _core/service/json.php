@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
+use fan\core\base\service\multi;
+
 /**
  * Description of JSON
  *
@@ -17,14 +19,9 @@ namespace fan\core\service;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.007 (31.08.2015)
  */
-class json extends \fan\core\base\service\multi
+class json extends multi
 {
     public const DECODE_OPT_PHP_VERSION = '5.4.0';
-    /**
-     * Service's Instances
-     * @var \fan\core\service\json[]
-     */
-    private static array $instances = [];
 
     /**
      * Error Code
@@ -38,21 +35,21 @@ class json extends \fan\core\base\service\multi
      */
     protected bool $useBase64 = false;
 
-    protected function __construct(bool $useBase64)
+    private mixed $errorFactory = null;
+
+    public function __construct(
+        bool $useBase64,
+        ?callable $errorFactory = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null
+    )
     {
-        parent::__construct(true);
+        $this->errorFactory = $errorFactory;
+        parent::__construct(true, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
         $this->useBase64 = (bool)$useBase64;
     }
 
-    // ======== Static methods ======== \\
-    public static function instance(bool $useBase64 = false): self
-    {
-        $key = empty($useBase64) ? 0 : 1;
-        if (!isset(self::$instances[$key])) {
-            self::$instances[$key] = new self((bool)$key);
-        }
-        return self::$instances[$key];
-    }
     // ======== Main Interface methods ======== \\
 
     public function decode(string $json, bool $array = true, mixed $depth = null, mixed $options = null): mixed
@@ -92,7 +89,7 @@ class json extends \fan\core\base\service\multi
             $result = json_encode($sourse, (int)$options);
             $this->errorCode = json_last_error();
             if ((int)$this->errorCode !== JSON_ERROR_NONE && $logError) {
-                $this->containerService('error')->logErrorMessage(
+                $this->errorService()->logErrorMessage(
                         $this->getErrorText(),
                         'JSON error',
                         '',
@@ -181,5 +178,14 @@ class json extends \fan\core\base\service\multi
         if (is_scalar($v)) {
             $v = $op === 'encode' ? base64_encode((string)$v) : base64_decode((string)$v);
         }
+    }
+
+    private function errorService(): object
+    {
+        if (!is_callable($this->errorFactory)) {
+            throw new \RuntimeException('Error service factory is not configured for json service.');
+        }
+
+        return ($this->errorFactory)();
     }
 }

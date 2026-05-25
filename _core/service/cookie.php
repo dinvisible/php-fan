@@ -2,7 +2,9 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\base\service\multi;
+
+
 /**
  * Cookie service
  *
@@ -18,16 +20,8 @@ use fan\project\exception\service\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class cookie extends \fan\core\base\service\multi
+class cookie extends multi
 {
-    private static array $instances = [];
-
-    /**
-     * Cookie data
-     * @var array
-     */
-    protected static ?array $data = null;
-
     protected ?string $path = null;
 
     protected ?string $domain = null;
@@ -36,47 +30,66 @@ class cookie extends \fan\core\base\service\multi
 
     protected bool $httpOnly = false;
 
-    protected function __construct(mixed $path, mixed $domain, bool $secure)
+    private ?object $input = null;
+
+    private mixed $errorFactory = null;
+    private ?object $state = null;
+    private \Closure $cookieValueEncoder;
+    private \Closure $cookieValueDecoder;
+    private \Closure $cookieValueChecker;
+    private ?object $cookieWriter = null;
+
+    public function __construct(
+        mixed $path,
+        mixed $domain,
+        bool $secure,
+        ?object $input = null,
+        ?callable $errorFactory = null,
+        ?callable $cookieValueEncoder = null,
+        ?callable $cookieValueDecoder = null,
+        ?callable $cookieValueChecker = null,
+        ?object $cookieWriter = null,
+        ?object $state = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null
+    )
     {
-        parent::__construct(false);
+        $this->input = $input;
+        $this->errorFactory = $errorFactory;
+        $this->cookieValueEncoder = \Closure::fromCallable(
+            $cookieValueEncoder ?? static function (mixed $value): string {
+                throw new \RuntimeException('Cookie value encoder is not configured for cookie service.');
+            }
+        );
+        $this->cookieValueDecoder = \Closure::fromCallable(
+            $cookieValueDecoder ?? static function (
+                string $payload,
+                mixed $default = null,
+                ?callable $onError = null,
+                bool $returnOriginalOnLegacyFailure = false
+            ): mixed {
+                throw new \RuntimeException('Cookie value decoder is not configured for cookie service.');
+            }
+        );
+        $this->cookieValueChecker = \Closure::fromCallable($cookieValueChecker ?? static fn(string $payload): bool => true);
+        $this->cookieWriter = $cookieWriter;
+        $this->state = $state ?? throw new \RuntimeException('Cookie state is not configured for cookie service.');
+        parent::__construct(false, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
 
         $this->path   = is_null($path) ? null : (string)$path;
         $this->domain = is_null($domain) ? null : (string)$domain;
         $this->secure = (bool)$secure;
-        if (is_null(self::$data)) {
-            self::$data = &$_COOKIE;
-        }
+        $this->state()->initializeData($this->input()->globalArray('_COOKIE'));
     }
-
-    public static function instance(mixed $path = null, mixed $domain = null, bool $secure = false): self
-    {
-        $config = self::staticContainerService('config')->get('cookie');
-
-        if (is_null($path)) {
-            $path = $config->get('DEFAULT_PATH', '/');
-        }
-        if (is_null($domain)) {
-            $domain = $config->get('DEFAULT_DOMAIN');
-        }
-
-        $k0 = empty($domain) ? '' : (string)$domain;
-        $k1 = empty($path)   ? '' : (string)$path;
-        $k2 = empty($path)   ? '' : (string)$path;
-        if (empty(self::$instances[$k0][$k1][$k2])) {
-            self::$instances[$k0][$k1][$k2] = new self($path, $domain, !empty($secure));
-        }
-
-        return self::$instances[$k0][$k1][$k2];
-    }
-
 
     public function get(string $name, ?string $defaultVal = null): mixed
     {
-        if (!isset(self::$data[$name])) {
+        if (!$this->state()->hasData($name)) {
             return $defaultVal;
         }
 
-        return $this->decodeCookieValue((string)self::$data[$name], $defaultVal);
+        return $this->decodeCookieValue((string)$this->state()->getData($name), $defaultVal);
     }
 
     /**
@@ -87,11 +100,11 @@ class cookie extends \fan\core\base\service\multi
     private function encodeCookieValue(mixed $value): string
     {
         try {
-            return \fan\core\adapter\safe_serializer::encodeJson($value);
+            return ($this->valueEncoder())($value);
         } catch (\InvalidArgumentException $e) {
-            throw new fatalException($this, 'Cookie value contains data unsupported by JSON.');
+            throw $this->createServiceFatalException('Cookie value contains data unsupported by JSON.');
         } catch (\JsonException $e) {
-            throw new fatalException($this, 'Cookie value isn\'t JSON serializable: ' . $e->getMessage());
+            throw $this->createServiceFatalException('Cookie value isn\'t JSON serializable: ' . $e->getMessage());
         }
     }
 
@@ -103,11 +116,15 @@ class cookie extends \fan\core\base\service\multi
      */
     private function decodeCookieValue(string $value, mixed $defaultVal = null): mixed
     {
-        return \fan\core\adapter\safe_serializer::decodeExternalPayload(
+        if (!($this->cookieValueChecker)($value)) {
+            return $value;
+        }
+
+        return ($this->valueDecoder())(
             $value,
             $defaultVal,
             function (string $message): void {
-                $this->containerService('error')->logErrorMessage($message, 'Cookie JSON decode error', '', true, false);
+                $this->errorLogger()->logErrorMessage($message, 'Cookie JSON decode error', '', true, false);
             },
             true
         );
@@ -116,7 +133,7 @@ class cookie extends \fan\core\base\service\multi
     public function getAll(?string $defaultVal = null): array
     {
         $result = [];
-        foreach (self::$data as $k => $v) {
+        foreach ($this->state()->getAllData() as $k => $v) {
             $result[$k] = $this->get($k, $defaultVal);
         }
         return $result;
@@ -131,11 +148,11 @@ class cookie extends \fan\core\base\service\multi
     {
         $cookieValue = $time < 0 ? '' : $this->encodeCookieValue($value);
 
-        if (setcookie($name, $cookieValue, ($time ? $time + time() : 0), (string)$this->path, (string)$this->domain, $this->secure, $this->httpOnly)) {
+        if ($this->cookieWriter()->write($name, $cookieValue, ($time ? $time + time() : 0), (string)$this->path, (string)$this->domain, $this->secure, $this->httpOnly)) {
             if ($time < 0) {
-                unset(self::$data[$name]);
-            } elseif (!$this->secure || !empty($_SERVER['HTTPS'])) {
-                self::$data[$name] = $cookieValue;
+                $this->state()->deleteData($name);
+            } elseif (!$this->secure || !empty($this->input()->serverValue('HTTPS'))) {
+                $this->state()->setData($name, $cookieValue);
             }
             return true;
         }
@@ -147,7 +164,7 @@ class cookie extends \fan\core\base\service\multi
     {
         $date = trim($date);
         if (empty($date)) {
-            throw new fatalException($this, 'Date isn\'t set');
+            throw $this->createServiceFatalException('Date isn\'t set');
         }
 
         $matches = [];
@@ -166,7 +183,7 @@ class cookie extends \fan\core\base\service\multi
             $time = mktime((int)$matches[6], (int)$matches[7], (int)$matches[8] - 1, (int)$matches[3], (int)$matches[4], (int)$matches[2]) - time();
             return $this->setByTime($name, $value, $time);
         }
-        throw new fatalException($this, 'Date contains incorrect format: "' . $date . '"');
+        throw $this->createServiceFatalException('Date contains incorrect format: "' . $date . '"');
     }
 
     public function delete(string $name): bool
@@ -177,6 +194,69 @@ class cookie extends \fan\core\base\service\multi
     public function setHttpOnlyFlag(bool $httpOnly): void
     {
         $this->httpOnly = !empty($httpOnly);
+    }
+
+    private function input(): object
+    {
+        if ($this->input === null) {
+            throw new \RuntimeException('Request input service is not configured for cookie service.');
+        }
+
+        return $this->input;
+    }
+
+    private function state(): object
+    {
+        if ($this->state === null) {
+            throw new \RuntimeException('Cookie state is not configured for cookie service.');
+        }
+
+        return $this->state;
+    }
+
+    private function errorLogger(): object
+    {
+        if (!is_callable($this->errorFactory)) {
+            throw new \RuntimeException('Error service factory is not configured for cookie service.');
+        }
+
+        return ($this->errorFactory)();
+    }
+
+    private function cookieWriter(): object
+    {
+        if ($this->cookieWriter === null || !method_exists($this->cookieWriter, 'write')) {
+            throw new \RuntimeException('Cookie writer is not configured for cookie service.');
+        }
+
+        return $this->cookieWriter;
+    }
+
+    private function valueEncoder(): callable
+    {
+        if (!isset($this->cookieValueEncoder)) {
+            $this->cookieValueEncoder = \Closure::fromCallable(static function (mixed $value): string {
+                throw new \RuntimeException('Cookie value encoder is not configured for cookie service.');
+            });
+        }
+
+        return $this->cookieValueEncoder;
+    }
+
+    private function valueDecoder(): callable
+    {
+        if (!isset($this->cookieValueDecoder)) {
+            $this->cookieValueDecoder = \Closure::fromCallable(static function (
+                string $payload,
+                mixed $default = null,
+                ?callable $onError = null,
+                bool $returnOriginalOnLegacyFailure = false
+            ): mixed {
+                throw new \RuntimeException('Cookie value decoder is not configured for cookie service.');
+            });
+        }
+
+        return $this->cookieValueDecoder;
     }
 
 }

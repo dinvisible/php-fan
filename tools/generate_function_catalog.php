@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 $root = dirname(__DIR__);
-$sourceRoots = ['_core', '_project', 'htdocs', 'cli', 'tools', 'unit'];
+$sourceRoots = ['_core', '_project', 'htdocs', 'tools', 'unit'];
 $excludedPrefixes = [
     $root . '/libraries/',
     $root . '/vendor/',
@@ -150,7 +150,7 @@ function renderCatalog(array $entries): string
     $lines = [
         '# Каталог функций',
         '',
-        'Документ сгенерирован по PHP-токенам. Он описывает функции и методы production-кода, CLI, tools, htdocs и unit-тестов, исключая vendor, libraries и legacy assets.',
+        'Документ сгенерирован по PHP-токенам. Он описывает функции и методы production-кода, tools, htdocs и unit-тестов, исключая vendor, libraries и legacy assets.',
         '',
         '- Сгенерировано: ' . $generatedAt,
         '- Описано функций и методов: ' . count($entries),

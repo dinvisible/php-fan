@@ -3,7 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use project\exception\service\fatal as fatalException;
+use fan\core\base\service\single;
+
 /**
  * Description of translation
  *
@@ -19,7 +20,7 @@ use project\exception\service\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.006 (20.04.2015)
  */
-class translation extends \fan\core\base\service\single
+class translation extends single
 {
     /**
      * Combi-message buffer
@@ -46,10 +47,47 @@ class translation extends \fan\core\base\service\single
 
     protected array $forCall  = [];
 
-    protected function __construct(bool $allowIni = true)
+    private ?object $translationRuntime = null;
+
+    /**
+     * @var callable|null
+     */
+    private $translationTabFactory = null;
+
+    private array $translationMessageTagFactories = [];
+
+    private ?object $translationErrorLogger = null;
+    private ?object $translationBlockContext = null;
+    private ?object $translationMatcher = null;
+    private ?object $translationRequestInput = null;
+
+    /**
+     * @var callable|null
+     */
+    private $translationPhpArrayLoader = null;
+
+    private ?object $translationFileStorage = null;
+
+    public function __construct(
+        bool $allowIni = true,
+        ?object $locale = null,
+        ?object $runtime = null,
+        ?callable $tabFactory = null,
+        array $messageTagFactories = [],
+        ?object $errorLogger = null,
+        ?object $blockContext = null,
+        ?object $matcher = null,
+        ?object $requestInput = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?callable $phpArrayLoader = null,
+        ?object $fileStorage = null
+    )
     {
-        parent::__construct($allowIni);
-        $this->locale      = $this->containerService('locale');
+        parent::__construct($allowIni, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
+        $this->setTranslationDependencies($locale, $runtime, $tabFactory, $messageTagFactories, $errorLogger, $blockContext, $matcher, $requestInput, $phpArrayLoader, $fileStorage);
+        $this->locale      = $this->translationLocale();
         $this->editableLng = array_keys((array)$this->locale->getAvailableLanguages());
     }
 
@@ -63,6 +101,33 @@ class translation extends \fan\core\base\service\single
     // ======== Static methods ======== \\
 
     // ======== Main Interface methods ======== \\
+
+    public function setTranslationDependencies(
+        ?object $locale = null,
+        ?object $runtime = null,
+        ?callable $tabFactory = null,
+        array $messageTagFactories = [],
+        ?object $errorLogger = null,
+        ?object $blockContext = null,
+        ?object $matcher = null,
+        ?object $requestInput = null,
+        ?callable $phpArrayLoader = null,
+        ?object $fileStorage = null
+    ): static
+    {
+        $this->locale = $locale;
+        $this->translationRuntime = $runtime;
+        $this->translationTabFactory = $tabFactory;
+        $this->translationMessageTagFactories = $messageTagFactories;
+        $this->translationErrorLogger = $errorLogger;
+        $this->translationBlockContext = $blockContext;
+        $this->translationMatcher = $matcher;
+        $this->translationRequestInput = $requestInput;
+        $this->translationPhpArrayLoader = $phpArrayLoader;
+        $this->translationFileStorage = $fileStorage;
+
+        return $this;
+    }
 
     public function getCombiPart(): ?string
     {
@@ -114,7 +179,7 @@ class translation extends \fan\core\base\service\single
         if ($enableML) {
             $keyF = $this->_formatKey($key);
             if (empty($keyF)) {
-                throw new fatalException($this, 'Incorrect Key. You can\'t create message with key "' . $key . '"');
+                throw $this->createServiceFatalException('Incorrect Key. You can\'t create message with key "' . $key . '"');
             }
 
             $availableLng = $this->locale->getAvailableLanguages();
@@ -149,7 +214,7 @@ class translation extends \fan\core\base\service\single
             }
         }
 
-        if ($enableML && class_exists('\fan\core\service\tab', false) && $this->containerService('tab')->isDebugAllowed()) {
+        if ($enableML && $this->translationDebugAllowed()) {
             $this->_setReferer($keyF);
             $len = strpos($keyF, '_');
             if ($len > 0) {
@@ -177,8 +242,8 @@ class translation extends \fan\core\base\service\single
         $lng = (string)$lng;
         if (empty($this->messages[$lng])) {
             $path = $this->_getFilePath('MESSAGES_PATH', ['{LNG}' => $lng]);
-            if (is_readable($path)) {
-                $this->messages[$lng] = (array)\fan\project\adapter\php_array_file::load($path);
+            if ($this->translationFileStorage()->isReadable($path)) {
+                $this->messages[$lng] = (array)$this->loadPhpArrayFile($path);
             } else {
                 throw new \RuntimeException('Undefined message file "' . $path . '".');
             }
@@ -194,8 +259,8 @@ class translation extends \fan\core\base\service\single
     {
         if (empty($this->msgUseTag)) {
             $path = $this->_getFilePath('USE_TAGS_PATH');
-            if (is_readable($path)) {
-                $this->msgUseTag = \fan\project\adapter\php_array_file::load($path);
+            if ($this->translationFileStorage()->isReadable($path)) {
+                $this->msgUseTag = $this->loadPhpArrayFile($path);
             } else {
                 throw new \RuntimeException('Undefined message file "' . $path . '".');
             }
@@ -255,7 +320,7 @@ class translation extends \fan\core\base\service\single
     {
         if (!$this->tags) {
             $path = $this->_getFilePath('TAGS_PATH');
-            $this->tags = \fan\project\adapter\php_array_file::load($path, []);
+            $this->tags = $this->loadPhpArrayFile($path, []);
         }
         return $this->tags;
     }
@@ -264,7 +329,7 @@ class translation extends \fan\core\base\service\single
     {
         if (!$this->referers) {
             $path = $this->_getFilePath('REFERERS_PATH');
-            $this->referers = \fan\project\adapter\php_array_file::load($path, []);
+            $this->referers = $this->loadPhpArrayFile($path, []);
             $lng  = $this->locale->getAvailableLanguages();
             if ((string)$lng === (string)$this->locale->getDefaultLanguage()) {
                 $this->getMessageArr($lng);
@@ -352,12 +417,12 @@ class translation extends \fan\core\base\service\single
     {
         $path = (string)$this->getConfig($key);
         if (empty($path)) {
-            throw new fatalException($this, 'Incorrect Key. Key for path "' . $key . '" doesn\'t set');
+            throw $this->createServiceFatalException('Incorrect Key. Key for path "' . $key . '" doesn\'t set');
         }
         if ($repl) {
             $path = strtr($path, (array)$repl);
         }
-        return \bootstrap::parsePath($path);
+        return $this->translationRuntime()->parsePath($path);
     }
 
     protected function _getTag(string $key): string
@@ -368,14 +433,14 @@ class translation extends \fan\core\base\service\single
             foreach ($matches1[1] as $k => $v) {
                 [$class, $method, $arg] = array_pad(explode(':', (string)$v, 3), 3, '');
                 if (preg_match('/^service\|(\w+)$/', $class, $matches2) && class_exists('\fan\project\service\\' . $matches2[1])) {
-                    $callback = [service($matches2[1]), $method];
+                    $callback = [$this->translationService((string)$matches2[1]), $method];
                 } elseif (class_exists($class)) {
                     $callback = [$class, $method];
                 }
                 if (!empty($callback) && is_callable($callback)) {
-                    $ret = str_replace($matches1[0][$k], (string)call_user_func($callback, $arg), $ret);
+                    $ret = str_replace($matches1[0][$k], (string)$callback($arg), $ret);
                 } else {
-                    $this->containerService('error')->logErrorMessage('Message tag "' . $key . '" is not callable.', 'Incorect message tag', '', true, false);
+                    $this->translationErrorLogger()->logErrorMessage('Message tag "' . $key . '" is not callable.', 'Incorect message tag', '', true, false);
                 }
             }
         }
@@ -386,13 +451,14 @@ class translation extends \fan\core\base\service\single
     {
         $this->getRefererArr();
 
-        list($stage, $path) = getCurBlockInfo();
+        [$stage, $path] = $this->translationBlockContext()->getCurrentBlockInfo();
         if (!$path) {
             $path = 'Unknown!';
         }
         if (!isset($this->referers[$key][$path][$stage])) {
-            $source = service('matcher')->getItem(0)->source;
-            $this->referers[$key][$path][$stage] = (string)($_SERVER['REQUEST_METHOD'] ?? '') . ': ' . (string)$source;
+            $source = $this->translationMatcher()->getItem(0)->source;
+            $requestMethod = $this->translationRequestInput()->serverValue('REQUEST_METHOD', '');
+            $this->referers[$key][$path][$stage] = (string)$requestMethod . ': ' . (string)$source;
             $this->forCall['_saveRefererArr'] = 1;
         }
     }
@@ -411,7 +477,7 @@ class translation extends \fan\core\base\service\single
         foreach ($this->editableLng as $lng) {
             if (isset ($this->messages[$lng])) {
                 ksort($this->messages[$lng]);
-                file_put_contents($this->_getFilePath('MESSAGES_PATH', ['{LNG}' => $lng]), '<?php
+                $this->translationFileStorage()->write($this->_getFilePath('MESSAGES_PATH', ['{LNG}' => $lng]), '<?php
 /*
  * Short messages array for language "' . $lng . '"
  */
@@ -426,7 +492,7 @@ return ' . var_export($this->messages[$lng], true) . ';
     protected function _saveMsgUseTag(): void
     {
         ksort($this->msgUseTag);
-        file_put_contents($this->_getFilePath('USE_TAGS_PATH'), '<?php
+        $this->translationFileStorage()->write($this->_getFilePath('USE_TAGS_PATH'), '<?php
 /*
  * Array of messages used tags
  */
@@ -437,7 +503,7 @@ return ' . var_export($this->msgUseTag, true) . ';
     protected function _saveTagArr(): void
     {
         ksort($this->tags);
-        file_put_contents($this->_getFilePath('TAGS_PATH'), '<?php
+        $this->translationFileStorage()->write($this->_getFilePath('TAGS_PATH'), '<?php
 /*
  * Tags array
  */
@@ -448,12 +514,132 @@ return ' . var_export($this->tags, true) . ';
     protected function _saveRefererArr(): void
     {
         ksort($this->referers);
-        file_put_contents($this->_getFilePath('REFERERS_PATH'), '<?php
+        $this->translationFileStorage()->write($this->_getFilePath('REFERERS_PATH'), '<?php
 /*
  * Referer array
  */
 return ' . var_export($this->referers, true) . ';
 ?>');
+    }
+
+    private function translationLocale(): object
+    {
+        if ($this->locale === null) {
+            throw new \RuntimeException('Locale service is not configured for translation service.');
+        }
+
+        return $this->locale;
+    }
+
+    private function translationRuntime(): object
+    {
+        if ($this->translationRuntime === null) {
+            throw new \RuntimeException('Bootstrap runtime service is not configured for translation service.');
+        }
+
+        return $this->translationRuntime;
+    }
+
+    private function translationDebugAllowed(): bool
+    {
+        if ($this->translationTabFactory === null && !class_exists('\fan\core\service\tab', false)) {
+            return false;
+        }
+        if (!is_callable($this->translationTabFactory)) {
+            throw new \RuntimeException('Tab service factory is not configured for translation service.');
+        }
+
+        $tab = ($this->translationTabFactory)();
+
+        return is_object($tab) && method_exists($tab, 'isDebugAllowed') && (bool)$tab->isDebugAllowed();
+    }
+
+    private function loadPhpArrayFile(string $path, mixed $default = null): mixed
+    {
+        if (!is_callable($this->translationPhpArrayLoader)) {
+            throw new \RuntimeException('PHP array file loader is not configured for translation service.');
+        }
+
+        return ($this->translationPhpArrayLoader)($path, $default);
+    }
+
+    private function translationFileStorage(): object
+    {
+        if ($this->translationFileStorage === null) {
+            throw new \RuntimeException('Translation file storage is not configured for translation service.');
+        }
+
+        return $this->translationFileStorage;
+    }
+
+    private function translationService(string $serviceName): object
+    {
+        if ($serviceName === 'translation') {
+            return $this;
+        }
+        if ($serviceName === 'tab') {
+            return $this->translationTab();
+        }
+        if (!isset($this->translationMessageTagFactories[$serviceName]) || !is_callable($this->translationMessageTagFactories[$serviceName])) {
+            throw new \RuntimeException('Message tag service "' . $serviceName . '" is not configured for translation service.');
+        }
+
+        $service = ($this->translationMessageTagFactories[$serviceName])();
+        if (!is_object($service)) {
+            throw new \RuntimeException('Message tag service "' . $serviceName . '" must resolve to an object.');
+        }
+
+        return $service;
+    }
+
+    private function translationTab(): object
+    {
+        if (!is_callable($this->translationTabFactory)) {
+            throw new \RuntimeException('Tab service factory is not configured for translation service.');
+        }
+
+        $tab = ($this->translationTabFactory)();
+        if (!is_object($tab)) {
+            throw new \RuntimeException('Tab service factory must resolve to an object.');
+        }
+
+        return $tab;
+    }
+
+    private function translationErrorLogger(): object
+    {
+        if ($this->translationErrorLogger === null) {
+            throw new \RuntimeException('Error logger is not configured for translation service.');
+        }
+
+        return $this->translationErrorLogger;
+    }
+
+    private function translationBlockContext(): object
+    {
+        if ($this->translationBlockContext === null) {
+            throw new \RuntimeException('Block context service is not configured for translation service.');
+        }
+
+        return $this->translationBlockContext;
+    }
+
+    private function translationMatcher(): object
+    {
+        if ($this->translationMatcher === null) {
+            throw new \RuntimeException('Matcher service is not configured for translation service.');
+        }
+
+        return $this->translationMatcher;
+    }
+
+    private function translationRequestInput(): object
+    {
+        if ($this->translationRequestInput === null) {
+            throw new \RuntimeException('Request input service is not configured for translation service.');
+        }
+
+        return $this->translationRequestInput;
     }
 
     // ======== The magic methods ======== \\

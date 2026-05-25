@@ -3,11 +3,13 @@
 declare(strict_types=1);
 
 namespace fan\project\block\carcass;
+use fan\project\block\base;
+
 /**
  * Block of carcass
  * @version of file: 05.02.001 (10.03.2014)
  */
-class common extends \fan\project\block\base
+class common extends base
 {
 
     /**

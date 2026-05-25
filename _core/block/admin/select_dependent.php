@@ -22,7 +22,7 @@ class select_dependent extends base
 {
     public function init(): void
     {
-        $this->containerService('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
+        $this->roleService()->setSessionRoles('admin', $this->getMeta('login_timeout'));
 
         $data = $this->getData();
 
@@ -41,7 +41,7 @@ class select_dependent extends base
         $level = $data['level'];
         $meta = $this->getMeta(['level_data', $level]);
         return [
-            'hash'  => ge((string)$meta['entity'])->getRowsetByParam([$meta['param_key'] => $data['cval']])->getArrayHash($meta['key'], $meta['val']),
+            'hash'  => $this->entityService()->get((string)$meta['entity'])->getRowsetByParam([$meta['param_key'] => $data['cval']])->getArrayHash($meta['key'], $meta['val']),
             'level' => $level,
             'cval'  => $data['cval'],
         ];

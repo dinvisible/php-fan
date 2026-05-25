@@ -25,7 +25,7 @@ return [
   'MENU_ABOUT' => 'About us',
   'MENU_NEWS' => 'News',
   'NOTE_FIELDS_MARKED_AS_REQUIRED_FOR_FILL' => 'Fields marked as "{b}*{/b}" required for fill.',
-  'NOTE_UPLOAD_FILE_LIMIT' => 'The size of attached file should not exceed {video-size} Kb.',
+  'NOTE_UPLOAD_FILE_LIMIT' => 'The size of attached file should not exceed {file-size} Kb.',
   'OTHER_TEST' => 'Test',
   'OTHER_TEST_TAG' => 'Test {b}bold text{/b}',
 ];

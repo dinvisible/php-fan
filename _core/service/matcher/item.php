@@ -2,7 +2,11 @@
 declare(strict_types=1);
 
 namespace fan\core\service\matcher;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\service\config\row;
+use fan\core\service\matcher;
+use fan\core\service\matcher\item\handler;
+use fan\core\service\matcher\item\parsed;
+
 /**
  * Description of item
  *
@@ -25,8 +29,6 @@ use fan\project\exception\service\fatal as fatalException;
  */
 class item implements \ArrayAccess
 {
-    use \fan\core\di\container_aware_trait;
-
     /**
      * Index of this item
      * @var array
@@ -54,12 +56,35 @@ class item implements \ArrayAccess
      */
     protected ?object $facade = null;
 
-    public function __construct(int $index)
+    private ?object $input = null;
+    private ?object $runtime = null;
+    private ?object $locale = null;
+    private ?object $application = null;
+    private ?object $routeFileStorage = null;
+    private mixed $componentFactory = null;
+    private mixed $serviceExceptionFactory = null;
+    private mixed $fatalExceptionFactory = null;
+
+    public function __construct(
+        int $index,
+        ?object $input = null,
+        ?object $runtime = null,
+        ?object $locale = null,
+        ?object $application = null,
+        ?object $routeFileStorage = null,
+        ?callable $componentFactory = null,
+        ?callable $serviceExceptionFactory = null,
+        ?callable $fatalExceptionFactory = null
+    )
     {
         $this->index = (int)$index;
+        $this->componentFactory = $componentFactory;
+        $this->serviceExceptionFactory = $serviceExceptionFactory;
+        $this->fatalExceptionFactory = $fatalExceptionFactory;
+        $this->setDependencies($input, $runtime, $locale, $application, $routeFileStorage);
         foreach ($this->data as $k => &$v) {
             $class = '\fan\project\service\matcher\item\\' . $k;
-            $v = new $class($this);
+            $v = $this->matcherItemComponent($class, $k);
         }
     }
 
@@ -93,7 +118,7 @@ class item implements \ArrayAccess
         }
     }
 
-    public function setFacade(\fan\core\service\matcher $facade): static
+    public function setFacade(matcher $facade): static
     {
         $this->facade = $facade;
         foreach ($this->data as $v) {
@@ -102,9 +127,52 @@ class item implements \ArrayAccess
         return $this;
     }
 
-    public function getFacade(): ?\fan\core\service\matcher
+    public function getFacade(): ?matcher
     {
         return $this->facade;
+    }
+
+    public function serviceExceptionFactory(): ?callable
+    {
+        return is_callable($this->serviceExceptionFactory) ? $this->serviceExceptionFactory : null;
+    }
+
+    public function createServiceFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        $factory = $this->serviceExceptionFactory();
+        if ($factory === null) {
+            throw new \RuntimeException('Service exception factory is not configured for matcher item.');
+        }
+        if ($this->facade === null) {
+            throw new \RuntimeException('Matcher facade is not configured for matcher item.');
+        }
+
+        $exception = $factory(
+            '\fan\project\exception\service\fatal',
+            $this->facade,
+            $message,
+            $code,
+            $previous
+        );
+        if (!$exception instanceof \Throwable) {
+            throw new \UnexpectedValueException('Service exception factory must return a throwable object.');
+        }
+
+        return $exception;
+    }
+
+    public function createMatcherFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        if (!is_callable($this->fatalExceptionFactory)) {
+            throw new \RuntimeException('Matcher item fatal exception factory is not configured.');
+        }
+
+        $exception = ($this->fatalExceptionFactory)($message, $code, $previous, $this->input);
+        if (!$exception instanceof \Throwable) {
+            throw new \UnexpectedValueException('Matcher item fatal exception factory must return a throwable object.');
+        }
+
+        return $exception;
     }
 
     public function getIndex(): ?int
@@ -112,7 +180,23 @@ class item implements \ArrayAccess
         return $this->index;
     }
 
-    public function getHandler(bool $forceDefine = false): \fan\core\service\matcher\item\handler
+    public function getMainBlockBasePath(): string
+    {
+        return rtrim($this->runtime()->getLoader()->main, '\\/');
+    }
+
+    public function setDependencies(?object $input = null, ?object $runtime = null, ?object $locale = null, ?object $application = null, ?object $routeFileStorage = null): static
+    {
+        $this->input = $input ?? $this->input;
+        $this->runtime = $runtime ?? $this->runtime;
+        $this->locale = $locale ?? $this->locale;
+        $this->application = $application ?? $this->application;
+        $this->routeFileStorage = $routeFileStorage ?? $this->routeFileStorage;
+
+        return $this;
+    }
+
+    public function getHandler(bool $forceDefine = false): handler
     {
         if (empty($this->data['handler']['method'])){
             foreach ($this->_defineHandler($forceDefine) as $k => $v) {
@@ -136,7 +220,7 @@ class item implements \ArrayAccess
         $appName  = null;
         $reqData  = [];
         $pathPos  = null;
-        $locale   = $this->containerService('locale');
+        $locale   = $this->locale();
         $languages      = $locale->getAvailableLanguages();
         $regexpLanguage = implode('|', array_keys($languages));
 
@@ -192,7 +276,7 @@ class item implements \ArrayAccess
         //   - local (disk-paths) must point by last item;
         //   - outer (URN) must point by current item;
         // If this is departed from a rule - will be big error when AppName is changed
-        $this->containerService('application')->setAppName((string)$appName);
+        $this->application()->setAppName((string)$appName);
         return $this;
     }
 
@@ -248,10 +332,11 @@ class item implements \ArrayAccess
     {
         // Prepare global URI-parameters
         if (empty($this->index)) {
-            $scheme   = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+            $input = $this->input();
+            $scheme   = $input->serverValue('HTTPS') === 'on' ? 'https' : 'http';
             $userName = $password = $anchor = null; // ToDo: Set start default values there
             if (empty($host)) {
-                $host = array_val($_SERVER, 'HTTP_HOST');
+                $host = $input->serverValue('HTTP_HOST');
             }
         } else {
             $prevUri  = $this->facade->getUri($this->index - 1);
@@ -262,7 +347,7 @@ class item implements \ArrayAccess
             if (empty($host)) {
                 $host = $prevUri['host'];
             } elseif (!$this->facade->getConfig('allow_switch_host', false)) {
-                throw new fatalException($this->facade, 'Host switching isn\'t allowed there');
+                throw $this->createServiceFatalException('Host switching isn\'t allowed there');
             }
         }
 
@@ -313,15 +398,58 @@ class item implements \ArrayAccess
         $cli = [
             'file' => $file,
             'path' => $path,
-            'argv' => empty($_SERVER['argv']) ? [] : $_SERVER['argv'],
+            'argv' => $this->input()->argv(),
         ];
 
         return $cli;
     }
 
+    private function input(): object
+    {
+        return $this->requireDependency($this->input, 'Request input service');
+    }
+
+    private function runtime(): object
+    {
+        return $this->requireDependency($this->runtime, 'Bootstrap runtime service');
+    }
+
+    private function locale(): object
+    {
+        return $this->requireDependency($this->locale, 'Locale service');
+    }
+
+    private function application(): object
+    {
+        return $this->requireDependency($this->application, 'Application service');
+    }
+
+    private function routeFileStorage(): object
+    {
+        return $this->requireDependency($this->routeFileStorage, 'Matcher route file storage');
+    }
+
+    private function requireDependency(mixed $dependency, string $name): object
+    {
+        if (is_object($dependency)) {
+            return $dependency;
+        }
+
+        throw new \RuntimeException($name . ' is not configured for matcher item.');
+    }
+
+    private function matcherItemComponent(string $className, string $key): object
+    {
+        if (!is_callable($this->componentFactory)) {
+            throw new \RuntimeException('Matcher item component factory is not configured for matcher item.');
+        }
+
+        return ($this->componentFactory)($className, $this, $key);
+    }
+
     protected function _defineHandler(bool $forceDefine): array
     {
-        if (\bootstrap::isCli()) {
+        if ($this->runtime()->isCli()) {
             return $this->_handlerDefinerSapiName();
         } elseif (empty($this->index) || $forceDefine) {
             // Find handler by RegExp
@@ -340,28 +468,31 @@ class item implements \ArrayAccess
 
             // Set default handler if it doesn't macth any RegExp
             $default = $this->facade->getConfig('default_handler', [
-                'key'    => 'tab',
-                'method' => '\fan\project\service\tab::getCode',
-                'param'  => null
+                'key'     => 'tab',
+                'service' => 'tab',
+                'method'  => 'handleContent',
+                'param'   => null,
             ]);
             return [
-                'key'    => $default['key'],
-                'method' => $default['method'],
-                'param'  => empty($default['param']) ? null : $default['param'],
+                'key'     => $default['key'],
+                'service' => $default['service'] ?? null,
+                'method'  => $default['method'],
+                'param'   => empty($default['param']) ? null : $default['param'],
             ];
         }
         // Copy handler from first item
         $firstHandler = $this->facade->getHandler(0);
         return [
-            'key'    => $firstHandler['key'],
-            'method' => $firstHandler['method'],
-            'param'  => $firstHandler['param'],
+            'key'     => $firstHandler['key'],
+            'service' => $firstHandler['service'],
+            'method'  => $firstHandler['method'],
+            'param'   => $firstHandler['param'],
         ];
     }
 
     protected function readHandlerConfig(mixed $data): array
     {
-        if ($data instanceof \fan\core\service\config\row) {
+        if ($data instanceof row) {
             return $data->toArray();
         }
         if (is_array($data)) {
@@ -375,7 +506,8 @@ class item implements \ArrayAccess
     {
         return [
             'key'     => 'cli',
-            'method'  => '\fan\project\service\cli::getContent',
+            'service' => 'cli',
+            'method'  => 'handleContent',
             'param'   => [],
             'ctrlKey' => null,
         ];
@@ -387,7 +519,8 @@ class item implements \ArrayAccess
         if (preg_match((string)$data['regexp'], (string)$this->data['uri']['path'], $matches)) {
             return [
                 'key'     => 'plain',
-                'method'  => '\fan\project\service\plain::getContent',
+                'service' => 'plain',
+                'method'  => 'handleContent',
                 'param'   => [$key, $data['class'], $this->_getControllerMethod($matches, $data['method'])],
                 'ctrlKey' => $key,
                 'reqKey' => isset($matches[1]) ? $matches[1] : null,
@@ -396,9 +529,9 @@ class item implements \ArrayAccess
         return null;
     }
 
-    protected function _parseRequestForTab(\fan\core\service\matcher\item\parsed $parsed, array $data): ?static
+    protected function _parseRequestForTab(parsed $parsed, array $data): ?static
     {
-        $path  = \bootstrap::getLoader()->project;
+        $path  = $this->runtime()->getLoader()->project;
         $path .= '/app/' . $parsed['app_name'] . '/' . $this->_getConfig('main_block_dir', 'main');
 
         $mainRequest = [];
@@ -406,15 +539,19 @@ class item implements \ArrayAccess
             if (empty($v)) {
                 unset($data[$k]);
             } else {
-                if (is_file($path . '/' . $v . '.php')) {
+                if ($this->routeFileStorage()->isFile($path . '/' . $v . '.php')) {
                     $mainRequest[] = $v;
                     unset($data[$k]);
-                    if (!isset($data[$k + 1]) || !is_dir($path . '/' . $v) || !is_dir($path . '/' . $data[$k + 1]) && !is_file($path . '/' . $data[$k + 1] . '.php')) {
+                    if (
+                        !isset($data[$k + 1])
+                        || !$this->routeFileStorage()->isDirectory($path . '/' . $v)
+                        || !$this->routeFileStorage()->isDirectory($path . '/' . $data[$k + 1]) && !$this->routeFileStorage()->isFile($path . '/' . $data[$k + 1] . '.php')
+                    ) {
                         $parsed['main_request'] = $mainRequest;
                         $parsed['add_request']  = array_merge([], $data);
                         return null;
                     }
-                } elseif (is_dir($path . '/' . $v)) {
+                } elseif ($this->routeFileStorage()->isDirectory($path . '/' . $v)) {
                     $path .= '/' . $v;
                     $mainRequest[] = $v;
                     unset($data[$k]);
@@ -427,7 +564,7 @@ class item implements \ArrayAccess
         // Set Index file if in URI it is not requested
         if (empty($data)) {
             $index = empty($mainRequest) ? $this->_getConfig('directory_index', 'index') : end($mainRequest);
-            if (is_file($path . '/' . $index . '.php')) {
+            if ($this->routeFileStorage()->isFile($path . '/' . $index . '.php')) {
                 $parsed['main_request'] = array_merge($mainRequest, [$index]);
                 $parsed['add_request']  = [];
             }
@@ -435,7 +572,7 @@ class item implements \ArrayAccess
 
         return $this;
     }
-    protected function _parseRequestForPlain(\fan\core\service\matcher\item\parsed $parsed, array $data): static
+    protected function _parseRequestForPlain(parsed $parsed, array $data): static
     {
         $mainRequstPref = $this->data['handler']->reqKey;
         if (empty($mainRequstPref)) {
@@ -453,7 +590,7 @@ class item implements \ArrayAccess
         }
         return $this;
     }
-    protected function _parseRequestForCli(\fan\core\service\matcher\item\parsed $parsed, array $data): static
+    protected function _parseRequestForCli(parsed $parsed, array $data): static
     {
         return $this;
     }
@@ -466,15 +603,15 @@ class item implements \ArrayAccess
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\service\fatal
      * @throws \fan\project\exception\fatal
      */
     protected function _makeException(string $errMsg): never
     {
         if ($this->facade) {
-            throw new fatalException($this->facade, $errMsg);
+            throw $this->createServiceFatalException($errMsg);
         }
-        throw new \fan\project\exception\fatal($errMsg);
+        throw $this->createMatcherFatalException($errMsg);
     }
 
     protected function _getControllerMethod(array $matches, string $pattern): string

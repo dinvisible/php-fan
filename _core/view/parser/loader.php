@@ -2,6 +2,11 @@
 declare(strict_types=1);
 
 namespace fan\core\view\parser;
+use fan\core\block\base;
+use fan\core\view\parser;
+use fan\core\view\router\loader as router_loader;
+use fan\core\view\router\loader_state;
+
 /**
  * View parser Loader-type
  *
@@ -17,15 +22,47 @@ namespace fan\core\view\parser;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-class loader extends \fan\core\view\parser
+class loader extends parser
 {
+    protected mixed $dataLoaderFactory = null;
+
+    public function __construct(
+        base $mainBlock,
+        ?callable $jsonFactory = null,
+        ?callable $templateFactory = null,
+        ?object $header = null,
+        ?object $locale = null,
+        ?callable $dataLoaderFactory = null
+    ) {
+        parent::__construct($mainBlock, $jsonFactory, $templateFactory, $header, $locale);
+        $this->dataLoaderFactory = $dataLoaderFactory;
+    }
+
     // ======== Static methods ======== \\
-    final static public function getFormat(): string {
+    final static public function getFormat(?callable $exceptionFactory = null): string {
         return 'loader';
     }
 
-    static public function getRouter(\fan\core\block\base $block): \fan\core\view\router\loader {
-        return new \fan\project\view\router\loader($block);
+    static public function getRouter(
+        base $block,
+        mixed $loaderStateOrFactory = null,
+        ?callable $viewRouterFactory = null
+    ): router_loader {
+        $loaderState = $loaderStateOrFactory;
+        if ($loaderState === null) {
+            throw new \RuntimeException('Loader state is not configured for loader view parser.');
+        }
+        if (!$loaderState instanceof loader_state) {
+            throw new \InvalidArgumentException('Loader view parser router requires a loader state.');
+        }
+
+        $factory = static::viewRouterFactory($viewRouterFactory);
+        $router = $factory(static::class, $block, $loaderState);
+        if (!$router instanceof router_loader) {
+            throw new \UnexpectedValueException('View router factory must return a loader view router.');
+        }
+
+        return $router;
     }
 
     // ======== The magic methods ======== \\
@@ -36,7 +73,7 @@ class loader extends \fan\core\view\parser
         if (method_exists($this->mainBlock, 'getDataLoader')) {
             $loader = $this->mainBlock->getDataLoader();
         } else {
-            $loader = new \fan\project\adapter\data_loader();
+            $loader = $this->createDataLoader();
         }
         $loader->setJson($this->result['json'], true);
         $loader->setText($this->result['text'], true);
@@ -47,7 +84,16 @@ class loader extends \fan\core\view\parser
         return $result;
     }
 
-    public function getResultData(\fan\core\block\base $block): array
+    protected function createDataLoader(): object
+    {
+        if (is_callable($this->dataLoaderFactory)) {
+            return ($this->dataLoaderFactory)();
+        }
+
+        throw new \RuntimeException('Data loader factory is not configured for loader view parser.');
+    }
+
+    public function getResultData(base $block): array
     {
         $viewRouter = $block->getView();
         $tplResult  = $this->_getTplResult($block);
@@ -59,7 +105,7 @@ class loader extends \fan\core\view\parser
     }
 
     // ======== Protected methods ======== \\
-    public function _getTplResult(\fan\core\block\base $block): array
+    public function _getTplResult(base $block): array
     {
         $tplVar = $block->getView()->html->toArray();
 

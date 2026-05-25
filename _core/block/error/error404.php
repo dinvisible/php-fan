@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\block\error;
+use fan\core\block\base;
+
 /**
  * Base abstract block of error 404
  *
@@ -19,7 +21,7 @@ namespace fan\core\block\error;
  * @version of file: 05.02.007 (31.08.2015)
  * @abstract
  */
-abstract class error404 extends \fan\core\block\base
+abstract class error404 extends base
 {
     public function setViewVars(string $error, string $message, string $combiMessage): void
     {

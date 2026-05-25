@@ -2,6 +2,10 @@
 declare(strict_types=1);
 
 namespace fan\core\view;
+use fan\core\block\base;
+use fan\core\view\keeper;
+use fan\core\view\router as view_router;
+
 /**
  * View element of Block
  *
@@ -35,18 +39,51 @@ abstract class router implements \ArrayAccess, \Countable
      */
     protected ?string $defaultKey = null;
 
-    public function __construct(\fan\core\block\base $block)
+    private \Closure $keeperFactory;
+
+    private \Closure $blockExceptionFactory;
+
+    private \Closure $arrayAdducer;
+
+    public function __construct(
+        base $block,
+        ?callable $keeperFactory = null,
+        ?callable $blockExceptionFactory = null,
+        ?callable $arrayAdducer = null
+    )
     {
+        $this->block = $block;
+        $this->keeperFactory = \Closure::fromCallable(
+            $keeperFactory ?? static function (view_router $router): keeper {
+                throw new \RuntimeException('View keeper factory is not configured for view router.');
+            }
+        );
+        $this->blockExceptionFactory = \Closure::fromCallable(
+            $blockExceptionFactory ?? static function (
+                string $exceptionClass,
+                base $block,
+                string $message,
+                int $code = E_USER_ERROR,
+                ?\Exception $previous = null
+            ): \Throwable {
+                throw new \RuntimeException('Block exception factory is not configured for view router.');
+            }
+        );
+        $this->arrayAdducer = \Closure::fromCallable(
+            $arrayAdducer ?? static function (mixed $value): array {
+                throw new \RuntimeException('Array adducer is not configured for view router.');
+            }
+        );
+
         if (empty($this->keepers) || !is_array($this->keepers)) {
-            throw new \fan\project\exception\block\fatal($this, 'Keepers list doesn\'t set at the class "' . get_class($this) . '"');
+            throw $this->createBlockFatalException('Keepers list doesn\'t set at the class "' . get_class($this) . '"');
         }
         if (empty($this->defaultKey)) {
             reset($this->keepers);
             $this->defaultKey = key($this->keepers);
         } elseif (!array_key_exists($this->defaultKey, $this->keepers)) {
-            throw new \fan\project\exception\block\fatal($this, 'Incorrect default Keepers key "' . $this->defaultKey . '" at the class "' . get_class($this) . '"');
+            throw $this->createBlockFatalException('Incorrect default Keepers key "' . $this->defaultKey . '" at the class "' . get_class($this) . '"');
         }
-        $this->block = $block;
     }
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
@@ -129,7 +166,7 @@ abstract class router implements \ArrayAccess, \Countable
         return $this;
     }
 
-    public function getBlock(): \fan\core\block\base
+    public function getBlock(): base
     {
         return $this->block;
     }
@@ -146,7 +183,7 @@ abstract class router implements \ArrayAccess, \Countable
         }
         $result = [];
         foreach ($this->keepers as $k => $v) {
-            $result[$k] = adduceToArray($v);
+            $result[$k] = ($this->arrayAdducer())($v);
         }
         return $result;
     }
@@ -160,16 +197,87 @@ abstract class router implements \ArrayAccess, \Countable
     /**
      * @throws \fan\core\exception\block\fatal
      */
-    public function _getKeeper(string $key): \fan\core\view\keeper
+    public function _getKeeper(string $key): keeper
     {
         if (!array_key_exists($key, $this->keepers)) {
-            throw new \fan\project\exception\block\fatal($this, 'Incorrect name of Keeper "' . $key . '"');
+            throw $this->createBlockFatalException('Incorrect name of Keeper "' . $key . '"');
         }
         if (empty($this->keepers[$key])) {
             $method = '_get' . ucfirst($key) . 'Keeper';
-            $this->keepers[$key] = method_exists($this, $method) ? $this->$method() : new \fan\project\view\keeper($this);
+            $this->keepers[$key] = method_exists($this, $method) ? $this->$method() : $this->createKeeper();
         }
         return $this->keepers[$key];
+    }
+
+    private function createKeeper(): keeper
+    {
+        $keeper = ($this->keeperFactory())($this);
+        if (!$keeper instanceof keeper) {
+            throw new \RuntimeException('View keeper factory must return a view keeper.');
+        }
+
+        return $keeper;
+    }
+
+    private function createBlockFatalException(string $message, int $code = E_USER_ERROR, ?\Exception $previous = null): \Throwable
+    {
+        $exception = ($this->blockExceptionFactory())(
+            '\fan\project\exception\block\fatal',
+            $this->block,
+            $message,
+            $code,
+            $previous
+        );
+        if (!$exception instanceof \Throwable) {
+            throw new \UnexpectedValueException('Block exception factory must return a throwable object.');
+        }
+
+        return $exception;
+    }
+
+    private function arrayAdducer(): callable
+    {
+        if (!isset($this->arrayAdducer)) {
+            $this->arrayAdducer = \Closure::fromCallable(
+                static function (mixed $value): array {
+                    throw new \RuntimeException('Array adducer is not configured for view router.');
+                }
+            );
+        }
+
+        return $this->arrayAdducer;
+    }
+
+    private function keeperFactory(): callable
+    {
+        if (!isset($this->keeperFactory)) {
+            $this->keeperFactory = \Closure::fromCallable(
+                static function (view_router $router): keeper {
+                    throw new \RuntimeException('View keeper factory is not configured for view router.');
+                }
+            );
+        }
+
+        return $this->keeperFactory;
+    }
+
+    private function blockExceptionFactory(): callable
+    {
+        if (!isset($this->blockExceptionFactory)) {
+            $this->blockExceptionFactory = \Closure::fromCallable(
+                static function (
+                    string $exceptionClass,
+                    base $block,
+                    string $message,
+                    int $code = E_USER_ERROR,
+                    ?\Exception $previous = null
+                ): \Throwable {
+                    throw new \RuntimeException('Block exception factory is not configured for view router.');
+                }
+            );
+        }
+
+        return $this->blockExceptionFactory;
     }
 
     protected function _checkSetter(): bool

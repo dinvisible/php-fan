@@ -2,6 +2,9 @@
 declare(strict_types=1);
 
 namespace fan\core\service\tab\delegate;
+use fan\core\service\tab;
+use fan\core\service\tab\delegate;
+
 /**
  * Description of urlMaker
  *
@@ -17,16 +20,38 @@ namespace fan\core\service\tab\delegate;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.007 (31.08.2015)
  */
-class urlMaker extends \fan\core\service\tab\delegate
+class urlMaker extends delegate
 {
     /**
      * @var \fan\core\service\matcher
      */
     protected ?object $matcher = null;
 
-    public function __construct()
+    private ?object $request = null;
+
+    private ?object $locale = null;
+
+    private mixed $sessionFactory = null;
+
+    private ?object $input = null;
+
+    private mixed $arrayValueReader = null;
+
+    public function __construct(
+        ?object $matcher = null,
+        ?object $request = null,
+        ?object $locale = null,
+        ?callable $sessionFactory = null,
+        ?object $input = null,
+        ?callable $arrayValueReader = null
+    )
     {
-        $this->matcher = \fan\project\service\matcher::instance();
+        $this->matcher = $matcher;
+        $this->request = $request;
+        $this->locale = $locale;
+        $this->sessionFactory = $sessionFactory;
+        $this->input = $input;
+        $this->arrayValueReader = $arrayValueReader;
     }
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
@@ -38,16 +63,18 @@ class urlMaker extends \fan\core\service\tab\delegate
     public function getCurrentURI(mixed $corLanguage = true, bool $addExt = true, bool $addQueryStr = true, mixed $addSid = null, mixed $sprtr = null): string
     {
         if (is_array($corLanguage)) {
+            $arrayValueReader = $this->arrayValueReader();
+
             return $this->getCurrentURI(
-                    array_val($corLanguage, 'correct_language', true),
-                    (bool)array_val($corLanguage, 'add_extension',    true),
-                    (bool)array_val($corLanguage, 'add_query_string', true),
-                    array_val($corLanguage, 'add_session_id',   null),
-                    array_val($corLanguage, 'query_separator',  null)
+                    $arrayValueReader($corLanguage, 'correct_language', true),
+                    (bool)$arrayValueReader($corLanguage, 'add_extension',    true),
+                    (bool)$arrayValueReader($corLanguage, 'add_query_string', true),
+                    $arrayValueReader($corLanguage, 'add_session_id',   null),
+                    $arrayValueReader($corLanguage, 'query_separator',  null)
             );
         }
 
-        $req    = $this->containerService('request');
+        $req    = $this->request();
         /* @var $req \fan\core\service\request */
         $parsed = $this->matcher->getCurrentItem()->parsed;
         /* @var $parsed \fan\core\service\matcher\item\parsed */
@@ -73,10 +100,10 @@ class urlMaker extends \fan\core\service\tab\delegate
         }
         // Add language
         if (is_null($corLanguage)) {
-            $corLanguage = $this->containerService('locale')->isEnabled();
+            $corLanguage = $this->locale()->isEnabled();
         }
         if ($corLanguage) {
-            $lng = $this->containerService('locale')->getLanguage();
+            $lng = $this->locale()->getLanguage();
             if (!empty($lng)) {
                 array_unshift($request, $lng);
             }
@@ -104,7 +131,7 @@ class urlMaker extends \fan\core\service\tab\delegate
             $addSid = $this->getConfig('ALLOW_GET_SID', true);
         }
         if ($addSid) {
-            $ses = $this->containerService('session');
+            $ses = $this->session();
             if (!$ses->isByCookies()) {
                 $curRequest = $this->addQuery($curRequest, $ses->getSessionName(), $ses->getSessionId(), (string)$sprtr);
             }
@@ -116,7 +143,7 @@ class urlMaker extends \fan\core\service\tab\delegate
 
     public function getModifiedCurrentURI(array $modifier, mixed $addExt = true, mixed $addSid = null, mixed $protocol = null): string
     {
-        $request = $this->containerService('request');
+        $request = $this->request();
         /* @var $request \fan\core\service\request */
         $main  = $request->getAll('M', []);
         $add   = $request->getAll('A', [], false);
@@ -174,7 +201,7 @@ class urlMaker extends \fan\core\service\tab\delegate
             $urn .= '/' . implode('/', $add);
         }
         if ($addExt) {
-            $ext  = $this->containerService('tab')->getDefaultExtension();
+            $ext  = $this->getDefaultExtension();
             $urn .= empty($ext) ? '' : '.' . $ext;
         }
         if (!empty($get)) {
@@ -194,30 +221,76 @@ class urlMaker extends \fan\core\service\tab\delegate
             $urn = $this->matcher->getCurrentUri();
         }
 
-        if (substr($urn, 0, 1) === \fan\core\service\tab::URN_AP) {
+        $urnApplicationPrefix = defined('\fan\core\service\tab::URN_AP') ? tab::URN_AP : '~';
+        if (substr($urn, 0, 1) === $urnApplicationPrefix) {
             $urnPrefix = $this->getConfig(['URN_prefix', $type]);
             $appPrefix = trim((string)$this->matcher->getCurrentItem()->parsed['app_prefix'], '/');
             $urn = (empty($appPrefix) ? '' : '/' . $appPrefix) . (string)$urnPrefix . substr($urn, 1);
         }
 
         if ($addSid) {
-            $ses = $this->containerService('session');
+            $ses = $this->session();
             if (!$ses->isByCookies()) {
                 $urn = $this->addQuery($urn, $ses->getSessionName(), $ses->getSessionId());
             }
         }
 
         if (!preg_match('/^https?\:\/\/\w/i', $urn)) {
-            $locale = $this->containerService('locale');
+            $locale = $this->locale();
             if ($type === 'link' && $locale->isUriParsing()) {
                 $urn = $locale->modifyUrn($urn);
             }
 
-            if ($this->isUseHttps() && !is_null($protocol) && (bool)$protocol !== (($_SERVER['HTTPS'] ?? '') === 'on')) {
-                $urn = ($protocol ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . $urn;
+            if ($this->isUseHttps() && !is_null($protocol) && (bool)$protocol !== ($this->input()->serverValue('HTTPS') === 'on')) {
+                $urn = ($protocol ? 'https' : 'http') . '://' . (string)$this->input()->serverValue('HTTP_HOST', '') . $urn;
             }
         }
         return $urn;
+    }
+
+    private function input(): object
+    {
+        if ($this->input !== null) {
+            return $this->input;
+        }
+
+        throw new \RuntimeException('Request input service is not configured for tab URL maker.');
+    }
+
+    private function request(): object
+    {
+        if ($this->request !== null) {
+            return $this->request;
+        }
+
+        throw new \RuntimeException('Request service is not configured for tab URL maker.');
+    }
+
+    private function locale(): object
+    {
+        if ($this->locale !== null) {
+            return $this->locale;
+        }
+
+        throw new \RuntimeException('Locale service is not configured for tab URL maker.');
+    }
+
+    private function session(): object
+    {
+        if (!is_callable($this->sessionFactory)) {
+            throw new \RuntimeException('Session service factory is not configured for tab URL maker.');
+        }
+
+        return ($this->sessionFactory)();
+    }
+
+    private function arrayValueReader(): callable
+    {
+        if (!is_callable($this->arrayValueReader)) {
+            throw new \RuntimeException('Array value reader is not configured for tab URL maker.');
+        }
+
+        return $this->arrayValueReader;
     }
 
     public function addQuery(string $urn, mixed $key, mixed $val, mixed $sprtr = null): string

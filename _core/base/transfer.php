@@ -25,12 +25,20 @@ abstract class transfer extends \Exception
     protected ?string $newUri = null;
     protected ?string $newQueryString = null;
 
-    public function __construct(string $newUri, ?string $newQueryString = null, ?string $dbOper = null)
+    public function __construct(
+        string $newUri,
+        ?string $newQueryString = null,
+        ?string $dbOper = null,
+        ?object $databaseConnections = null
+    )
     {
         $this->newUri = $newUri;
         $this->newQueryString = $newQueryString;
         if ($dbOper) {
-            \fan\project\service\database::fixAll($dbOper, false);
+            if ($databaseConnections === null) {
+                throw new \RuntimeException('Database connections service is not configured for transfer.');
+            }
+            $databaseConnections->fixAll($dbOper, false);
         }
         parent::__construct($this->transferType, E_USER_NOTICE);
     }

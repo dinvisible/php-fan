@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\base\service;
+use fan\core\base\service;
+
 /**
  * Base abstract service
  *
@@ -19,24 +21,8 @@ namespace fan\core\base\service;
  * @version of file: 05.02.001 (10.03.2014)
  * @abstract
  */
-abstract class single extends \fan\core\base\service
+abstract class single extends service
 {
-    private static ?array $instances = null;
-
-    // ======== Static methods ======== \\
-
-    public static function instance(): static
-    {
-        $name = self::checkName(get_called_class());
-        if (!isset(self::$instances[$name])) {
-            $instance = new $name();
-            if (!isset(self::$instances[$name])) {
-                self::$instances[$name] = $instance;
-            }
-        }
-        return self::$instances[$name];
-    }
-
     // ======== Main Interface methods ======== \\
 
     final public function isSingleton(): bool
@@ -49,10 +35,12 @@ abstract class single extends \fan\core\base\service
     protected function _saveInstance(): static
     {
         $className = self::checkName(get_class($this));
-        if (isset(self::$instances[$className])) {
-            throw new \fan\project\exception\service\fatal($this, 'Dublicate of service init "' . $className . '"');
+        $state = $this->_singleState();
+        if ($state->hasInstance($className)) {
+            throw $this->createServiceFatalException('Dublicate of service init "' . $className . '"');
         }
-        self::$instances[$className] = $this;
+        $state->setInstance($className, $this);
+
         return $this;
     }
 

@@ -1,10 +1,13 @@
 <?php
 
 declare(strict_types=1);
+use fan\core\service\config\base;
+use PHPUnit\Framework\TestCase;
+
 
 require_once __DIR__ . '/../../../../_core/service/config/base.php';
 
-class ServiceConfigBaseTest extends \PHPUnit\Framework\TestCase
+class ServiceConfigBaseTest extends TestCase
 {
     private string $tmpDir;
 
@@ -26,10 +29,11 @@ class ServiceConfigBaseTest extends \PHPUnit\Framework\TestCase
 
     public function testDirectoryPathIsNormalizedAndExistingFilePathIsResolved(): void
     {
-        $loader = new class extends \fan\core\service\config\base {
+        $loader = new class extends base {
             protected string $fileExtention = 'conf';
         };
-        file_put_contents($this->tmpDir . '/app.conf', 'content');
+        $path = $this->tmpDir . '/app.conf';
+        $loader->setFileStorage(new ServiceConfigBaseFileStorageDouble([$path]));
 
         $this->assertSame($loader, $loader->setDirPath($this->tmpDir));
         $this->assertSame($this->tmpDir . '/app.conf', $loader->getFilePath('app'));
@@ -38,13 +42,40 @@ class ServiceConfigBaseTest extends \PHPUnit\Framework\TestCase
 
     public function testBaseLoaderReturnsEmptyArrayForExistingFileWithoutSpecialParser(): void
     {
-        $loader = new class extends \fan\core\service\config\base {
+        $loader = new class extends base {
         };
         $file = $this->tmpDir . '/plain';
-        file_put_contents($file, 'ignored');
+        $loader->setFileStorage(new ServiceConfigBaseFileStorageDouble([$file]));
 
         $this->assertSame([], $loader->loadFile($file));
         $this->assertSame([], $loader->loadFile($this->tmpDir . '/missing'));
         $this->assertSame([], $loader->loadFile(null));
+    }
+
+    public function testSourceUsesFacadeExceptionFactory(): void
+    {
+        $source = file_get_contents(__DIR__ . '/../../../../_core/service/config/base.php');
+
+        $this->assertIsString($source);
+        $this->assertStringContainsString('private function createConfigFatalException(', $source);
+        $this->assertStringContainsString('$this->facade->createConfigFatalException($message, $code, $previous)', $source);
+        $this->assertStringContainsString('$this->createConfigFatalException(', $source);
+        $this->assertStringNotContainsString('new fatalException', $source);
+        $this->assertStringNotContainsString('use fan\project\exception\service\fatal as fatalException;', $source);
+    }
+}
+
+final class ServiceConfigBaseFileStorageDouble
+{
+    /**
+     * @param list<string> $existingPaths
+     */
+    public function __construct(private array $existingPaths)
+    {
+    }
+
+    public function exists(string $path): bool
+    {
+        return in_array($path, $this->existingPaths, true);
     }
 }

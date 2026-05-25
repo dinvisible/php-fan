@@ -21,23 +21,14 @@ return [
     'own' => [
         'externalCss' => [
             'style' => [
-                'c00' => '~/main.css',
                 'c01' => '~/layout.css',
                 'c02' => '~/data.css',
                 'c03' => '~/elm.css',
                 'c04' => '/css/extra/calendar.css'
             ], // files are attached by @import-directive
-            'ie'  => [
-                'c00' => '~/ie.css'
-            ], // files are used for IE5-IE7
-            //'ie6' => ['~/ie6.css'], // files are used for IE5-IE6
         ],
         'externalJS' => [ // JavaScript files
             'head' => [
-                //'m00' => '/js/debug.js',
-                'm01' => '/js/js-wrapper.js',
-                'm02' => '/js/load-wrapper.js',
-
                 'm03' => '~/ctrl/main_ctrl.js',
                 'm04' => '~/ctrl/login_ctrl.js',
                 'm05' => '~/ctrl/pattern_ctrl.js',
@@ -63,10 +54,6 @@ return [
                 'a01' => '/js/extra/calendar.js',
             ],
         ],
-        'embedJS' => [ // embed JavaScript text
-            'head' => 'mainCtrl.init(' . (role('admin') ? 1 : 0) . ', \'/admin\', _wrapper);',
-        ],
-
         'title' => 'Admin System',
 
         'template' => dirname(__FILE__) . '/index.tpl',

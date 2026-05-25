@@ -1,80 +1,80 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<title>{@$title}</title>
-{@$headBefore}
-{*
+<title>{{ title|default('') }}</title>
+{{ headBefore|default('') }}
+{#
 
-====== meta-tags ====== *}
-{if @$meta}{foreach item=meta_item from=$meta}
-<meta{=$this->makeTagAttr('name', $meta_item)} content="{$meta_item['content']}"{=$this->makeTagAttr('http-equiv', $meta_item, 'http_equiv')}{=$this->makeTagAttr('scheme', $meta_item)}{=$this->makeTagAttr('id', $meta_item)} />
-{/foreach}{/if}
-{*
+====== meta-tags ====== #}
+{% if meta|default(null) %}{% for meta_item in meta %}
+<meta{% if meta_item.name|default(null) %} name="{{ meta_item.name }}"{% endif %} content="{{ meta_item.content }}"{% if meta_item.http_equiv|default(null) %} http-equiv="{{ meta_item.http_equiv }}"{% endif %}{% if meta_item.scheme|default(null) %} scheme="{{ meta_item.scheme }}"{% endif %}{% if meta_item.id|default(null) %} id="{{ meta_item.id }}"{% endif %} />
+{% endfor %}{% endif %}
+{#
 
-====== CSS (old format) - block ====== *}
-{if @$externalCss['old']}{foreach item=CssOld from=$externalCss['old']}
-<link rel="stylesheet" type="text/css" href="{$CssOld}"></link>
-{/foreach}{/if}
-{*
+====== CSS (old format) - block ====== #}
+{% if externalCss.old|default(null) %}{% for CssOld in externalCss.old %}
+<link rel="stylesheet" type="text/css" href="{{ CssOld }}"></link>
+{% endfor %}{% endif %}
+{#
 
-====== CSS - block ====== *}
-{if @$externalCss['new'] || @$embedCss}{nostrip}
+====== CSS - block ====== #}
+{% if externalCss.new|default(null) or embedCss|default(null) %}
 <style type="text/css">
 <!--/*--><![CDATA[/*><!--*/
-{if @$externalCss['new']}{foreach item=cssFile from=$externalCss['new']}
-@import url({$cssFile});
-{/foreach}{/if}
-{@$embedCss}
+{% if externalCss.new|default(null) %}{% for cssFile in externalCss.new %}
+@import url({{ cssFile }});
+{% endfor %}{% endif %}
+{{ embedCss|default('') }}
 /*]]>*/-->
 </style>
-{/nostrip}{/if}
-{*
+{% endif %}
+{#
 
-====== CSS (IE) - block ====== *}
-{if @$externalCss['ie']}
+====== CSS (IE) - block ====== #}
+{% if externalCss.ie|default(null) %}
 <style type="text/css">
-{foreach item=cssFile from=$externalCss['ie']}
-@import url({$cssFile});
-{/foreach}
+{% for cssFile in externalCss.ie %}
+@import url({{ cssFile }});
+{% endfor %}
 </style>
-{/if}
-{*
+{% endif %}
+{#
 
-====== External head JavaScript ====== *}
-{if @$externalJS['head']}{foreach item=jsFile from=$externalJS['head']}
-<script type="text/javascript" src="{$jsFile}"></script>
-{/foreach}{/if}
-{*
+====== External head JavaScript ====== #}
+{% if externalJS.head|default(null) %}{% for jsFile in externalJS.head %}
+<script type="text/javascript" src="{{ jsFile }}"></script>
+{% endfor %}{% endif %}
+{#
 
-====== Embeded head JavaScript ====== *}
-{if @$embedJS['head']}{nostrip}
+====== Embeded head JavaScript ====== #}
+{% if embedJS.head|default(null) %}
 <script type="text/javascript">
 <!--//--><![CDATA[//><!--
-{@$embedJS['head'][0]}{@$embedJS['head'][1]}{@$embedJS['head'][2]}
+{{ embedJS.head[0]|default('') }}{{ embedJS.head[1]|default('') }}{{ embedJS.head[2]|default('') }}
 //--><!]]>
 </script>
-{/nostrip}{/if}
-{@$headAfter}
+{% endif %}
+{{ headAfter|default('') }}
 </head>
-<body{if @$bodyClass} class="{$bodyClass}"{/if}>{if @$carcass}{$carcass}{else}{@$main}{/if}
-{*
+<body{% if bodyClass|default(null) %} class="{{ bodyClass }}"{% endif %}>{% if carcass|default(null) %}{{ carcass }}{% else %}{{ main|default('') }}{% endif %}
+{#
 
-====== External body JavaScript (deprecated!!!) ====== *}
-{if @$externalJS['body']}{foreach item=jsFile from=$externalJS['body']}
-<script type="text/javascript" src="{$jsFile}"></script>
-{/foreach}{/if}
-{*
+====== External body JavaScript (deprecated!!!) ====== #}
+{% if externalJS.body|default(null) %}{% for jsFile in externalJS.body %}
+<script type="text/javascript" src="{{ jsFile }}"></script>
+{% endfor %}{% endif %}
+{#
 
-====== Embeded body JavaScript (is not advisable) ====== *}
-{if @$embedJS['body']}{nostrip}
+====== Embeded body JavaScript (is not advisable) ====== #}
+{% if embedJS.body|default(null) %}
 <script type="text/javascript">
 <!--//--><![CDATA[//><!--
-{@$embedJS['body'][0]}{@$embedJS['body'][1]}{@$embedJS['body'][2]}
+{{ embedJS.body[0]|default('') }}{{ embedJS.body[1]|default('') }}{{ embedJS.body[2]|default('') }}
 //--><!]]>
 </script>
-{/nostrip}{/if}
-{if @$poweredBy}{nostrip}<!--
-Powered by: {$poweredBy}. Copyright (C) 2005-2012 Alexandr Nosov, http://www.alex.4n.com.ua/, Kharkov.
+{% endif %}
+{% if poweredBy|default(null) %}<!--
+Powered by: {{ poweredBy }}. Copyright (C) 2005-2012 Alexandr Nosov, http://www.alex.4n.com.ua/, Kharkov.
 PHP-FAN is licensed under the terms of the GNU Lesser General Public License: http://www.opensource.org/licenses/lgpl-license.php
--->{/nostrip}{/if}
+-->{% endif %}
 </body></html>

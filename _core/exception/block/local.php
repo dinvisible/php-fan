@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 namespace fan\core\exception\block;
+use fan\core\block\base as block_base;
+use fan\core\exception\base;
+
 /**
  * Exception a block local error. Usually catch immediate in the block
  *
@@ -18,7 +21,7 @@ namespace fan\core\exception\block;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.011 (03.10.2015)
  */
-class local extends \fan\core\exception\base
+class local extends base
 {
     /**
      * Block's object
@@ -26,13 +29,23 @@ class local extends \fan\core\exception\base
      */
     protected ?object $block = null;
 
-    public function __construct(\fan\core\block\base $block, string $logErrMsg, int $code = E_USER_NOTICE, ?\Throwable $previous = null)
+    public function __construct(
+        block_base $block,
+        string $logErrMsg,
+        int $code = E_USER_NOTICE,
+        ?\Throwable $previous = null,
+        ?object $exceptionDatabaseConnections = null,
+        ?object $exceptionRuntimeLogger = null,
+        ?object $exceptionRequestService = null,
+        ?object $exceptionErrorService = null,
+        ?object $exceptionHeaderWriter = null
+    )
     {
         $this->block = $block;
-        parent::__construct($logErrMsg, $code, $previous = null);
+        parent::__construct($logErrMsg, $code, $previous, $exceptionDatabaseConnections, $exceptionRuntimeLogger, $exceptionRequestService, $exceptionErrorService, $exceptionHeaderWriter);
     }
 
-    public function getBlock(): \fan\core\block\base
+    public function getBlock(): block_base
     {
         return $this->block;
     }

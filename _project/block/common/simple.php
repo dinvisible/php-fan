@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\project\block\common;
+use fan\core\block\common\simple as common_simple;
+
 /**
  * Base abstract simple block
  *
@@ -19,6 +21,6 @@ namespace fan\project\block\common;
  * @version of file: 05.02.001 (10.03.2014)
  * @abstract
  */
-abstract class simple extends \fan\core\block\common\simple
+abstract class simple extends common_simple
 {
 }

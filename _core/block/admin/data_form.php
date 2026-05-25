@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\block\admin;
+use fan\core\base\model\row;
+
 /**
  * Admin form data class for loader block
  *
@@ -43,14 +45,15 @@ class data_form extends data
     public function parseData(mixed $edit, mixed $insert): static
     {
         //$ettAcces = $this->getMeta('check_access4edit'); // ToDo: Check for use it
-        $fields   = adduceToArray($this->getMeta(['form_struct', 'rows']));
+        $fields   = ($this->arrayAdducer())($this->getMeta(['form_struct', 'rows']));
+        $entity = $this->entityService()->get((string)$this->getMeta('entity'));
         if ($edit) {
-            $this->row = ge((string)$this->getMeta('entity'))->getRowByParam($this->getCondition());
+            $this->row = $entity->getRowByParam($this->getCondition());
             $this->saveRow($this->row, $edit, $fields);
             $this->checkDBerror($this->row, 'Can\'t update data: ');
         } elseif ($insert) {
             $addFields = array_keys($this->getMeta(['addParam', 'default_val'], []));
-            $this->row = gr((string)$this->getMeta('entity'));
+            $this->row = $entity->getNewRow();
             $this->saveRow($this->row, $insert, $fields, $addFields);
             $this->checkDBerror($this->row, 'Can\'t insert data: ');
         }
@@ -101,9 +104,9 @@ class data_form extends data
         return $name;
     }
 
-    public function getCurrentRow(bool $cacheEnable): \fan\core\base\model\row
+    public function getCurrentRow(bool $cacheEnable): row
     {
-        $ett = ge((string)$this->getMeta('entity'));
+        $ett = $this->entityService()->get((string)$this->getMeta('entity'));
         $ettKey = $this->getMeta('entity_key', null);
         return $ettKey ?
             $ett->getRowByKey((string)$ettKey, $this->getCondition()) :

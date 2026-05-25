@@ -25,7 +25,7 @@ return [
   'MENU_ABOUT' => 'О нас',
   'MENU_NEWS' => 'Новости',
   'NOTE_FIELDS_MARKED_AS_REQUIRED_FOR_FILL' => 'Поля, отмеченные как "{b}*{/b}", обязательны для заполнения.',
-  'NOTE_UPLOAD_FILE_LIMIT' => 'Размер прикрепляемого файла не должен превышать {video-size}Kb.',
+  'NOTE_UPLOAD_FILE_LIMIT' => 'Размер прикрепляемого файла не должен превышать {file-size}Kb.',
   'OTHER_TEST' => 'Проверка',
   'OTHER_TEST_TAG' => 'Проверка {b}жирного текста{/b}',
 ];

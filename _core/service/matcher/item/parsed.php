@@ -104,7 +104,7 @@ class parsed extends base
             if (empty($mainRequest)) {
                 $this->data['file'] = '';
             } else {
-                $this->data['file'] = rtrim(\bootstrap::getLoader()->main, '\\/');
+                $this->data['file'] = $this->item->getMainBlockBasePath();
                 $this->data['file'] .= '/' . implode('/', $mainRequest) . '.php';
             }
         }

@@ -2,7 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service\obfuscator;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\service\obfuscator;
+
 /**
  * Description of obfuscator-engine base
  *
@@ -50,7 +51,7 @@ abstract class base
 
     // ======== Main Interface methods ======== \\
 
-    public function setFacade(\fan\core\service\obfuscator $facade): static
+    public function setFacade(obfuscator $facade): static
     {
         if (empty($this->facade)) {
             $this->facade = $facade;

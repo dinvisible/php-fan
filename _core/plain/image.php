@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 namespace fan\core\plain;
-use fan\project\exception\plain\fatal as fatalException;
+
 /**
  * Class of controller for show image, nail, etc
  *
@@ -68,7 +68,7 @@ class image extends db_file
         if (!empty($this->id)) {
             list($this->width, $this->height) = $this->_getNailSize();
             if (empty($this->width) && empty($this->height)) {
-                throw new fatalException($this, 'There isn\'t point width or height of nail.');
+                throw $this->createPlainFatalException('There isn\'t point width or height of nail.');
             } else {
                 $dirMask = (string)$this->config->get('nail_dir', '{TEMP}/nail');
                 $this->nailDir = $this->_getNailDir($dirMask, false);
@@ -82,7 +82,7 @@ class image extends db_file
         if ($this->imageType === 'adm_nail') {
             return [60, 60];
         }
-        $sr = $this->containerService('request');
+        $sr = $this->context()->request();
         $width = $sr->get('w', 'GPA');
         $height = $sr->get('h', 'GPA');
         return [
@@ -107,7 +107,7 @@ class image extends db_file
         $isSize = !empty($this->width) || !empty($this->height);
         if ($isSize && !empty($this->nailDir)) {
             list($cache, $cacheKey, $data) = $this->_getCacheData($mainData);
-            if (!empty($data) && is_file($data['filePath'])) {
+            if (!empty($data) && $this->context()->fileStorage()->isFile($data['filePath'])) {
                 $this->plainContent = $data['content'];
                 return $data;
             }
@@ -133,9 +133,9 @@ class image extends db_file
 
     protected function _getStubFileData(): array
     {
-        $nailStub = \bootstrap::parsePath((string)$this->config->get('nail_stub', '{PROJECT}/data/image/empty_nail.gif'));
-        if (!empty($nailStub) && is_readable($nailStub)) {
-            $imgData = getimagesize($nailStub);
+        $nailStub = $this->context()->parsePath((string)$this->config->get('nail_stub', '{PROJECT}/data/image/empty_nail.gif'));
+        if (!empty($nailStub) && $this->context()->fileStorage()->isReadable($nailStub)) {
+            $imgData = $this->context()->imageMetadataReader()->size($nailStub);
             if (!empty($imgData)) {
                 $pathInfo = pathinfo($nailStub);
                 return [
@@ -144,9 +144,9 @@ class image extends db_file
                     'headers' => [
                         'contentType' => $imgData['mime'],
                         'filename'    => $pathInfo['basename'],
-                        'length'      => filesize($nailStub),
+                        'length'      => $this->context()->fileStorage()->size($nailStub),
                         'legthRange'  => 'bytes',
-                        'modified'    => filemtime($nailStub),
+                        'modified'    => $this->context()->fileStorage()->modifiedTime($nailStub),
                         'cacheLimit'  => 300,
                     ]
                 ];
@@ -157,21 +157,21 @@ class image extends db_file
 
     protected function _getNailDir(string $dirMask, $isException = false): ?string
     {
-        $nailDir = empty($dirMask) ? null : rtrim(\bootstrap::parsePath($dirMask), '/\\');
+        $nailDir = empty($dirMask) ? null : rtrim($this->context()->parsePath($dirMask), '/\\');
 
         if (!empty($nailDir)) {
-            if (is_file($nailDir)) {
-                throw new fatalException($this, 'Incorrect path for nail. Is file there "' . $nailDir . '"');
-            } elseif (!is_dir($nailDir)) {
-                if (!mkdir($nailDir, 0744, true)) {
+            if ($this->context()->fileStorage()->isFile($nailDir)) {
+                throw $this->createPlainFatalException('Incorrect path for nail. Is file there "' . $nailDir . '"');
+            } elseif (!$this->context()->fileStorage()->isDirectory($nailDir)) {
+                if (!$this->context()->fileStorage()->makeDirectory($nailDir, 0744, true)) {
                     if ($isException) {
-                        throw new fatalException($this, 'Can\'t create directory "' . $nailDir . '"');
+                        throw $this->createPlainFatalException('Can\'t create directory "' . $nailDir . '"');
                     }
                     $nailDir = null;
                 }
-            } elseif (!is_writable($nailDir)) {
+            } elseif (!$this->context()->fileStorage()->isWritable($nailDir)) {
                 if ($isException) {
-                    throw new fatalException($this, 'Directory "' . $nailDir . '" isn\'t writable');
+                    throw $this->createPlainFatalException('Directory "' . $nailDir . '" isn\'t writable');
                 }
                 $nailDir = null;
             }
@@ -182,7 +182,7 @@ class image extends db_file
 
     protected function _getCacheData($mainData): array
     {
-        $cache = $this->containerService('cache', 'img_nail');
+        $cache = $this->context()->cache('img_nail');
         /* @var $cache \fan\core\service\cache */
 
         $cacheKey = (string)$this->id;
@@ -203,7 +203,7 @@ class image extends db_file
 
     protected function _getNailData(array $mainData): array
     {
-        $img = \fan\project\service\image_modify::instance($mainData['filePath']);
+        $img = $this->context()->imageModify($mainData['filePath']);
         $img->scal($this->width, $this->height);
         $imgData = $img->getImageInfo(300, empty($this->nailDir));
 

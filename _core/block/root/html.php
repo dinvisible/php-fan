@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\block\root;
+use fan\core\block\base;
+
 /**
  * Base abstract root html block
  *
@@ -19,8 +21,14 @@ namespace fan\core\block\root;
  * @version of file: 05.02.010 (28.09.2015)
  * @abstract
  */
-abstract class html extends \fan\core\block\base
+abstract class html extends base
 {
+    private ?object $rootHtmlFileStorage = null;
+
+    private \Closure $shortClassNameResolver;
+
+    private \Closure $arrayLikeChecker;
+
     /**
      * Name of block
      * @var string
@@ -73,6 +81,27 @@ abstract class html extends \fan\core\block\base
      */
     protected array $cssMedia = ['all', 'braille', 'handheld', 'print', 'screen', 'speech', 'projection', 'tty', 'tv'];
 
+    public function setBlockDependencies(array $dependencies): static
+    {
+        parent::setBlockDependencies($dependencies);
+        if (isset($dependencies['rootHtmlFileStorage'])) {
+            $this->rootHtmlFileStorage = $dependencies['rootHtmlFileStorage'];
+        }
+        $this->shortClassNameResolver = \Closure::fromCallable(
+            $dependencies['shortClassNameResolver'] ?? static function (object|string $object): string {
+                $className = is_object($object) ? get_class($object) : $object;
+                $position = strrpos($className, '\\');
+
+                return $position === false ? $className : substr($className, $position + 1);
+            }
+        );
+        $this->arrayLikeChecker = \Closure::fromCallable(
+            $dependencies['arrayLikeChecker'] ?? static fn(mixed $value): bool => is_array($value) || $value instanceof \ArrayAccess
+        );
+
+        return $this;
+    }
+
     public function init(): void
     {
         $browserClass = '';
@@ -91,7 +120,7 @@ abstract class html extends \fan\core\block\base
             }
         }
         $this->_setViewVar('bodyClass', $browserClass);
-        $this->_setViewVar('poweredBy', $this->getMeta('show_power', true) ? $this->containerService('application')->getCoreVersion() : null);
+        $this->_setViewVar('poweredBy', $this->getMeta('show_power', true) ? $this->applicationService()->getCoreVersion() : null);
     }
 
     public function runAfterInit(): void
@@ -107,12 +136,12 @@ abstract class html extends \fan\core\block\base
                 }
             }
             if (empty($title)) {
-                $app = $this->containerService('application');
+                $app = $this->applicationService();
                 /* @var $app \fan\core\service\application */
                 $title  = $app->getConfig('PROJECT_NAME');
                 $title .= (empty($title) ? '' : ' | ') . $app->getAppName();
                 if ($main) {
-                    $title .= ' | ' . get_class_name($main);
+                    $title .= ' | ' . $this->shortClassName($main);
                 }
             }
             $this->view['title'] = $title;
@@ -138,7 +167,7 @@ abstract class html extends \fan\core\block\base
             $meta = $meta->toArray();
         }
         if (!is_array($meta)) {
-            error_log('Incorrect value for meta-tag.', E_USER_NOTICE);
+            $this->errorLogWriter()->write('Incorrect value for meta-tag.');
             return;
         }
 
@@ -208,13 +237,13 @@ abstract class html extends \fan\core\block\base
     {
         if (is_object($css)) {
             if (!method_exists($css, '__toString')) {
-                error_log('Incorrect value for Embed Css.', E_USER_NOTICE);
+                $this->errorLogWriter()->write('Incorrect value for Embed Css.');
                 return null;
             }
             $css = $css->__toString();
         }
         if (!in_array($media, $this->cssMedia)) {
-            error_log('Incorrect Media type of CSS: "' . $media . '".', E_USER_WARNING);
+            $this->errorLogWriter()->write('Incorrect Media type of CSS: "' . $media . '".');
             return null;
         }
         $css = (string)$css;
@@ -232,7 +261,7 @@ abstract class html extends \fan\core\block\base
 
     public function setEmbedCssByMeta(mixed $meta): static
     {
-        if (is_array_alt($meta)) {
+        if ($this->isArrayLike($meta)) {
             foreach ($meta as $k => $v) {
                 $this->setEmbedCss($v, (string)$k);
             }
@@ -241,6 +270,16 @@ abstract class html extends \fan\core\block\base
         }
 
         return $this;
+    }
+
+    private function shortClassName(object|string $object): string
+    {
+        return ($this->shortClassNameResolver)($object);
+    }
+
+    private function isArrayLike(mixed $value): bool
+    {
+        return ($this->arrayLikeChecker)($value);
     }
 
     public function setExternalJs(mixed $jsFile, string $pos = 'head'): static
@@ -282,7 +321,7 @@ abstract class html extends \fan\core\block\base
         if (is_array($js)) {
             $jsArgs = $js;
             $js = (string)array_shift($jsArgs) . '(';
-            $json = $this->containerService('json');
+            $json = $this->jsonService();
             foreach ($jsArgs as $v) {
                 $js .= $json->encode($v) . ', ';
             }
@@ -319,12 +358,11 @@ abstract class html extends \fan\core\block\base
     public function setModalWindow(string $filePath, array $tplVars = [], mixed $cssFile = '/css/modal_win.css', mixed $jsFile = null): static
     {
         if (!empty($filePath)) {
-            if (!\is_file($filePath)) {
-                $filePath = \bootstrap::parsePath($filePath);
+            if (!$this->rootHtmlFileStorage()->isFile($filePath)) {
+                $filePath = $this->runtimeService()->parsePath($filePath);
             }
-            if (\is_readable($filePath)) {
-                $template = $this->containerService('template')->get($filePath, null, $this);
-                /* @var $template \fan\core\service\template\type\base */
+            if ($this->rootHtmlFileStorage()->isReadable($filePath)) {
+                $template = $this->templateService()->get($filePath, null, $this);
 
                 foreach ($tplVars as $k => $v) {
                     $template->assign($k, $v);
@@ -360,6 +398,12 @@ abstract class html extends \fan\core\block\base
         }
         return false;
     }
+
+    private function rootHtmlFileStorage(): object
+    {
+        return $this->rootHtmlFileStorage ?? throw new \RuntimeException('Root HTML file storage is not configured.');
+    }
+
     // ==================== protected methods ==================== \\
 
     /**
@@ -369,7 +413,8 @@ abstract class html extends \fan\core\block\base
     {
         $js =& $this->externalJS[$type];
         if (!in_array($uri, $js)) {
-            $jsFileContent = is_readable(BASE_DIR . $uri) ? file_get_contents(BASE_DIR . $uri) : false;
+            $jsFilePath = BASE_DIR . $uri;
+            $jsFileContent = $this->rootHtmlFileStorage()->isReadable($jsFilePath) ? $this->rootHtmlFileStorage()->read($jsFilePath) : false;
             if (is_string($jsFileContent) && preg_match('/\/\*\*include\s*(.+?)\s*\*\//is', $jsFileContent, $matches)) {
                 $scripts = explode("\n", $matches[1]);
                 foreach ($scripts as $scr) {
@@ -390,11 +435,11 @@ abstract class html extends \fan\core\block\base
             $this->view->set('modal_win', $this->modalWin);
         }
 
-        $externalCSS = service('obfuscator', 'css')->getNewList($this->externalCSS);
+        $externalCSS = $this->obfuscatorService('css')->getNewList($this->externalCSS);
         $this->view->set('externalCSS', $externalCSS);
         $this->view->set('embedCSS',    $this->embedCSS);
 
-        $externalJS = service('obfuscator', 'js')->getNewList($this->externalJS);
+        $externalJS = $this->obfuscatorService('js')->getNewList($this->externalJS);
         $this->view->set('externalJS',  $externalJS);
         $this->view->set('embedJS',     $this->embedJS);
     }

@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
+use fan\core\base\service\single;
+use fan\core\block\base;
+
 /**
  * debug manager service
  *
@@ -18,7 +21,7 @@ namespace fan\core\service;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.007 (31.08.2015)
  */
-class debug extends \fan\core\base\service\single {
+class debug extends single {
 
     /**
      * @var \fan\core\service\tab
@@ -29,34 +32,54 @@ class debug extends \fan\core\base\service\single {
      */
     protected ?array $blockCode = null;
 
-    protected function __construct(bool $allowIni = true)
-    {
-        parent::__construct($allowIni);
+    private ?object $input = null;
+    private ?object $metaFileStorage = null;
+    private \Closure $arrayAdducer;
+    private ?object $reflectionClassFactory = null;
 
-        $this->tab = $this->containerService('tab');
-        $this->config['ENABLED'] = $this->isEnabled() && preg_match((string)$this->getConfig('DEBUG_IP', '/^127\.0\.0\.1$/'), (string)($_SERVER['SERVER_ADDR'] ?? ''));
+    public function __construct(
+        bool $allowIni = true,
+        ?object $tab = null,
+        ?object $input = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?object $metaFileStorage = null,
+        ?callable $arrayAdducer = null,
+        ?object $reflectionClassFactory = null
+    )
+    {
+        $this->tab = $tab;
+        $this->input = $input;
+        $this->metaFileStorage = $metaFileStorage;
+        $this->arrayAdducer = \Closure::fromCallable(
+            $arrayAdducer ?? static function (): array {
+                throw new \RuntimeException('Array adducer is not configured for debug service.');
+            }
+        );
+        $this->reflectionClassFactory = $reflectionClassFactory;
+        parent::__construct($allowIni, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
+
+        $this->config['ENABLED'] = $this->isEnabled() && preg_match((string)$this->getConfig('DEBUG_IP', '/^127\.0\.0\.1$/'), (string)$this->input()->serverValue('SERVER_ADDR', ''));
+    }
+
+    private function input(): object
+    {
+        if ($this->input !== null) {
+            return $this->input;
+        }
+
+        throw new \RuntimeException('Request input service is not configured for debug service.');
+    }
+
+    private function metaFileStorage(): object
+    {
+        return $this->metaFileStorage ?? throw new \RuntimeException('Meta file storage is not configured for debug service.');
     }
 
     public function setExtFiles(object $root, bool $mode): void
     {
-        if ($this->isEnabled()) {
-            if (method_exists($root, 'setExternalCss')) {
-                    $root->setExternalCss((string)$this->getConfig('CSS_CONTROL',  '/__debug_trace/css/debug_control.css'));
-                if ($mode) {
-                    $root->setExternalCss((string)$this->getConfig('CSS_DEBUG0',  '/__debug_trace/css/debAcug_common.css'));
-                    $root->setExternalCss((string)$this->getConfig('CSS_DEBUG1',  '/__debug_trace/css/debug_mode1.css'));
-                }
-            }
-            if (method_exists($root, 'setExternalJs')) {
-                $root->setExternalJs((string)$this->getConfig('JS_WRAPPER', '/js/js-wrapper.js'));
-                $root->setExternalJs((string)$this->getConfig('JS_FILE',    '/__debug_trace/js/debug_trace.js'));
-                $root->setExternalJs('/js/debug.js');
-            }
-            if (method_exists($root, 'setEmbedJs')) {
-                $root->setEmbedJs('debug_trace.init(' . $mode . ');');
-                $root->setEmbedJs('basicBroadcaster.prototype.config.DebugMode = true', 'head', -1);
-            }
-        }
+        return;
     }
 
     public function setBlockCode(string $name, string $code): void
@@ -64,7 +87,7 @@ class debug extends \fan\core\base\service\single {
         $this->blockCode[$name] = $code;
     }
 
-    public function wrapHtmlCode(string $code, \fan\core\block\base $block): string
+    public function wrapHtmlCode(string $code, base $block): string
     {
         if (!$this->isEnabled()) {
             return $code;
@@ -86,21 +109,8 @@ class debug extends \fan\core\base\service\single {
 <title>' . $title . '</title>
 <style type="text/css">
 <!--/*--><![CDATA[/*><!--*/
-@import url(/css/main.css);
-@import url(' . $this->getConfig('CSS_CONTROL', '/__debug_trace/css/debug_control.css') . ');
-@import url(' . $this->getConfig('CSS_DEBUG0',  '/__debug_trace/css/debug_common.css') . ');
-@import url(' . $this->getConfig('CSS_DEBUG2',  '/__debug_trace/css/debug_mode2.css') . ');
 /*]]>*/-->
 </style>
-<script type="text/javascript" src="/js/debug.js"></script>
-<script type="text/javascript" src="' . $this->getConfig('JS_WRAPPER', '/js/js-wrapper.js') . '"></script>
-<script type="text/javascript" src="' . $this->getConfig('JS_FILE',    '/__debug_trace/js/debug_trace.js') . '"></script>
-<script type="text/javascript">
-<!--//--><![CDATA[//><!--
-basicBroadcaster.prototype.config.DebugMode = true;
-debug_trace.init(2);
-//--><!]]>
-</script>
 </head><body>
 <div id="debug2"><div>
 <ul class="debug2_list">' . $blockInfo . '</ul>
@@ -108,7 +118,7 @@ debug_trace.init(2);
 </body></html>';
     }
 
-    public function getSecondDebugRow(\fan\core\block\base $block, string $incl, bool $isView): string
+    public function getSecondDebugRow(base $block, string $incl, bool $isView): string
     {
         $name = $block->getBlockName();
         $ret = '<li class="debug2_row"><span class="debug2_label"><b>' . $block->getMeta('initOrder', $this->tab->getDefaultInitNum()) . ':</b> ' . $name . '</span>';
@@ -145,10 +155,10 @@ debug_trace.init(2);
 
 
 
-    protected function _getBlockDetail(\fan\core\block\base $block): string
+    protected function _getBlockDetail(base $block): string
     {
         $refl = [
-            new \ReflectionClass($block)
+            $this->reflectionClass($block)
         ];
 
         $debug = $block->getDebugInfo();
@@ -182,13 +192,40 @@ debug_trace.init(2);
 
     protected function _reduceMetaArray(array $meta): array
     {
-        foreach (adduceToArray($meta) as $k => $v) {
+        foreach (($this->arrayAdducer())($meta) as $k => $v) {
             if ($k !== 'common' && $k !== 'own') {
                 unset($meta[$k]);
             }
         }
 
         return $meta;
+    }
+
+    private function arrayAdducer(): callable
+    {
+        if (!isset($this->arrayAdducer)) {
+            $this->arrayAdducer = \Closure::fromCallable(
+                static function (): array {
+                    throw new \RuntimeException('Array adducer is not configured for debug service.');
+                }
+            );
+        }
+
+        return $this->arrayAdducer;
+    }
+
+    private function reflectionClass(object|string $object): \ReflectionClass
+    {
+        if ($this->reflectionClassFactory === null || !method_exists($this->reflectionClassFactory, 'create')) {
+            throw new \RuntimeException('Reflection class factory must expose create().');
+        }
+
+        $reflection = $this->reflectionClassFactory->create($object);
+        if (!$reflection instanceof \ReflectionClass) {
+            throw new \UnexpectedValueException('Reflection class factory must return a ReflectionClass.');
+        }
+
+        return $reflection;
     }
 
     /**
@@ -210,7 +247,7 @@ debug_trace.init(2);
             $ret .= '<div>';
             $ret .= '<span>' . $this->_correctPath($file) . '<b>' . basename($file) . '</b> &nbsp;</span>';
             $file = substr($file, 0, -4) . '.meta.php';
-            if (is_file($file)) {
+            if ($this->metaFileStorage()->exists($file)) {
                 $ret .= '<span>' . $this->_correctPath($file) . '<b>' . basename($file) . '</b> &nbsp;</span>';
             }
             $ret .= '</div>';

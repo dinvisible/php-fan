@@ -3,15 +3,10 @@
 declare(strict_types=1);
 
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
 
-if (!function_exists('role')) {
-    function role($condition): bool
-    {
-        return $condition === 'admin';
-    }
-}
 
-class MetaFilesTest extends \PHPUnit\Framework\TestCase
+class MetaFilesTest extends TestCase
 {
     public static function metaFileProvider(): array
     {
@@ -25,9 +20,6 @@ class MetaFilesTest extends \PHPUnit\Framework\TestCase
             'admin root' => ['_core/block/admin/root.meta.php'],
             'admin structure' => ['_core/block/admin/structure.meta.php'],
             'common html pager' => ['_core/block/common/html_pager.meta.php'],
-            'common html pager quantifier' => ['_core/block/common/html_pager_quantifier.meta.php'],
-            'form parser' => ['_core/block/form/parser.meta.php'],
-            'form usual' => ['_core/block/form/usual.meta.php'],
             'root html' => ['_core/block/root/html.meta.php'],
         ];
     }
@@ -57,34 +49,13 @@ class MetaFilesTest extends \PHPUnit\Framework\TestCase
         $this->assertTrue($meta['own']['notUseTemplate']);
     }
 
-    public function testAdminIndexMetaBuildsRuntimeEmbedScriptFromRole(): void
+    public function testAdminIndexMetaKeepsStaticConfigurationOnly(): void
     {
         $meta = require dirname(__DIR__, 3) . '/_core/block/admin/index.meta.php';
 
         $this->assertSame('Admin System', $meta['own']['title']);
-        $this->assertStringContainsString('mainCtrl.init(1,', $meta['own']['embedJS']['head']);
-        $this->assertSame('/js/js-wrapper.js', $meta['own']['externalJS']['head']['m01']);
+        $this->assertArrayNotHasKey('embedJS', $meta['own']);
+        $this->assertSame('~/ctrl/main_ctrl.js', $meta['own']['externalJS']['head']['m03']);
     }
 
-    public function testFormUsualMetaContainsDefaultDesignAndValidatorSettings(): void
-    {
-        $meta = require dirname(__DIR__, 3) . '/_core/block/form/usual.meta.php';
-
-        $form = $meta['own']['form'];
-        $this->assertSame('POST', $form['action_method']);
-        $this->assertSame('form_validation', $form['js_validator']);
-        $this->assertSame('submit_1', $form['default_type']['button']);
-        $this->assertStringContainsString('<input type="text"', $form['design']['input']['text']);
-    }
-
-    public function testPagerQuantifierMetaDescribesGetFormField(): void
-    {
-        $meta = require dirname(__DIR__, 3) . '/_core/block/common/html_pager_quantifier.meta.php';
-
-        $form = $meta['own']['form'];
-        $this->assertSame('GET', $form['action_method']);
-        $this->assertSame('G', $form['request_type']);
-        $this->assertFalse($form['redirect_required']);
-        $this->assertSame('select', $form['fields']['pager_quantifier']['input_type']);
-    }
 }

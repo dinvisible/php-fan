@@ -3,8 +3,11 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\project\exception\service\fatal as fatalException;
 use \fan\project\exception\error500 as error500;
+use fan\core\base\service\multi;
+use fan\core\service\config\row as config_row;
+use fan\core\service\user\base;
+
 /**
  * user manager service
  *
@@ -58,36 +61,12 @@ use \fan\project\exception\error500 as error500;
  * @method boolean isNew()
  * @method boolean isChanged()
  */
-class user extends \fan\core\base\service\multi
+class user extends multi
 {
     /**
      *
      */
     public const SES_NAMESPACE = 'user';
-
-    private static array $instances = [];
-
-    /**
-     * @var \fan\core\service\session
-     */
-    private static ?object $session = null;
-
-    /**
-     * @var \fan\core\service\user[]
-     */
-    private static ?array $currentUsers = null;
-
-    /**
-     * Priority User Space for application
-     * @var array
-     */
-    private static ?array $prioritySpace = null;
-
-    /**
-     * Current user space resolved for the running application.
-     * @var string
-     */
-    private static ?string $currentUserSpace = null;
 
     protected ?string $userSpace = null;
     protected mixed $identifyer = null;
@@ -96,6 +75,53 @@ class user extends \fan\core\base\service\multi
      * @var \fan\core\service\user\base
      */
     protected ?object $userData = null;
+
+    /**
+     * @var callable|null
+     */
+    private mixed $configFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $userSessionFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $currentUserFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $userApplicationFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $userErrorFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $userRequestInputFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $userEntityFactory = null;
+
+    private ?object $userState = null;
+
+    private \Closure $userEngineFactory;
+
+    private \Closure $instanceKeyEncoder;
+
+    private \Closure $snapshotEncoder;
+
+    private \Closure $snapshotDecoder;
+
+    private \Closure $arrayAdducer;
 
     protected array $delegateRule = [
         'userData' => [
@@ -122,113 +148,138 @@ class user extends \fan\core\base\service\multi
         ],
     ];
 
-    protected function __construct(mixed $identifyer, string $userSpace)
+    public function __construct(
+        mixed $identifyer,
+        string $userSpace,
+        ?callable $configFactory = null,
+        ?callable $sessionFactory = null,
+        ?callable $currentUserFactory = null,
+        ?callable $applicationFactory = null,
+        ?callable $errorFactory = null,
+        ?callable $requestInputFactory = null,
+        ?callable $entityFactory = null,
+        ?callable $userEngineFactory = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?object $userState = null,
+        ?callable $instanceKeyEncoder = null,
+        ?callable $snapshotEncoder = null,
+        ?callable $snapshotDecoder = null,
+        ?callable $arrayAdducer = null
+    )
     {
+        $this->userState = $userState ?? throw new \RuntimeException('User state is not configured for user service.');
+        $this->userEngineFactory = \Closure::fromCallable(
+            $userEngineFactory ?? static function (string $engineClass, mixed $identifyer): base {
+                throw new \RuntimeException('User engine factory is not configured for user service.');
+            }
+        );
+        $this->arrayAdducer = \Closure::fromCallable(
+            $arrayAdducer ?? static function (mixed $value): array {
+                throw new \RuntimeException('Array adducer is not configured for user service.');
+            }
+        );
+        $this->instanceKeyEncoder = \Closure::fromCallable(
+            $instanceKeyEncoder ?? static function (mixed $identifyer): int|string {
+                throw new \RuntimeException('User instance key encoder is not configured for user service.');
+            }
+        );
+        $this->snapshotEncoder = \Closure::fromCallable(
+            $snapshotEncoder ?? static function (mixed $state): string {
+                throw new \RuntimeException('Snapshot encoder is not configured for user service.');
+            }
+        );
+        $this->snapshotDecoder = \Closure::fromCallable(
+            $snapshotDecoder ?? static function (string $payload, mixed $default = null): mixed {
+                throw new \RuntimeException('Snapshot decoder is not configured for user service.');
+            }
+        );
+        $this->setUserDependencies(
+            $configFactory,
+            $sessionFactory,
+            $currentUserFactory,
+            $applicationFactory,
+            $errorFactory,
+            $requestInputFactory,
+            $entityFactory,
+            arrayAdducer: $arrayAdducer
+        );
         $this->userSpace  = (string)$userSpace;
         $this->identifyer = $identifyer;
 
-        parent::__construct();
+        parent::__construct(true, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
 
         $spaceConfig = $this->_getSpaceConfig();
         $engine = $this->_getEngine((string)$spaceConfig['ENGINE'], false);
-        $this->userData = new $engine($identifyer);
-        $this->userData->setFacade($this)->setConfig($spaceConfig)->load();
+        if (!is_string($engine)) {
+            throw new \RuntimeException('User engine class cannot be resolved.');
+        }
+        $this->userData = $this->createUserEngine($engine, $identifyer);
+        $this->configureUserData($spaceConfig)->load();
 
         $this->_subscribeForService('application', 'setAppName', [$this, 'onSetAppName']);
     }
 
-
-    // ======== Static methods ======== \\
-    public static function instance(mixed $identifyer, ?string $reqSpace = null): static
-    {
-        $userSpace = self::_verifySpace($reqSpace);
-        $instanceKey = self::_getInstanceKey($identifyer);
-        if (is_null(self::$currentUsers)) {
-            self::_getCurrentUsers(); // If first call - pull users from session
-        }
-
-        if (!isset(self::$instances[$userSpace][$instanceKey])) {
-            new \fan\project\service\user($identifyer, $userSpace);
-        }
-        return self::$instances[$userSpace][$instanceKey];
-    }
-
-    public static function checkLogout(): ?\fan\core\service\user
-    {
-        $user = self::getCurrent();
-        if (!empty($user)) {
-            $field = $user->getConfig('LOGOUT_FIELD');
-            if (!empty($field)) {
-                $order  = (string)$user->getConfig('LOGOUT_ORDER', 'GP');
-                $logout = self::staticContainerService('request')->get((string)$field, $order);
-                if (!empty($logout)) {
-                    for ($i = 0; $i < 100 && !empty($user); $i++) {
-                        $user->logout();
-                        $user = self::getCurrent();
-                    }
-                    if ($i > 99) {
-                        throw new error500('Too many iteration for logout user.');
-                    }
-                    return null;
-                }
-            }
-        }
-        return $user;
-    }
-
-    public static function getCurrent(?string $reqSpace = null): ?\fan\core\service\user
-    {
-        $userSpace = self::_verifySpace($reqSpace);
-        $curUsers  = self::_getCurrentUsers();
-        return isset($curUsers[$userSpace]) ? $curUsers[$userSpace] : null;
-    }
-
-    /**
-     * @throws error500
-     */
-    public static function getCurrentSpace(): string
-    {
-        $config   = self::staticContainerService('config')->get('user');
-        $appName  = self::staticContainerService('application')->getAppName();
-        $curUsers = self::_getCurrentUsers();
-
-        // If is Priority Space and has current user - use it
-        if (isset(self::$prioritySpace[$appName])) {
-            $prioritySp = self::$prioritySpace[$appName];
-            if (isset($curUsers[$prioritySp])) {
-                return $prioritySp;
-            }
-        }
-
-        // Use Space with first registered user
-        $firstSp  = null;
-        foreach ($config->get('space', []) as $k => $v) {
-            if (in_array($appName, adduceToArray($v->APPLICATIONS))) {
-                if (isset($curUsers[$k])) {
-                    return $k;
-                } elseif (empty($firstSp)) {
-                    $firstSp = $k;
-                }
-            }
-        }
-
-        // Use Priority or First Space for current application
-        if (!empty($prioritySp)) {
-            return $prioritySp;
-        }
-        if (!empty($firstSp)) {
-            return $firstSp;
-        }
-
-        // Use Default Space if another one is not defined
-        $userSpace = $config->get('DEFAULT_SPACE');
-        if (empty($userSpace)) {
-            throw new error500('Default user space is not set.');
-        }
-        return $userSpace;
-    }
-
     // ======== Main Interface methods ======== \\
+
+    public function setUserDependencies(
+        ?callable $configFactory = null,
+        ?callable $sessionFactory = null,
+        ?callable $currentUserFactory = null,
+        ?callable $applicationFactory = null,
+        ?callable $errorFactory = null,
+        ?callable $requestInputFactory = null,
+        ?callable $entityFactory = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?object $userState = null,
+        ?callable $instanceKeyEncoder = null,
+        ?callable $snapshotEncoder = null,
+        ?callable $snapshotDecoder = null,
+        ?callable $arrayAdducer = null
+    ): static
+    {
+        if ($arrayAdducer !== null) {
+            $this->arrayAdducer = \Closure::fromCallable($arrayAdducer);
+        }
+        if ($instanceKeyEncoder !== null) {
+            $this->instanceKeyEncoder = \Closure::fromCallable($instanceKeyEncoder);
+        }
+        if ($snapshotEncoder !== null) {
+            $this->snapshotEncoder = \Closure::fromCallable($snapshotEncoder);
+        }
+        if ($snapshotDecoder !== null) {
+            $this->snapshotDecoder = \Closure::fromCallable($snapshotDecoder);
+        }
+        if ($userState !== null) {
+            $this->userState = $userState;
+            if ($this->userSpace !== null) {
+                $this->_saveInstance();
+            }
+        }
+        $this->configFactory = $configFactory;
+        $this->userSessionFactory = $sessionFactory;
+        $this->currentUserFactory = $currentUserFactory;
+        $this->userApplicationFactory = $applicationFactory;
+        $this->userErrorFactory = $errorFactory;
+        $this->userRequestInputFactory = $requestInputFactory;
+        $this->userEntityFactory = $entityFactory;
+
+        if ($serviceBootstrapRuntime !== null || $serviceConfigurator !== null || $serviceCacheFactory !== null) {
+            $this->setServiceDependencies($serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
+            if ($this->userSpace !== null && $this->config === null && $serviceConfigurator !== null) {
+                $this->_setConfig()->resetEnabled();
+            }
+        }
+
+        if ($this->userData instanceof base && $this->config !== null) {
+            $this->configureUserData($this->_getSpaceConfig());
+        }
+
+        return $this;
+    }
 
     public function setCurrent(): bool
     {
@@ -236,8 +287,10 @@ class user extends \fan\core\base\service\multi
             return false;
         }
         if (!$this->isCurrent()) {
-            self::$currentUsers[$this->userSpace] = $this;
-            self::_getSession()->set('currents', self::$currentUsers);
+            $currentUsers = $this->_getCurrentUsers();
+            $currentUsers[$this->userSpace] = $this;
+            $this->state()->setCurrentUsers($currentUsers);
+            $this->userSession()->set('currents', $currentUsers);
             if ($this->_isCorrespondApp()) {
                 $this->_broadcastMessage('currentUser', $this);
             }
@@ -247,7 +300,7 @@ class user extends \fan\core\base\service\multi
 
     public function isCurrent(): bool
     {
-        $curUsers = self::_getCurrentUsers();
+        $curUsers = $this->_getCurrentUsers();
         return isset($curUsers[$this->userSpace]) && $curUsers[$this->userSpace] === $this;
     }
 
@@ -256,8 +309,10 @@ class user extends \fan\core\base\service\multi
         if ($this->isValid()) {
             $appName = $this->_isCorrespondApp($appName);
             if (!empty($appName)) {
-                self::$prioritySpace[$appName] = $this->userSpace;
-                self::_getSession()->set('priority', self::$prioritySpace);
+                $prioritySpace = $this->state()->getPrioritySpace() ?? [];
+                $prioritySpace[$appName] = $this->userSpace;
+                $this->state()->setPrioritySpace($prioritySpace);
+                $this->userSession()->set('priority', $prioritySpace);
                 return true;
             }
         }
@@ -267,11 +322,13 @@ class user extends \fan\core\base\service\multi
     public function logout(): bool
     {
         if ($this->isCurrent()) {
-            unset(self::$currentUsers[$this->userSpace]);
-            self::_getSession()->set('currents', self::$currentUsers);
+            $currentUsers = $this->_getCurrentUsers();
+            unset($currentUsers[$this->userSpace]);
+            $this->state()->setCurrentUsers($currentUsers);
+            $this->userSession()->set('currents', $currentUsers);
             if ($this->_isCorrespondApp()) {
                 $this->userData->logout();
-                $user = self::getCurrent();
+                $user = $this->currentUser();
                 if (empty($user)) {
                     $this->_broadcastMessage('logoutUser', $this);
                 } else {
@@ -298,7 +355,7 @@ class user extends \fan\core\base\service\multi
     public function removeRole(string|array $role): static
     {
         $curRoles = $this->getRoles(true);
-        foreach (adduceToArray($role) as $roleName) {
+        foreach (($this->arrayAdducer())($role) as $roleName) {
             if (array_key_exists($roleName, $curRoles)) {
                 unset($curRoles[$roleName]);
             }
@@ -354,16 +411,16 @@ class user extends \fan\core\base\service\multi
         return $this->userData->getAllData();
     }
 
-    public function getEngine(): ?\fan\core\service\user\base
+    public function getEngine(): ?base
     {
         return $this->userData;
     }
 
     public function onSetAppName(string $appName): void
     {
-        if ((string)$this->userSpace === (string)self::$currentUserSpace && !$this->_isCorrespondApp($appName)) {
-            self::$currentUserSpace = null;
-            self::getCurrent();
+        if ((string)$this->userSpace === (string)$this->state()->getCurrentUserSpace() && !$this->_isCorrespondApp($appName)) {
+            $this->state()->setCurrentUserSpace(null);
+            $this->currentUser();
         }
     }
 
@@ -388,49 +445,27 @@ class user extends \fan\core\base\service\multi
 
     protected function _saveInstance(): static
     {
-        self::$instances[(string)$this->userSpace][self::_getInstanceKey($this->identifyer)] = $this;
+        $this->state()->setInstance((string)$this->userSpace, $this->getInstanceKey($this->identifyer), $this);
         return $this;
     }
 
-    protected static function _getCurrentUsers(): array
+    protected function _getCurrentUsers(): array
     {
-        if (is_null(self::$currentUsers)) {
-            $ses = self::_getSession();
-            self::$currentUsers  = $ses->get('currents', []);
-            self::$prioritySpace = $ses->get('priority', []);
-            foreach (self::$currentUsers as $k => $v) {
-                $instanceKey = self::_getInstanceKey($v->identifyer);
-                if (!isset(self::$instances[$k][$instanceKey])) {
-                    self::$instances[$k][$instanceKey] = $v;
+        $currentUsers = $this->state()->getCurrentUsers();
+        if (is_null($currentUsers)) {
+            $ses = $this->userSession();
+            $currentUsers = $ses->get('currents', []);
+            $this->state()->setCurrentUsers($currentUsers);
+            $this->state()->setPrioritySpace($ses->get('priority', []));
+            foreach ($currentUsers as $k => $v) {
+                $instanceKey = $this->getInstanceKey($v->identifyer);
+                if ($this->state()->getInstance((string)$k, $instanceKey) === null) {
+                    $this->state()->setInstance((string)$k, $instanceKey, $v);
                 }
             }
         }
 
-        return self::$currentUsers;
-    }
-
-    /**
-     * @throws error500
-     */
-    protected static function _verifySpace(?string $userSpace): string
-    {
-        if (empty($userSpace)) {
-            return self::getCurrentSpace();
-        }
-        $userSpace = (string)$userSpace;
-        $config = self::staticContainerService('config');
-        if (!$config->get(['user', 'space', $userSpace])) {
-            throw new error500('Incorrect identifyer of user space - "' . $userSpace . '".');
-        }
-        return $userSpace;
-    }
-
-    protected static function _getSession(): \fan\core\service\session
-    {
-        if (empty(self::$session)) {
-            self::$session = self::staticContainerService('session', self::SES_NAMESPACE, 'system');
-        }
-        return self::$session;
+        return $currentUsers;
     }
 
     protected function _getDelegate(mixed $class): mixed
@@ -441,7 +476,7 @@ class user extends \fan\core\base\service\multi
         return parent::_getDelegate($class);
     }
 
-    protected function _getSpaceConfig(): \fan\core\service\config\row
+    protected function _getSpaceConfig(): config_row
     {
         return $this->config->get(['space', $this->userSpace]);
     }
@@ -449,15 +484,61 @@ class user extends \fan\core\base\service\multi
     protected function _isCorrespondApp(?string $appName = null): ?string
     {
         if (empty($appName)) {
-            $appName = $this->containerService('application')->getAppName();
+            $appName = $this->userApplication()->getAppName();
         }
         $appName = (string)$appName;
         $spaceConfig = $this->_getSpaceConfig()->toArray();
         return in_array($appName, $spaceConfig['APPLICATIONS']) ? $appName : null;
     }
 
+    private function userSession(): object
+    {
+        if ($this->userSessionFactory !== null) {
+            return ($this->userSessionFactory)(self::SES_NAMESPACE, 'system');
+        }
+
+        throw new \RuntimeException('Session service is not configured for user service.');
+    }
+
+    private function currentUser(): mixed
+    {
+        if ($this->currentUserFactory !== null) {
+            return ($this->currentUserFactory)();
+        }
+
+        throw new \RuntimeException('Current user factory is not configured for user service.');
+    }
+
+    private function userApplication(): object
+    {
+        if ($this->userApplicationFactory !== null) {
+            return ($this->userApplicationFactory)();
+        }
+
+        throw new \RuntimeException('Application service is not configured for user service.');
+    }
+
+    private function userEntityService(): object
+    {
+        if ($this->userEntityFactory !== null) {
+            return ($this->userEntityFactory)();
+        }
+
+        throw new \RuntimeException('Entity service is not configured for user service.');
+    }
+
+    public function createUserFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        return $this->createServiceFatalException($message, $code, $previous);
+    }
+
+    private function state(): object
+    {
+        return $this->userState ?? throw new \RuntimeException('User state is not configured for user service.');
+    }
+
     /**
-     * @throws fatalException
+     * @throws \Throwable
      */
     protected function _convertToArray(mixed $data): array
     {
@@ -470,7 +551,7 @@ class user extends \fan\core\base\service\multi
         if (is_object($data) && method_exists($data, 'toArray')) {
             return $data->toArray();
         }
-        throw new fatalException($this, 'Incorrect data format "' . gettype($data) . '"');
+        throw $this->createUserFatalException('Incorrect data format "' . gettype($data) . '"');
     }
 
     protected function _checkKey(string $type, string $key): array
@@ -511,7 +592,7 @@ class user extends \fan\core\base\service\multi
 
     public function serialize(): string
     {
-        return \fan\core\adapter\safe_serializer::encodePhpSnapshot($this->__serialize());
+        return ($this->snapshotEncoder())($this->__serialize());
     }
 
     public function __serialize(): array
@@ -525,7 +606,7 @@ class user extends \fan\core\base\service\multi
 
     public function unserialize(string $data): void
     {
-        $data = \fan\core\adapter\safe_serializer::decodePhpSnapshot((string)$data, []);
+        $data = ($this->snapshotDecoder())((string)$data, []);
         if (!is_array($data)) {
             throw new \UnexpectedValueException('User snapshot must decode to an array.');
         }
@@ -537,10 +618,50 @@ class user extends \fan\core\base\service\multi
     {
         $this->userSpace  = (string)$data['user_space'];
         $this->identifyer = $data['identifyer'];
-        $this->_saveInstance()->_setConfig()->resetEnabled();
-
         $this->userData = $this->restoreUserData($data['user_data']);
-        $this->userData->setFacade($this)->setConfig($this->_getSpaceConfig());
+        if ($this->userState !== null && (isset($this->instanceKeyEncoder) || is_int($this->identifyer) || is_string($this->identifyer))) {
+            $this->_saveInstance();
+        }
+
+        if ($this->config !== null) {
+            $this->configureUserData($this->_getSpaceConfig());
+        }
+    }
+
+    private function configureUserData(config_row $spaceConfig): base
+    {
+        $this->userData->setEngineDependencies(
+            $this->userErrorFactory !== null ? ($this->userErrorFactory)() : null,
+            $this->userRequestInputFactory !== null ? ($this->userRequestInputFactory)() : null,
+            isset($this->snapshotEncoder) ? $this->snapshotEncoder() : null,
+            isset($this->snapshotDecoder) ? $this->snapshotDecoder() : null
+        );
+        if (method_exists($this->userData, 'setConfigFactory') && is_callable($this->configFactory)) {
+            $this->userData->setConfigFactory($this->configFactory);
+        }
+        if (method_exists($this->userData, 'setEntityFactory')) {
+            $this->userData->setEntityFactory(fn(): object => $this->userEntityService());
+        }
+
+        return $this->userData->setFacade($this)->setConfig($spaceConfig);
+    }
+
+    private function createUserEngine(string $engineClass, mixed $identifyer): base
+    {
+        if (!isset($this->userEngineFactory)) {
+            $this->userEngineFactory = \Closure::fromCallable(
+                static function (string $engineClass, mixed $identifyer): base {
+                    throw new \RuntimeException('User engine factory is not configured for user service.');
+                }
+            );
+        }
+
+        $engine = ($this->userEngineFactory)($engineClass, $identifyer);
+        if (!$engine instanceof base) {
+            throw new \UnexpectedValueException('User engine factory must return a user engine object.');
+        }
+
+        return $engine;
     }
 
     /**
@@ -550,24 +671,78 @@ class user extends \fan\core\base\service\multi
      *
      * @return int|string Key that can be used in static instance maps.
      */
-    private static function _getInstanceKey(mixed $identifyer): int|string
+    private function getInstanceKey(mixed $identifyer): int|string
     {
-        return is_int($identifyer) || is_string($identifyer) ?
-            $identifyer :
-            \fan\core\adapter\safe_serializer::stableKey($identifyer);
-    }
-
-    private function restoreUserData(mixed $userData): \fan\core\service\user\base
-    {
-        if (is_string($userData)) {
-            $userData = \fan\core\adapter\safe_serializer::decodePhpSnapshot($userData);
+        if (is_int($identifyer) || is_string($identifyer)) {
+            return $identifyer;
         }
 
-        if (!$userData instanceof \fan\core\service\user\base) {
+        return ($this->instanceKeyEncoder())($identifyer);
+    }
+
+    private function restoreUserData(mixed $userData): base
+    {
+        if (is_string($userData)) {
+            $userData = ($this->snapshotDecoder())($userData);
+        }
+
+        if (!$userData instanceof base) {
             throw new \UnexpectedValueException('User data snapshot must decode to a user data object.');
         }
 
         return $userData;
+    }
+
+    private function snapshotEncoder(): callable
+    {
+        if (!isset($this->snapshotEncoder)) {
+            $this->snapshotEncoder = \Closure::fromCallable(
+                static function (mixed $state): string {
+                    throw new \RuntimeException('Snapshot encoder is not configured for user service.');
+                }
+            );
+        }
+
+        return $this->snapshotEncoder;
+    }
+
+    private function snapshotDecoder(): callable
+    {
+        if (!isset($this->snapshotDecoder)) {
+            $this->snapshotDecoder = \Closure::fromCallable(
+                static function (string $payload, mixed $default = null): mixed {
+                    throw new \RuntimeException('Snapshot decoder is not configured for user service.');
+                }
+            );
+        }
+
+        return $this->snapshotDecoder;
+    }
+
+    private function instanceKeyEncoder(): callable
+    {
+        if (!isset($this->instanceKeyEncoder)) {
+            $this->instanceKeyEncoder = \Closure::fromCallable(
+                static function (mixed $identifyer): int|string {
+                    throw new \RuntimeException('User instance key encoder is not configured for user service.');
+                }
+            );
+        }
+
+        return $this->instanceKeyEncoder;
+    }
+
+    private function arrayAdducer(): callable
+    {
+        if (!isset($this->arrayAdducer)) {
+            $this->arrayAdducer = \Closure::fromCallable(
+                static function (mixed $value): array {
+                    throw new \RuntimeException('Array adducer is not configured for user service.');
+                }
+            );
+        }
+
+        return $this->arrayAdducer;
     }
 
 

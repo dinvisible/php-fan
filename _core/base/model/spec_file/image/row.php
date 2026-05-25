@@ -2,6 +2,9 @@
 declare(strict_types=1);
 
 namespace fan\core\base\model\spec_file\image;
+use fan\core\base\model\entity as model_entity;
+use fan\core\base\model\spec_file\row as spec_file_row;
+
 /**
  * Row of special file
  *
@@ -18,24 +21,97 @@ namespace fan\core\base\model\spec_file\image;
  * @version of file: 05.02.006 (20.04.2015)
  * @abstract
  */
-abstract class row extends \fan\core\base\model\spec_file\row
+abstract class row extends spec_file_row
 {
 
-    /**
-     * Object of Image-template
-     * @var \fan\core\service\template\type\image[]
-     */
-    private static array $template = [];
+    private ?object $runtime = null;
+
+    private mixed $imageModifyFactory = null;
+
+    private mixed $errorFactory = null;
+
+    private ?row_state $state = null;
+
+    private ?object $imageMetadataReader = null;
+    private ?object $imageSourceFileStorage = null;
+
+    public function setSpecFileImageRowDependencies(
+        ?object $runtime = null,
+        ?callable $templateFactory = null,
+        ?callable $imageModifyFactory = null,
+        ?callable $errorFactory = null,
+        ?row_state $state = null,
+        ?object $imageMetadataReader = null,
+        ?object $imageSourceFileStorage = null
+    ): static {
+        if ($runtime !== null) {
+            $this->runtime = $runtime;
+        }
+        if ($imageModifyFactory !== null) {
+            $this->imageModifyFactory = $imageModifyFactory;
+        }
+        if ($errorFactory !== null) {
+            $this->errorFactory = $errorFactory;
+        }
+        if ($state !== null) {
+            $this->state = $state;
+        }
+        if ($imageMetadataReader !== null) {
+            $this->imageMetadataReader = $imageMetadataReader;
+        }
+        if ($imageSourceFileStorage !== null) {
+            $this->imageSourceFileStorage = $imageSourceFileStorage;
+        }
+
+        return $this;
+    }
+
+    protected function setDependenciesFromEntityService(model_entity $entity): void
+    {
+        parent::setDependenciesFromEntityService($entity);
+        try {
+            $service = $entity->getService();
+        } catch (\Throwable) {
+            return;
+        }
+        if (method_exists($service, 'getSpecFileImageRowDependencies')) {
+            $this->setSpecFileImageRowDependencies(...$service->getSpecFileImageRowDependencies());
+        }
+    }
+
+    private function runtimeService(): object
+    {
+        return $this->runtime ?? throw new \RuntimeException('Bootstrap runtime service is not configured for spec image row.');
+    }
+
+    private function imageModifyService(string $sourcePath): object
+    {
+        return $this->imageModifyFactory !== null ? ($this->imageModifyFactory)($sourcePath) : throw new \RuntimeException('Image modify service is not configured for spec image row.');
+    }
+
+    private function errorService(): object
+    {
+        return $this->errorFactory !== null ? ($this->errorFactory)() : throw new \RuntimeException('Error service is not configured for spec image row.');
+    }
 
     protected function getTemplate(): object
     {
-        $entityName = $this->getEntity()->getName();
-        if (!isset(self::$template[$entityName])) {
-            $srcPath      = $this->getConfig('TEMPLATE_PATH', '{PROJECT}/data/special_templates/show_image.tpl');
-            $templatePath = \bootstrap::parsePath((string)$srcPath);
-            self::$template[$entityName] = $this->containerService('template')->get($templatePath, '\fan\core\service\template\type\image');
-        }
-        return self::$template[$entityName];
+        throw new \RuntimeException('Template service has been removed for spec image row.');
+    }
+
+    private function state(): row_state
+    {
+        return $this->state ?? throw new \RuntimeException('Spec-file image row state is not configured for spec-file image row.');
+    }
+
+    private function imageMetadataReader(): object
+    {
+        return $this->imageMetadataReader ?? throw new \RuntimeException('Image metadata reader is not configured for spec-file image row.');
+    }
+
+    private function imageSourceFileStorage(): object
+    {
+        return $this->imageSourceFileStorage ?? throw new \RuntimeException('Image source file storage is not configured for spec-file image row.');
     }
 
     public function setFormFile(string $formKey, array $addKeys = [], string $decription = '', string $alt = ''): bool
@@ -80,7 +156,7 @@ abstract class row extends \fan\core\base\model\spec_file\row
 
     public function rotateImage(int|float $angle, int $bgrColor = 0xFFFFFF, int|float $fix = 0): void
     {
-        $si = service('image_modify', $this->getEntityFile()->getFilePath());
+        $si = $this->imageModifyService($this->getEntityFile()->getFilePath());
         $si->rotate($angle, $bgrColor, $fix);
         $si->saveAndReplace(null);
         $this->saveImage();
@@ -238,23 +314,23 @@ abstract class row extends \fan\core\base\model\spec_file\row
         if ($path === '') {
             return false;
         }
-        if (!preg_match('/^[a-z][a-z0-9+.-]*:\/\//i', $path) && (!is_file($path) || !is_readable($path))) {
-            $this->containerService('error')->logErrorMessage('Image file "' . $path . '" is not readable.', 'Image metadata error', '', true, false);
+        if (
+            !preg_match('/^[a-z][a-z0-9+.-]*:\/\//i', $path)
+            && (!$this->imageSourceFileStorage()->isFile($path) || !$this->imageSourceFileStorage()->isReadable($path))
+        ) {
+            $this->errorService()->logErrorMessage('Image file "' . $path . '" is not readable.', 'Image metadata error', '', true, false);
             return false;
         }
 
         $errorMessage = null;
-        set_error_handler(static function (int $severity, string $message) use (&$errorMessage): bool {
-            $errorMessage = $message;
-            return true;
-        });
-        try {
-            $result = getimagesize($path);
-        } finally {
-            restore_error_handler();
-        }
+        $result = $this->imageMetadataReader()->size(
+            $path,
+            static function (string $message) use (&$errorMessage): void {
+                $errorMessage = $message;
+            }
+        );
         if ($result === false && $errorMessage) {
-            $this->containerService('error')->logErrorMessage($errorMessage, 'Image metadata error', '', true, false);
+            $this->errorService()->logErrorMessage($errorMessage, 'Image metadata error', '', true, false);
         }
         return $result;
     }

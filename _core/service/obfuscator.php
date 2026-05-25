@@ -2,7 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\core\exception\service\fatal as fatalException;
+use fan\core\base\service\multi;
+
 /**
  * Paiment-maker service
  *
@@ -18,9 +19,8 @@ use fan\core\exception\service\fatal as fatalException;
  * @author: Alex Nosov (alex@4n.com.ua)
  * @version of file: 05.02.008 (15.09.2015)
  */
-class obfuscator extends \fan\core\base\service\multi
+class obfuscator extends multi
 {
-    private static array $instances = [];
     /**
      * List of Engines by TA Types
      * @var array
@@ -54,31 +54,39 @@ class obfuscator extends \fan\core\base\service\multi
     ];
 
     /**
-     * @throws \fan\core\exception\service\fatal
+     * @var callable|null
      */
-    protected function __construct(string $type)
+    private $phpArrayFileLoader = null;
+
+    private ?object $fileStorage = null;
+
+    /**
+     * @throws \Throwable
+     */
+    public function __construct(
+        string $type,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?callable $phpArrayFileLoader = null,
+        ?object $fileStorage = null
+    )
     {
         $type = strtolower((string)$type);
-        if (in_array($type, $this->fileType, true)) {
+        $isSupportedType = in_array($type, $this->fileType, true);
+        if ($isSupportedType) {
             $this->type = $type;
-        } else {
-            throw new fatalException(0, 'Incorrect file type for obfuscator "' . $type . '"', 3008);
         }
+        $this->phpArrayFileLoader = $phpArrayFileLoader;
+        $this->fileStorage = $fileStorage;
 
-        parent::__construct(true);
+        parent::__construct(true, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
+
+        if (!$isSupportedType) {
+            throw $this->createServiceFatalException('Incorrect file type for obfuscator "' . $type . '"', 3008);
+        }
 
         $this->_defineDir();
-    }
-
-    // ======== Static methods ======== \\
-
-    public static function instance(string $type): static
-    {
-        $type = strtolower($type);
-        if (!isset(self::$instances[$type])) {
-            new self($type);
-        }
-        return self::$instances[$type];
     }
 
     // ======== Main Interface methods ======== \\
@@ -102,18 +110,18 @@ class obfuscator extends \fan\core\base\service\multi
     public function getFileData(string $name): string|false
     {
         $contentFile = $this->contentDir . '/' . $name;
-        return is_file($contentFile) ? file_get_contents($contentFile) : 'Error 404! File not found.';
+        return $this->fileStorage()->isFile($contentFile) ? $this->fileStorage()->read($contentFile) : 'Error 404! File not found.';
     }
 
     public function getHeaders(string $name, ?int $length = null): array
     {
         $contentFile = $this->contentDir . '/' . $name;
-        if (is_file($contentFile)) {
+        if ($this->fileStorage()->isFile($contentFile)) {
             return [
                 'contentType' => $this->type === 'css' ? 'text/css' : 'application/javascript',
                 'filename'    => $this->type . '_' . $name,
-                'length'      => empty($length) ? filesize($contentFile) : $length,
-                'modified'    => filemtime($contentFile),
+                'length'      => empty($length) ? $this->fileStorage()->size($contentFile) : $length,
+                'modified'    => $this->fileStorage()->modifiedTime($contentFile),
                 //'cacheLimit'  => 0,
             ];
         }
@@ -143,14 +151,8 @@ class obfuscator extends \fan\core\base\service\multi
 
     // ======== Private/Protected methods ======== \\
 
-    protected function _saveInstance(): static
-    {
-        self::$instances[$this->type] = $this;
-        return $this;
-    }
-
     /**
-     * @throws fatalException
+     * @throws \Throwable
      */
     protected function _defineDir(): static
     {
@@ -159,14 +161,19 @@ class obfuscator extends \fan\core\base\service\multi
         }
         foreach ($this->dirKeys as  $k => $v) {
             $tmp = (string)$this->getConfig('PATH_' . $k, '{TEMP}/obfuscator/' . $this->type . '/' . strtolower($k));
-            $this->$v = \bootstrap::parsePath($tmp);
-            if (!is_dir($this->$v)) {
-                if (!mkdir ($this->$v, 0750, true)) {
-                    throw new fatalException('Can\'t create directory "' . $this->$v . '" for obfuscator.');
+            $this->$v = $this->runtime()->parsePath($tmp);
+            if (!$this->fileStorage()->isDirectory($this->$v)) {
+                if (!$this->fileStorage()->makeDirectory($this->$v, 0750, true)) {
+                    throw $this->createServiceFatalException('Can\'t create directory "' . $this->$v . '" for obfuscator.');
                 }
             }
         }
         return $this;
+    }
+
+    private function runtime(): object
+    {
+        return $this->serviceBootstrapRuntime();
     }
 
     protected function _makeNewCssList(array $fileList): array
@@ -235,23 +242,23 @@ class obfuscator extends \fan\core\base\service\multi
         $metaFile      = $this->metaDir . '/' . $name;
 
         // Check - is content exists and isn't obsolete
-        if (is_file($contentFile)) {
+        if ($this->fileStorage()->isFile($contentFile)) {
             if (!$checkObsolete) {
                 return $this;
             }
-            if (is_file($metaFile)) {
+            if ($this->fileStorage()->isFile($metaFile)) {
                 $obsolete = false;
-                $data = \fan\project\adapter\php_array_file::load($metaFile, []);
+                $data = $this->loadPhpArrayFile($metaFile, []);
                 foreach ($list as $v) {
                     $srcPath = BASE_DIR . '/' . $v;
-                    if (!is_file($srcPath)) {
+                    if (!$this->fileStorage()->isFile($srcPath)) {
                         continue;
                     }
                     if (!isset($data[$v]['time']) || !isset($data[$v]['size'])) {
                         $obsolete = true;
                         break;
                     }
-                    if ((int)$data[$v]['time'] !== (int)filemtime($srcPath) || (int)$data[$v]['size'] !== (int)filesize($srcPath)) {
+                    if ((int)$data[$v]['time'] !== (int)$this->fileStorage()->modifiedTime($srcPath) || (int)$data[$v]['size'] !== (int)$this->fileStorage()->size($srcPath)) {
                         $obsolete = true;
                         break;
                     }
@@ -267,25 +274,25 @@ class obfuscator extends \fan\core\base\service\multi
         $data    = [];
         foreach ($list as $v) {
             $srcPath = BASE_DIR . '/' . $v;
-            if (!is_readable($srcPath)) {
+            if (!$this->fileStorage()->isReadable($srcPath)) {
                 throw new \RuntimeException('File "' . $v . '" isn\'t readable. Can\'t obfuscate it.');
             }
 
-            $tmp      = file_get_contents($srcPath);
+            $tmp      = $this->fileStorage()->read($srcPath);
             $content .= $this->obfuscate((string)$tmp);
             if ($checkObsolete) {
                 $data[$v] = [
-                    'time' => filemtime($srcPath),
-                    'size' => filesize($srcPath),
+                    'time' => $this->fileStorage()->modifiedTime($srcPath),
+                    'size' => $this->fileStorage()->size($srcPath),
                 ];
             }
         }
 
-        if (file_put_contents($contentFile, $content) === false) {
+        if ($this->fileStorage()->write($contentFile, $content) === false) {
             throw new \RuntimeException('Obfuscator error. Can\'t save file "' . $contentFile . '".');
         }
         if ($checkObsolete) {
-            if (file_put_contents($metaFile, '<?php
+            if ($this->fileStorage()->write($metaFile, '<?php
 return ' . var_export($data, true) .';
 ?>') === false) {
                 throw new \RuntimeException('Obfuscator error. Can\'t save file "' . $metaFile . '".');
@@ -293,6 +300,24 @@ return ' . var_export($data, true) .';
         }
 
         return $this;
+    }
+
+    private function loadPhpArrayFile(string $path, mixed $default = null): mixed
+    {
+        if (!is_callable($this->phpArrayFileLoader)) {
+            throw new \RuntimeException('PHP array file loader is not configured for obfuscator service.');
+        }
+
+        return ($this->phpArrayFileLoader)($path, $default);
+    }
+
+    private function fileStorage(): object
+    {
+        if ($this->fileStorage === null) {
+            throw new \RuntimeException('File storage dependency is not configured for obfuscator service.');
+        }
+
+        return $this->fileStorage;
     }
 
     /**

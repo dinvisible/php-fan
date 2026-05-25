@@ -107,6 +107,12 @@ namespace fan\project\service {
             if (class_exists('\FanTest\_core\block\FakeServiceRegistry', false)) {
                 \FanTest\_core\block\FakeServiceRegistry::set('error', self::$instance);
             }
+            if (class_exists('\FanTest\_core\block\FakeServiceContainer', false)) {
+                \FanTest\_core\block\FakeServiceRegistry::installContainer(new \FanTest\_core\block\FakeServiceContainer());
+            } elseif (class_exists('\fan\core\di\container', true)) {
+                $container = new \fan\core\di\container();
+                $container->set('error', self::$instance);
+            }
         }
 
         public function logErrorMessage($message, $title = '', $note = '', $fixPosition = false): void

@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 namespace fan\core\block\admin;
+use fan\core\base\model\rowset;
+use fan\core\block\loader\base as loader_base;
+use fan\core\view\router;
+
 /**
  * Base class for loader block
  *
@@ -19,7 +23,7 @@ namespace fan\core\block\admin;
  * @version of file: 05.02.005 (12.02.2015)
  * @abstract
  */
-abstract class base extends \fan\core\block\loader\base
+abstract class base extends loader_base
 {
     public function getHashArray(array $arg, ?array $arrMerge = null, mixed $mergeBefore = true): array
     {
@@ -28,7 +32,8 @@ abstract class base extends \fan\core\block\loader\base
             $retData[$e->get($arg['key'])] = $e->get($arg['val']);
         }
         if ($arrMerge) {
-            $retData = $mergeBefore ? array_merge_recursive_alt($arrMerge, $retData) : array_merge_recursive_alt($retData, $arrMerge);
+            $recursiveMerger = $this->recursiveMerger();
+            $retData = $mergeBefore ? $recursiveMerger($arrMerge, $retData) : $recursiveMerger($retData, $arrMerge);
         }
         reset($retData);
         return [$retData, key($retData)];
@@ -99,7 +104,7 @@ abstract class base extends \fan\core\block\loader\base
         return [$retData, $retKeys, $depth];
     }
 
-    private function getRowset(array $arg): \fan\core\base\model\rowset
+    private function getRowset(array $arg): rowset
     {
         if (!isset($arg['param'])) {
             $arg['param'] = null;
@@ -114,7 +119,7 @@ abstract class base extends \fan\core\block\loader\base
             $arg['order'] = '';
         }
 
-        $ett = ge((string)$arg['entity']);
+        $ett = $this->entityService()->get((string)$arg['entity']);
         if (isset($arg['sql_key'])) {
             return $ett->getRowsetByKey(
                 (string)$arg['sql_key'],
@@ -162,7 +167,7 @@ abstract class base extends \fan\core\block\loader\base
     protected function getTemplateCode(array $addVars = []): string
     {
         $retHtml  = '';
-        $tmp      = $this->view instanceof \fan\core\view\router && count($this->view) > 0 ? $this->view->toArray() : [];
+        $tmp      = $this->view instanceof router && count($this->view) > 0 ? $this->view->toArray() : [];
         $tplVars  = isset($tmp['html']) && is_array($tmp['html']) ? $tmp['html'] : [];
         $template = $this->getTemplate();
         if (!empty($template)) {
@@ -178,7 +183,7 @@ abstract class base extends \fan\core\block\loader\base
             }
 
             $tplParentClass = $this->getMeta('tpl_parent_class');
-            $template = $this->containerService('template')->get((string)$template, is_null($tplParentClass) ? null : (string)$tplParentClass, $this);
+            $template = $this->templateService()->get((string)$template, is_null($tplParentClass) ? null : (string)$tplParentClass, $this);
             foreach ($tplVars as $k => $v) {
                 $template->assign((string)$k, $v);
             }

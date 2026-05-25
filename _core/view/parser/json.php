@@ -2,6 +2,10 @@
 declare(strict_types=1);
 
 namespace fan\core\view\parser;
+use fan\core\block\base;
+use fan\core\view\parser;
+use fan\core\view\router\json as router_json;
+
 /**
  * View parser JSON-type
  *
@@ -17,16 +21,29 @@ namespace fan\core\view\parser;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.007 (31.08.2015)
  */
-class json extends \fan\core\view\parser
+class json extends parser
 {
     // ======== Static methods ======== \\
 
-    final static public function getFormat(): string {
+    final static public function getFormat(?callable $exceptionFactory = null): string {
         return 'json';
     }
 
-    static public function getRouter(\fan\core\block\base $block): \fan\core\view\router\json {
-        return new \fan\project\view\router\json($block);
+    static public function getRouter(
+        base $block,
+        mixed $loaderStateOrFactory = null,
+        ?callable $viewRouterFactory = null
+    ): router_json {
+        if (is_callable($loaderStateOrFactory) && $viewRouterFactory === null) {
+            $viewRouterFactory = $loaderStateOrFactory;
+        }
+        $factory = static::viewRouterFactory($viewRouterFactory);
+        $router = $factory(static::class, $block);
+        if (!$router instanceof router_json) {
+            throw new \UnexpectedValueException('View router factory must return a JSON view router.');
+        }
+
+        return $router;
     }
 
     // ======== Main Interface methods ======== \\
@@ -34,7 +51,7 @@ class json extends \fan\core\view\parser
     {
         $view = $this->rootBlock->getView();
         $useBase64 = method_exists($view, 'isUseBase64') && $view->isUseBase64();
-        $result = $this->containerService('json', $useBase64)->encode($this->result);
+        $result = $this->getJsonEncoder($useBase64)->encode($this->result);
 
         $this->_setHeaders($result, 'application/json');
         return $result;

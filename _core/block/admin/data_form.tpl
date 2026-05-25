@@ -1,9 +1,9 @@
-{if @$rows}
+{% if rows|default(null) %}
     <table class="formDataTable">
         <tbody>
-        {foreach from=$rows item=row}
-            <tr><td class="formDataLabel">{$row['label']}:</td><td class="formDataInput">{ldelim}{$row['type']}-{$row['field']}{rdelim}</td></tr>
-        {/foreach}
+        {% for row in rows %}
+            <tr><td class="formDataLabel">{{ row.label }}:</td><td class="formDataInput">{{ '{' }}{{ row.type }}-{{ row.field }}{{ '}' }}</td></tr>
+        {% endfor %}
         </tbody>
     </table>
-{/if}
+{% endif %}

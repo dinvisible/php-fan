@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\project\block\common;
+use fan\core\block\common\html_pager as common_html_pager;
+
 /**
  * Pager class
  *
@@ -18,6 +20,6 @@ namespace fan\project\block\common;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 02.002
  */
-class html_pager extends \fan\core\block\common\html_pager
+class html_pager extends common_html_pager
 {
 }

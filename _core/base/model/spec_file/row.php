@@ -2,6 +2,9 @@
 declare(strict_types=1);
 
 namespace fan\core\base\model\spec_file;
+use fan\core\base\model\file_data\row as file_data_row;
+use fan\core\base\model\row as model_row;
+
 /**
  * Row of special files
  *
@@ -18,7 +21,7 @@ namespace fan\core\base\model\spec_file;
  * @version of file: 05.02.001 (10.03.2014)
  * @abstract
  */
-abstract class row extends \fan\core\base\model\row
+abstract class row extends model_row
 {
     /**
      * Entity File Data
@@ -41,11 +44,11 @@ abstract class row extends \fan\core\base\model\row
         $this->getEntityFile()->delete();
     }
 
-    public function getEntityFile(): \fan\core\base\model\file_data\row
+    public function getEntityFile(): file_data_row
     {
         if (!$this->entityFile) {
-            $ns = get_ns_name($this, 2);
-            $this->entityFile = gr('\\' . $ns . '\file_data');
+            $ns = $this->namespaceName($this, 2);
+            $this->entityFile = $this->getEntity()->getService()->get('\\' . $ns . '\file_data')->getNewRow();
             $this->entityFile->getEntity()->setConnection($this->getEntity()->getConnection()->getConnectionName());
             $this->entityFile->setAllowLoadInfo(false);
             $this->entityFile->loadById($this->getId(false));

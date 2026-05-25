@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
+use fan\core\base\service\multi;
+
 /**
  * SOAP operation service
  *
@@ -18,7 +20,7 @@ namespace fan\core\service;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.007 (31.08.2015)
  */
-class soap extends \fan\core\base\service\multi
+class soap extends multi
 {
     /**
      * @var SoapClient
@@ -30,23 +32,93 @@ class soap extends \fan\core\base\service\multi
     private ?object $soapFault = null;
     private ?bool $logEnabled = null;
 
+    private \Closure $errorFactory;
+
+    private ?object $runtime = null;
+
+    private ?object $phpRuntimeSettings = null;
+    private ?object $wsdlFileStorage = null;
+    private \Closure $arrayValueReader;
+    private \Closure $soapHeaderFactory;
+    private \Closure $soapClientFactory;
+    private \Closure $soapVarFactory;
+    private \Closure $domDocumentFactory;
+    private \Closure $streamContextFactory;
+
     /**
      * Soap Headers
      * @var array
      */
     private array $soapHeaders = [];
 
-    protected function __construct(bool $logEnabled)
+    public function __construct(
+        bool $logEnabled,
+        callable $errorFactory,
+        object $runtime,
+        object $serviceBootstrapRuntime,
+        object $serviceConfigurator,
+        callable $serviceCacheFactory,
+        object $phpRuntimeSettings,
+        object $wsdlFileStorage,
+        ?callable $arrayValueReader = null,
+        ?callable $classNameResolver = null,
+        ?callable $soapHeaderFactory = null,
+        ?callable $soapClientFactory = null,
+        ?callable $soapVarFactory = null,
+        ?callable $domDocumentFactory = null,
+        ?callable $streamContextFactory = null
+    )
     {
-        parent::__construct(false);
+        $this->errorFactory = \Closure::fromCallable($errorFactory);
+        $this->runtime = $runtime;
+        $this->phpRuntimeSettings = $phpRuntimeSettings;
+        $this->wsdlFileStorage = $wsdlFileStorage;
+        $this->arrayValueReader = \Closure::fromCallable(
+            $arrayValueReader ?? static function (array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed {
+                throw new \RuntimeException('Array value reader is not configured for SOAP service.');
+            }
+        );
+        $this->soapHeaderFactory = \Closure::fromCallable(
+            $soapHeaderFactory ?? static function (string $nameSpace, array $name, ?array $data = null): \SoapHeader {
+                throw new \RuntimeException('SOAP header factory is not configured for SOAP service.');
+            }
+        );
+        $this->soapClientFactory = \Closure::fromCallable(
+            $soapClientFactory ?? static function (string $wsdlFile, ?array $param = null): \SoapClient {
+                throw new \RuntimeException('SOAP client factory is not configured for SOAP service.');
+            }
+        );
+        $this->soapVarFactory = \Closure::fromCallable(
+            $soapVarFactory ?? static function (
+                mixed $data,
+                int $encoding,
+                ?string $typeName = null,
+                ?string $typeNamespace = null,
+                ?string $nodeName = null,
+                ?string $nodeNamespace = null
+            ): \SoapVar {
+                throw new \RuntimeException('SOAP var factory is not configured for SOAP service.');
+            }
+        );
+        $this->domDocumentFactory = \Closure::fromCallable(
+            $domDocumentFactory ?? static function (): \DOMDocument {
+                throw new \RuntimeException('DOM document factory is not configured for SOAP service.');
+            }
+        );
+        $this->streamContextFactory = \Closure::fromCallable(
+            $streamContextFactory ?? static function (array $options): mixed {
+                throw new \RuntimeException('Stream context factory is not configured for SOAP service.');
+            }
+        );
+        parent::__construct(false, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory, null, null, $classNameResolver, $arrayValueReader);
         $enableCache = $this->config['CACHE_ENABLED'] ? 1 : 0;
-        ini_set('soap.wsdl_cache_enabled', $enableCache);
+        $this->phpRuntimeSettings()->set('soap.wsdl_cache_enabled', (string)$enableCache);
         if ($enableCache) {
             if ($this->config['CACHE_DIR']) {
-                ini_set('soap.wsdl_cache_dir', $this->config['CACHE_DIR']);
+                $this->phpRuntimeSettings()->set('soap.wsdl_cache_dir', (string)$this->config['CACHE_DIR']);
             }
             if ($this->config['CACHE_TTL']) {
-                ini_set('soap.wsdl_cache_ttl', $this->config['CACHE_TTL']);
+                $this->phpRuntimeSettings()->set('soap.wsdl_cache_ttl', (string)$this->config['CACHE_TTL']);
             }
         }
         if ($this->config['TRACE_ENABLED']) {
@@ -55,11 +127,30 @@ class soap extends \fan\core\base\service\multi
         $this->logEnabled = (bool)$logEnabled;
     }
 
-    public static function instance(string $wsdlFile, ?array $param = null, bool $logEnabled = true): static
+    public function initializeSoapObject(string $wsdlFile, mixed $param = null): ?\SoapClient
     {
-        $instance = new self((bool)$logEnabled);
-        $instance->_initSoapObj($wsdlFile, $param);
-        return $instance;
+        return $this->_initSoapObj($wsdlFile, $param);
+    }
+
+    public function setPhpRuntimeSettings(object $phpRuntimeSettings): static
+    {
+        $this->phpRuntimeSettings = $phpRuntimeSettings;
+
+        return $this;
+    }
+
+    private function phpRuntimeSettings(): object
+    {
+        if ($this->phpRuntimeSettings === null) {
+            throw new \RuntimeException('PHP runtime settings dependency is not configured for SOAP service.');
+        }
+
+        return $this->phpRuntimeSettings;
+    }
+
+    private function wsdlFileStorage(): object
+    {
+        return $this->wsdlFileStorage ?? throw new \RuntimeException('SOAP WSDL file storage is not configured for SOAP service.');
     }
 
     /**
@@ -74,7 +165,7 @@ class soap extends \fan\core\base\service\multi
             $this->_makeServiceException('Error! Function name is not string there: (' . gettype($funcName) . ') "' . strval($funcName) . '"');
         }
 
-        $errorService = $this->containerService('error');
+        $errorService = $this->error();
         /* @var $errorService \fan\core\service\error */
         if (!is_array($arguments)) {
             $errorService->logErrorMessage('Error! Arguments is not array there: (' . gettype($arguments) . ') "' . strval($arguments) . '"', 'SOAP: incorrect arguments.', null, true);
@@ -107,7 +198,7 @@ class soap extends \fan\core\base\service\multi
 
     public function setHeader(string $nameSpace, array $name, ?array $data = null): void
     {
-        $this->soapHeaders[] = new \SoapHeader($nameSpace, $name, $data);
+        $this->soapHeaders[] = $this->createSoapHeader($nameSpace, $name, $data);
     }
 
 
@@ -155,7 +246,7 @@ class soap extends \fan\core\base\service\multi
     protected function _initSoapObj(string $wsdlFile, mixed $param = null): ?\SoapClient
     {
         $isURL = (bool)preg_match('/^https?:\/\//', $wsdlFile);
-        $wsdlFile_Full = $isURL ? $wsdlFile : \bootstrap::parsePath((string)$this->config['WSDL_DIR']) . $wsdlFile;
+        $wsdlFile_Full = $isURL ? $wsdlFile : $this->runtime()->parsePath((string)$this->config['WSDL_DIR']) . $wsdlFile;
 
         if (isset($this->config['PARAM'])) {
             if (!is_array($param)) {
@@ -172,7 +263,7 @@ class soap extends \fan\core\base\service\multi
             if (!is_array($param)) {
                 $param = [];
             }
-            $param['stream_context'] = stream_context_create([
+            $param['stream_context'] = $this->createStreamContext([
                 'ssl' => [
                     'verify_peer'      => false,
                     'verify_peer_name' => false,
@@ -180,25 +271,25 @@ class soap extends \fan\core\base\service\multi
             );
         }
 
-        if ($isURL || file_exists($wsdlFile_Full)) {
+        if ($isURL || $this->wsdlFileStorage()->exists($wsdlFile_Full)) {
             try {
                 if (isset($param['soap_version'])) {
                     if (is_numeric($param['soap_version'])) {
                         $param['soap_version'] = (int)$param['soap_version'];
                     } else {
                         $const = get_defined_constants();
-                        $param['soap_version'] = $const[array_val($param, 'soap_version')];
+                        $param['soap_version'] = $const[$this->arrayValueReader()($param, 'soap_version')];
                     }
                 }
-                $this->soapObj = $param && is_array($param) ? new \SoapClient($wsdlFile_Full, $param) : new \SoapClient($wsdlFile_Full);
+                $this->soapObj = $this->createSoapClient($wsdlFile_Full, $param && is_array($param) ? $param : null);
                 return $this->soapObj;
             } catch (\SoapFault $err) {
                 $this->soapFault = $err;
-                $this->containerService('error')->logSoapError($err);
+                $this->error()->logSoapError($err);
                 return null;
             }
         } else {
-            $this->containerService('error')->logErrorMessage('Error. WSDL-file "' . $wsdlFile_Full . '" isn\'t exist.');
+            $this->error()->logErrorMessage('Error. WSDL-file "' . $wsdlFile_Full . '" isn\'t exist.');
             return null;
         }
     }
@@ -211,13 +302,13 @@ class soap extends \fan\core\base\service\multi
             }
         }
         if (in_array($currentLevel, $levels) && !is_scalar($data)) {
-            $data = new \SoapVar(
+            $data = $this->createSoapVar(
                 $data,
                 SOAP_ENC_OBJECT,
-                array_val($varParam, 'type_name'),
-                array_val($varParam, 'type_namespace'),
-                array_val($varParam, 'node_name'),
-                array_val($varParam, 'node_namespace')
+                $this->arrayValueReader()($varParam, 'type_name'),
+                $this->arrayValueReader()($varParam, 'type_namespace'),
+                $this->arrayValueReader()($varParam, 'node_name'),
+                $this->arrayValueReader()($varParam, 'node_namespace')
             );
         }
         return $data;
@@ -228,9 +319,157 @@ class soap extends \fan\core\base\service\multi
         if ($xml === '') {
             return '';
         }
-        $xml = new \DOMDocument();
-        $xml->loadXML($xml);
-        $xml->formatOutput = true;
-        return htmlspecialchars((string)$xml->saveXML());
+        $doc = $this->createDomDocument();
+        $doc->loadXML($xml);
+        $doc->formatOutput = true;
+        return htmlspecialchars((string)$doc->saveXML());
+    }
+
+    private function error(): object
+    {
+        if (!isset($this->errorFactory)) {
+            $this->errorFactory = \Closure::fromCallable(
+                static function (): object {
+                    throw new \RuntimeException('Error dependency is not configured for SOAP service.');
+                }
+            );
+        }
+
+        $error = ($this->errorFactory)();
+        if (!is_object($error)) {
+            throw new \UnexpectedValueException('Error dependency must be an object.');
+        }
+
+        return $error;
+    }
+
+    private function runtime(): object
+    {
+        if ($this->runtime === null) {
+            throw new \RuntimeException('Bootstrap runtime dependency is not configured for SOAP service.');
+        }
+
+        return $this->runtime;
+    }
+
+    protected function arrayValueReader(): callable
+    {
+        if (!isset($this->arrayValueReader)) {
+            $this->arrayValueReader = \Closure::fromCallable(
+                static function (array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed {
+                    throw new \RuntimeException('Array value reader is not configured for SOAP service.');
+                }
+            );
+        }
+
+        return $this->arrayValueReader;
+    }
+
+    private function createSoapHeader(string $nameSpace, array $name, ?array $data = null): \SoapHeader
+    {
+        if (!isset($this->soapHeaderFactory)) {
+            $this->soapHeaderFactory = \Closure::fromCallable(
+                static function (string $nameSpace, array $name, ?array $data = null): \SoapHeader {
+                    throw new \RuntimeException('SOAP header factory is not configured for SOAP service.');
+                }
+            );
+        }
+
+        $header = ($this->soapHeaderFactory)($nameSpace, $name, $data);
+        if (!$header instanceof \SoapHeader) {
+            $actual = is_object($header) ? get_class($header) : gettype($header);
+            throw new \UnexpectedValueException('SOAP header factory returned "' . $actual . '".');
+        }
+
+        return $header;
+    }
+
+    private function createSoapClient(string $wsdlFile, ?array $param = null): \SoapClient
+    {
+        if (!isset($this->soapClientFactory)) {
+            $this->soapClientFactory = \Closure::fromCallable(
+                static function (string $wsdlFile, ?array $param = null): \SoapClient {
+                    throw new \RuntimeException('SOAP client factory is not configured for SOAP service.');
+                }
+            );
+        }
+
+        $client = ($this->soapClientFactory)($wsdlFile, $param);
+        if (!$client instanceof \SoapClient) {
+            $actual = is_object($client) ? get_class($client) : gettype($client);
+            throw new \UnexpectedValueException('SOAP client factory returned "' . $actual . '".');
+        }
+
+        return $client;
+    }
+
+    private function createSoapVar(
+        mixed $data,
+        int $encoding,
+        ?string $typeName = null,
+        ?string $typeNamespace = null,
+        ?string $nodeName = null,
+        ?string $nodeNamespace = null
+    ): \SoapVar {
+        if (!isset($this->soapVarFactory)) {
+            $this->soapVarFactory = \Closure::fromCallable(
+                static function (
+                    mixed $data,
+                    int $encoding,
+                    ?string $typeName = null,
+                    ?string $typeNamespace = null,
+                    ?string $nodeName = null,
+                    ?string $nodeNamespace = null
+                ): \SoapVar {
+                    throw new \RuntimeException('SOAP var factory is not configured for SOAP service.');
+                }
+            );
+        }
+
+        $soapVar = ($this->soapVarFactory)($data, $encoding, $typeName, $typeNamespace, $nodeName, $nodeNamespace);
+        if (!$soapVar instanceof \SoapVar) {
+            $actual = is_object($soapVar) ? get_class($soapVar) : gettype($soapVar);
+            throw new \UnexpectedValueException('SOAP var factory returned "' . $actual . '".');
+        }
+
+        return $soapVar;
+    }
+
+    private function createDomDocument(): \DOMDocument
+    {
+        if (!isset($this->domDocumentFactory)) {
+            $this->domDocumentFactory = \Closure::fromCallable(
+                static function (): \DOMDocument {
+                    throw new \RuntimeException('DOM document factory is not configured for SOAP service.');
+                }
+            );
+        }
+
+        $document = ($this->domDocumentFactory)();
+        if (!$document instanceof \DOMDocument) {
+            $actual = is_object($document) ? get_class($document) : gettype($document);
+            throw new \UnexpectedValueException('DOM document factory returned "' . $actual . '".');
+        }
+
+        return $document;
+    }
+
+    private function createStreamContext(array $options): mixed
+    {
+        if (!isset($this->streamContextFactory)) {
+            $this->streamContextFactory = \Closure::fromCallable(
+                static function (array $options): mixed {
+                    throw new \RuntimeException('Stream context factory is not configured for SOAP service.');
+                }
+            );
+        }
+
+        $context = ($this->streamContextFactory)($options);
+        if (!is_resource($context)) {
+            $actual = is_object($context) ? get_class($context) : gettype($context);
+            throw new \UnexpectedValueException('Stream context factory returned "' . $actual . '".');
+        }
+
+        return $context;
     }
 }

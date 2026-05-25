@@ -6,21 +6,40 @@ namespace fan\core\adapter;
 
 class data_loader
 {
-    use \fan\core\di\container_aware_trait;
-
     private array $json = [];
     private string $text = '';
     private string $html = '';
 
+    /**
+     * @var callable
+     */
+    private $arrayAdducer;
+
+    /**
+     * @var callable
+     */
+    private $recursiveMerger;
+
+    public function __construct(
+        private object $input,
+        private object $jsonEncoder,
+        callable $arrayAdducer,
+        callable $recursiveMerger,
+        private ?object $headerWriter = null
+    ) {
+        $this->arrayAdducer = $arrayAdducer;
+        $this->recursiveMerger = $recursiveMerger;
+    }
+
     public function getData(): array
     {
-        return $_REQUEST;
+        return $this->input->request();
     }
 
     public function setJson(mixed $json, bool $merge = true): static
     {
-        $json = adduceToArray($json);
-        $this->json = $merge ? array_merge_recursive_alt($this->json, $json) : $json;
+        $json = ($this->arrayAdducer)($json);
+        $this->json = $merge ? ($this->recursiveMerger)($this->json, $json) : $json;
 
         return $this;
     }
@@ -41,14 +60,14 @@ class data_loader
 
     public function send(bool $sendHeaders = true): string
     {
-        $content = $this->containerService('json')->encode([
+        $content = $this->jsonEncoder->encode([
             'json' => $this->json,
             'text' => $this->text,
             'html' => $this->html,
         ]);
 
-        if ($sendHeaders && !headers_sent()) {
-            header('Content-Type: application/json; charset=utf-8');
+        if ($sendHeaders && !$this->headerWriter()->sent()) {
+            $this->headerWriter()->send('Content-Type: application/json; charset=utf-8');
         }
 
         return $content;
@@ -59,5 +78,14 @@ class data_loader
         $contentType = 'application/json' . ($withCharset ? '; charset=utf-8' : '');
 
         return $asHeader ? 'Content-Type: ' . $contentType : $contentType;
+    }
+
+    private function headerWriter(): object
+    {
+        if ($this->headerWriter === null) {
+            throw new \RuntimeException('Header writer dependency is not configured for data loader.');
+        }
+
+        return $this->headerWriter;
     }
 }

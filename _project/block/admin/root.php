@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\project\block\admin;
+use fan\project\block\admin\root as admin_root;
+
 /**
  * Admin root block
  *
@@ -18,6 +20,6 @@ namespace fan\project\block\admin;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class root extends \fan\project\block\admin\root
+class root extends admin_root
 {
 }

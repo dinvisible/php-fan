@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service\session;
+use fan\core\service\session;
+
 /**
  * PHP native session engine
  *
@@ -20,23 +22,30 @@ namespace fan\core\service\session;
  */
 class inbuilt
 {
-    use \fan\core\di\container_aware_trait;
-
     /**
      * Facade of service
      * @var fan\core\service\session
      */
     protected ?object $facade = null;
 
-    public function __construct(mixed $sid)
+    private ?object $input = null;
+
+    private mixed $errorFactory = null;
+
+    private ?object $nativeSession = null;
+
+    public function __construct(mixed $sid, ?object $input = null, ?callable $errorFactory = null, ?object $nativeSession = null)
     {
+        $this->input = $input;
+        $this->errorFactory = $errorFactory;
+        $this->nativeSession = $nativeSession;
         if (!empty($sid)) {
             $this->setSessionId((string)$sid);
         }
-        session_start();
+        $this->nativeSession()->start();
     }
 
-    public function setFacade(\fan\core\service\session $facade): static
+    public function setFacade(session $facade): static
     {
         if (empty($this->facade)) {
             $this->facade = $facade;
@@ -46,40 +55,58 @@ class inbuilt
 
     public function getSessionId(): string
     {
-        return session_id();
+        return (string)$this->nativeSession()->id();
     } // getSessionId
 
     public function setSessionId(string $sid): static
     {
-        session_id($sid);
+        $this->nativeSession()->id($sid);
         return $this;
     } // setSessionId
 
     public function getSessionName(): string
     {
-        return session_name();
+        return (string)$this->nativeSession()->name();
     } // getSessionName
 
     public function &getData(string $group, string $sesName): mixed
     {
-        if (!isset($_SESSION[$group])) {
-            $_SESSION[$group] = [$sesName => null];
-        } elseif (!is_array($_SESSION[$group]) || !array_key_exists($sesName, $_SESSION[$group])) {
-            $_SESSION[$group][$sesName] = null;
-        }
-        return $_SESSION[$group][$sesName];
+        return $this->input()->sessionValue($group, $sesName);
     }
 
     public function &getRoot(): array
     {
-        return $_SESSION;
+        return $this->input()->sessionRoot();
     }
 
     public function destroy(): static
     {
-        if (session_status() === PHP_SESSION_ACTIVE && !session_destroy()) {
-            $this->containerService('error')->logErrorMessage('Failed to destroy native PHP session.', 'Session error', '', true, false);
+        if ($this->nativeSession()->status() === PHP_SESSION_ACTIVE && !$this->nativeSession()->destroy()) {
+            $this->errorLogger()->logErrorMessage('Failed to destroy native PHP session.', 'Session error', '', true, false);
         }
         return $this;
+    }
+
+    private function input(): object
+    {
+        if ($this->input === null) {
+            throw new \RuntimeException('Request input service is not configured for native session engine.');
+        }
+
+        return $this->input;
+    }
+
+    private function errorLogger(): object
+    {
+        if (!is_callable($this->errorFactory)) {
+            throw new \RuntimeException('Error service factory is not configured for native session engine.');
+        }
+
+        return ($this->errorFactory)();
+    }
+
+    private function nativeSession(): object
+    {
+        return $this->nativeSession ?? throw new \RuntimeException('Native session adapter is not configured for native session engine.');
     }
 }

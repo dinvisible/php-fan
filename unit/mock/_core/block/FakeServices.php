@@ -3,6 +3,15 @@
 declare(strict_types=1);
 
 namespace FanTest\_core\block;
+use fan\core\base\meta\maker;
+use fan\core\base\meta\maker_state;
+use fan\core\base\meta\row;
+use fan\core\block\base;
+use fan\core\di\container_interface;
+use fan\core\service\tab;
+use fan\project\base\meta\row as meta_row;
+use fan\project\service\error;
+
 
 require_once __DIR__ . '/../../../../_core/base/meta/maker.php';
 
@@ -18,6 +27,10 @@ class FakeServiceRegistry
         FakeViewClass::$lastRouter = null;
     }
 
+    public static function installContainer(container_interface $container): void
+    {
+    }
+
     public static function set($name, $service): void
     {
         self::$services[$name] = $service;
@@ -30,7 +43,7 @@ class FakeServiceRegistry
         }
 
         if ((string)$name === 'error' && class_exists('\fan\project\service\error', false)) {
-            return \fan\project\service\error::instance();
+            return error::instance();
         }
 
         if (!isset(self::$services[$name])) {
@@ -44,11 +57,42 @@ class FakeServiceRegistry
                 self::$services[$name] = new FakeReflector();
             } elseif ((string)$name === 'locale') {
                 self::$services[$name] = new FakeLocale();
+            } elseif ((string)$name === 'role') {
+                self::$services[$name] = new FakeRoleService();
+            } elseif ((string)$name === 'database_connections') {
+                self::$services[$name] = new FakeDatabaseConnections();
+            } elseif ((string)$name === 'bootstrap_runtime') {
+                self::$services[$name] = new FakeBootstrapRuntime();
+            } elseif ((string)$name === 'request_input') {
+                self::$services[$name] = new FakeRequestInput();
+            } elseif ((string)$name === 'block_file_storage') {
+                self::$services[$name] = new FakeBlockFileStorage();
+            } elseif ((string)$name === 'project_tool_file_storage') {
+                self::$services[$name] = new FakeProjectToolFileStorage();
+            } elseif ((string)$name === 'view_router_factory') {
+                self::$services[$name] = static function (string $viewClass, base $block, ?object $loaderState = null): object {
+                    FakeViewClass::$lastRouter = new FakeViewRouter($block);
+
+                    return FakeViewClass::$lastRouter;
+                };
             } else {
                 self::$services[$name] = new FakeGenericService($name);
             }
         }
         return self::$services[$name];
+    }
+}
+
+class FakeServiceContainer implements container_interface
+{
+    public function has(string $id): bool
+    {
+        return true;
+    }
+
+    public function get(string $id, mixed ...$arguments): mixed
+    {
+        return FakeServiceRegistry::get($id, $arguments);
     }
 }
 
@@ -85,8 +129,204 @@ class FakeGenericService
     }
 }
 
+class FakeRoleService
+{
+    public function check(mixed $condition): mixed
+    {
+        return FakeRoleRegistry::check($condition);
+    }
+}
+
+class FakeDatabaseConnections
+{
+    public array $calls = [];
+
+    public function fixAll(string $oper, bool $setError = true): void
+    {
+        $this->calls[] = [$oper, $setError];
+    }
+
+    public function commitAll(): void
+    {
+        $this->fixAll('commit', false);
+    }
+
+    public function rollbackAll(bool $setError = true): void
+    {
+        $this->fixAll('rollback', $setError);
+    }
+
+    public function close(): void
+    {
+        $this->calls[] = ['close'];
+    }
+}
+
+class FakeBootstrapRuntime
+{
+    public function getLoader(): FakeBootstrapLoader
+    {
+        return new FakeBootstrapLoader();
+    }
+
+    public function getRunner(): FakeBootstrapRunner
+    {
+        return new FakeBootstrapRunner();
+    }
+
+    public function parsePath(string $path): string
+    {
+        return $path;
+    }
+
+    public function logError(string $message): void
+    {
+        if (class_exists('\bootstrap', false) && property_exists('\bootstrap', 'log')) {
+            \bootstrap::$log[] = $message;
+        }
+    }
+}
+
+class FakeBootstrapLoader
+{
+    public string $project = '/project';
+
+    public string $main = '/project/app/main';
+
+    public function loadBlockByPath(string $path): ?string
+    {
+        return FakeServiceRegistry::get('tab')->loadBlock($path);
+    }
+
+    public function loadBlockByMR(?string $appName, array $mainRequest): ?string
+    {
+        return FakeServiceRegistry::get('tab')->loadBlock(implode('/', $mainRequest));
+    }
+}
+
+class FakeBootstrapRunner
+{
+    public array $showErrorCalls = [];
+
+    public function showError(mixed $errMsg, string $errFile = 'error_500', bool $isEcho = true): mixed
+    {
+        $this->showErrorCalls[] = [$errMsg, $errFile, $isEcho];
+
+        return $errMsg;
+    }
+}
+
 class FakeRequest
 {
+}
+
+class FakeRequestInput
+{
+    public function globalArray(string $name): array
+    {
+        $value = $GLOBALS[$name] ?? [];
+
+        return is_array($value) ? $value : [];
+    }
+
+    public function globalValue(string $name, mixed $default = null): mixed
+    {
+        return $GLOBALS[$name] ?? $default;
+    }
+
+    public function request(): array
+    {
+        return $this->globalArray('_REQUEST');
+    }
+
+    public function requestValue(string $key, mixed $default = null): mixed
+    {
+        $request = $this->request();
+
+        return $request[$key] ?? $default;
+    }
+
+    public function serverValue(string $key, mixed $default = null): mixed
+    {
+        return $_SERVER[$key] ?? $default;
+    }
+
+    public function server(): array
+    {
+        return $_SERVER;
+    }
+
+    public function &sessionRoot(): array
+    {
+        if (!isset($GLOBALS['_SESSION']) || !is_array($GLOBALS['_SESSION'])) {
+            $GLOBALS['_SESSION'] = [];
+        }
+
+        return $GLOBALS['_SESSION'];
+    }
+
+    public function &sessionValue(string $group, string $name): mixed
+    {
+        $session =& $this->sessionRoot();
+        if (!isset($session[$group]) || !is_array($session[$group])) {
+            $session[$group] = [$name => null];
+        } elseif (!array_key_exists($name, $session[$group])) {
+            $session[$group][$name] = null;
+        }
+
+        return $session[$group][$name];
+    }
+}
+
+class FakeBlockFileStorage
+{
+    public function isFile(string $path): bool
+    {
+        return is_file($path);
+    }
+
+    public function exists(string $path): bool
+    {
+        return file_exists($path);
+    }
+}
+
+class FakeProjectToolFileStorage
+{
+    public function isDirectory(string $path): bool
+    {
+        return is_dir($path);
+    }
+
+    public function isFile(string $path): bool
+    {
+        return is_file($path);
+    }
+
+    public function makeDirectory(string $path, int $mode = 0777, bool $recursive = false): bool
+    {
+        return mkdir($path, $mode, $recursive);
+    }
+
+    public function read(string $path): string|false
+    {
+        return file_get_contents($path);
+    }
+
+    public function write(string $path, string $content): int|false
+    {
+        return file_put_contents($path, $content);
+    }
+
+    public function copy(string $source, string $destination): bool
+    {
+        return copy($source, $destination);
+    }
+
+    public function scanDirectory(string $path): array|false
+    {
+        return scandir($path);
+    }
 }
 
 class FakeSession
@@ -195,9 +435,12 @@ class FakeViewClass
 {
     public static string $format = 'html';
     public static ?object $lastRouter = null;
+    public static mixed $lastFormatExceptionFactory = null;
 
-    public static function getFormat(): string
+    public static function getFormat(?callable $exceptionFactory = null): string
     {
+        self::$lastFormatExceptionFactory = $exceptionFactory;
+
         return self::$format;
     }
 
@@ -235,7 +478,7 @@ class FakeViewRouter
     }
 }
 
-class FakeTab extends \fan\core\service\tab
+class FakeTab extends tab
 {
     public ?object $currentBlock = null;
     public array $currentBlockCalls = [];
@@ -266,7 +509,7 @@ class FakeTab extends \fan\core\service\tab
         return $this;
     }
 
-    public function checkBlockStatus(\fan\core\block\base $block): array
+    public function checkBlockStatus(base $block): array
     {
         return $this->blockStatus;
     }
@@ -310,6 +553,77 @@ class FakeTab extends \fan\core\service\tab
     {
         return $this->subscriber;
     }
+
+    public function getBlockDependencies(): array
+    {
+        return [
+            'tab' => $this,
+            'requestFactory' => static fn(): object => FakeServiceRegistry::get('request'),
+            'roleFactory' => static fn(): object => FakeServiceRegistry::get('role'),
+            'sessionFactory' => static fn(string $nameSpace, string $group = 'block'): object => FakeServiceRegistry::get('session', [$nameSpace, $group]),
+            'reflectorFactory' => static fn(): object => FakeServiceRegistry::get('reflector'),
+            'runtime' => FakeServiceRegistry::get('bootstrap_runtime'),
+            'localeFactory' => static fn(): object => FakeServiceRegistry::get('locale'),
+            'entityFactory' => static fn(mixed ...$arguments): object => FakeServiceRegistry::get('entity', $arguments),
+            'matcherFactory' => static fn(): object => FakeServiceRegistry::get('matcher'),
+            'formFactory' => static fn(mixed ...$arguments): object => FakeServiceRegistry::get('form', $arguments),
+            'requestInputFactory' => static fn(): object => FakeServiceRegistry::get('request_input'),
+            'jsonFactory' => static fn(mixed ...$arguments): object => FakeServiceRegistry::get('json', $arguments),
+            'pagerFactory' => static fn(mixed ...$arguments): object => FakeServiceRegistry::get('pager', $arguments),
+            'templateFactory' => static fn(mixed ...$arguments): object => FakeServiceRegistry::get('template', $arguments),
+            'applicationFactory' => static fn(): object => FakeServiceRegistry::get('application'),
+            'obfuscatorFactory' => static fn(mixed ...$arguments): object => FakeServiceRegistry::get('obfuscator', $arguments),
+            'imageModifyFactory' => static fn(mixed ...$arguments): object => FakeServiceRegistry::get('image_modify', $arguments),
+            'blockFileStorage' => FakeServiceRegistry::get('block_file_storage'),
+            'projectToolFileStorage' => FakeServiceRegistry::get('project_tool_file_storage'),
+            'configFactory' => static fn(mixed ...$arguments): object => FakeServiceRegistry::get('config', $arguments),
+            'databaseFactory' => static fn(mixed ...$arguments): object => FakeServiceRegistry::get('database', $arguments),
+            'userFactory' => static fn(mixed ...$arguments): object => FakeServiceRegistry::get('user', $arguments),
+            'logFactory' => static fn(mixed ...$arguments): object => FakeServiceRegistry::get('log', $arguments),
+            'transferFactory' => static fn(mixed ...$arguments): object => FakeServiceRegistry::get('transfer', $arguments),
+            'errorFactory' => static fn(): object => FakeServiceRegistry::get('error'),
+            'dateFactory' => static fn(mixed ...$arguments): object => FakeServiceRegistry::get('date', $arguments),
+            'viewRouterFactory' => static fn(
+                string $viewClass,
+                base $block,
+                ?object $loaderState = null,
+                ?callable $blockExceptionFactory = null
+            ): object => FakeViewClass::$lastRouter = new FakeViewRouter($block),
+            'metaMakerFactory' => static fn(
+                base $block,
+                object $reflector,
+                maker_state $state,
+                callable $phpArrayFileLoader,
+                callable $rowFactory,
+                object $fileStorage,
+                ?callable $blockExceptionFactory = null
+            ): object => new FakeMetaMaker($block),
+            'blockFactory' => static fn(
+                string $blockClass,
+                string $blockName,
+                object $tabService,
+                ?base $containerBlock,
+                array $meta,
+                bool $allowMeta,
+                mixed $inBranch,
+                array $dependencies
+            ): object => new $blockClass($blockName, $tabService, $containerBlock, $meta, $allowMeta, $inBranch, $dependencies),
+            'blockExceptionFactory' => static fn(
+                string $exceptionClass,
+                base $block,
+                string $message,
+                int $code,
+                ?\Exception $previous = null
+            ): \Throwable => new $exceptionClass($block, $message, $code, $previous),
+            'metaRowFactory' => static fn(
+                maker $maker,
+                array $data,
+                ?row $parent = null,
+                int|string|null $keyName = null,
+                ?callable $rowFactory = null
+            ): object => new meta_row($maker, $data, $parent, $keyName, $rowFactory),
+        ];
+    }
 }
 
 class FakeReflector
@@ -339,7 +653,7 @@ class FakeLocale
     }
 }
 
-class FakeMetaMaker extends \fan\core\base\meta\maker
+class FakeMetaMaker extends maker
 {
     public ?object $block = null;
     public ?object $meta = null;
@@ -357,9 +671,37 @@ class FakeMetaMaker extends \fan\core\base\meta\maker
     public function __construct($block, $data = [])
     {
         $this->block = $block;
-        $this->rootRow = $this->meta = class_exists('\fan\project\base\meta\row', false)
-            ? new \fan\project\base\meta\row($this, $data)
-            : new \fan\core\base\meta\row($data);
+        $rowFactory = static fn(
+            maker $maker,
+            array $rowData,
+            ?row $parent = null,
+            int|string|null $keyName = null,
+            ?callable $rowFactory = null
+        ): object => self::createMetaRow($maker, $rowData, $parent, $keyName, $rowFactory);
+        $property = new \ReflectionProperty(maker::class, 'rowFactory');
+        $property->setValue($this, $rowFactory);
+        $this->rootRow = $this->meta = $rowFactory($this, $data);
+    }
+
+    private static function createMetaRow(
+        maker $maker,
+        array $data,
+        ?row $parent = null,
+        int|string|null $keyName = null,
+        ?callable $rowFactory = null
+    ): object {
+        if (class_exists('\fan\project\base\meta\row', false)) {
+            return new meta_row($maker, $data, $parent, $keyName, $rowFactory);
+        }
+
+        $constructor = new \ReflectionMethod(row::class, '__construct');
+        $firstParameter = $constructor->getParameters()[0] ?? null;
+        $firstType = $firstParameter?->getType();
+        if ($firstType instanceof \ReflectionNamedType && $firstType->getName() === maker::class) {
+            return new row($maker, $data, $parent, $keyName, $rowFactory);
+        }
+
+        return new row($data);
     }
 
     public function setContainerMeta($containerMeta): static
@@ -374,7 +716,7 @@ class FakeMetaMaker extends \fan\core\base\meta\maker
         return $this;
     }
 
-    public function assembleBlock(): \fan\core\base\meta\row
+    public function assembleBlock(): row
     {
         $this->assembleBlockCalls++;
         return $this->meta;
@@ -391,7 +733,7 @@ class FakeMetaMaker extends \fan\core\base\meta\maker
         $current = $this->meta;
         $path = is_array($key) ? $key : [$key];
         foreach ($path as $key) {
-            if ($current instanceof \fan\core\base\meta\row && isset($current[$key])) {
+            if ($current instanceof row && isset($current[$key])) {
                 $current = $current[$key];
             } elseif (is_array($current) && array_key_exists($key, $current)) {
                 $current = $current[$key];
@@ -416,7 +758,7 @@ class FakeMetaMaker extends \fan\core\base\meta\maker
         $current = $this->meta;
         while (count($path) > 1) {
             $key = array_shift($path);
-            if (!isset($current[$key]) || !($current[$key] instanceof \fan\core\base\meta\row)) {
+            if (!isset($current[$key]) || !($current[$key] instanceof row)) {
                 $current[$key] = [];
             }
             $current = $current[$key];

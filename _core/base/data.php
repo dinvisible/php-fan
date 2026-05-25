@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\base;
+use fan\core\base\data as base_data;
+
 /**
  * Any types of Data (config, meta, entity, etc)
  *
@@ -20,8 +22,6 @@ namespace fan\core\base;
  */
 abstract class data implements \ArrayAccess, \Iterator, \Countable
 {
-    use \fan\core\di\container_aware_trait;
-
     /**
      * Error messages
      * @var array
@@ -73,10 +73,42 @@ abstract class data implements \ArrayAccess, \Iterator, \Countable
      */
     protected bool $fullRewrite = false;
 
-    public function __construct(mixed $data = null, int|string|null $key = null, ?\fan\core\base\data $superior = null)
+    protected ?object $errorLogger = null;
+
+    private \Closure $subDataFactory;
+
+    private mixed $snapshotEncoder = null;
+
+    private mixed $snapshotDecoder = null;
+
+    private \Closure $classNameResolver;
+
+    public function __construct(
+        mixed $data = null,
+        int|string|null $key = null,
+        ?base_data $superior = null,
+        ?object $errorLogger = null,
+        ?callable $subDataFactory = null,
+        ?callable $snapshotEncoder = null,
+        ?callable $snapshotDecoder = null,
+        ?callable $classNameResolver = null
+    )
     {
         $this->key      = $key;
         $this->superior = $superior;
+        $this->errorLogger = $errorLogger ?? $superior?->errorLogger;
+        $this->subDataFactory = $subDataFactory === null
+            ? ($superior?->subDataFactory ?? $this->defaultSubDataFactory())
+            : \Closure::fromCallable($subDataFactory);
+        $this->snapshotEncoder = $snapshotEncoder === null
+            ? $superior?->snapshotEncoder
+            : \Closure::fromCallable($snapshotEncoder);
+        $this->snapshotDecoder = $snapshotDecoder === null
+            ? $superior?->snapshotDecoder
+            : \Closure::fromCallable($snapshotDecoder);
+        $this->classNameResolver = $classNameResolver === null
+            ? ($superior?->classNameResolver ?? $this->defaultClassNameResolver())
+            : \Closure::fromCallable($classNameResolver);
         if (is_array($data)) {
             foreach ($data as $k => $v) {
                 $this->set($k, $v, true);
@@ -171,6 +203,16 @@ abstract class data implements \ArrayAccess, \Iterator, \Countable
         return $this->fullRewrite;
     }
 
+    public function setErrorLogger(?object $errorLogger): static
+    {
+        $this->errorLogger = $errorLogger;
+        foreach ($this->_getSubData() as $subData) {
+            $subData->setErrorLogger($errorLogger);
+        }
+
+        return $this;
+    }
+
     // ======== Private/Protected methods ======== \\
 
     protected function _restoreSetters(): static
@@ -238,15 +280,60 @@ abstract class data implements \ArrayAccess, \Iterator, \Countable
     /**
      * @param mixed $value Value that should be applied or transformed.
      */
-    protected function _makeSubData(mixed $key, mixed $value): \fan\core\base\data
+    protected function _makeSubData(mixed $key, mixed $value): base_data
     {
-        $class = get_class($this);
-        return new $class($value, $key, $this);
+        $subData = ($this->subDataFactory())($value, $key, $this);
+        if (!$this->_isThisClass($subData)) {
+            $actual = is_object($subData) ? get_class($subData) : gettype($subData);
+            throw new \UnexpectedValueException('Sub-data factory for "' . get_class($this) . '" returned "' . $actual . '".');
+        }
+        $subData->setErrorLogger($this->errorLogger);
+
+        return $subData;
     }
 
     protected function _isThisClass(mixed $object): bool
     {
-        return is_object($object) && get_class_alt($object) === get_class($this);
+        return is_object($object) && $this->className($object) === get_class($this);
+    }
+
+    private function className(object $object): string
+    {
+        return ($this->classNameResolver())($object);
+    }
+
+    private function classNameResolver(): callable
+    {
+        if (!isset($this->classNameResolver)) {
+            $this->classNameResolver = $this->defaultClassNameResolver();
+        }
+
+        return $this->classNameResolver;
+    }
+
+    private function subDataFactory(): callable
+    {
+        if (!isset($this->subDataFactory)) {
+            $this->subDataFactory = $this->defaultSubDataFactory();
+        }
+
+        return $this->subDataFactory;
+    }
+
+    private function defaultSubDataFactory(): \Closure
+    {
+        return \Closure::fromCallable(
+            static function (mixed $value, int|string|null $key, base_data $superior): base_data {
+                throw new \RuntimeException('Sub-data factory is not configured for data class "' . get_class($superior) . '".');
+            }
+        );
+    }
+
+    private function defaultClassNameResolver(): \Closure
+    {
+        return \Closure::fromCallable(
+            static fn(object $object): string => get_class($object)
+        );
     }
 
     protected function _checkSetterClass(array $link, string $class): bool
@@ -275,8 +362,13 @@ abstract class data implements \ArrayAccess, \Iterator, \Countable
         foreach ($replacement as $k => $v) {
             $errMsg = str_replace('{' . strtoupper($k) . '}', $v, $errMsg);
         }
-        $this->containerService('error')->logErrorMessage($errMsg, 'Data error', '', true);
+        $this->errorLogger()->logErrorMessage($errMsg, 'Data error', '', true);
         return $this;
+    }
+
+    protected function errorLogger(): object
+    {
+        return $this->errorLogger ?? throw new \RuntimeException('Data error logger dependency is not configured.');
     }
 
     // ======== The magic methods ======== \\
@@ -423,7 +515,7 @@ abstract class data implements \ArrayAccess, \Iterator, \Countable
 
     public function serialize(): string
     {
-        return \fan\core\adapter\safe_serializer::encodePhpSnapshot($this->__serialize());
+        return ($this->snapshotEncoder())($this->__serialize());
     }
 
     /**
@@ -437,8 +529,26 @@ abstract class data implements \ArrayAccess, \Iterator, \Countable
     public function unserialize(string $recover): void
     {
         $this->restoreSerializedData(
-            \fan\core\adapter\safe_serializer::decodePhpSnapshot($recover, [])
+            ($this->snapshotDecoder())($recover, [])
         );
+    }
+
+    protected function snapshotEncoder(): callable
+    {
+        if (!is_callable($this->snapshotEncoder)) {
+            throw new \RuntimeException('Snapshot encoder is not configured for data object.');
+        }
+
+        return $this->snapshotEncoder;
+    }
+
+    protected function snapshotDecoder(): callable
+    {
+        if (!is_callable($this->snapshotDecoder)) {
+            throw new \RuntimeException('Snapshot decoder is not configured for data object.');
+        }
+
+        return $this->snapshotDecoder;
     }
 
     private function restoreSerializedData(array $recover): void
@@ -446,11 +556,13 @@ abstract class data implements \ArrayAccess, \Iterator, \Countable
         $this->multiLevel  = $recover['multiLevel'];
         $this->fullRewrite = $recover['fullRewrite'];
         $this->errMsg      = $recover['errMsg'];
+        $this->subDataFactory = $this->defaultSubDataFactory();
+        $this->classNameResolver = $this->defaultClassNameResolver();
 
         $this->data = $recover['data'];
         if ($this->multiLevel) {
             foreach ($this->data as $k => $v) {
-                if (is_object($v) && $v instanceof \fan\core\base\data) {
+                if (is_object($v) && $v instanceof base_data) {
                     $v->key      = $k;
                     $v->superior = $this;
                 }

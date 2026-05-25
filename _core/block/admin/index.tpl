@@ -43,7 +43,7 @@
                     <td id="vSeparator2" rowspan="2"><div>&nbsp;</div></td>
                     <td id="blAdd">
                         <div id="blAddContent">
-                            <div id="blAddSubSel"><div id="closeAdd"><a href="#" class="win_close"></a></div>{* *}<div id="blAddSubSelect"></div></div>
+                            <div id="blAddSubSel"><div id="closeAdd"><a href="#" class="win_close"></a></div>{# #}<div id="blAddSubSelect"></div></div>
                             <div id="blAddContent__">
                                 <table class="contentData">
                                     <tr><td class="contentDataTop" id="frameRightTop">
@@ -59,10 +59,10 @@
                     <td class="background-color: #B500D6;">
                         <ol class="pager" id="pageListLeft">
                             <li class="pageScroll"><ul>
-                                <li><a href="#"><img src="{$oTab->getURI('~/first-pages.gif','img')}" alt="" /></a></li>
-                                <li><a href="#"><img src="{$oTab->getURI('~/prev-pages.gif','img')}" alt="" /></a></li>
-                                <li><a href="#"><img src="{$oTab->getURI('~/next-pages.gif','img')}" alt="" /></a></li>
-                                <li><a href="#"><img src="{$oTab->getURI('~/last-pages.gif','img')}" alt="" /></a></li>
+                                <li><a href="#"><img src="{{ oTab.getURI('~/first-pages.gif', 'img') }}" alt="" /></a></li>
+                                <li><a href="#"><img src="{{ oTab.getURI('~/prev-pages.gif', 'img') }}" alt="" /></a></li>
+                                <li><a href="#"><img src="{{ oTab.getURI('~/next-pages.gif', 'img') }}" alt="" /></a></li>
+                                <li><a href="#"><img src="{{ oTab.getURI('~/last-pages.gif', 'img') }}" alt="" /></a></li>
                             </ul></li>
                             <li class="pre_first" id="preFirstLeft">&nbsp;</li>
                             <li class="current"><a href="#">1</a></li>
@@ -71,10 +71,10 @@
                     <td class="background-color: #B500D6;">
                         <ol class="pager" id="pageListRight">
                             <li class="pageScroll"><ul>
-                                <li><a href="#"><img src="{$oTab->getURI('~/first-pages.gif','img')}" alt="" /></a></li>
-                                <li><a href="#"><img src="{$oTab->getURI('~/prev-pages.gif','img')}" alt="" /></a></li>
-                                <li><a href="#"><img src="{$oTab->getURI('~/next-pages.gif','img')}" alt="" /></a></li>
-                                <li><a href="#"><img src="{$oTab->getURI('~/last-pages.gif','img')}" alt="" /></a></li>
+                                <li><a href="#"><img src="{{ oTab.getURI('~/first-pages.gif', 'img') }}" alt="" /></a></li>
+                                <li><a href="#"><img src="{{ oTab.getURI('~/prev-pages.gif', 'img') }}" alt="" /></a></li>
+                                <li><a href="#"><img src="{{ oTab.getURI('~/next-pages.gif', 'img') }}" alt="" /></a></li>
+                                <li><a href="#"><img src="{{ oTab.getURI('~/last-pages.gif', 'img') }}" alt="" /></a></li>
                             </ul></li>
                             <li class="pre_first" id="preFirstRight">&nbsp;</li>
                             <li class="current"><a href="#">1</a></li>
@@ -82,7 +82,7 @@
                     </td>
                 </tr>
             </table>
-            {if @$browserType == "normal"}<div id="blClear"></div>{/if}
+            {% if browserType|default(null) == "normal" %}<div id="blClear"></div>{% endif %}
         </div>
     </div>
     <div id="blBottom">
@@ -96,7 +96,7 @@
 <div id="vSeparator2_"></div>
 
 <div id="formElements">
-{* Upload image *}
+{# Upload image #}
     <form action="#" method="post" enctype="multipart/form-data" id="formImageUpload" class="uplForm">
         <div class="modalBgr"></div>
         <div class="modal_win"><fieldset>
@@ -109,7 +109,7 @@
             </div>
         </fieldset></div>
     </form>
-{* Upload file *}
+{# Upload file #}
     <form action="#" method="post" enctype="multipart/form-data" id="formFileUpload" class="uplForm">
         <div class="modalBgr"></div>
         <div class="modal_win"><fieldset>
@@ -121,22 +121,7 @@
             </div>
         </fieldset></div>
     </form>
-{* Upload flash *}
-    <form action="#" method="post" enctype="multipart/form-data" id="formFlashUpload" class="uplForm">
-        <div class="modalBgr"></div>
-        <div class="modal_win"><fieldset>
-            <h3>Upload flash</h3>
-            <div class="modal_content">
-                <div class="modal_file"><span>File:</span><input type="file" name="flash" /></div>
-                <div class="modal_win_row"><span>Width:</span><input type="text" name="width" class="text" /></div>
-                <div class="modal_win_row"><span>Height:</span><input type="text" name="height" class="text" /></div>
-                <div class="modal_win_row"><span>BG-color:</span><input type="text" name="bgcolor" maxlength="6" class="text" /></div>
-                <div class="modal_win_row"><span>Comment:</span><textarea name="description" rows="3" cols="40" class="text"></textarea></div>
-                <div class="buttons"><button type="submit" class="float_left">Ok</button><button type="reset" class="float_right">Cancel</button></div>
-            </div>
-        </fieldset></div>
-    </form>
-{* Preview image *}
+{# Preview image #}
     <form action="#" method="get" id="imgPreview" class="modalPreview">
         <div class="modalBgr"></div>
         <div class="modal_win"><fieldset>
@@ -149,7 +134,7 @@
             </div>
         </fieldset></div>
     </form>
-    {@$customBlocks}
+    {{ customBlocks|default('') }}
 </div>
 
 <div id="wysiwygBlock" class="wysiwygForm">

@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\view\router;
+use fan\core\view\router;
+
 /**
  * View router of Block for HTML-type
  *
@@ -17,7 +19,7 @@ namespace fan\core\view\router;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class html extends \fan\core\view\router
+class html extends router
 {
     /**
      * Routers array

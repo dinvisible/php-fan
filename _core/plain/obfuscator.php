@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\plain;
+use fan\core\service\plain;
+
 /**
  * Respond for request of obfuscate CSS or JS-file
  *
@@ -21,8 +23,6 @@ namespace fan\core\plain;
 
 class obfuscator
 {
-    use \fan\core\di\container_aware_trait;
-
     /**
      * Handler object
      * @var \fan\core\service\plain
@@ -33,13 +33,15 @@ class obfuscator
      * @var \fan\core\service\obfuscator
      */
     protected ?object $obfuscator = null;
+    protected ?object $request = null;
 
-    public function __construct(\fan\core\service\plain $handler, $key)
+    public function __construct(plain $handler, $key, ?callable $obfuscatorFactory = null, ?object $request = null)
     {
         $this->handler = $handler;
+        $this->request = $request;
 
         $handle = $handler->getHandleData();
-        $this->obfuscator = service('obfuscator', (string)$handle['reqKey']);
+        $this->obfuscator = $this->createObfuscator((string)$handle['reqKey'], $obfuscatorFactory);
     }
 
     // ======== Static methods ======== \\
@@ -58,11 +60,29 @@ class obfuscator
 
     protected function _getContent(): string|false
     {
-        $name = (string)$this->containerService('request')->get(1, 'A');
+        $name = (string)$this->request()->get(1, 'A');
         $content = $this->obfuscator->getFileData($name);
         $headers = $this->obfuscator->getHeaders($name, strlen((string)$content));
         $this->handler->setHeaders($headers);
         return $content;
+    }
+
+    private function createObfuscator(string $type, ?callable $obfuscatorFactory): object
+    {
+        if (!is_callable($obfuscatorFactory)) {
+            throw new \RuntimeException('Obfuscator service factory is not configured for plain obfuscator controller.');
+        }
+
+        return $obfuscatorFactory($type);
+    }
+
+    private function request(): object
+    {
+        if ($this->request !== null) {
+            return $this->request;
+        }
+
+        throw new \RuntimeException('Request service is not configured for plain obfuscator controller.');
     }
 
     // ======== The magic methods ======== \\

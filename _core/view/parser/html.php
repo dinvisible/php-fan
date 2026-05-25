@@ -2,6 +2,11 @@
 declare(strict_types=1);
 
 namespace fan\core\view\parser;
+use fan\core\block\base;
+use fan\core\service\header;
+use fan\core\view\parser;
+use fan\core\view\router\html as router_html;
+
 /**
  * View parser HTML-type
  *
@@ -17,21 +22,34 @@ namespace fan\core\view\parser;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-class html extends \fan\core\view\parser
+class html extends parser
 {
     // ======== Static methods ======== \\
-    final static public function getFormat(): string {
+    final static public function getFormat(?callable $exceptionFactory = null): string {
         return 'html';
     }
 
-    static public function getRouter(\fan\core\block\base $block): \fan\core\view\router\html {
-        return new \fan\project\view\router\html($block);
+    static public function getRouter(
+        base $block,
+        mixed $loaderStateOrFactory = null,
+        ?callable $viewRouterFactory = null
+    ): router_html {
+        if (is_callable($loaderStateOrFactory) && $viewRouterFactory === null) {
+            $viewRouterFactory = $loaderStateOrFactory;
+        }
+        $factory = static::viewRouterFactory($viewRouterFactory);
+        $router = $factory(static::class, $block);
+        if (!$router instanceof router_html) {
+            throw new \UnexpectedValueException('View router factory must return an HTML view router.');
+        }
+
+        return $router;
     }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    public function getResultData(\fan\core\block\base $block): array
+    public function getResultData(base $block): array
     {
         $tplVar = $block->getViewData();
 
@@ -44,7 +62,7 @@ class html extends \fan\core\view\parser
     }
 
     // ======== Protected methods ======== \\
-    protected function _setHeaders($result, $contentType = 'text/html', $encoding = null): \fan\core\service\header
+    protected function _setHeaders($result, $contentType = 'text/html', $encoding = null): header
     {
         return parent::_setHeaders($result, $contentType, $encoding);
     }

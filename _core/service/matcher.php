@@ -2,6 +2,13 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
+use fan\core\base\service\single;
+use fan\core\service\matcher\item;
+use fan\core\service\matcher\item\handler;
+use fan\core\service\matcher\item\parsed;
+use fan\core\service\matcher\item\uri;
+use fan\core\service\matcher\stack;
+
 /**
  * Description of matcher
  *
@@ -17,7 +24,7 @@ namespace fan\core\service;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.007 (31.08.2015)
  */
-class matcher extends \fan\core\base\service\single
+class matcher extends single
 {
     /**
      * @var \fan\core\service\matcher\stack Stack of requested URI
@@ -25,10 +32,28 @@ class matcher extends \fan\core\base\service\single
     protected ?object $stack = null;
 
     // ============= Init Data ============= \\
-    protected function __construct(bool $allowIni = true)
+    public function __construct(
+        bool $allowIni = true,
+        ?object $input = null,
+        ?object $runtime = null,
+        ?object $locale = null,
+        ?object $application = null,
+        ?object $routeFileStorage = null,
+        ?callable $itemFactory = null,
+        ?callable $itemComponentFactory = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null
+    )
     {
+        parent::__construct($allowIni, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
         $this->stack = $this->_getEngine('stack');
-        parent::__construct($allowIni);
+        if (method_exists($this->stack, 'setItemDependencies')) {
+            $serviceExceptionFactory = $serviceBootstrapRuntime !== null && method_exists($serviceBootstrapRuntime, 'serviceExceptionFactory')
+                ? $serviceBootstrapRuntime->serviceExceptionFactory()
+                : null;
+            $this->stack->setItemDependencies($input, $runtime, $locale, $application, $routeFileStorage, $itemFactory, $itemComponentFactory, $serviceExceptionFactory);
+        }
     }
 
     /**
@@ -63,7 +88,7 @@ class matcher extends \fan\core\base\service\single
     }
 
     // ============= Get Common Data ============= \\
-    public function getStack(): \fan\core\service\matcher\stack
+    public function getStack(): stack
     {
         return $this->stack;
     }
@@ -71,66 +96,66 @@ class matcher extends \fan\core\base\service\single
     /**
      * @throws \fan\project\exception\service\fatal
      */
-    public function getItem(int $number): \fan\core\service\matcher\item
+    public function getItem(int $number): item
     {
         if (!isset($this->stack[$number])) {
-            throw new \fan\project\exception\service\fatal($this, 'Requested item number "' . $number . '" isn\'t set');;
+            throw $this->createServiceFatalException('Requested item number "' . $number . '" isn\'t set');
         }
         return $this->stack[$number];
     }
 
-    public function getLastItem(): \fan\core\service\matcher\item
+    public function getLastItem(): item
     {
         return $this->getItem((int)$this->getLastIndex());
     }
 
-    public function getCurrentItem(): \fan\core\service\matcher\item
+    public function getCurrentItem(): item
     {
         return $this->getItem((int)$this->getCurrentIndex());
     }
 
     // ============= Get URI ============= \\
-    public function getUri(int $number): \fan\core\service\matcher\item\uri
+    public function getUri(int $number): uri
     {
         $item = $this->getItem($number);
         return $item['uri'];
     }
 
-    public function getLastUri(): \fan\core\service\matcher\item\uri
+    public function getLastUri(): uri
     {
         return $this->getUri((int)$this->getLastIndex());
     }
 
-    public function getCurrentUri(): \fan\core\service\matcher\item\uri
+    public function getCurrentUri(): uri
     {
         return $this->getUri((int)$this->getCurrentIndex());
     }
 
     // ============= Get Handler ============= \\
-    public function getHandler(int $number, bool $forceDefine = false): \fan\core\service\matcher\item\handler
+    public function getHandler(int $number, bool $forceDefine = false): handler
     {
         $item = $this->getItem($number);
         return $item->getHandler($forceDefine);
     }
 
-    public function getCurrentHandler(bool $forceDefine = false): \fan\core\service\matcher\item\handler
+    public function getCurrentHandler(bool $forceDefine = false): handler
     {
         return $this->getHandler((int)$this->getCurrentIndex(), $forceDefine);
     }
 
     // ============= Get Parsed data ============= \\
-    public function getParsedData(int $number): \fan\core\service\matcher\item\parsed
+    public function getParsedData(int $number): parsed
     {
         $item = $this->getItem($number);
         return $item['parsed'];
     }
 
-    public function getLastParsedData(): \fan\core\service\matcher\item\parsed
+    public function getLastParsedData(): parsed
     {
         return $this->getParsedData((int)$this->getLastIndex());
     }
 
-    public function getCurrentParsedData(): \fan\core\service\matcher\item\parsed
+    public function getCurrentParsedData(): parsed
     {
         return $this->getParsedData((int)$this->getCurrentIndex());
     }

@@ -2,6 +2,9 @@
 declare(strict_types=1);
 
 namespace fan\core\service\matcher\item;
+use fan\core\service\matcher;
+use fan\core\service\matcher\item;
+
 /**
  * Description of item
  *
@@ -50,7 +53,7 @@ abstract class base implements \ArrayAccess, \Iterator
      */
     protected ?object $facade = null;
 
-    public function __construct(\fan\core\service\matcher\item $item)
+    public function __construct(item $item)
     {
         $this->item = $item;
     }
@@ -158,7 +161,7 @@ abstract class base implements \ArrayAccess, \Iterator
         return $this->data;
     }
 
-    public function setFacade(\fan\core\service\matcher $facade): static
+    public function setFacade(matcher $facade): static
     {
         $this->facade = $facade;
         return $this;
@@ -192,9 +195,9 @@ abstract class base implements \ArrayAccess, \Iterator
     protected function _makeException(string $errMsg): never
     {
         if ($this->facade) {
-            throw new \fan\project\exception\service\fatal($this->facade, $errMsg);
+            throw $this->item->createServiceFatalException($errMsg);
         }
-        throw new \fan\project\exception\fatal($errMsg);
+        throw $this->item->createMatcherFatalException($errMsg);
     }
 
     /**

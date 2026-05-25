@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\project\block\admin;
+use fan\core\block\admin\structure as admin_structure;
+
 /**
  * Admin structure class for loader block
  *
@@ -18,6 +20,6 @@ namespace fan\project\block\admin;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class structure extends \fan\core\block\admin\structure
+class structure extends admin_structure
 {
 }

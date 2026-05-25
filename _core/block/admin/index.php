@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\block\admin;
+use fan\core\block\common\simple;
+
 /**
  * Class admin index block
  *
@@ -18,12 +20,14 @@ namespace fan\core\block\admin;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class index extends \fan\core\block\common\simple
+class index extends simple
 {
 
     public function init(): void
     {
         $this->initRequired();
+        $isAdmin = $this->roleService()->check('admin') ? 1 : 0;
+        $this->_getBlock('root')->setEmbedJs('mainCtrl.init(' . $isAdmin . ', \'/admin\', _wrapper);');
     }
 
     public function initRequired(): void

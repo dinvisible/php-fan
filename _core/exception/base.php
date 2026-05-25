@@ -21,8 +21,6 @@ namespace fan\core\exception;
  */
 abstract class base extends \Exception
 {
-    use \fan\core\di\container_aware_trait;
-
     /**
      * File to show the error for the user
      * @var string
@@ -60,8 +58,24 @@ abstract class base extends \Exception
         'xdebug_message',
     ];
 
-    public function __construct(string $logErrMsg, int $code = E_USER_ERROR, ?\Throwable $previous = null)
+    protected ?object $exceptionDatabaseConnections = null;
+    protected ?object $exceptionRuntimeLogger = null;
+    protected ?object $exceptionRequestService = null;
+    protected ?object $exceptionErrorService = null;
+    protected ?object $exceptionHeaderWriter = null;
+
+    public function __construct(
+        string $logErrMsg,
+        int $code = E_USER_ERROR,
+        ?\Throwable $previous = null,
+        ?object $exceptionDatabaseConnections = null,
+        ?object $exceptionRuntimeLogger = null,
+        ?object $exceptionRequestService = null,
+        ?object $exceptionErrorService = null,
+        ?object $exceptionHeaderWriter = null
+    )
     {
+        $this->setExceptionDependencies($exceptionDatabaseConnections, $exceptionRuntimeLogger, $exceptionRequestService, $exceptionErrorService, $exceptionHeaderWriter);
         $this->logErrMsg = $logErrMsg;
         if (empty($this->showErrMsg)) {
             $this->showErrMsg = 'Please visit the site later.';
@@ -71,8 +85,8 @@ abstract class base extends \Exception
         }
 
         $this->dbOper = $this->_defineDbOper();
-        if (!empty($this->dbOper) && class_exists('\fan\core\service\database', false)) {
-            \fan\project\service\database::fixAll($this->dbOper);
+        if (!empty($this->dbOper) && $this->exceptionDatabaseConnections !== null) {
+            $this->databaseConnections()->fixAll($this->dbOper);
         }
 
         if (!empty($previous) && $previous instanceof \Exception) {
@@ -80,6 +94,23 @@ abstract class base extends \Exception
         } else {
             parent::__construct((string)$logErrMsg, (int)$code);
         }
+    }
+
+    public function setExceptionDependencies(
+        ?object $exceptionDatabaseConnections = null,
+        ?object $exceptionRuntimeLogger = null,
+        ?object $exceptionRequestService = null,
+        ?object $exceptionErrorService = null,
+        ?object $exceptionHeaderWriter = null
+    ): static
+    {
+        $this->exceptionDatabaseConnections = $exceptionDatabaseConnections;
+        $this->exceptionRuntimeLogger = $exceptionRuntimeLogger;
+        $this->exceptionRequestService = $exceptionRequestService;
+        $this->exceptionErrorService = $exceptionErrorService;
+        $this->exceptionHeaderWriter = $exceptionHeaderWriter;
+
+        return $this;
     }
 
     public function getErrorFile(): string
@@ -129,19 +160,21 @@ abstract class base extends \Exception
         if ($exceptPos) {
             $errMsg .= ' Error at the ' . str_replace('\\', '/', $this->file) . ', line ' . $this->line;
         }
-        \bootstrap::logError($errMsg);
+        $this->runtimeLogger()->logError($errMsg);
         return $this;
     }
 
     protected function _logByService(string $errMsg, string $errTitle = '', string $note = ''): static
     {
         if (!$note) {
-            $note = self::staticContainerService('request')->getInfoString();
-            if (!empty($_POST)) {
-                $note .= "\nPOST = " . var_export($_POST, true);
+            $request = $this->requestService();
+            $note = $request->getInfoString();
+            $postData = method_exists($request, 'getAll') ? $request->getAll('P', []) : [];
+            if (!empty($postData)) {
+                $note .= "\nPOST = " . var_export($postData, true);
             }
         }
-        $this->containerService('error')->logExceptionMessage($errMsg, $errTitle ? $errTitle : 'Log exception', $note);
+        $this->errorService()->logExceptionMessage($errMsg, $errTitle ? $errTitle : 'Log exception', $note);
         return $this;
     }
 
@@ -153,6 +186,39 @@ abstract class base extends \Exception
             throw new \InvalidArgumentException('Incorret DB-operation name for Ecxeption ' . get_class($this));
         }
         return null;
+    }
+
+    protected function databaseConnections(): object
+    {
+        return $this->exceptionDatabaseConnections ?? throw new \RuntimeException('Exception database connections dependency is not configured.');
+    }
+
+    protected function runtimeLogger(): object
+    {
+        return $this->exceptionRuntimeLogger ?? throw new \RuntimeException('Exception runtime logger dependency is not configured.');
+    }
+
+    protected function requestService(): object
+    {
+        return $this->exceptionRequestService ?? throw new \RuntimeException('Exception request service dependency is not configured.');
+    }
+
+    protected function errorService(): object
+    {
+        return $this->exceptionErrorService ?? throw new \RuntimeException('Exception error service dependency is not configured.');
+    }
+
+    protected function sendInternalServerErrorHeader(): void
+    {
+        $headerWriter = $this->exceptionHeaderWriter();
+        if (!$headerWriter->sent()) {
+            $headerWriter->send('HTTP/1.1 500 Internal Server Error');
+        }
+    }
+
+    protected function exceptionHeaderWriter(): object
+    {
+        return $this->exceptionHeaderWriter ?? throw new \RuntimeException('Exception header writer dependency is not configured.');
     }
 
 }

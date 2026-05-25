@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\view\router;
+use fan\core\view\router\simple;
+
 /**
  * View router of JSON-block
  *
@@ -17,7 +19,7 @@ namespace fan\core\view\router;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.007 (31.08.2015)
  */
-class json extends \fan\core\view\router\simple
+class json extends simple
 {
     /**
      * Use Base64

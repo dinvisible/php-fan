@@ -2,7 +2,9 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\base\service\single;
+
+
 /**
  * Application service
  *
@@ -18,7 +20,7 @@ use fan\project\exception\service\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.011 (03.10.2015)
  */
-class application extends \fan\core\base\service\single
+class application extends single
 {
     private ?string $name = null;
 
@@ -28,15 +30,32 @@ class application extends \fan\core\base\service\single
      */
     protected ?array $usedNames = null;
 
-    protected function __construct(bool $allowIni = true)
+    private ?object $runtime = null;
+    private \Closure $arrayAdducer;
+
+    public function __construct(
+        bool $allowIni = true,
+        ?object $runtime = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?callable $arrayAdducer = null
+    )
     {
-        parent::__construct($allowIni);
-        $sysApp = ['__log_viewer', '__tools'];
+        $this->runtime = $runtime;
+        $this->arrayAdducer = \Closure::fromCallable(
+            $arrayAdducer
+                ?? static function (mixed $value): array {
+                    throw new \RuntimeException('Array adducer is not configured for application service.');
+                }
+        );
+        parent::__construct($allowIni, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
+        $sysApp = [];
         $usedNames = $this->getConfig('used_names', $sysApp);
         if (empty($usedNames)) {
-            throw new fatalException($this, 'Used application names isn\'t set.');
+            throw $this->createServiceFatalException('Used application names isn\'t set.');
         }
-        $this->usedNames = adduceToArray($usedNames);
+        $this->usedNames = ($this->arrayAdducer())($usedNames);
         foreach ($sysApp as $v) {
             if (!in_array($v, $this->usedNames)) {
                 $this->usedNames[] = $v;
@@ -47,15 +66,15 @@ class application extends \fan\core\base\service\single
     public function setAppName(string $name): static
     {
         if (empty($name)) {
-            throw new fatalException($this, 'Application name can\'t be empty.');
+            throw $this->createServiceFatalException('Application name can\'t be empty.');
         } elseif (in_array($name, $this->usedNames)) {
             if ((string)$this->name !== (string)$name) {
                 $this->name = $name;
                 $this->_broadcastMessage('setAppName', $name);
-                \bootstrap::getLoader()->defineNewApp($this);
+                $this->runtime()->getLoader()->defineNewApp($this);
             }
         } else {
-            throw new fatalException($this, 'Unknown application name "' . $name . '".');
+            throw $this->createServiceFatalException('Unknown application name "' . $name . '".');
         }
         return $this;
     }
@@ -63,7 +82,7 @@ class application extends \fan\core\base\service\single
     public function getAppName(): string
     {
         if (empty($this->name)) {
-            throw new fatalException($this, 'Get Application Name while it isn\'t defined.');
+            throw $this->createServiceFatalException('Get Application Name while it isn\'t defined.');
         }
         return $this->name;
     }
@@ -82,5 +101,27 @@ class application extends \fan\core\base\service\single
     public function getCoreVersion(): string
     {
         return 'PHP-FAN 05.02.011 (2015-10-03)';
+    }
+
+    private function runtime(): object
+    {
+        if ($this->runtime !== null) {
+            return $this->runtime;
+        }
+
+        throw new \RuntimeException('Bootstrap runtime service is not configured for application service.');
+    }
+
+    private function arrayAdducer(): callable
+    {
+        if (!isset($this->arrayAdducer)) {
+            $this->arrayAdducer = \Closure::fromCallable(
+                static function (mixed $value): array {
+                    throw new \RuntimeException('Array adducer is not configured for application service.');
+                }
+            );
+        }
+
+        return $this->arrayAdducer;
     }
 }

@@ -2,6 +2,10 @@
 declare(strict_types=1);
 
 namespace fan\core\view\parser;
+use fan\core\block\base;
+use fan\core\service\header;
+use fan\core\view\parser;
+
 /**
  * View parser HTML-type
  *
@@ -17,31 +21,40 @@ namespace fan\core\view\parser;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-class debug2 extends \fan\core\view\parser
+class debug2 extends parser
 {
     /**
      * @var \fan\core\service\debug Root block
      */
     protected ?object $debug = null;
 
-    public function __construct(\fan\core\block\base $mainBlock)
-    {
-        parent::__construct($mainBlock);
-        $this->debug = \fan\project\service\debug::instance();
+    public function __construct(
+        base $mainBlock,
+        ?callable $jsonFactory,
+        object $debug,
+        ?callable $templateFactory = null,
+        ?object $header = null,
+        ?object $locale = null
+    ) {
+        parent::__construct($mainBlock, $jsonFactory, $templateFactory, $header, $locale);
+        $this->debug = $debug;
     }
 
     // ======== Static methods ======== \\
     /**
      * @throws \fan\project\exception\error500
      */
-    final static public function getFormat(): string {
-        throw new \fan\project\exception\error500('Class "\fan\core\view\parser\debug2" can\'t be use for define View-type');
+    final static public function getFormat(?callable $exceptionFactory = null): string {
+        throw static::createUnsupportedParserException(
+            'Class "\fan\core\view\parser\debug2" can\'t be use for define View-type',
+            $exceptionFactory
+        );
     }
 
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    public function getResultData(\fan\core\block\base $block): array
+    public function getResultData(base $block): array
     {
         $blockInfo = $this->_getInternalResultData($block, false);
         return [
@@ -54,7 +67,7 @@ class debug2 extends \fan\core\view\parser
     }
 
     // ======== Protected methods ======== \\
-    public function _getInternalResultData(\fan\core\block\base $block, $isView): string
+    public function _getInternalResultData(base $block, $isView): string
     {
         $incl = [];
         foreach ($block->getEmbeddedBlocks() as $embeddedBlock) {
@@ -63,7 +76,7 @@ class debug2 extends \fan\core\view\parser
 
         return $this->debug->getSecondDebugRow($block, $incl, $isView);
     }
-    protected function _setHeaders($result, $contentType = 'text/html', $encoding = null): \fan\core\service\header
+    protected function _setHeaders($result, $contentType = 'text/html', $encoding = null): header
     {
         return parent::_setHeaders($result, $contentType, $encoding);
     }

@@ -3,6 +3,11 @@
 declare(strict_types=1);
 
 namespace fan\core\service\config;
+use fan\core\base\data;
+use fan\core\base\model\entity;
+use fan\core\base\service;
+use fan\core\service\config\row as config_row;
+
 /**
  * Meta Data Row
  *
@@ -18,7 +23,7 @@ namespace fan\core\service\config;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class row extends \fan\core\base\data
+class row extends data
 {
     /**
      * Saved source data
@@ -44,20 +49,47 @@ class row extends \fan\core\base\data
      */
     protected ?string $rootKey = null;
 
-    public function __construct(mixed $data, int|string|null $key = null, ?\fan\core\base\data $superior = null)
+    /**
+     * @var callable|null
+     */
+    private $serviceExceptionFactory = null;
+
+    private mixed $shortClassNameResolver = null;
+
+    public function __construct(
+        mixed $data,
+        int|string|null $key = null,
+        ?data $superior = null,
+        ?object $errorLogger = null,
+        ?callable $subDataFactory = null,
+        ?callable $snapshotEncoder = null,
+        ?callable $snapshotDecoder = null,
+        ?callable $serviceExceptionFactory = null,
+        ?callable $shortClassNameResolver = null
+    )
     {
-        parent::__construct($data, $key, $superior);
+        if ($serviceExceptionFactory !== null) {
+            $this->serviceExceptionFactory = \Closure::fromCallable($serviceExceptionFactory);
+        } elseif ($superior instanceof self) {
+            $this->serviceExceptionFactory = $superior->serviceExceptionFactory;
+        }
+        if ($shortClassNameResolver !== null) {
+            $this->shortClassNameResolver = \Closure::fromCallable($shortClassNameResolver);
+        } elseif ($superior instanceof self) {
+            $this->shortClassNameResolver = $superior->shortClassNameResolver;
+        }
+        parent::__construct($data, $key, $superior, $errorLogger, $subDataFactory, $snapshotEncoder, $snapshotDecoder);
 
         $this->srcData = $this->data;
         //$this->errMsg[91] = 'Facade isn\'t set';
     }
 
     // ======== Main Interface methods ======== \\
-    public function setFacade(\fan\core\base\service $facade): static
+    public function setFacade(service $facade): static
     {
         if (empty($this->facade)) {
             $this->facade = $facade;
-            if (in_array($facade->getConfigType(), ['service', 'entity', 'cli', 'plain'])) {
+            if (in_array($facade->getConfigType(), ['service', 'entity', 'plain'])) {
                 $this->_setSetter($facade);
             }
         }
@@ -80,9 +112,9 @@ class row extends \fan\core\base\data
         return $this->rootKey;
     }
 
-    public function setServiceOwner(\fan\core\base\service $service): static
+    public function setServiceOwner(service $service): static
     {
-        $name = get_class_name($service);
+        $name = $this->shortClassName($service);
         if ($name === $this->getRootKey()) {
             $this->_setSetter($service);
             $this->owners[] = $service;
@@ -104,7 +136,7 @@ class row extends \fan\core\base\data
         return $this;
     }
 
-    public function setEntityOwner(\fan\core\base\model\entity $entity, string $name): static
+    public function setEntityOwner(entity $entity, string $name): static
     {
         if ($name === $this->getRootKey()) {
             $this->_setSetter($entity);
@@ -118,6 +150,20 @@ class row extends \fan\core\base\data
     public function getOwners(): array
     {
         return $this->owners;
+    }
+
+    private function shortClassName(object|string $object): string
+    {
+        if (!is_callable($this->shortClassNameResolver)) {
+            throw new \RuntimeException('Short class-name resolver is not configured for config row.');
+        }
+
+        $className = ($this->shortClassNameResolver)($object);
+        if (!is_string($className) || $className === '') {
+            throw new \UnexpectedValueException('Short class-name resolver must return a non-empty string.');
+        }
+
+        return $className;
     }
 
     public function getSources(): array
@@ -146,9 +192,9 @@ class row extends \fan\core\base\data
         return $this;
     }
 
-    public function mergeData(array|\fan\core\service\config\row $data, bool $priority = true): static
+    public function mergeData(array|config_row $data, bool $priority = true): static
     {
-        if (is_object($data) && $data instanceof \fan\core\service\config\row) {
+        if (is_object($data) && $data instanceof config_row) {
             $data = $data->toArray();
         }
         if ($this->_checkSetter() && is_array($data)) {
@@ -162,10 +208,12 @@ class row extends \fan\core\base\data
     }
 
     // ======== Private/Protected methods ======== \\
-    protected function _makeSubData(mixed $key, mixed $value): \fan\core\service\config\row
+    protected function _makeSubData(mixed $key, mixed $value): config_row
     {
-        $class = get_class($this);
-        $subData = new $class($value, $key, $this);
+        $subData = parent::_makeSubData($key, $value);
+        if (!$subData instanceof config_row) {
+            throw new \UnexpectedValueException('Config row sub-data factory returned "' . get_class($subData) . '".');
+        }
         if (!empty($this->facade)) {
             $subData->setFacade($this->facade);
         }
@@ -192,7 +240,30 @@ class row extends \fan\core\base\data
     public function __unset(string $key): void
     {
         // Todo: Do this "throw" only if it is enabled in config
-        throw new \fan\project\exception\service\fatal($this->facade, 'You can\'t unset data for key "' . $key . '".');
+        throw $this->createServiceFatalException('You can\'t unset data for key "' . $key . '".');
+    }
+
+    private function createServiceFatalException(string $message): \Throwable
+    {
+        if (!is_callable($this->serviceExceptionFactory)) {
+            throw new \RuntimeException('Service exception factory is not configured for config row.');
+        }
+        if (!$this->facade instanceof service) {
+            throw new \RuntimeException('Config row facade is not configured for service exception creation.');
+        }
+
+        $exception = ($this->serviceExceptionFactory)(
+            '\fan\project\exception\service\fatal',
+            $this->facade,
+            $message,
+            E_USER_ERROR,
+            null
+        );
+        if (!$exception instanceof \Throwable) {
+            throw new \UnexpectedValueException('Service exception factory must return a throwable object.');
+        }
+
+        return $exception;
     }
 
     // ======== Required Interface methods ======== \\
@@ -224,12 +295,12 @@ class row extends \fan\core\base\data
 
     public function serialize(): string
     {
-        return \fan\core\adapter\safe_serializer::encodePhpSnapshot($this->__serialize());
+        return ($this->snapshotEncoder())($this->__serialize());
     }
 
     public function unserialize(string $recover): void
     {
-        $recover = \fan\core\adapter\safe_serializer::decodePhpSnapshot($recover, []);
+        $recover = ($this->snapshotDecoder())($recover, []);
 
         parent::__unserialize($recover['parent']);
 

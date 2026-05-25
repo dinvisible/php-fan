@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\block\common;
+use fan\core\block\base;
+
 /**
  * Pager base class
  *
@@ -18,7 +20,7 @@ namespace fan\core\block\common;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-class html_pager extends \fan\core\block\base
+class html_pager extends base
 {
     /**
      * Name of block
@@ -83,7 +85,7 @@ class html_pager extends \fan\core\block\base
 
     protected function _postCreate(): void
     {
-        $this->pager = service('pager', $this->getContainer());
+        $this->pager = $this->pagerService($this->getContainer());
         // ToDo: Define quntifire there
     }
 

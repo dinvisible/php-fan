@@ -2,7 +2,6 @@
 declare(strict_types=1);
 
 namespace fan\core\service\obfuscator;
-use fan\project\exception\service\fatal as fatalException;
 /**
  * Simple obfuscator by regexp
  *

@@ -8,20 +8,40 @@ use FanTest\_core\block\FakeReflector;
 use FanTest\_core\block\FakeRequest;
 use FanTest\_core\block\FakeRoleRegistry;
 use FanTest\_core\block\FakeRootBlock;
+use FanTest\_core\block\FakeServiceContainer;
 use FanTest\_core\block\FakeServiceRegistry;
 use FanTest\_core\block\FakeTab;
 use FanTest\_core\block\FakeViewClass;
 use FanTest\_core\block\FakeViewRouter;
 use FanTest\_core\block\ObjectWithToArray;
 use FanTest\_core\block\TestableBaseBlock;
+use FanTest\_core\block\FakeMetaMaker;
+use fan\core\base\meta\delayed;
+use fan\core\base\meta\maker;
+use fan\core\base\meta\maker_state;
+use fan\core\base\meta\row as meta_row;
+use fan\core\block\base;
+use fan\project\base\meta\row;
+use fan\project\exception\block\fatal;
+use fan\project\exception\block\local;
+use PHPUnit\Framework\TestCase;
+
 
 require_once __DIR__ . '/../../mock/_core/block/GlobalFunctions.php';
 require_once __DIR__ . '/../../mock/_core/block/FrameworkStubs.php';
 require_once __DIR__ . '/../../mock/_core/block/FakeServices.php';
+require_once __DIR__ . '/../../../_core/base/meta/maker_state.php';
 require_once __DIR__ . '/../../../_core/block/base.php';
 require_once __DIR__ . '/../../mock/_core/block/TestableBaseBlock.php';
 
-class BaseTest extends \PHPUnit\Framework\TestCase
+final class BaseMetaMakerFactoryProbeBlock extends base
+{
+    protected function _transferor(): void
+    {
+    }
+}
+
+class BaseTest extends TestCase
 {
     private array $errors = [];
     private bool $capturingErrors = false;
@@ -29,7 +49,9 @@ class BaseTest extends \PHPUnit\Framework\TestCase
     protected function setUp(): void
     {
         FakeServiceRegistry::reset();
+        FakeServiceRegistry::installContainer(new FakeServiceContainer());
         TestableBaseBlock::useMeta([]);
+        FakeViewClass::$lastFormatExceptionFactory = null;
         $this->errors = [];
     }
 
@@ -68,9 +90,17 @@ class BaseTest extends \PHPUnit\Framework\TestCase
 
     private function makeMetaRow(TestableBaseBlock $block, array $data): object
     {
-        return class_exists('\fan\project\base\meta\row', false)
-            ? new \fan\project\base\meta\row($block->getMetaMaker(), $data)
-            : new \fan\core\base\meta\row($data);
+        $maker = $block->getMetaMaker();
+        $class = class_exists('\fan\project\base\meta\row', false)
+            ? row::class
+            : meta_row::class;
+        $constructor = new \ReflectionMethod($class, '__construct');
+        $firstParameter = $constructor->getParameters()[0] ?? null;
+        $firstType = $firstParameter?->getType();
+
+        return $firstType instanceof \ReflectionNamedType && $firstType->getName() === maker::class
+            ? new $class($maker, $data)
+            : new $class($data);
     }
 
     public function testConstructorWiresCoreDependenciesWithoutFullConstruction(): void
@@ -90,6 +120,66 @@ class BaseTest extends \PHPUnit\Framework\TestCase
         $this->assertSame('beta', $block->getMeta('alpha'));
         $this->assertSame(1, $block->transferorCalls);
         $this->assertInstanceOf('FanTest\_core\block\FakeMetaMaker', $block->getMetaMaker());
+    }
+
+    public function testConstructorUsesInjectedMetaMakerFactory(): void
+    {
+        $tab = new FakeTab();
+        $request = new FakeRequest();
+        $metaFileStorage = new class {
+            public function exists(string $path): bool
+            {
+                return false;
+            }
+        };
+        $calls = [];
+        $blockExceptionFactory = static fn(
+            string $exceptionClass,
+            base $block,
+            string $message,
+            int $code,
+            ?\Exception $previous = null
+        ): \Throwable => new \RuntimeException($message, $code, $previous);
+
+        $block = new BaseMetaMakerFactoryProbeBlock('content', $tab, null, [], false, null, [
+            'tab' => $tab,
+            'request' => $request,
+            'reflectorFactory' => static fn(): object => new FakeReflector(),
+            'metaMakerState' => new maker_state(),
+            'metaMakerFactory' => static function (
+                base $block,
+                object $reflector,
+                maker_state $state,
+                callable $phpArrayFileLoader,
+                callable $rowFactory,
+                object $fileStorage,
+                ?callable $blockExceptionFactory = null
+            ) use (&$calls): object {
+                $calls[] = [$block, $reflector, $state, $phpArrayFileLoader, $rowFactory, $fileStorage, $blockExceptionFactory];
+
+                return new FakeMetaMaker($block, ['factory' => 'used']);
+            },
+            'phpArrayFileLoader' => static fn(string $path, mixed $default = null): mixed => $default,
+            'metaRowFactory' => static fn(
+                maker $maker,
+                array $data,
+                ?meta_row $parent = null,
+                int|string|null $keyName = null,
+                ?callable $rowFactory = null
+            ): object => new row($maker, $data, $parent, $keyName, $rowFactory),
+            'metaFileStorage' => $metaFileStorage,
+            'blockExceptionFactory' => $blockExceptionFactory,
+        ]);
+
+        $this->assertSame('used', $block->getMeta('factory'));
+        $this->assertCount(1, $calls);
+        $this->assertSame($block, $calls[0][0]);
+        $this->assertInstanceOf(FakeReflector::class, $calls[0][1]);
+        $this->assertInstanceOf(maker_state::class, $calls[0][2]);
+        $this->assertIsCallable($calls[0][3]);
+        $this->assertIsCallable($calls[0][4]);
+        $this->assertSame($metaFileStorage, $calls[0][5]);
+        $this->assertSame($blockExceptionFactory, $calls[0][6]);
     }
 
     public function testConstructorDoesNotSetCurrentBlockWhenBlockNameIsEmpty(): void
@@ -182,7 +272,7 @@ class BaseTest extends \PHPUnit\Framework\TestCase
             }
         };
         $makeDelayed = function ($value) use ($resolver) {
-            $class = \fan\core\base\meta\delayed::class;
+            $class = delayed::class;
             $constructor = (new \ReflectionClass($class))->getConstructor();
             return $constructor && $constructor->getNumberOfParameters() >= 3
                 ? new $class($resolver, 'value', $value)
@@ -254,6 +344,18 @@ class BaseTest extends \PHPUnit\Framework\TestCase
         $this->assertSame(1, $view->getAllCalls);
     }
 
+    public function testViewFormatPassesInjectedParserExceptionFactory(): void
+    {
+        $tab = new FakeTab();
+        $exceptionFactory = static fn(string $message): \Throwable => new RuntimeException($message);
+        FakeViewClass::$format = 'html';
+        $block = new TestableBaseBlock('view', $tab, null, [], false);
+        $block->setBlockDependencies(['viewParserExceptionFactory' => $exceptionFactory]);
+
+        $this->assertSame('html', $block->getViewFormat());
+        $this->assertSame($exceptionFactory, FakeViewClass::$lastFormatExceptionFactory);
+    }
+
     public function testTemplateSelectionValidationAndLocalizedSuffixes(): void
     {
         $locale = new FakeLocale();
@@ -269,12 +371,34 @@ class BaseTest extends \PHPUnit\Framework\TestCase
         $this->assertTrue($block->setTemplate($this->fixturePath('ExplicitTemplate.tpl')));
         $this->assertFalse($block->setTemplate($this->fixturePath('missing.tpl'), false));
 
+        $exceptionCalls = [];
+        $block->setBlockDependencies([
+            'blockExceptionFactory' => static function (
+                string $exceptionClass,
+                base $block,
+                string $message,
+                int $code,
+                ?\Exception $previous = null
+            ) use (&$exceptionCalls): \Throwable {
+                $exceptionCalls[] = [$exceptionClass, $block, $message, $code, $previous];
+
+                return new $exceptionClass($block, $message, $code, $previous);
+            },
+        ]);
+
         try {
             $block->setTemplate($this->fixturePath('missing.tpl'), true);
             $this->fail('Expected fatal block exception for an invalid template path.');
-        } catch (\fan\project\exception\block\fatal $exception) {
+        } catch (fatal $exception) {
             $this->assertStringContainsString('Incorrect template path', $exception->getMessage());
         }
+
+        $this->assertCount(1, $exceptionCalls);
+        $this->assertSame('\fan\project\exception\block\fatal', $exceptionCalls[0][0]);
+        $this->assertSame($block, $exceptionCalls[0][1]);
+        $this->assertStringContainsString('Incorrect template path', $exceptionCalls[0][2]);
+        $this->assertSame(E_USER_ERROR, $exceptionCalls[0][3]);
+        $this->assertNull($exceptionCalls[0][4]);
     }
 
     public function testSetTemplateFindsTemplateByClassParentPath(): void
@@ -291,6 +415,29 @@ class BaseTest extends \PHPUnit\Framework\TestCase
         $this->assertSame($this->fixturePath('TestableBaseBlock.tpl'), $block->getTemplate());
     }
 
+    public function testSetTemplateUsesInjectedShortClassNameResolver(): void
+    {
+        $reflector = new FakeReflector();
+        $reflector->parentPaths = [
+            'FanTest\_core\block\TestableBaseBlock' => $this->fixturePath('TestableBaseBlock.php'),
+        ];
+        FakeServiceRegistry::set('reflector', $reflector);
+        TestableBaseBlock::useMeta([]);
+        $seenClass = null;
+        $block = new TestableBaseBlock('tpl', new FakeTab(), null, [], false);
+        $block->setBlockDependencies([
+            'shortClassNameResolver' => static function (object|string $class) use (&$seenClass): string {
+                $seenClass = $class;
+
+                return 'TestableBaseBlock';
+            },
+        ]);
+
+        $this->assertSame($block, $block->exposeSetTemplateInternal(''));
+        $this->assertSame('FanTest\_core\block\TestableBaseBlock', $seenClass);
+        $this->assertSame($this->fixturePath('TestableBaseBlock.tpl'), $block->getTemplate());
+    }
+
     public function testRootParametersAndTemplateVariablesAreCopiedFromMeta(): void
     {
         $root = new FakeRootBlock('root', new FakeTab(), null, [], false);
@@ -299,7 +446,7 @@ class BaseTest extends \PHPUnit\Framework\TestCase
         $block->setViewForTest($view);
         $block->setMetaRowForTest($this->makeMetaRow($block, [
             'meta_tag'    => ['description'],
-            'externalCss' => ['/main.css'],
+            'externalCss' => ['/theme.css'],
             'embedCss'    => ['body{}'],
             'externalJS'  => ['/app.js'],
             'embedJS'     => [
@@ -311,7 +458,7 @@ class BaseTest extends \PHPUnit\Framework\TestCase
         $this->assertSame($block, $block->exposeSetRootBlockParameters($root));
         $this->assertSame([
             ['setMetaTag', 'description'],
-            ['setExternalCss', ['/main.css']],
+            ['setExternalCss', ['/theme.css']],
             ['setEmbedCssByMeta', ['body{}']],
             ['setExternalJs', ['/app.js']],
             ['setEmbedJs', 'var a = 1;', 'head'],
@@ -381,7 +528,7 @@ class BaseTest extends \PHPUnit\Framework\TestCase
         try {
             $block->exposeSetEmbeddedBlocks();
             $this->fail('Expected fatal exception when main block placeholder has no tab main block.');
-        } catch (\fan\project\exception\block\fatal $exception) {
+        } catch (fatal $exception) {
             $this->assertStringContainsString('Main Block', $exception->getMessage());
         }
     }
@@ -391,12 +538,36 @@ class BaseTest extends \PHPUnit\Framework\TestCase
         $child = new TestableBaseBlock('child', new FakeTab(), null, [], false);
         $block = new TestableBaseBlock('parent', new FakeTab(), null, [], false);
         $block->setEmbeddedBlocksForTest(['child' => $child]);
+        $exceptionCalls = [];
+        $block->setBlockDependencies([
+            'blockExceptionFactory' => static function (
+                string $exceptionClass,
+                base $block,
+                string $message,
+                int $code,
+                ?\Exception $previous = null
+            ) use (&$exceptionCalls): \Throwable {
+                $exceptionCalls[] = [$exceptionClass, $block, $message, $code, $previous];
+
+                return new $exceptionClass($block, $message, $code, $previous);
+            },
+        ]);
 
         $this->assertSame($child, $block->getEmbeddedBlock('child'));
-        $this->expectException(\fan\project\exception\block\local::class);
-        $this->expectExceptionMessage('unknown Embedded Block');
 
-        $block->getEmbeddedBlock('missing');
+        try {
+            $block->getEmbeddedBlock('missing');
+            $this->fail('Expected local block exception for unknown embedded block.');
+        } catch (local $exception) {
+            $this->assertStringContainsString('unknown Embedded Block', $exception->getMessage());
+        }
+
+        $this->assertCount(1, $exceptionCalls);
+        $this->assertSame('\fan\project\exception\block\local', $exceptionCalls[0][0]);
+        $this->assertSame($block, $exceptionCalls[0][1]);
+        $this->assertSame('Call to unknown Embedded Block "missing"', $exceptionCalls[0][2]);
+        $this->assertSame(E_USER_WARNING, $exceptionCalls[0][3]);
+        $this->assertNull($exceptionCalls[0][4]);
     }
 
     public function testBlockLookupClassParsingAndBlockExceptions(): void
@@ -412,14 +583,14 @@ class BaseTest extends \PHPUnit\Framework\TestCase
         try {
             $block->exposeParseClassName('missing/path', true);
             $this->fail('Expected fatal exception for unknown embedded class path.');
-        } catch (\fan\project\exception\block\fatal $exception) {
+        } catch (fatal $exception) {
             $this->assertStringContainsString('Unknown block path', $exception->getMessage());
         }
 
         try {
             $block->exposeMakeBlockException('local failed', 'local');
             $this->fail('Expected local block exception.');
-        } catch (\fan\project\exception\block\local $exception) {
+        } catch (local $exception) {
             $this->assertSame('nothing', $block->getExceptionDbOper());
             $this->assertSame('local failed', $exception->getMessage());
         }
@@ -427,14 +598,14 @@ class BaseTest extends \PHPUnit\Framework\TestCase
         try {
             $block->exposeMakeBlockException('unknown failed', 'unknown');
             $this->fail('Expected fatal fallback exception.');
-        } catch (\fan\project\exception\block\fatal $exception) {
+        } catch (fatal $exception) {
             $this->assertSame('rollback', $block->getExceptionDbOper());
         }
 
         try {
             $block->exposeMakeBlockException('commit failed', 'fatal', 'commit');
             $this->fail('Expected fatal exception with explicit DB operation.');
-        } catch (\fan\project\exception\block\fatal $exception) {
+        } catch (fatal $exception) {
             $this->assertSame('commit', $block->getExceptionDbOper());
         }
     }
@@ -455,7 +626,7 @@ class BaseTest extends \PHPUnit\Framework\TestCase
         $this->assertSame('stored', $block->setSessionData('key', 'stored'));
         $this->assertSame('stored', $block->getSessionData('key'));
         $this->assertNull($block->removeSessionData('key'));
-        $session = service('session');
+        $session = FakeServiceRegistry::get('session');
         $this->assertSame([get_class($block), 'block'], $session->args);
 
         $this->assertSame($tab->subscriber, $block->_subscribeForEvent('changed'));
@@ -463,6 +634,57 @@ class BaseTest extends \PHPUnit\Framework\TestCase
         $this->assertSame($block, $tab->subscriber->calls[0][1]);
         $this->assertSame('changed', $tab->subscriber->calls[0][2]);
         $this->assertSame('eventHandler', $tab->subscriber->calls[0][3]);
+    }
+
+    public function testSourceNoLongerUsesContainerAwareTrait(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/_core/block/base.php');
+
+        $this->assertStringNotContainsString('container_aware_trait', $source);
+        $this->assertStringNotContainsString('function containerService(', $source);
+        $this->assertStringNotContainsString('function blockService(', $source);
+        $this->assertStringNotContainsString('serviceFactory', $source);
+        $this->assertStringNotContainsString('container_registry::get()', $source);
+        $this->assertStringNotContainsString('new $class($k, $this->tab, $this, $containerMeta', $source);
+        $this->assertStringContainsString('private mixed $blockFactory = null;', $source);
+        $this->assertStringContainsString('private mixed $metaMakerFactory = null;', $source);
+        $this->assertStringContainsString('private mixed $viewRouterFactory = null;', $source);
+        $this->assertStringContainsString('private ?object $imageMetadataReader = null;', $source);
+        $this->assertStringContainsString('private ?object $fileStorage = null;', $source);
+        $this->assertStringContainsString('private ?object $projectToolFileStorage = null;', $source);
+        $this->assertStringContainsString('private mixed $uploadSizeLimitProviderDependency = null;', $source);
+        $this->assertStringContainsString("'imageMetadataReader' => \$container->get('image_metadata_reader')", $source);
+        $this->assertStringContainsString("'metaMakerFactory' => \$container->get('meta_maker_factory')", $source);
+        $this->assertStringContainsString("'viewRouterFactory' => \$container->get('view_router_factory')", $source);
+        $this->assertStringContainsString("'blockFileStorage' => \$container->has('block_file_storage') ? \$container->get('block_file_storage') : null", $source);
+        $this->assertStringContainsString("'projectToolFileStorage' => \$container->has('project_tool_file_storage') ? \$container->get('project_tool_file_storage') : null", $source);
+        $this->assertStringContainsString("'rootHtmlFileStorage' => \$container->has('root_html_file_storage') ? \$container->get('root_html_file_storage') : null", $source);
+        $this->assertStringContainsString("'uploadSizeLimitProvider' => \$container->has('upload_size_limit_provider') ? \$container->get('upload_size_limit_provider') : null", $source);
+        $this->assertStringContainsString('$this->fileStorage()->isFile($templatePath)', $source);
+        $this->assertStringContainsString('$this->fileStorage()->exists($currentPath . \'meta.php\')', $source);
+        $this->assertStringContainsString("\$this->setUploadSizeLimitProvider(\$this->uploadSizeLimitProviderDependency);", $source);
+        $this->assertStringContainsString('private function createEmbeddedBlock(', $source);
+        $this->assertStringContainsString('$factory = $this->metaMakerFactory();', $source);
+        $this->assertStringContainsString('$factory = $this->viewRouterFactory();', $source);
+        $this->assertStringContainsString('$router = $factory($viewClass, $this, $loaderState, $this->blockExceptionFactory);', $source);
+        $this->assertStringContainsString('Meta maker factory must return a meta maker.', $source);
+        $this->assertStringContainsString('View router factory must return an object.', $source);
+        $this->assertStringContainsString('($this->blockFactory)(', $source);
+        $this->assertStringContainsString('($this->blockExceptionFactory)($class, $this, $logErrMsg, $code, $previous);', $source);
+        $this->assertStringContainsString('private function createBlockFatalException(', $source);
+        $this->assertStringContainsString('return $this->createBlockException(\'\fan\project\exception\block\fatal\', $logErrMsg, $code, $previous);', $source);
+        $this->assertStringContainsString('$this->_makeBlockException(\'Call to unknown Embedded Block "\' . $key . \'"\', \'local\', null, E_USER_WARNING);', $source);
+        $this->assertStringNotContainsString('new \fan\project\base\meta\maker(', $source);
+        $this->assertStringNotContainsString('new \fan\project\exception\block\local(', $source);
+        $this->assertStringNotContainsString('new fatalException', $source);
+        $this->assertStringNotContainsString('use fan\project\exception\block\fatal as fatalException;', $source);
+        $this->assertStringNotContainsString('::getRouter($this', $source);
+        $this->assertStringNotContainsString('call_user_func($this->blockFactory', $source);
+        $this->assertStringNotContainsString('call_user_func($this->blockExceptionFactory', $source);
+        $this->assertDoesNotMatchRegularExpression(
+            '/(?<!->)(?<!::)(?<!\\\\)\b(?:is_file|file_exists)\s*\(/',
+            $source
+        );
     }
 
     public function testDelegateHelpersCacheRoleCheckRunInitAndDebugInfo(): void

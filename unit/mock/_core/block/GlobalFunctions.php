@@ -1,18 +1,13 @@
 <?php
 
 declare(strict_types=1);
+use FanTest\_core\block\FakeRoleRegistry;
 
-if (!function_exists('service')) {
-    function service($name, $args = []): mixed
-    {
-        return \FanTest\_core\block\FakeServiceRegistry::get($name, $args);
-    }
-}
 
 if (!function_exists('role')) {
     function role($condition): mixed
     {
-        return \FanTest\_core\block\FakeRoleRegistry::check($condition);
+        return FakeRoleRegistry::check($condition);
     }
 }
 

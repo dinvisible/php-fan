@@ -17,6 +17,7 @@ namespace fan\core\service\matcher\item;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  *
+ * @property string $service
  * @property string $method
  * @property array $param
  */
@@ -28,6 +29,7 @@ class handler extends base
      */
     protected array $data = [
         'key'     => null,
+        'service' => null,
         'method'  => null,
         'param'   => null,
         'ctrlKey' => null, // Config-key used for define current handler

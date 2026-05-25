@@ -2,8 +2,13 @@
 
 declare(strict_types=1);
 
-namespace fan\project\service {
-    class database
+namespace {
+    require_once __DIR__ . '/../../../../_core/di/container_interface.php';
+    require_once __DIR__ . '/../../../../_core/di/container.php';
+}
+
+namespace FanTest\_core\base {
+    class DatabaseConnectionsStub
     {
         public static array $calls = [];
 
@@ -12,9 +17,22 @@ namespace fan\project\service {
             self::$calls = [];
         }
 
-        public static function fixAll($dbOper, $makeException = true): void
+        public function fixAll($dbOper, $makeException = true): void
         {
             self::$calls[] = [$dbOper, $makeException];
+        }
+    }
+
+    class TransferServiceContainer implements \fan\core\di\container_interface
+    {
+        public function has(string $id): bool
+        {
+            return $id === 'database_connections';
+        }
+
+        public function get(string $id, mixed ...$arguments): mixed
+        {
+            return new DatabaseConnectionsStub();
         }
     }
 }

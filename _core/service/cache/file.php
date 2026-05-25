@@ -2,9 +2,10 @@
 declare(strict_types=1);
 
 namespace fan\core\service\cache;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\service\cache;
+
 /**
- * ADOdb wrapper for template engine
+ * File cache engine
  *
  * This file is part PHP-FAN (php-framework from Alexandr Nosov)
  * Copyright (C) 2005-2007 Alexandr Nosov, http://www.alex.4n.com.ua/
@@ -31,10 +32,38 @@ class file extends base
      */
     private ?string $fileMeta = null;
 
+    private ?object $fileStorage = null;
+
+    public function __construct(
+        cache $facade,
+        string $type,
+        string $key,
+        array $config,
+        ?object $errorLogger = null,
+        ?object $runtime = null,
+        ?callable $payloadEncoder = null,
+        ?callable $payloadDecoder = null,
+        ?callable $jsonPayloadChecker = null,
+        ?object $fileStorage = null
+    ) {
+        parent::__construct(
+            $facade,
+            $type,
+            $key,
+            $config,
+            $errorLogger,
+            $runtime,
+            $payloadEncoder,
+            $payloadDecoder,
+            $jsonPayloadChecker
+        );
+        $this->fileStorage = $fileStorage;
+    }
+
     protected function _loadData(bool $loadMetaOnly): bool
     {
         list($fileData, $fileMeta) = $this->_getFilePath();
-        if (!file_exists($fileMeta)) {
+        if (!$this->fileStorage()->exists($fileMeta)) {
             return false;
         }
 
@@ -42,7 +71,7 @@ class file extends base
         $isLegacyMeta   = !$this->_isJsonPayload($metaRaw);
         $metaData       = $this->_decodePayload($metaRaw, 'Cache meta decode error');
         $this->metaData = is_array($metaData) ? $metaData : [];
-        if (!is_array($metaData) || !$this->_checkActual($metaData) || !file_exists($fileData) || $loadMetaOnly) {
+        if (!is_array($metaData) || !$this->_checkActual($metaData) || !$this->fileStorage()->exists($fileData) || $loadMetaOnly) {
             return false;
         }
 
@@ -78,11 +107,11 @@ class file extends base
         $this->_checkWritable($fileData, 'data');
 
         $dataType = $this->metaData['data_type'] ?? 'null';
-        file_put_contents($fileMeta, $this->_encodePayload($this->metaData), LOCK_EX);
+        $this->fileStorage()->write($fileMeta, $this->_encodePayload($this->metaData), LOCK_EX);
         if ($dataType === 'string') {
-            file_put_contents($fileData, $this->data, LOCK_EX);
+            $this->fileStorage()->write($fileData, (string)$this->data, LOCK_EX);
         } elseif ($dataType !== 'null') {
-            file_put_contents($fileData, $this->_encodePayload($this->data), LOCK_EX);
+            $this->fileStorage()->write($fileData, $this->_encodePayload($this->data), LOCK_EX);
         }
         return $this;
     }
@@ -90,11 +119,11 @@ class file extends base
     protected function _deleteData(): static
     {
         list($fileData, $fileMeta) = $this->_getFilePath();
-        if (file_exists($fileMeta)) {
-            unlink($fileMeta);
+        if ($this->fileStorage()->exists($fileMeta)) {
+            $this->fileStorage()->delete($fileMeta);
         }
-        if (file_exists($fileData)) {
-            unlink($fileData);
+        if ($this->fileStorage()->exists($fileData)) {
+            $this->fileStorage()->delete($fileData);
         }
         parent::_deleteData();
         return $this;
@@ -104,25 +133,25 @@ class file extends base
     {
         if (empty($this->fileData) || empty($this->fileMeta)) {
             if (empty($this->config['BASE_DIR'])) {
-                throw new fatalException($this->facade, 'Base cache doesn\'t set for "' . $this->type . '".');
+                throw $this->createCacheFatalException('Base cache doesn\'t set for "' . $this->type . '".');
             }
-            $path = rtrim(\bootstrap::parsePath((string)$this->config['BASE_DIR']), '/\\');
+            $path = rtrim($this->runtime()->parsePath((string)$this->config['BASE_DIR']), '/\\');
             if (!empty($this->extraPath)) {
                 $path .= '/' . trim($this->extraPath, '/\\');
             }
-            if (!is_dir($path)) {
+            if (!$this->fileStorage()->isDirectory($path)) {
                 $dirMode = empty($this->config['DIR_MODE']) ? 0777 : (int)$this->config['DIR_MODE'];
-                if (!mkdir($path, $dirMode, true)) {
-                    throw new fatalException($this->facade, 'Can\'t create cache directory for "' . $this->type . '".');
+                if (!$this->fileStorage()->makeDirectory($path, $dirMode, true)) {
+                    throw $this->createCacheFatalException('Can\'t create cache directory for "' . $this->type . '".');
                 }
-            } elseif (!is_writable($path)) {
-                throw new fatalException($this->facade, 'Cache directory for "' . $this->type . '" isn\'t writable.');
+            } elseif (!$this->fileStorage()->isWritable($path)) {
+                throw $this->createCacheFatalException('Cache directory for "' . $this->type . '" isn\'t writable.');
             }
 
             if (empty($this->config['CODE_FILE_NAME'])) {
                 $fileName = $this->key;
                 if (!preg_match('/^[a-z0-9\-_\(\)\!\.]+$/i', $fileName) || substr($fileName, -5) === '.meta') {
-                    throw new fatalException($this->facade, 'Cache key "' . $this->key . '" can\'t be used for name of cache file.');
+                    throw $this->createCacheFatalException('Cache key "' . $this->key . '" can\'t be used for name of cache file.');
                 }
             } else {
                 $fileName = md5($this->key);
@@ -141,18 +170,23 @@ class file extends base
 
     protected function _checkWritable(string $filePath, string $type): void
     {
-        if (is_file($filePath) && !is_writable($filePath)) {
-            throw new fatalException($this->facade, 'Cache ' . $type . '-file "' . $filePath . '" isn\'t writable.');
+        if ($this->fileStorage()->isFile($filePath) && !$this->fileStorage()->isWritable($filePath)) {
+            throw $this->createCacheFatalException('Cache ' . $type . '-file "' . $filePath . '" isn\'t writable.');
         }
     }
 
     protected function _readFile(string $filePath): string
     {
-        $result = file_get_contents($filePath);
+        $result = $this->fileStorage()->read($filePath);
         if ($result === false) {
-            throw new fatalException($this->facade, 'Cache file "' . $filePath . '" isn\'t readable.');
+            throw $this->createCacheFatalException('Cache file "' . $filePath . '" isn\'t readable.');
         }
         return $result;
+    }
+
+    private function fileStorage(): object
+    {
+        return $this->fileStorage ?? throw new \RuntimeException('Cache file storage is not configured for cache file engine.');
     }
 
 }

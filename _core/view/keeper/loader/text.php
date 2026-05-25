@@ -2,6 +2,10 @@
 declare(strict_types=1);
 
 namespace fan\core\view\keeper\loader;
+use fan\core\view\keeper;
+use fan\core\view\router;
+use fan\core\view\router\loader;
+
 /**
  * View-data keeper of Block data for loader JSON-data
  *
@@ -17,9 +21,9 @@ namespace fan\core\view\keeper\loader;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class text extends \fan\core\view\keeper
+class text extends keeper
 {
-    public function __construct(\fan\core\view\router $router)
+    public function __construct(router $router)
     {
         parent::__construct($router);
         $this->fullRewrite = true;
@@ -51,7 +55,7 @@ class text extends \fan\core\view\keeper
         return $this;
     }
 
-    public function addRouter(\fan\core\view\router\loader $router): static
+    public function addRouter(loader $router): static
     {
         $this->_setSetter($router);
         $this->_setSetter($router->getBlock());

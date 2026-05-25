@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\block\admin;
+use fan\core\block\loader\base as loader_base;
+
 /**
  * Block admin form pattern
  *
@@ -18,7 +20,7 @@ namespace fan\core\block\admin;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class form_pattern extends \fan\core\block\loader\base
+class form_pattern extends loader_base
 {
     public function init(): void
     {

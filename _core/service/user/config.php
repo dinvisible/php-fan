@@ -3,7 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service\user;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\service\config\row;
+
 /**
  * User-data engine by data from config-file
  *
@@ -28,9 +29,18 @@ class config extends base
      */
     protected ?object $authConfig = null;
 
+    private mixed $configFactory = null;
+
+    public function setConfigFactory(callable $configFactory): static
+    {
+        $this->configFactory = $configFactory;
+
+        return $this;
+    }
+
     public function makePasswordHash(string $password): string
     {
-        $login = array_val($this->data, 'login', $this->identifyer);
+        $login = $this->arrayValueReader()($this->data, 'login', $this->identifyer);
         return $login ? md5((string)$login . $password . (string)$this->config->get('ENGINE_KEY')) : '';
     }
 
@@ -46,7 +56,7 @@ class config extends base
             return false;
         }
 
-        $this->authConfig = $this->containerService('config', (string)$file)->get((string)$key);
+        $this->authConfig = $this->configService((string)$file)->get((string)$key);
 
         $rule = $this->_getAccessRule();
         if (empty($rule)) {
@@ -55,7 +65,7 @@ class config extends base
 
         $mainRole = $this->authConfig->main_role;
         if (empty($mainRole) || !is_string($mainRole)) {
-            throw new fatalException($this->facade, 'Main role isn\'t set in config-file "' . $file . '" for "' . $key . '"!');
+            throw $this->createUserFatalException('Main role isn\'t set in config-file "' . $file . '" for "' . $key . '"!');
         }
 
         if ((string)$this->identifyer === 'anonymous') {
@@ -68,7 +78,7 @@ class config extends base
         return !empty($this->data);
     }
 
-    protected function _getAnonymousData(\fan\core\service\config\row $rule): array
+    protected function _getAnonymousData(row $rule): array
     {
         $this->isValid = true;
 
@@ -125,7 +135,7 @@ class config extends base
         if (!empty($this->authConfig['RULE'])) {
             foreach ($this->authConfig['RULE'] as $rule) {
                 foreach ($keys as $k0 => $k1) {
-                    if (!empty($rule[$k0]) && !preg_match((string)$rule[$k0], (string)($_SERVER[$k1] ?? ''))) {
+                    if (!empty($rule[$k0]) && !preg_match((string)$rule[$k0], (string)$this->requestInput()->serverValue($k1, ''))) {
                         continue 2;
                     }
                 }
@@ -162,6 +172,15 @@ class config extends base
         foreach ($rules as $v) {
             $target[(string)$v] = null;
         }
+    }
+
+    private function configService(string $file): mixed
+    {
+        if (!is_callable($this->configFactory)) {
+            throw new \RuntimeException('Config service factory is not configured for user config engine.');
+        }
+
+        return ($this->configFactory)($file);
     }
 
     // ======== The magic methods ======== \\

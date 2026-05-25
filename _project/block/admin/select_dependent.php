@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\project\block\admin;
+use fan\core\block\admin\select_dependent as admin_select_dependent;
+
 /**
  * Block admin select dependent
  *
@@ -18,6 +20,6 @@ namespace fan\project\block\admin;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class select_dependent extends \fan\core\block\admin\select_dependent
+class select_dependent extends admin_select_dependent
 {
 }

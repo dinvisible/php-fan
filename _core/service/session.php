@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
+use fan\core\base\service\multi;
+
 /**
  * Session service
  *
@@ -18,31 +20,8 @@ namespace fan\core\service;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.005 (12.02.2015)
  */
-class session extends \fan\core\base\service\multi
+class session extends multi
 {
-    private static array $instances = [];
-    private static ?object $engine = null;
-    /**
-     * @var \fan\core\service\request Session engine
-     */
-    protected static ?object $sr = null;
-    /**
-     * Flag: Session is got by cookie
-     * @var boolean
-     */
-    private static ?bool $byCookie = null;
-    /**
-     * Flag: Session is expired
-     * @var boolean
-     */
-    private static bool $isExpired = false;
-
-    /**
-     * Buffer of Data for data communication beetween different parts of code
-     * @var array
-     */
-    private static array $bufferData = [];
-
     /**
      * Session name-space in the group
      * @var string
@@ -55,25 +34,100 @@ class session extends \fan\core\base\service\multi
      */
     private ?string $group = null;
 
-    protected function __construct(string $nameSpace, string $group)
+    private ?object $databaseConfig = null;
+
+    private ?object $requestInput = null;
+
+    private mixed $errorFactory = null;
+
+    private ?object $requestService = null;
+    private ?object $logService = null;
+
+    /**
+     * @var callable|null
+     */
+    private $sessionFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $dateFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $cookieFactory = null;
+
+    private ?object $pearSessionSupportLoader = null;
+
+    private mixed $sessionEngineFactory = null;
+
+    private ?object $sessionState = null;
+
+    private ?object $phpRuntimeSettings = null;
+
+    private ?object $nativeSession = null;
+
+    public function __construct(
+        string $nameSpace,
+        string $group,
+        ?object $databaseConfig = null,
+        ?object $requestInput = null,
+        ?callable $errorFactory = null,
+        ?object $requestService = null,
+        ?object $logService = null,
+        ?callable $sessionFactory = null,
+        ?callable $dateFactory = null,
+        ?callable $cookieFactory = null,
+        ?object $pearSessionSupportLoader = null,
+        ?callable $sessionEngineFactory = null,
+        ?object $sessionState = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?object $phpRuntimeSettings = null,
+        ?object $nativeSession = null,
+        ?callable $arrayValueReader = null
+    )
     {
-        parent::__construct(empty(self::$instances));
+        $this->databaseConfig = $databaseConfig;
+        $this->requestInput = $requestInput;
+        $this->errorFactory = $errorFactory;
+        $this->pearSessionSupportLoader = $pearSessionSupportLoader;
+        $this->sessionEngineFactory = $sessionEngineFactory;
+        $this->phpRuntimeSettings = $phpRuntimeSettings;
+        $this->nativeSession = $nativeSession;
+        $this->setSessionDependencies($requestService, $logService, $sessionFactory, $dateFactory, $cookieFactory);
+        $this->sessionState = $sessionState;
+        $state = $this->state();
+        parent::__construct(
+            !$state->hasInstances(),
+            $serviceBootstrapRuntime,
+            $serviceConfigurator,
+            $serviceCacheFactory,
+            null,
+            null,
+            null,
+            $arrayValueReader
+        );
         $nameSpace = (string)$nameSpace;
         $group = (string)$group;
-        self::$instances[$group][$nameSpace] = $this;
+        $state->setInstance($group, $nameSpace, $this);
 
         if ($this->isEnabled()) {
             $this->nameSpace = $nameSpace;
             $this->group     = $group;
 
-            if (is_null(self::$engine)) {
-                self::$sr = $this->containerService('request');
+            if (is_null($state->getEngine())) {
+                $state->setRequestService($this->sessionRequestService());
                 $sid = $this->_prepareParameters();
 
                 // ========= {START session engine} ========= \\
                 $class = $this->_getEngine((string)$this->config['ENGINE'], false);
-                self::$engine = new $class($sid);
-                self::$engine->setFacade($this);
+                $state->setEngine($this->sessionEngine((string)$class, $sid, $state));
+                if (method_exists($state->getEngine(), 'setFacade')) {
+                    $state->getEngine()->setFacade($this);
+                }
 
                 // Compare Urer's system
                 $mismatch = $this->_compareSystem();
@@ -81,8 +135,12 @@ class session extends \fan\core\base\service\multi
                     $erMsg  = '{key => ' . $mismatch['key'] . ', ';
                     $erMsg .= 'old => '  . $mismatch['old'] . ', ';
                     $erMsg .= 'new => '  . $mismatch['new'] . ', ';
-                    $erMsg .= 'ip => ' . ($_SERVER['REMOTE_ADDR'] ?? '') . '}';
-                    l($erMsg, 'Session is not compared');
+                    $erMsg .= 'ip => ' . $this->sessionRequestInput()->serverValue('REMOTE_ADDR', '') . '}';
+                    if ($this->logService !== null) {
+                        $this->sessionLog()->logMessage('custom', $erMsg, 'Session is not compared');
+                    } elseif (is_callable($this->errorFactory)) {
+                        ($this->errorFactory)()->logErrorMessage($erMsg, 'Session is not compared');
+                    }
                     $this->setSessionId(md5($this->getSessionId() . microtime()));
                     $this->_killAll();
                 }
@@ -96,38 +154,36 @@ class session extends \fan\core\base\service\multi
         } // check enabling status
     }
 
-    // ======== Static methods ======== \\
-    /**
-     * @throws \fan\project\exception\fatal
-     */
-    public static function instance(mixed $nameSpace = null, mixed $group = 'custom'): static
-    {
-        if (is_null($group)) {
-            throw new \fan\project\exception\fatal('Unset group name for \fan\core\service\session.');
-        }
-        if (is_null($nameSpace)) {
-            $config    = self::staticContainerService('config')->get('session');
-            $group     = 'app';
-            $nameSpace = self::staticContainerService('application')->getAppName();
-            $repName   = $config->get(['REPLACE_APP', $nameSpace]);
-            if ($repName) {
-                $nameSpace = (string)$repName;
-            }
-        }
-        $nameSpace = (string)$nameSpace;
-        $group = (string)$group;
-        if (!isset(self::$instances[$group][$nameSpace])) {
-            new self($nameSpace, $group);
-        }
-        return self::$instances[$group][$nameSpace];
-    }
-
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
+    public function setSessionDependencies(
+        ?object $requestService = null,
+        ?object $logService = null,
+        ?callable $sessionFactory = null,
+        ?callable $dateFactory = null,
+        ?callable $cookieFactory = null
+    ): static
+    {
+        $this->requestService = $requestService;
+        $this->logService = $logService;
+        $this->sessionFactory = $sessionFactory;
+        $this->dateFactory = $dateFactory;
+        $this->cookieFactory = $cookieFactory;
+
+        return $this;
+    }
+
+    public function setPhpRuntimeSettings(object $phpRuntimeSettings): static
+    {
+        $this->phpRuntimeSettings = $phpRuntimeSettings;
+
+        return $this;
+    }
+
     public function get(array|string $key, mixed $defaultValue = null, bool $removeFromSes = false): mixed
     {
-        if (self::$engine) {
+        if ($this->state()->getEngine()) {
             $data = $this->_getEngineData();
             $result = array_get_element($data, $key, false);
             if ($removeFromSes) {
@@ -140,7 +196,7 @@ class session extends \fan\core\base\service\multi
 
     public function &getByLink(mixed $key, mixed $defaultValue = null): mixed
     {
-        if (self::$engine) {
+        if ($this->state()->getEngine()) {
             $data   =& $this->_getEngineData();
             $result =& array_get_element($data, $key, true);
             if (is_null($result)) {
@@ -158,7 +214,7 @@ class session extends \fan\core\base\service\multi
 
     public function set(mixed $key, mixed $value): ?bool
     {
-        if (self::$engine) {
+        if ($this->state()->getEngine()) {
             if (is_array($key)) {
                 $data = &$this->getByLink($key, null);
                 $data = $value;
@@ -175,7 +231,7 @@ class session extends \fan\core\base\service\multi
 
     public function remove(mixed $key): ?bool
     {
-        if (self::$engine) {
+        if ($this->state()->getEngine()) {
             $data =& $this->_getEngineData();
             if (is_array($key) && count($key) === 1) {
                 $key = reset($key);
@@ -198,7 +254,7 @@ class session extends \fan\core\base\service\multi
 
     public function removeAll(): ?bool
     {
-        if (self::$engine) {
+        if ($this->state()->getEngine()) {
             $data = &$this->_getEngineData();
             $data = null;
             return true;
@@ -208,33 +264,34 @@ class session extends \fan\core\base\service\multi
 
     public function setBufferData(string $key, mixed $val): static
     {
-        self::$bufferData[$key] = $val;
+        $this->state()->setBufferData($key, $val);
         return $this;
     }
 
     public function getBufferData(string $key, mixed $default = null): mixed
     {
-        return array_val(self::$bufferData, $key, $default);
+        return $this->state()->getBufferData($key, $default);
     }
 
     public function getSessionId(): ?string
     {
-        if (self::$engine) {
-            return self::$engine->getSessionId();
+        if ($engine = $this->state()->getEngine()) {
+            return $engine->getSessionId();
         }
         return null;
     }
 
     public function isByCookies(): ?bool
     {
-        return self::$byCookie;
+        return $this->state()->isByCookie();
     }
 
     public function setSessionId(string $sid): bool
     {
-        if (self::$engine) {
+        $engine = $this->state()->getEngine();
+        if ($engine) {
             if ($this->_checkSessionId($sid)) {
-                self::$engine->setSessionId($sid);
+                $engine->setSessionId($sid);
                 $this->_setCookie((string)$this->getSessionName(), $sid);
                 return true;
             }
@@ -244,8 +301,8 @@ class session extends \fan\core\base\service\multi
 
     public function getSessionName(): ?string
     {
-        if (self::$engine) {
-            return self::$engine->getSessionName();
+        if ($engine = $this->state()->getEngine()) {
+            return $engine->getSessionName();
         }
         return null;
     }
@@ -262,26 +319,25 @@ class session extends \fan\core\base\service\multi
 
     public function isExpired(): bool
     {
-        return self::$isExpired;
+        return $this->state()->isExpired();
     }
 
     public function resetExpired(bool $clearAll = true): static
     {
-        if ($clearAll && self::$isExpired) {
+        if ($clearAll && $this->state()->isExpired()) {
             $this->_killAll();
         }
-        self::$isExpired = false;
+        $this->state()->setExpired(false);
         return $this;
     }
 
     public function destroy(): static
     {
-        if (self::$engine) {
-            self::$engine->destroy();
+        $engine = $this->state()->getEngine();
+        if ($engine) {
+            $engine->destroy();
 
-            self::$instances = [];
-            self::$engine    = null;
-            self::$byCookie  = null;
+            $this->state()->clear();
         }
         return $this;
     }
@@ -293,52 +349,67 @@ class session extends \fan\core\base\service\multi
         $config = $this->config->toArray();
         // Check conf - Session MAXLIFETIME
         if ($config['MAXLIFETIME']){
-            ini_set('session.gc_maxlifetime', (string)$config['MAXLIFETIME']);
+            $this->phpRuntimeSettings()->set('session.gc_maxlifetime', (string)$config['MAXLIFETIME']);
         }
 
         // Check conf - Session COOKIE_SECURE
-        ini_set('session.cookie_secure', !empty($config['COOKIE_SECURE']) ? '1' : '0');
+        $this->phpRuntimeSettings()->set('session.cookie_secure', !empty($config['COOKIE_SECURE']) ? '1' : '0');
 
         // Check conf - Session COOKIE_HTTPONLY
-        ini_set('session.cookie_httponly', !isset($config['COOKIE_HTTPONLY']) || !empty($config['COOKIE_HTTPONLY']) ? '1' : '0');
+        $this->phpRuntimeSettings()->set('session.cookie_httponly', !isset($config['COOKIE_HTTPONLY']) || !empty($config['COOKIE_HTTPONLY']) ? '1' : '0');
 
         // Set main session parameters
         if (empty($config['COOKIE_DOMAIN'])) {
-            session_set_cookie_params (0, '/');
+            $this->nativeSession()->setCookieParams(0, '/');
         } else {
-            session_set_cookie_params (0, '/', (string)$config['COOKIE_DOMAIN']);
+            $this->nativeSession()->setCookieParams(0, '/', (string)$config['COOKIE_DOMAIN']);
         }
-        session_cache_limiter((string)$config['CACHE_LIMITER']);
+        $this->nativeSession()->cacheLimiter((string)$config['CACHE_LIMITER']);
 
         // ---- Define sessin by Cookie/GET/POST ---- \\
+        $request = $this->state()->getRequestService();
         $sesName   = (string)$this->config->get('SESSION_NAME', 'SID');
-        $cookieSid = self::$sr->get($sesName, 'C');
-        self::$byCookie = !empty($cookieSid);
+        $cookieSid = $request->get($sesName, 'C');
+        $this->state()->setByCookie(!empty($cookieSid));
 
         // Check session ID by GET/POST
-        $sid = self::$sr->get(strtoupper($sesName), 'GP', self::$sr->get(strtolower($sesName), 'GP'));
-        if ($this->_checkSessionId($sid, $sesName) && (!self::$byCookie || $this->config->get('IS_GET_PRIORITY', false))) {
-            self::$byCookie = self::$byCookie && (string)$cookieSid === (string)$sid;
+        $sid = $request->get(strtoupper($sesName), 'GP', $request->get(strtolower($sesName), 'GP'));
+        if ($this->_checkSessionId($sid, $sesName) && (!$this->state()->isByCookie() || $this->config->get('IS_GET_PRIORITY', false))) {
+            $this->state()->setByCookie($this->state()->isByCookie() && (string)$cookieSid === (string)$sid);
             $this->_setCookie($sesName, (string)$sid);
-        } elseif (self::$byCookie && !$this->_checkSessionId($cookieSid)) {
+        } elseif ($this->state()->isByCookie() && !$this->_checkSessionId($cookieSid)) {
             $sid = md5((string)$cookieSid . microtime());
-            self::$byCookie = false;
+            $this->state()->setByCookie(false);
             $this->_setCookie($sesName, $sid);
         }
-        session_name($sesName);
+        $this->nativeSession()->name($sesName);
 
-        return self::$byCookie ? (string)$cookieSid : (is_null($sid) ? null : (string)$sid);
+        return $this->state()->isByCookie() ? (string)$cookieSid : (is_null($sid) ? null : (string)$sid);
+    }
+
+    private function phpRuntimeSettings(): object
+    {
+        if ($this->phpRuntimeSettings === null) {
+            throw new \RuntimeException('PHP runtime settings dependency is not configured for session service.');
+        }
+
+        return $this->phpRuntimeSettings;
+    }
+
+    private function nativeSession(): object
+    {
+        return $this->nativeSession ?? throw new \RuntimeException('Native session adapter is not configured for session service.');
     }
 
     protected function _setCookie(string $var, string $val): static
     {
-        \fan\project\service\cookie::instance('/', $this->config['COOKIE_DOMAIN'])->set($var, $val);
+        $this->sessionCookie('/', $this->config['COOKIE_DOMAIN'])->set($var, $val);
         return $this;
     }
 
     protected function &_getEngineData(): mixed
     {
-        return self::$engine->getData((string)$this->group, (string)$this->nameSpace);
+        return $this->state()->getEngine()->getData((string)$this->group, (string)$this->nameSpace);
     }
 
     protected function _checkSessionId(mixed &$sid, ?string $sesName = null): bool
@@ -349,7 +420,7 @@ class session extends \fan\core\base\service\multi
             return true;
         }
         if ($sesName) { // ToDo: Make this by service request
-            self::$sr->remove((string)$sesName, 'GPR', true);
+            $this->state()->getRequestService()->remove((string)$sesName, 'GPR', true);
         }
         $sid = null;
         return false;
@@ -360,16 +431,17 @@ class session extends \fan\core\base\service\multi
         $mismatch = null;
         $check    = $this->config['CHECK_SYSTEM'];
         if ($check) {
-            $server = self::$sr->getAll('S', []);
-            $ses    = $this->containerService('session', 'data', 'session');
+            $server = $this->state()->getRequestService()->getAll('S', []);
+            $ses    = $this->sessionService('data', 'session');
             $param  = &$ses->getByLink('param');
+            $arrayValueReader = $this->arrayValueReader();
             if ($ses->get('is_fill', false)) {
                 foreach ($check as $v) {
-                    if ((string)array_val($param, $v) !== (string)array_val($server, $v)) {
+                    if ((string)$arrayValueReader($param, $v) !== (string)$arrayValueReader($server, $v)) {
                         $mismatch = [
                             'key' => $v,
-                            'old' => array_val($param,  $v),
-                            'new' => array_val($server, $v),
+                            'old' => $arrayValueReader($param,  $v),
+                            'new' => $arrayValueReader($server, $v),
                         ];
                         break;
                     }
@@ -390,26 +462,27 @@ class session extends \fan\core\base\service\multi
     {
         $conf = $this->config;
         if ($conf['KILL_BY_TIMEOUT']) {
-            $ses = $this->containerService('session', 'time', 'session');
+            $ses = $this->sessionService('time', 'session');
 
-            self::$isExpired = &$ses->getByLink('isKilled');
+            $isExpired = &$ses->getByLink('isKilled');
+            $this->state()->setExpiredReference($isExpired);
             $nowDt = date('Y-m-d H:i:s');
-            $now = \fan\project\service\date::instance($nowDt);
+            $now = $this->sessionDate($nowDt);
             $differ = $now->getDifference($ses->get('reload', $nowDt));
 
             if ($differ > $conf['MAXLIFETIME']) {
                 $this->_killAll();
-                self::$isExpired = true;
+                $this->state()->setExpired(true);
             }
             $ses->set('reload', $nowDt);
-            return !self::$isExpired;
+            return !$this->state()->isExpired();
         }
         return true;
     }
 
     protected function _killAll(): void
     {
-        $ses = &self::$engine->getRoot();
+        $ses = &$this->state()->getEngine()->getRoot();
         foreach ($ses as $group => &$gr) {
             if ($group !== 'ses' && is_array($gr)) {
                 foreach ($gr as &$dt) {
@@ -417,6 +490,87 @@ class session extends \fan\core\base\service\multi
                 }
             }
         }
+    }
+
+    private function sessionRequestService(): object
+    {
+        if ($this->requestService === null) {
+            throw new \RuntimeException('Request service is not configured for session service.');
+        }
+
+        return $this->requestService;
+    }
+
+    private function sessionRequestInput(): object
+    {
+        if ($this->requestInput === null) {
+            throw new \RuntimeException('Request input service is not configured for session service.');
+        }
+
+        return $this->requestInput;
+    }
+
+    private function sessionLog(): object
+    {
+        if ($this->logService === null) {
+            throw new \RuntimeException('Log service is not configured for session service.');
+        }
+
+        return $this->logService;
+    }
+
+    private function sessionService(string $nameSpace, string $group): object
+    {
+        if (!is_callable($this->sessionFactory)) {
+            throw new \RuntimeException('Session service factory is not configured for session service.');
+        }
+
+        return ($this->sessionFactory)($nameSpace, $group);
+    }
+
+    private function sessionDate(string $date): object
+    {
+        if (!is_callable($this->dateFactory)) {
+            throw new \RuntimeException('Date service factory is not configured for session service.');
+        }
+
+        return ($this->dateFactory)($date);
+    }
+
+    private function sessionCookie(mixed $path, mixed $domain): object
+    {
+        if (!is_callable($this->cookieFactory)) {
+            throw new \RuntimeException('Cookie service factory is not configured for session service.');
+        }
+
+        return ($this->cookieFactory)($path, $domain);
+    }
+
+    private function sessionEngine(string $class, ?string $sid, object $state): object
+    {
+        if (!is_callable($this->sessionEngineFactory)) {
+            throw new \RuntimeException('Session engine factory is not configured for session service.');
+        }
+
+        return ($this->sessionEngineFactory)(
+            $class,
+            $sid,
+            $this->config,
+            $this->databaseConfig,
+            $this->requestInput,
+            $this->errorFactory,
+            $state->getRequestService(),
+            $this->pearSessionSupportLoader
+        );
+    }
+
+    private function state(): object
+    {
+        if ($this->sessionState === null) {
+            throw new \RuntimeException('Session state is not configured for session service.');
+        }
+
+        return $this->sessionState;
     }
 
 }

@@ -5,8 +5,10 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../../_core/base/expression_evaluator.php';
 
 use fan\core\base\expression_evaluator;
+use PHPUnit\Framework\TestCase;
 
-class ExpressionEvaluatorTest extends \PHPUnit\Framework\TestCase
+
+class ExpressionEvaluatorTest extends TestCase
 {
     public function testEvaluatesBooleanExpressionsWithResolvedIdentifiers(): void
     {

@@ -2,7 +2,12 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\base\model\entity as model_entity;
+use fan\core\base\model\rowset;
+use fan\core\base\service\multi;
+use fan\core\block\base;
+
+
 /**
  * Pager service
  *
@@ -18,14 +23,8 @@ use fan\project\exception\service\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.005 (12.02.2015)
  */
-class pager extends \fan\core\base\service\multi
+class pager extends multi
 {
-    /**
-     * Service's Instances
-     * @var \fan\core\service\pager[]
-     */
-    private static array $instances = [];
-
     /**
      * Form Id
      * @var \fan\core\block\base
@@ -54,29 +53,50 @@ class pager extends \fan\core\base\service\multi
      */
     protected int|float|null $itemQtt = null;
 
-    protected function __construct(\fan\core\block\base $block)
+    /**
+     * @var callable|null
+     */
+    private $pagerEntityFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $pagerTabFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $pagerRequestFactory = null;
+
+    public function __construct(
+        base $block,
+        ?callable $entityFactory = null,
+        ?callable $tabFactory = null,
+        ?callable $requestFactory = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null
+    )
     {
-        parent::__construct(true);
+        parent::__construct(true, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
+        $this->setPagerDependencies($entityFactory, $tabFactory, $requestFactory);
         $this->block = $block;
     }
 
-    // ======== Static methods ======== \\
-    public static function instance(string|\fan\core\block\base $block): static
-    {
-        if (is_string($block)) {
-            $block = self::staticContainerService('tab')->getTabBlock($block);
-        } elseif (!is_object($block) || !($block instanceof \fan\core\block\base)) {
-            throw new \fan\core\exception\error500('Incorect call service pager. Please point block of data or its name.');
-        }
-
-        $name = $block->getBlockName();
-        if (!isset(self::$instances[$name])) {
-            self::$instances[$name] = new self($block);
-        }
-        return self::$instances[$name];
-    }
-
     // ======== Main Interface methods ======== \\
+
+    public function setPagerDependencies(
+        ?callable $entityFactory = null,
+        ?callable $tabFactory = null,
+        ?callable $requestFactory = null
+    ): static
+    {
+        $this->pagerEntityFactory = $entityFactory;
+        $this->pagerTabFactory = $tabFactory;
+        $this->pagerRequestFactory = $requestFactory;
+
+        return $this;
+    }
 
     public function setPageNum(int|float $pageNum, bool $force = false): static
     {
@@ -155,22 +175,22 @@ class pager extends \fan\core\base\service\multi
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\service\fatal
      */
-    public function getItemsByParam(mixed $param = [], string $orderBy = ''): \fan\core\base\model\rowset
+    public function getItemsByParam(mixed $param = [], string $orderBy = ''): rowset
     {
         $meta = $this->block->getMeta('pager');
         if (!is_object($meta) || (string)$meta['entity_key'] === '') {
-            throw new fatalException($this, 'Entity key is not set.');
+            throw $this->createServiceFatalException('Entity key is not set.');
         }
-        $ett    = ge($meta['entity_key']);
+        $ett    = $this->pagerEntity()->get((string)$meta['entity_key']);
         $sqlKey = $meta['sql_key'];
         return $this->getItemsByKey($ett, $sqlKey, $param, $orderBy);
     }
 
-    public function getItemsByKey(string|\fan\core\base\model\entity $ett, string $sqlKey = '', mixed $param = [], string $orderBy = ''): \fan\core\base\model\rowset
+    public function getItemsByKey(string|model_entity $ett, string $sqlKey = '', mixed $param = [], string $orderBy = ''): rowset
     {
-        $ett = is_object($ett) && $ett instanceof \fan\core\base\model\entity ? $ett : ge($ett);
+        $ett = is_object($ett) && $ett instanceof model_entity ? $ett : $this->pagerEntity()->get($ett);
 
         $this->_definePageNum()
                 ->_defineItemPerPage()
@@ -200,13 +220,13 @@ class pager extends \fan\core\base\service\multi
         }
         $modifier['include'][strtolower((string)$by) === 'add' ? 'A' : 'G'][$key] = $page;
 
-        return $this->containerService('tab')->getModifiedCurrentURI($modifier, $addExt, $addSid, $protocol);
+        return $this->pagerTab()->getModifiedCurrentURI($modifier, $addExt, $addSid, $protocol);
     }
 
     // ======== Private/Protected methods ======== \\
-    protected function _countItemByEtt(mixed $param, string|\fan\core\base\model\entity $ett, ?string $sqlKey = null): static
+    protected function _countItemByEtt(mixed $param, string|model_entity $ett, ?string $sqlKey = null): static
     {
-        $ett = is_object($ett) ? $ett : ge($ett);
+        $ett = is_object($ett) ? $ett : $this->pagerEntity()->get($ett);
         $this->itemQtt = empty($sqlKey) ?
                 $ett->getCountByParam($param) :
                 $ett->getCountByKey($sqlKey, $param);
@@ -218,7 +238,7 @@ class pager extends \fan\core\base\service\multi
         if (is_null($this->pageNum) || $force) {
             $key  = $this->getConfig('PAGE_REQUEST_KEY', 'page');
             $src  = $this->getConfig('PAGE_REQUEST_SRC', 'AG');
-            $page = (int)$this->containerService('request')->get($key, $src, 1);
+            $page = (int)$this->pagerRequest()->get($key, $src, 1);
             $this->setPageNum($page);
         }
         return $this;
@@ -241,6 +261,33 @@ class pager extends \fan\core\base\service\multi
             $this->setPageQtt($pageQtt);
         }
         return $this;
+    }
+
+    private function pagerEntity(): object
+    {
+        if ($this->pagerEntityFactory !== null) {
+            return ($this->pagerEntityFactory)();
+        }
+
+        throw new \RuntimeException('Entity service is not configured for pager service.');
+    }
+
+    private function pagerTab(): object
+    {
+        if ($this->pagerTabFactory !== null) {
+            return ($this->pagerTabFactory)();
+        }
+
+        throw new \RuntimeException('Tab service is not configured for pager service.');
+    }
+
+    private function pagerRequest(): object
+    {
+        if ($this->pagerRequestFactory !== null) {
+            return ($this->pagerRequestFactory)();
+        }
+
+        throw new \RuntimeException('Request service is not configured for pager service.');
     }
 
     // ======== The magic methods ======== \\

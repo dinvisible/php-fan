@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 namespace fan\core\base\meta;
+use fan\core\base\data;
+use fan\core\base\meta\row as meta_row;
+
 /**
  * Meta Data Row
  *
@@ -18,7 +21,7 @@ namespace fan\core\base\meta;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-class row extends \fan\core\base\data
+class row extends data
 {
     /**
      * @var \fan\core\block\all Linked block
@@ -38,14 +41,22 @@ class row extends \fan\core\base\data
 
     protected int|string|null $keyName = null;
 
+    private $rowFactory = null;
 
-    public function __construct(maker $maker, array $data, ?row $parent = null, int|string|null $keyName = null)
+    public function __construct(
+        maker $maker,
+        array $data,
+        ?row $parent = null,
+        int|string|null $keyName = null,
+        ?callable $rowFactory = null
+    )
     {
         $this->maker   = $maker;
         $this->block   = $maker->getBlock();
-        $this->data    = $this->makeData($data);
         $this->parent  = $parent;
         $this->keyName = $keyName;
+        $this->rowFactory = $rowFactory ?? $maker->getRowFactory();
+        $this->data    = $this->makeData($data);
 
         $this->_setSetter($maker);
         $this->_setSetter($this->block);
@@ -57,7 +68,7 @@ class row extends \fan\core\base\data
     {
         $ret = [];
         foreach ($data as $k => $v) {
-            $ret[$k] = is_array($v) ? new \fan\project\base\meta\row($this->maker, $v, $this, $k) : $v;
+            $ret[$k] = is_array($v) ? $this->createRow($v, $this, $k) : $v;
         }
         return $ret;
     }
@@ -72,10 +83,24 @@ class row extends \fan\core\base\data
 
     // ======== Private/Protected methods ======== \\
 
-    protected function _makeSubData(mixed $key, mixed $value): \fan\core\base\meta\row
+    protected function _makeSubData(mixed $key, mixed $value): meta_row
     {
-        $class = get_class($this);
-        return new $class($this->maker, $value, $this, $key);
+        return $this->createRow($value, $this, $key);
+    }
+
+    private function createRow(array $data, ?row $parent = null, int|string|null $keyName = null): row
+    {
+        if (!is_callable($this->rowFactory)) {
+            throw new \RuntimeException('Meta row factory is not configured for meta row.');
+        }
+
+        $row = ($this->rowFactory)($this->maker, $data, $parent, $keyName, $this->rowFactory);
+        if (!$row instanceof row) {
+            $actual = is_object($row) ? get_class($row) : gettype($row);
+            throw new \UnexpectedValueException('Meta row factory returned "' . $actual . '".');
+        }
+
+        return $row;
     }
 
 }

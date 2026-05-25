@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
+use fan\core\base\service\single;
+use fan\core\service\config\row as config_row;
+
 /**
  * Description of error
  *
@@ -18,7 +21,7 @@ namespace fan\core\service;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-class error extends \fan\core\base\service\single
+class error extends single
 {
     /**
      * Types of system error
@@ -90,8 +93,7 @@ class error extends \fan\core\base\service\single
     protected ?array $sysErrorBuffer = null;
 
     /**
-     * Service log
-     * @var \fan\project\service\log
+     * Optional legacy service log.
      */
     protected ?object $servLog = null;
 
@@ -113,19 +115,52 @@ class error extends \fan\core\base\service\single
      */
     private bool $duplicateByEmail = false;
 
-    protected function __construct(bool $allowIni = true)
+    protected ?object $input = null;
+
+    protected ?object $runtime = null;
+
+    protected mixed $logFactory = null;
+
+    protected mixed $emailFactory = null;
+
+    protected mixed $phpArrayFileLoader = null;
+
+    protected ?object $errorLogWriter = null;
+
+    protected ?object $fileStorage = null;
+
+    public function __construct(
+        bool $allowIni = true,
+        ?object $input = null,
+        ?object $runtime = null,
+        ?callable $logFactory = null,
+        ?callable $emailFactory = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?callable $phpArrayFileLoader = null,
+        ?object $errorLogWriter = null,
+        ?object $fileStorage = null
+    )
     {
-        parent::__construct($allowIni);
+        $this->input = $input;
+        $this->runtime = $runtime;
+        $this->logFactory = $logFactory;
+        $this->emailFactory = $emailFactory;
+        $this->phpArrayFileLoader = $phpArrayFileLoader;
+        $this->errorLogWriter = $errorLogWriter;
+        $this->fileStorage = $fileStorage;
+        parent::__construct($allowIni, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
         $config = $this->config;
 
-        if (\bootstrap::isCli()) {
+        if ($this->runtime()->isCli()) {
             $this->duplicateByEmail = false;
         } elseif (!empty($config['DUPLICATE_BY_EMAIL'])) {
-            if (!is_array($config['DUPLICATE_BY_EMAIL']) && !($config['DUPLICATE_BY_EMAIL'] instanceof \fan\core\service\config\row)) {
+            if (!is_array($config['DUPLICATE_BY_EMAIL']) && !($config['DUPLICATE_BY_EMAIL'] instanceof config_row)) {
                 $config['DUPLICATE_BY_EMAIL'] = [$config['DUPLICATE_BY_EMAIL']];
             }
             foreach ($config['DUPLICATE_BY_EMAIL'] as $v) {
-                if (preg_match((string)$v, (string)($_SERVER['SERVER_NAME'] ?? ''))) {
+                if (preg_match((string)$v, (string)$this->input()->serverValue('SERVER_NAME', ''))) {
                     $this->duplicateByEmail = true;
                     break;
                 }
@@ -187,7 +222,7 @@ class error extends \fan\core\base\service\single
         $header  = isset($this->sysErrorType[$errNo]) ? $this->sysErrorType[$errNo] : 'Unknown system error ' . $errNo;
 
         if ($this->isSysError) {
-            \bootstrap::logError($header . "\n" . $message);
+            $this->runtime()->logError($header . "\n" . $message);
             return null;
         }
         $this->isSysError = true;
@@ -258,9 +293,9 @@ class error extends \fan\core\base\service\single
     {
         $mask = $this->readErrorMask($mask);
         if (!empty($path)) {
-            $path = \bootstrap::parsePath((string)$path);
-            if (is_dir($path)) {
-                $realPath = realpath($path);
+            $path = $this->runtime()->parsePath((string)$path);
+            if ($this->fileStorage()->isDirectory($path)) {
+                $realPath = $this->fileStorage()->realPath($path);
                 $path = is_string($realPath) ? str_replace('\\', '/', $realPath) : null;
                 if (!is_null($path) && (!isset($this->ignorePath[$mask]) || !in_array($path, $this->ignorePath[$mask]))) {
                     $this->ignorePath[$mask][] = $path;
@@ -320,21 +355,93 @@ class error extends \fan\core\base\service\single
 
     protected function _logError(string $type, string $message, string $header, string $note, bool $isTrace, bool $duplicateByEmail): void
     {
-        if (isset($_SERVER['REQUEST_METHOD']) && !in_array(strtoupper($_SERVER['REQUEST_METHOD']), ['GET', 'POST'])) {
+        $input = $this->input();
+        $requestMethod = $input->serverValue('REQUEST_METHOD');
+        if ($requestMethod !== null && !in_array(strtoupper((string)$requestMethod), ['GET', 'POST'])) {
             if (!empty($note)) {
                 $note .= '<br />';
             }
-            $note .= '$_SERVER = ' . var_export($_SERVER, true);
+            $note .= '$_SERVER = ' . var_export($input->server(), true);
         }
 
-        if (!$this->servLog) {
-            $this->servLog = \fan\project\service\log::instance();
+        if (is_callable($this->logFactory)) {
+            $this->logService()->logError($type, $message, $header, $note, $isTrace);
+        } else {
+            $this->errorLogWriter()->write(trim($type . "\t" . $header . "\t" . $message . "\t" . $note));
         }
-        $this->servLog->logError($type, $message, $header, $note, $isTrace);
 
         if ($duplicateByEmail && $this->duplicateByEmail) {
             $this->makeErrorEmail($type, $header, $message);
         }
+    }
+
+    private function input(): object
+    {
+        if ($this->input !== null) {
+            return $this->input;
+        }
+
+        throw new \RuntimeException('Request input service is not configured for error service.');
+    }
+
+    private function runtime(): object
+    {
+        if ($this->runtime !== null) {
+            return $this->runtime;
+        }
+
+        throw new \RuntimeException('Bootstrap runtime service is not configured for error service.');
+    }
+
+    private function logService(): object
+    {
+        if ($this->servLog === null) {
+            if (!is_callable($this->logFactory)) {
+                throw new \RuntimeException('Log service factory is not configured for error service.');
+            }
+            $this->servLog = ($this->logFactory)();
+        }
+
+        return $this->servLog;
+    }
+
+    private function emailService(): object
+    {
+        if ($this->servEmail === null) {
+            if (!is_callable($this->emailFactory)) {
+                throw new \RuntimeException('Email service factory is not configured for error service.');
+            }
+            $this->servEmail = ($this->emailFactory)();
+        }
+
+        return $this->servEmail;
+    }
+
+    private function loadPhpArrayFile(string $path, mixed $default = null): mixed
+    {
+        if (!is_callable($this->phpArrayFileLoader)) {
+            throw new \RuntimeException('PHP-array file loader is not configured for error service.');
+        }
+
+        return ($this->phpArrayFileLoader)($path, $default);
+    }
+
+    private function errorLogWriter(): object
+    {
+        if ($this->errorLogWriter === null) {
+            throw new \RuntimeException('Error log writer is not configured for error service.');
+        }
+
+        return $this->errorLogWriter;
+    }
+
+    private function fileStorage(): object
+    {
+        if ($this->fileStorage === null) {
+            throw new \RuntimeException('File storage dependency is not configured for error service.');
+        }
+
+        return $this->fileStorage;
     }
 
     public function makeErrorEmail(string $type, string $subject, string $message): void
@@ -344,10 +451,10 @@ class error extends \fan\core\base\service\single
             $file = $config['MAIL_FILE'];
             if (strstr($subject, 'fatal') === false && $file) {
                 $ctime = time();
-                $file = \bootstrap::parsePath((string)$file) . $type . '.log.php';
-                $fileExists = file_exists($file);
+                $file = $this->runtime()->parsePath((string)$file) . $type . '.log.php';
+                $fileExists = $this->fileStorage()->exists($file);
 
-                $data = $fileExists ? \fan\project\adapter\php_array_file::load($file, ['start' => $ctime]) : ['start' => $ctime];
+                $data = $fileExists ? $this->loadPhpArrayFile($file, ['start' => $ctime]) : ['start' => $ctime];
                 $key = md5($message);
                 if (isset($data[$key])) {
                     $data[$key]['qtt']++;
@@ -364,7 +471,7 @@ class error extends \fan\core\base\service\single
                     $data['start'] = date('d F Y H:i:s.', $data['start']);
                     $this->_sendErrorEmail('Packet email of ' . $type, var_export($data, true));
                 } else {
-                    file_put_contents($file, '<?php' . "\nreturn " . var_export($data, true) . ";\n" . '?>');
+                    $this->fileStorage()->write($file, '<?php' . "\nreturn " . var_export($data, true) . ";\n" . '?>');
                     if (!$fileExists) {
                         $this->chmodPacketFile($file, 0666);
                     }
@@ -383,16 +490,16 @@ class error extends \fan\core\base\service\single
 
             $ctime = time();
 
-            $path = \bootstrap::parsePath((string)$config['MAIL_FILE']);
+            $path = $this->runtime()->parsePath((string)$config['MAIL_FILE']);
 
             $dirName = dirname($path);
             $prefix = basename($path);
             $len = strlen($prefix);
 
-            foreach (scandir($dirName) as $v) {
+            foreach ($this->fileStorage()->scanDirectory($dirName) ?: [] as $v) {
                 $file = $dirName . '/' . $v;
-                if (substr($v, 0, $len) === $prefix && file_exists($file)) {
-                    $data = \fan\project\adapter\php_array_file::load($file, []);
+                if (substr($v, 0, $len) === $prefix && $this->fileStorage()->exists($file)) {
+                    $data = $this->loadPhpArrayFile($file, []);
                     if ($data['start'] + $config['SENT_TIME_LIMIT'] < $ctime) {
                         $this->removePacketFile($file);
                         $data['start'] = date('d F Y H:i:s.', $data['start']);
@@ -405,35 +512,33 @@ class error extends \fan\core\base\service\single
 
     private function removePacketFile(string $file): void
     {
-        if (!is_file($file)) {
+        if (!$this->fileStorage()->isFile($file)) {
             return;
         }
-        if (!is_writable($file)) {
-            error_log('Cannot remove error packet file "' . $file . '": file is not writable.');
+        if (!$this->fileStorage()->isWritable($file)) {
+            $this->errorLogWriter()->write('Cannot remove error packet file "' . $file . '": file is not writable.');
             return;
         }
-        if (!unlink($file)) {
-            error_log('Cannot remove error packet file "' . $file . '".');
+        if (!$this->fileStorage()->delete($file)) {
+            $this->errorLogWriter()->write('Cannot remove error packet file "' . $file . '".');
         }
     }
 
     private function chmodPacketFile(string $file, int $mode): void
     {
-        if (!file_exists($file)) {
+        if (!$this->fileStorage()->exists($file)) {
             return;
         }
-        if (!chmod($file, $mode)) {
-            error_log('Cannot chmod error packet file "' . $file . '".');
+        if (!$this->fileStorage()->changeMode($file, $mode)) {
+            $this->errorLogWriter()->write('Cannot chmod error packet file "' . $file . '".');
         }
     }
 
     protected function _sendErrorEmail(string $subject, string $message): void
     {
         $config = $this->config;
-        if (!$this->servEmail) {
-            $this->servEmail = $this->containerService('email', 'err_message');
-        }
-        $this->servEmail->clearAllRecipients();
+        $emailService = $this->emailService();
+        $emailService->clearAllRecipients();
         if (isset($config['MAIL_CC'])) {
             foreach ($config['MAIL_CC'] as $v) {
                 $v = trim((string)$v);
@@ -444,11 +549,11 @@ class error extends \fan\core\base\service\single
                         $email = $v;
                         $name  = '';
                     }
-                    $this->servEmail->addCc($email, $name);
+                    $emailService->addCc($email, $name);
                 }
             }
         }
-        $this->servEmail->send($subject, $message, (string)$config['MAIL_TO'], (string)$config['NAME_TO']);
+        $emailService->send($subject, $message, (string)$config['MAIL_TO'], (string)$config['NAME_TO']);
     }
 
 }

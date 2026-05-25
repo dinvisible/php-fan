@@ -6,23 +6,46 @@ namespace fan\core\adapter;
 
 class php_array_file
 {
-    /**
-     * Loads a PHP file that returns structured data, usually an array.
-     */
-    public static function load(string $path, mixed $default = null): mixed
-    {
-        if (!is_readable($path)) {
-            return $default;
-        }
+    private \Closure $isReadable;
+    private \Closure $fileReader;
 
-        return self::includeFile($path);
+    public function __construct(?callable $isReadable = null, ?callable $fileReader = null)
+    {
+        $this->isReadable = \Closure::fromCallable(
+            $isReadable ?? static fn(string $path): bool => is_readable($path)
+        );
+        $this->fileReader = \Closure::fromCallable(
+            $fileReader ?? static function (string $path, ?object $context = null): mixed {
+                if ($context === null) {
+                    return include $path;
+                }
+
+                return (function (string $path): mixed {
+                    return include $path;
+                })->call($context, $path);
+            }
+        );
+    }
+
+    public function __invoke(string $path, mixed $default = null, ?object $context = null): mixed
+    {
+        return $this->loadFile($path, $default, $context);
     }
 
     /**
-     * Isolates include scope for legacy PHP-array storage files.
+     * Loads a PHP file that returns structured data, usually an array.
      */
-    private static function includeFile(string $path): mixed
+    public static function load(string $path, mixed $default = null, ?object $context = null): mixed
     {
-        return include $path;
+        return (new self())->loadFile($path, $default, $context);
+    }
+
+    public function loadFile(string $path, mixed $default = null, ?object $context = null): mixed
+    {
+        if (!($this->isReadable)($path)) {
+            return $default;
+        }
+
+        return $context === null ? ($this->fileReader)($path) : ($this->fileReader)($path, $context);
     }
 }

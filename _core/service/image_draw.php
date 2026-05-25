@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\project\exception\service\fatal as fatalException;
 
 /**
  * Service Image Processor
@@ -27,7 +26,7 @@ class image_draw extends image_modify
 
     public function setBackground(int|string|array $bgrColor = 0xFFFFFF): static
     {
-        imagefilledrectangle($this->image, 0, 0, (int)$this->sourceWidth, (int)$this->sourceHeight, $this->adaptColor($bgrColor));
+        $this->imageCanvasOperations()->fillRectangle($this->image, 0, 0, (int)$this->sourceWidth, (int)$this->sourceHeight, $this->adaptColor($bgrColor));
         return $this;
     }
 
@@ -39,20 +38,20 @@ class image_draw extends image_modify
         if ($vertAlign === 'top') {
             $top = $this->_getCoord($coord, 'top');
         } elseif ($vertAlign === 'middle') {
-            $top = ceil(($this->sourceHeight - imagefontheight($fontNumber) - $this->_getCoordDiff($coord, 'bottom', 'top')) / 2);
+            $top = ceil(($this->sourceHeight - $this->imageCanvasOperations()->fontHeight($fontNumber) - $this->_getCoordDiff($coord, 'bottom', 'top')) / 2);
         } elseif ($vertAlign === 'bottom') {
-            $top = $this->sourceHeight - ($this->_getCoord($coord, 'bottom') + imagefontheight($fontNumber));
+            $top = $this->sourceHeight - ($this->_getCoord($coord, 'bottom') + $this->imageCanvasOperations()->fontHeight($fontNumber));
         }
         //Calculating of left x coordinate for text
         if ($txtAlign === 'left') {
             $left = $this->_getCoord($coord, 'left');
         } elseif ($txtAlign === 'center') {
-            $left = ceil(($this->sourceWidth - imagefontwidth($fontNumber) * strlen($string) - $this->_getCoordDiff($coord, 'right', 'left')) / 2);
+            $left = ceil(($this->sourceWidth - $this->imageCanvasOperations()->fontWidth($fontNumber) * strlen($string) - $this->_getCoordDiff($coord, 'right', 'left')) / 2);
         } elseif ($txtAlign === 'right') {
-            $left = $this->sourceWidth - ($this->_getCoord($coord, 'right') + imagefontwidth($fontNumber) * strlen($string));
+            $left = $this->sourceWidth - ($this->_getCoord($coord, 'right') + $this->imageCanvasOperations()->fontWidth($fontNumber) * strlen($string));
         }
 
-        imagestring($this->image, $fontNumber, (int)$left, (int)$top, $string, $this->adaptColor($fntColor));
+        $this->imageCanvasOperations()->string($this->image, $fontNumber, (int)$left, (int)$top, $string, $this->adaptColor($fntColor));
         return $this;
     }
 
@@ -61,10 +60,10 @@ class image_draw extends image_modify
         if (!$fontFile) {
             $fontFile = (string)$this->get_config('FONT_FILE', 'arial.ttf');
         }
-        $fontFile = (string)\bootstrap::parsePath((string)$this->getConfig('FONT_PATH', '{PROJECT}/data/font/')) . $fontFile;
+        $fontFile = (string)$this->runtime()->parsePath((string)$this->getConfig('FONT_PATH', '{PROJECT}/data/font/')) . $fontFile;
 
         $fontHeight = (int)(isset($coord['height']) ? $coord['height'] : $this->sourceHeight - $this->_getCoordDiff($coord, 'bottom', 'top') / 2);
-        $stringSize = imageftbbox($fontHeight, 0, $fontFile, $string, $info);
+        $stringSize = $this->imageCanvasOperations()->trueTypeBoundingBox($fontHeight, 0, $fontFile, $string, $info);
         $strWidth  = $stringSize[4];
         $strHeight = -$stringSize[5];
 
@@ -85,7 +84,7 @@ class image_draw extends image_modify
             $left = $this->sourceWidth - ($this->_getCoord($coord, 'right') + $strWidth);
         }
 
-        imagettftext($this->image, $fontHeight, (float)array_val($coord, 'angle', 0), (int)$left, (int)($top + $fontHeight), $this->adaptColor($fntColor), $fontFile, $string);
+        $this->imageCanvasOperations()->trueTypeText($this->image, $fontHeight, (float)$this->arrayValueReader()($coord, 'angle', 0), (int)$left, (int)($top + $fontHeight), $this->adaptColor($fntColor), $fontFile, $string);
         return $this;
     }
 
@@ -102,10 +101,10 @@ class image_draw extends image_modify
             ];
         }
         if (!is_null($brdColor)) {
-            imagerectangle($this->image, (int)$coord['left'], (int)$coord['top'], (int)($this->width - $coord['right']), (int)($this->height - $coord['bottom']), $this->adaptColor($brdColor));
+            $this->imageCanvasOperations()->rectangle($this->image, (int)$coord['left'], (int)$coord['top'], (int)($this->width - $coord['right']), (int)($this->height - $coord['bottom']), $this->adaptColor($brdColor));
         }
         if (!is_null($bgrColor)) {
-            imagefilledrectangle($this->image, (int)$coord['left'], (int)$coord['top'], (int)($this->width - $coord['right']), (int)($this->height - $coord['bottom']), $this->adaptColor($bgrColor));
+            $this->imageCanvasOperations()->fillRectangle($this->image, (int)$coord['left'], (int)$coord['top'], (int)($this->width - $coord['right']), (int)($this->height - $coord['bottom']), $this->adaptColor($bgrColor));
         }
         return $this;
     }
@@ -116,10 +115,10 @@ class image_draw extends image_modify
         $pointCount = (int)(count($points) / 2);
 
         if (!is_null($brdColor)) {
-            imagepolygon($this->image, $points, $pointCount, $this->adaptColor($brdColor));
+            $this->imageCanvasOperations()->polygon($this->image, $points, $pointCount, $this->adaptColor($brdColor));
         }
         if (!is_null($bgrColor)) {
-            imagefilledpolygon($this->image, $points, $pointCount, $this->adaptColor($bgrColor));
+            $this->imageCanvasOperations()->filledPolygon($this->image, $points, $pointCount, $this->adaptColor($bgrColor));
         }
         return $this;
     }
@@ -127,7 +126,7 @@ class image_draw extends image_modify
     public function ellipse(array $coord, int|string|array|null $brdColor = 0x000000, int|string|array|null $bgrColor = 0XFFFFFF): static
     {
         if (!is_null($brdColor)) {
-            imageellipse(
+            $this->imageCanvasOperations()->ellipse(
                     $this->image,
                     (int)$coord['centerX'],
                     (int)$coord['centerY'],
@@ -137,7 +136,7 @@ class image_draw extends image_modify
             );
         }
         if (!is_null($bgrColor)) {
-            imagefilledellipse(
+            $this->imageCanvasOperations()->filledEllipse(
                     $this->image,
                     (int)$coord['centerX'],
                     (int)$coord['centerY'],
@@ -152,7 +151,7 @@ class image_draw extends image_modify
     public function ellipseSector(array $coord, int|string|array|null $brdColor = 0x000000, int|string|array|null $bgrColor = 0XFFFFFF): static
     {
         if (!is_null($brdColor)) {
-            imagearc(
+            $this->imageCanvasOperations()->arc(
                     $this->image,
                     (int)$coord['centerX'],
                     (int)$coord['centerY'],
@@ -164,7 +163,7 @@ class image_draw extends image_modify
             );
         }
         if (!is_null($bgrColor)) {
-            imagefilledarc(
+            $this->imageCanvasOperations()->filledArc(
                     $this->image,
                     (int)$coord['centerX'],
                     (int)$coord['centerY'],
@@ -183,12 +182,14 @@ class image_draw extends image_modify
 
     public function line(array $coord, int|string|array $brdColor = 0X000000): static
     {
-        imageline(
+        $arrayValueReader = $this->arrayValueReader();
+
+        $this->imageCanvasOperations()->line(
                 $this->image,
-                (int)array_val($coord, 'left', 0),
-                (int)array_val($coord, 'top', 0),
-                (int)($this->width - array_val($coord, 'right', 0)),
-                (int)($this->height - array_val($coord, 'bottom', 0)),
+                (int)$arrayValueReader($coord, 'left', 0),
+                (int)$arrayValueReader($coord, 'top', 0),
+                (int)($this->width - $arrayValueReader($coord, 'right', 0)),
+                (int)($this->height - $arrayValueReader($coord, 'bottom', 0)),
                 $this->adaptColor($brdColor)
         );
         return $this;
@@ -214,12 +215,12 @@ class image_draw extends image_modify
 
     public function getFontWidth(int|float $fontNumber): int
     {
-        return imagefontwidth((int)$fontNumber);
+        return $this->imageCanvasOperations()->fontWidth((int)$fontNumber);
     }
 
     public function getFontHeigth(int|float $fontNumber): int
     {
-        return imagefontheight((int)$fontNumber);
+        return $this->imageCanvasOperations()->fontHeight((int)$fontNumber);
     }
 
 // ========================= Private methods ============================ \\

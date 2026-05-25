@@ -2,6 +2,10 @@
 declare(strict_types=1);
 
 namespace fan\core\view;
+use fan\core\base\data;
+use fan\core\block\base;
+use fan\core\view\router;
+
 /**
  * View data-keeper
  *
@@ -17,14 +21,14 @@ namespace fan\core\view;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class keeper extends \fan\core\base\data
+class keeper extends data
 {
     /**
      * @var \fan\core\view\router
      */
     protected ?object $router = null;
 
-    public function __construct(\fan\core\view\router $router)
+    public function __construct(router $router)
     {
         $this->router = $router;
         $this->_setSetter($router);
@@ -57,12 +61,12 @@ class keeper extends \fan\core\base\data
         return $this;
     }
 
-    public function getRouter(): \fan\core\view\router
+    public function getRouter(): router
     {
         return $this->router;
     }
 
-    public function getBlock(): \fan\core\block\base
+    public function getBlock(): base
     {
         return $this->router->getBlock();
     }

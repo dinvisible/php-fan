@@ -3,7 +3,10 @@
 declare(strict_types=1);
 
 namespace fan\core\base\model;
-use fan\project\exception\model\entity\fatal as fatalException;
+use fan\core\base\model\request;
+use fan\core\base\model\row;
+use fan\core\base\model\rowset;
+
 /**
  * Entity - table data
  *
@@ -16,15 +19,13 @@ use fan\project\exception\model\entity\fatal as fatalException;
  * Do not remove this comment if you want to use script!
  * Не удаляйте данный комментарий, если вы хотите использовать скрипт!
  *
- * @property-read \fan\core\service\entity\description $description
+ * @property-read object $description
  * @property-read \fan\core\base\model\request $request
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.006 (20.04.2015)
  */
 abstract class entity
 {
-    use \fan\core\di\container_aware_trait;
-
     /**
      * Entity Name (suffix of NS with class-name)
      *
@@ -49,16 +50,16 @@ abstract class entity
     protected ?object $service = null;
     /**
      * Service of entity
-     * @var \fan\core\service\database
+     * @var object
      */
     protected ?object $connection = null;
     /**
-     * Connection Name for \fan\core\service\database
+     * Connection Name for database factory
      * @var string
      */
     protected ?string $connectionName = null;
     /**
-     * Connection Key for \fan\core\service\database
+     * Connection Key for database factory
      * @var string
      */
     protected string|int|float|null $connectionKey = null;
@@ -67,7 +68,6 @@ abstract class entity
 
     /**
      * Description of table of current Entity
-     * @var \fan\core\service\entity\description
      */
     protected ?object $description = null;
     /**
@@ -98,14 +98,57 @@ abstract class entity
      */
     protected ?string $requestClassName = null;
 
-    public function __construct(\fan\core\service\entity $service, mixed $name, mixed $param = [])
+    private mixed $configFactory = null;
+
+    private mixed $databaseFactory = null;
+
+    private mixed $reflectorFactory = null;
+
+    private mixed $rowFactory = null;
+
+    private mixed $rowsetFactory = null;
+
+    private mixed $requestLoaderFactory = null;
+
+    private mixed $modelEntityExceptionFactory = null;
+
+    private \Closure $namespaceResolver;
+
+    private ?object $reflectionClassFactory = null;
+
+    public function __construct(
+        object $service,
+        mixed $name,
+        mixed $param = [],
+        ?callable $configFactory = null,
+        ?callable $databaseFactory = null,
+        ?callable $reflectorFactory = null,
+        ?callable $rowFactory = null,
+        ?callable $rowsetFactory = null,
+        ?callable $requestLoaderFactory = null,
+        ?callable $modelEntityExceptionFactory = null,
+        ?callable $namespaceResolver = null,
+        ?object $reflectionClassFactory = null
+    )
     {
         $param = (array)$param;
         $this->service  = $service;
         $this->name     = is_null($name) ? null : (string)$name;
+        $this->namespaceResolver = $this->defaultNamespaceResolver();
+        $this->setEntityDependencies(
+            $configFactory,
+            $databaseFactory,
+            $reflectorFactory,
+            $rowFactory,
+            $rowsetFactory,
+            $requestLoaderFactory,
+            $modelEntityExceptionFactory,
+            $namespaceResolver,
+            $reflectionClassFactory
+        );
 
         $this->bakParam = $param;
-        $this->config   = $this->containerService('config', 'entity')->getEntityConfig($this, $name);
+        $this->config   = $this->configService()->getEntityConfig($this, $name);
 
         $this->_setConnectionParam($param);
 
@@ -117,6 +160,159 @@ abstract class entity
 
     }
 
+    public function setEntityDependencies(
+        ?callable $configFactory = null,
+        ?callable $databaseFactory = null,
+        ?callable $reflectorFactory = null,
+        ?callable $rowFactory = null,
+        ?callable $rowsetFactory = null,
+        ?callable $requestLoaderFactory = null,
+        ?callable $modelEntityExceptionFactory = null,
+        ?callable $namespaceResolver = null,
+        ?object $reflectionClassFactory = null
+    ): static
+    {
+        if ($configFactory !== null) {
+            $this->configFactory = $configFactory;
+        }
+        if ($databaseFactory !== null) {
+            $this->databaseFactory = $databaseFactory;
+        }
+        if ($reflectorFactory !== null) {
+            $this->reflectorFactory = $reflectorFactory;
+        }
+        if ($rowFactory !== null) {
+            $this->rowFactory = $rowFactory;
+        }
+        if ($rowsetFactory !== null) {
+            $this->rowsetFactory = $rowsetFactory;
+        }
+        if ($requestLoaderFactory !== null) {
+            $this->requestLoaderFactory = $requestLoaderFactory;
+        }
+        if ($modelEntityExceptionFactory !== null) {
+            $this->modelEntityExceptionFactory = $modelEntityExceptionFactory;
+        }
+        if ($namespaceResolver !== null) {
+            $this->namespaceResolver = \Closure::fromCallable($namespaceResolver);
+        }
+        if ($reflectionClassFactory !== null) {
+            $this->reflectionClassFactory = $reflectionClassFactory;
+        }
+
+        return $this;
+    }
+
+    private function createModelEntityFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        if (!is_callable($this->modelEntityExceptionFactory)) {
+            throw new \RuntimeException('Model entity exception factory is not configured for model entity.');
+        }
+
+        $exception = ($this->modelEntityExceptionFactory)(
+            '\fan\project\exception\model\entity\fatal',
+            $this,
+            $message,
+            $code,
+            $previous
+        );
+        if (!$exception instanceof \Throwable) {
+            $actual = is_object($exception) ? get_class($exception) : gettype($exception);
+            throw new \UnexpectedValueException('Model entity exception factory returned "' . $actual . '".');
+        }
+
+        return $exception;
+    }
+
+    public function createDescriptionFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        return $this->createModelEntityFatalException($message, $code, $previous);
+    }
+
+    public function createRowsetFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        return $this->createModelEntityFatalException($message, $code, $previous);
+    }
+
+    public function createRequestFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        return $this->createModelEntityFatalException($message, $code, $previous);
+    }
+
+    public function createDesignerFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        return $this->createModelEntityFatalException($message, $code, $previous);
+    }
+
+    private function configService(): object
+    {
+        return $this->configFactory !== null ? ($this->configFactory)() : throw new \RuntimeException('Entity config service is not configured for model entity.');
+    }
+
+    private function databaseService(?string $connectionName = null, mixed $extraKey = 0): object
+    {
+        return $this->databaseFactory !== null ? ($this->databaseFactory)($connectionName, $extraKey) : throw new \RuntimeException('Database service is not configured for model entity.');
+    }
+
+    private function reflectorService(): object
+    {
+        return $this->reflectorFactory !== null ? ($this->reflectorFactory)() : throw new \RuntimeException('Reflector service is not configured for model entity.');
+    }
+
+    private function createRow(?array &$data = null, ?rowset $rowset = null): row
+    {
+        if (!is_callable($this->rowFactory)) {
+            throw new \RuntimeException('Row factory is not configured for model entity.');
+        }
+
+        $className = $this->getRowClassName();
+        if ($data === null) {
+            $emptyData = [];
+            $row = ($this->rowFactory)($className, $this, $emptyData, $rowset);
+        } else {
+            $row = ($this->rowFactory)($className, $this, $data, $rowset);
+        }
+        if (!$row instanceof row) {
+            $actual = is_object($row) ? get_class($row) : gettype($row);
+            throw new \UnexpectedValueException('Row factory returned "' . $actual . '".');
+        }
+
+        return $row;
+    }
+
+    private function createRowset(array &$data): rowset
+    {
+        if (!is_callable($this->rowsetFactory)) {
+            throw new \RuntimeException('Rowset factory is not configured for model entity.');
+        }
+        if (!is_callable($this->rowFactory)) {
+            throw new \RuntimeException('Row factory is not configured for model entity.');
+        }
+
+        $rowset = ($this->rowsetFactory)($this->getRowsetClassName(), $this, $data, $this->rowFactory);
+        if (!$rowset instanceof rowset) {
+            $actual = is_object($rowset) ? get_class($rowset) : gettype($rowset);
+            throw new \UnexpectedValueException('Rowset factory returned "' . $actual . '".');
+        }
+
+        return $rowset;
+    }
+
+    private function createRequestLoader(string $className): request
+    {
+        if (!is_callable($this->requestLoaderFactory)) {
+            throw new \RuntimeException('Request loader factory is not configured for model entity.');
+        }
+
+        $request = ($this->requestLoaderFactory)($className, $this, $this->reflectorService());
+        if (!$request instanceof request) {
+            $actual = is_object($request) ? get_class($request) : gettype($request);
+            throw new \UnexpectedValueException('Request loader factory returned "' . $actual . '".');
+        }
+
+        return $request;
+    }
+
     // ======== The magic methods ======== \\
 
     /**
@@ -124,35 +320,35 @@ abstract class entity
      *
      * @param mixed $value Value that should be applied or transformed.
      *
-     * @throws fatalException
+     * @throws \fan\project\exception\model\entity\fatal
      */
     public function __set(string $key, mixed $value): void
     {
-        throw new fatalException($this, 'There is impossible to set property "' . $key . '".');
+        throw $this->createModelEntityFatalException('There is impossible to set property "' . $key . '".');
     }
 
     /**
      * Handles dynamic property reads for this current component.
      *
-     * @throws fatalException
+     * @throws \fan\project\exception\model\entity\fatal
      */
     public function __get(string $key): mixed
     {
         $prop = $this->_getPropertyList();
         if (!isset($prop[$key])) {
-            throw new fatalException($this, 'There is impossible to get property "' . $key . '".');
+            throw $this->createModelEntityFatalException('There is impossible to get property "' . $key . '".');
         }
         return $this->{$prop[$key]}();
     }
 
     // ======== Main Interface methods ======== \\
     // --===-- Get Row --===-- \\
-    public function getNewRow(): \fan\core\base\model\row
+    public function getNewRow(): row
     {
         return $this->_getRowByData();
     }
 
-    public function getRowById(mixed $rowId, bool $idIsEncrypt = false): \fan\core\base\model\row
+    public function getRowById(mixed $rowId, bool $idIsEncrypt = false): row
     {
         if (is_null($rowId)) {
             return $this->_getRowByData();
@@ -161,13 +357,13 @@ abstract class entity
         return $this->getRowByParam($param, 0, null);
     }
 
-    public function getRowByParam(mixed $param = null, int|float $offset = 0, ?string $orderBy = null): \fan\core\base\model\row
+    public function getRowByParam(mixed $param = null, int|float $offset = 0, ?string $orderBy = null): row
     {
         $data =& $this->getDataByParam($param, 1, $offset, $orderBy, true);
         return $this->_getRowByData($data);
     }
 
-    public function getRowOrCreate(?array $loadParam = null, array $saveParam = [], bool $saveNew = true): \fan\core\base\model\row
+    public function getRowOrCreate(?array $loadParam = null, array $saveParam = [], bool $saveNew = true): row
     {
         $row = $this->getRowByParam($loadParam);
         if (!$row->checkIsLoad()) {
@@ -176,37 +372,35 @@ abstract class entity
         return $row;
     }
 
-    public function getRowByKey(string $queryKey, mixed $param = null, int|float $offset = 0, ?string $orderBy = null): \fan\core\base\model\row
+    public function getRowByKey(string $queryKey, mixed $param = null, int|float $offset = 0, ?string $orderBy = null): row
     {
         $designer = $this->getSnippetyDesigner($queryKey)->setOrderPart($orderBy);
         return $this->getRowByQuery($designer, $param, $offset);
     }
 
-    public function getRowByQuery(string|\fan\core\service\entity\designer $query, mixed $param = null, int|float $offset = 0): \fan\core\base\model\row
+    public function getRowByQuery(string|designer $query, mixed $param = null, int|float $offset = 0): row
     {
         $data  =& $this->getDataByQuery($query, $param, 1, $offset, true);
         return $this->_getRowByData($data);
     }
 
     // --===-- Get Rowset --===-- \\
-    public function getRowsetByParam(mixed $param = null, int|float $qtt = -1, int|float $offset = -1, string $orderBy = ''): \fan\core\base\model\rowset
+    public function getRowsetByParam(mixed $param = null, int|float $qtt = -1, int|float $offset = -1, string $orderBy = ''): rowset
     {
-        $class =  $this->getRowsetClassName();
         $data  =& $this->getDataByParam($param, $qtt, $offset, $orderBy);
-        return new $class($this, $data);
+        return $this->createRowset($data);
     }
 
-    public function getRowsetByKey(string $queryKey, mixed $param = null, int|float $qtt = -1, int|float $offset = -1, string $orderBy = ''): \fan\core\base\model\rowset
+    public function getRowsetByKey(string $queryKey, mixed $param = null, int|float $qtt = -1, int|float $offset = -1, string $orderBy = ''): rowset
     {
         $designer = $this->getSnippetyDesigner($queryKey)->setOrderPart($orderBy);
         return $this->getRowsetByQuery($designer, $param, $qtt, $offset);
     }
 
-    public function getRowsetByQuery(string|\fan\core\service\entity\designer $query, mixed $param = null, int|float $qtt = -1, int|float $offset = -1): \fan\core\base\model\rowset
+    public function getRowsetByQuery(string|designer $query, mixed $param = null, int|float $qtt = -1, int|float $offset = -1): rowset
     {
-        $class =  $this->getRowsetClassName();
         $data  =& $this->getDataByQuery($query, $param, $qtt, $offset);
-        return new $class($this, $data);
+        return $this->createRowset($data);
     }
 
     // --===-- Get Count --===-- \\
@@ -222,7 +416,7 @@ abstract class entity
         return $this->getCountByQuery($query, $param);
     }
 
-    public function getCountByQuery(string|\fan\core\service\entity\designer $query, mixed $param = null): mixed
+    public function getCountByQuery(string|designer $query, mixed $param = null): mixed
     {
         list($query, $newParam) = $this->_getSqlAsString($query, $param);
         // ToDo: Take account of Union
@@ -234,7 +428,7 @@ abstract class entity
         $method = $this->config['COUNT_METHOD'];
         if (empty($method)) {
             /* @var $globalConf \fan\core\service\config\row */
-            $globalConf = $this->containerService('config', 'entity')->get('common');
+            $globalConf = $this->configService()->get('common');
             $method = $globalConf->get('DEFAULT_COUNT_METHOD', 'SUBQUERY');
         }
 
@@ -256,7 +450,7 @@ abstract class entity
     }
     // ---- Additional interface methods ---- \\
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\model\entity\fatal
      */
     public function getParamById(mixed $rowId, bool $idIsEncrypt = false): array
     {
@@ -267,7 +461,7 @@ abstract class entity
             } elseif (is_object($rowId) && method_exists($rowId, '__toString')) {
                 $param[$idName] = $rowId->__toString();
             } else {
-                throw new fatalException($this, 'Value of ID for select data from "' . $this->getTableName() . '" must have scalar value.');
+                throw $this->createModelEntityFatalException('Value of ID for select data from "' . $this->getTableName() . '" must have scalar value.');
             }
         } elseif (is_array($rowId) && count($idName) === count($rowId)) {
             sort($idName);
@@ -280,7 +474,7 @@ abstract class entity
                 $param = $rowId;
             }
         } else {
-            throw new fatalException($this, 'Value of ID for select data from "' . $this->getTableName() . '" must be as array.');
+            throw $this->createModelEntityFatalException('Value of ID for select data from "' . $this->getTableName() . '" must be as array.');
         }
         return $param;
     }
@@ -293,9 +487,9 @@ abstract class entity
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\model\entity\fatal
      */
-    public function &getDataByQuery(string|\fan\core\service\entity\designer $query, mixed $param = null, int|float $qtt = -1, int|float $offset = -1, bool $onlyOne = false): array
+    public function &getDataByQuery(string|designer $query, mixed $param = null, int|float $qtt = -1, int|float $offset = -1, bool $onlyOne = false): array
     {
         list($query, $newParam) = $this->_getSqlAsString($query, $param, false);
         $data = $this->getConnection()->getAllLimit($query, $newParam, $qtt, $offset);
@@ -318,7 +512,7 @@ abstract class entity
     {
         return $this->getRequestLoader()->get($queryKey);
     }
-    public function getSnippetyDesigner(string $queryKey): \fan\core\service\entity\designer\snippety
+    public function getSnippetyDesigner(string $queryKey): object
     {
         $designer = $this->getDesigner('snippety');
         /* @var $designer \fan\core\service\entity\designer\snippety */
@@ -336,18 +530,18 @@ abstract class entity
             if (empty($extraKey)) {
                 $extraKey = $this->connectionKey;
             }
-            $connection = $this->containerService('database', is_null($connection) ? null : (string)$connection, $extraKey);
-        } elseif (is_object($connection) && $connection instanceof \fan\core\service\database) {
+            $connection = $this->databaseService(is_null($connection) ? null : (string)$connection, $extraKey);
+        } elseif (is_object($connection)) {
             $connection = $connection;
         } else {
-            throw new fatalException($this, 'Incorrect connection.');
+            throw $this->createModelEntityFatalException('Incorrect connection.');
         }
 
         $this->connection  = $connection;
         $this->description = null;
         return $this;
     }
-    public function getConnection(): \fan\core\service\database
+    public function getConnection(): object
     {
         if (!$this->connection) {
             $this->setConnection();
@@ -393,7 +587,7 @@ abstract class entity
         return empty($this->name) && $showAlter ? '(Anonymous)' . $this->getTableName() : $this->name;
     }
 
-    public function getService(): \fan\core\service\entity
+    public function getService(): object
     {
         return $this->service;
     }
@@ -405,23 +599,23 @@ abstract class entity
         return is_null($key) ? $this->config : $this->config->get($key, $default);
     }
 
-    public function getDesigner(string $type = 'select'): \fan\core\service\entity\designer
+    public function getDesigner(string $type = 'select'): object
     {
         return $this->getService()->getDesigner($this, $type);
     }
 
-    public function getDescription(array $param = []): \fan\core\service\entity\description
+    public function getDescription(array $param = []): object
     {
         if (is_null($this->description)) {
             $this->description = $this->getService()->getDescription($this, array_merge((array)$param, $this->bakParam));
         }
         return $this->description;
     }
-    public function getRequestLoader(array $sql = []): \fan\core\base\model\request
+    public function getRequestLoader(array $sql = []): request
     {
         if (is_null($this->request)) {
             $className = $this->getRequestClassName();
-            $this->request = new $className($this);
+            $this->request = $this->createRequestLoader($className);
         }
         if (!empty($sql)) {
             $this->request->setRequests($sql);
@@ -484,7 +678,7 @@ abstract class entity
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\model\entity\fatal
      */
     protected function _defineTableName(array $param = []): string
     {
@@ -496,7 +690,7 @@ abstract class entity
         if (preg_match('/^(?:.+\\\\)?(\w+)$/', (string)$name, $matches)) {
             return $matches[1];
         }
-        throw new fatalException($this, 'Can\'t define the Table name for "' . get_class($this) . '".');
+        throw $this->createModelEntityFatalException('Can\'t define the Table name for "' . get_class($this) . '".');
     }
 
     protected function _getPropertyList(): array
@@ -513,11 +707,11 @@ abstract class entity
         } else {
             $connectionName = $this->config['CONNECTION'];
             while (empty($connectionName)) {
-                $globalConf = $this->containerService('config', 'entity')->get('common');
+                $globalConf = $this->configService()->get('common');
                 if (isset($globalConf['CONNECTIONS'])) {
                     $prefix = trim($this->getService()->getNsPrefix(), '\\');
                     $len    = strlen($prefix);
-                    $ns     = get_ns_name($this, 2);
+                    $ns     = $this->namespaceName($this, 2);
                     for ($i = 0; $i < 2; $i++) {
                         if (isset($globalConf['CONNECTIONS'][$ns])) {
                             $connectionName = $globalConf['CONNECTIONS'][$ns];
@@ -541,8 +735,64 @@ abstract class entity
         return $this;
     }
 
+    private function namespaceName(object|string $object, int $depth = 1): string
+    {
+        $namespace = ($this->namespaceResolver())($object, $depth);
+        if (!is_string($namespace)) {
+            throw new \UnexpectedValueException('Namespace resolver must return a string.');
+        }
+
+        return $namespace;
+    }
+
+    private static function nativeNamespaceName(object|string $object, int $depth = 1): string
+    {
+        if ($depth < 0 || $depth > 40) {
+            return '';
+        }
+
+        $name = is_object($object) ? get_class($object) : $object;
+        for ($i = 0; $i < $depth; $i++) {
+            $position = strrpos($name, '\\');
+            $name = $position > 0 ? substr($name, 0, $position) : '';
+        }
+
+        return $name;
+    }
+
+    private function reflectionClass(object|string $className): \ReflectionClass
+    {
+        if ($this->reflectionClassFactory === null || !method_exists($this->reflectionClassFactory, 'create')) {
+            throw new \RuntimeException('Reflection class factory must expose create().');
+        }
+
+        $reflection = $this->reflectionClassFactory->create($className);
+        if (!$reflection instanceof \ReflectionClass) {
+            $actual = is_object($reflection) ? get_class($reflection) : gettype($reflection);
+            throw new \UnexpectedValueException('Reflection class factory returned "' . $actual . '".');
+        }
+
+        return $reflection;
+    }
+
+    private function namespaceResolver(): callable
+    {
+        if (!isset($this->namespaceResolver)) {
+            $this->namespaceResolver = $this->defaultNamespaceResolver();
+        }
+
+        return $this->namespaceResolver;
+    }
+
+    private function defaultNamespaceResolver(): \Closure
+    {
+        return \Closure::fromCallable(
+            static fn(object|string $object, int $depth = 1): string => self::nativeNamespaceName($object, $depth)
+        );
+    }
+
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\model\entity\fatal
      */
     protected function _getClassName(string $key): string
     {
@@ -552,7 +802,7 @@ abstract class entity
         } else {
             $prefix = $this->getService()->getNsPrefix();
             if (empty($prefix)) {
-                throw new fatalException($this, 'In config prefix doesn\'t set for "' . $key . '".');
+                throw $this->createModelEntityFatalException('In config prefix doesn\'t set for "' . $key . '".');
             }
 
             $className = $prefix . $name . '\\' . $key;
@@ -561,7 +811,7 @@ abstract class entity
             $className = '\fan\project\base\model\\' . $key;
         }
 
-        $reflection = new \ReflectionClass($className);
+        $reflection = $this->reflectionClass($className);
         do {
             if ($reflection->getName() === 'fan\core\base\model\\' . $key) {
                 return $className;
@@ -569,25 +819,24 @@ abstract class entity
             $reflection = $reflection->getParentClass();
         } while (!empty($reflection));
 
-        throw new fatalException($this, 'Class "' . $className . '" must be instance of "\fan\core\base\model\\' . $key . '".');
+        throw $this->createModelEntityFatalException('Class "' . $className . '" must be instance of "\fan\core\base\model\\' . $key . '".');
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\model\entity\fatal
      */
-    protected function _getSqlAsString(string|\fan\core\service\entity\designer $query, mixed $param): array
+    protected function _getSqlAsString(string|designer $query, mixed $param): array
     {
-        if (is_object($query) && $query instanceof \fan\core\service\entity\designer) {
+        if (is_object($query) && $query instanceof designer) {
             return [$query->assemble($param), $query->getAdjustedParam()];
         } elseif (!is_string($query)) {
             return [$query, $param];
         }
-        throw new fatalException($this, 'Incorrect format of SQL-request.');
+        throw $this->createModelEntityFatalException('Incorrect format of SQL-request.');
     }
 
-    protected function _getRowByData(?array &$data = null): \fan\core\base\model\row
+    protected function _getRowByData(?array &$data = null): row
     {
-        $class = $this->getRowClassName();
-        return empty($data) ? new $class($this) : new $class($this, $data);
+        return empty($data) ? $this->createRow() : $this->createRow($data);
     }
 }

@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 namespace fan\core\block\loader;
-use fan\core\exception\block\fatal as exception_block_fatal;
+
 /**
  * Base class for loader form validation block
  *
@@ -27,12 +27,12 @@ abstract class loader_form_validation extends base
         $data = $this->getData();
         $this->setJson($data);
         if (empty($data['field'])) {
-            throw new exception_block_fatal($this, 'Method name for check field isn\'t set.');
+            $this->_makeBlockException('Method name for check field isn\'t set.', 'fatal');
         } elseif (method_exists($this, 'check_' . $data['field'])) {
             $ret = $this->{'check_' . $data['field']}($data['value'] ?? null, $this->getMeta(['err_message', $data['field']], ''));
             $this->setText(is_null($ret) ? 'ok' : $ret);
         } else {
-            throw new exception_block_fatal($this, 'Method "check_' .  $data['field'] . '" isn\'t found.');
+            $this->_makeBlockException('Method "check_' .  $data['field'] . '" isn\'t found.', 'fatal');
         }
     }
 

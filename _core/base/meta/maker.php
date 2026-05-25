@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 namespace fan\core\base\meta;
+use fan\core\base\meta\row;
+use fan\core\block\base;
+
 /**
  * Meta-Data Maker
  *
@@ -20,11 +23,7 @@ namespace fan\core\base\meta;
  */
 class maker implements \IteratorAggregate
 {
-    /**
-     * Cache of blocks of Meta-data
-     * @var array
-     */
-    protected static array $metaCache = [];
+    protected maker_state $state;
 
     /**
      * @var \fan\core\block\base Linked block
@@ -93,12 +92,73 @@ class maker implements \IteratorAggregate
      */
     protected ?object $rootRow = null;
 
-    public function __construct(\fan\core\block\base $block)
+    /**
+     * @var callable|null
+     */
+    private $phpArrayFileLoader = null;
+
+    /**
+     * @var callable|null
+     */
+    private $rowFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $delayedFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $blockExceptionFactory = null;
+
+    private ?object $fileStorage = null;
+
+    private \Closure $recursiveMerger;
+
+    private \Closure $arrayAdducer;
+
+    private \Closure $classNameResolver;
+
+    public function __construct(
+        base $block,
+        object $reflector,
+        ?maker_state $state = null,
+        ?callable $phpArrayFileLoader = null,
+        ?callable $rowFactory = null,
+        ?callable $delayedFactory = null,
+        ?callable $blockExceptionFactory = null,
+        ?object $fileStorage = null,
+        ?callable $recursiveMerger = null,
+        ?callable $arrayAdducer = null,
+        ?callable $classNameResolver = null
+    )
     {
         $this->block     = $block;
         $this->blockName = $block->getBlockName();
+        $this->state     = $state ?? throw new \RuntimeException('Meta maker state is not configured for meta maker.');
+        $this->phpArrayFileLoader = $phpArrayFileLoader;
+        $this->rowFactory = $rowFactory;
+        $this->delayedFactory = $delayedFactory;
+        $this->blockExceptionFactory = $blockExceptionFactory;
+        $this->fileStorage = $fileStorage;
+        $this->recursiveMerger = \Closure::fromCallable(
+            $recursiveMerger ?? static function (mixed ...$values): mixed {
+                throw new \RuntimeException('Recursive merger is not configured for meta maker.');
+            }
+        );
+        $this->arrayAdducer = \Closure::fromCallable(
+            $arrayAdducer ?? static function (mixed $value): array {
+                throw new \RuntimeException('Array adducer is not configured for meta maker.');
+            }
+        );
+        $this->classNameResolver = \Closure::fromCallable(
+            $classNameResolver ?? static function (object $object): string {
+                throw new \RuntimeException('Class name resolver is not configured for meta maker.');
+            }
+        );
 
-        $paths = \fan\project\service\reflector::instance()->getParentPaths($this->block);
+        $paths = $reflector->getParentPaths($this->block);
         $this->_defineBlockMeta($paths);
         $this->_defineFolderMeta($paths);
     }
@@ -123,7 +183,7 @@ class maker implements \IteratorAggregate
 
     public function __call(string $method, array $arguments = []): mixed
     {
-        return call_user_func_array([$this->block, $method], $arguments);
+        return $this->block->{$method}(...$arguments);
     }
 
     final public function getIterator(): \Traversable {
@@ -163,7 +223,7 @@ class maker implements \IteratorAggregate
         return $data;
     }
 
-    public function assembleBlock(): \fan\core\base\meta\row
+    public function assembleBlock(): row
     {
         $data = [];
         foreach ($this->getOrder('current') as $v) {
@@ -172,7 +232,7 @@ class maker implements \IteratorAggregate
                 $data = $this->_mergeMeta($data, $this->source[$v[0]][$key], $v[0]);
             }
         }
-        $this->rootRow = new \fan\project\base\meta\row($this, $data);
+        $this->rootRow = $this->createRow($data);
         return $this->rootRow;
     }
 
@@ -208,7 +268,7 @@ class maker implements \IteratorAggregate
         $block     = $this->getSource('block');
         unset($block['own']);
         $container = ['common' => $this->getSource(['container', 'common'])];
-        return array_merge_recursive_alt($folder, $parent, $block, $container);
+        return ($this->recursiveMerger())($folder, $parent, $block, $container);
     }
 
     public function getOrder(string $key): array
@@ -216,7 +276,7 @@ class maker implements \IteratorAggregate
         if (isset($this->order[$key])) {
             return $this->order[$key];
         }
-        throw new \OutOfBoundsException('Get Undefined Order of Meta-data "' . $key . '" in block "' . $this->blockName . '", class "' . get_class_alt($this->block) . '".');
+        throw new \OutOfBoundsException('Get Undefined Order of Meta-data "' . $key . '" in block "' . $this->blockName . '", class "' . $this->className($this->block) . '".');
     }
 
     /**
@@ -264,9 +324,9 @@ class maker implements \IteratorAggregate
     {
         $pathParts  = pathinfo(array_shift($paths));
         $folderPath = $pathParts['dirname'] . '/_folder.meta.php';
-        if (file_exists($folderPath)) {
+        if ($this->fileStorage()->exists($folderPath)) {
             $this->_setSource('folder', $this->readMetaSource(
-                \fan\project\adapter\php_array_file::load($folderPath, []),
+                $this->loadPhpArrayFile($folderPath, []),
                 $folderPath
             ));
         }
@@ -274,13 +334,16 @@ class maker implements \IteratorAggregate
 
     protected function _loadBlockSource(string $class, string $path): array
     {
-        if (!array_key_exists($class, self::$metaCache)) {
+        if (!$this->state->hasBlockSource($class)) {
             $metaPath = substr($path, 0, -3) . 'meta.php';
-            self::$metaCache[$class] = file_exists($metaPath) ?
-                $this->readMetaSource(\fan\project\adapter\php_array_file::load($metaPath), $metaPath) :
-                [];
+            $this->state->setBlockSource(
+                $class,
+                $this->fileStorage()->exists($metaPath) ?
+                    $this->readMetaSource($this->loadPhpArrayFile($metaPath), $metaPath) :
+                    []
+            );
         }
-        return self::$metaCache[$class];
+        return $this->state->getBlockSource($class);
     }
 
     protected function readMetaSource(mixed $data, string $metaPath): array
@@ -300,7 +363,7 @@ class maker implements \IteratorAggregate
     protected function _setSource(string $type, array $data): static
     {
         if (!key_exists($type, $this->source)) {
-            throw new \fan\project\exception\block\fatal($this->block, 'Unknown type "' . $type . '" of source Meta-data');
+            throw $this->createBlockFatalException('Unknown type "' . $type . '" of source Meta-data');
         }
         $this->source[$type] = $data;
         return $this;
@@ -326,10 +389,119 @@ class maker implements \IteratorAggregate
         if (is_null($arguments)) {
             $arguments = [];
         } elseif (!is_array($arguments)) {
-            $arguments = adduceToArray($arguments);
+            $arguments = ($this->arrayAdducer())($arguments);
         }
-        $ret = $delayed ? new \fan\project\base\meta\delayed($obj, $method, $arguments) : call_user_func_array([$obj, $method], $arguments);
+        $callable = [$obj, $method];
+        $ret = $delayed ? $this->createDelayedMeta($obj, $method, $arguments) : $callable(...$arguments);
         return $ret;
+    }
+
+    private function loadPhpArrayFile(string $path, mixed $default = null): mixed
+    {
+        if (!is_callable($this->phpArrayFileLoader)) {
+            throw new \RuntimeException('PHP array file loader is not configured for meta maker.');
+        }
+
+        return ($this->phpArrayFileLoader)($path, $default);
+    }
+
+    private function fileStorage(): object
+    {
+        return $this->fileStorage ?? throw new \RuntimeException('Meta file storage is not configured for meta maker.');
+    }
+
+    private function recursiveMerger(): callable
+    {
+        if (!isset($this->recursiveMerger)) {
+            $this->recursiveMerger = \Closure::fromCallable(
+                static function (mixed ...$values): mixed {
+                    throw new \RuntimeException('Recursive merger is not configured for meta maker.');
+                }
+            );
+        }
+
+        return $this->recursiveMerger;
+    }
+
+    private function arrayAdducer(): callable
+    {
+        if (!isset($this->arrayAdducer)) {
+            $this->arrayAdducer = \Closure::fromCallable(
+                static function (mixed $value): array {
+                    throw new \RuntimeException('Array adducer is not configured for meta maker.');
+                }
+            );
+        }
+
+        return $this->arrayAdducer;
+    }
+
+    private function className(object $object): string
+    {
+        if (!isset($this->classNameResolver)) {
+            $this->classNameResolver = \Closure::fromCallable(
+                static function (object $object): string {
+                    throw new \RuntimeException('Class name resolver is not configured for meta maker.');
+                }
+            );
+        }
+
+        return (string)($this->classNameResolver)($object);
+    }
+
+    public function getRowFactory(): callable
+    {
+        if (!is_callable($this->rowFactory)) {
+            throw new \RuntimeException('Meta row factory is not configured for meta maker.');
+        }
+
+        return $this->rowFactory;
+    }
+
+    private function createRow(array $data, ?row $parent = null, int|string|null $keyName = null): row
+    {
+        $row = ($this->getRowFactory())($this, $data, $parent, $keyName);
+        if (!$row instanceof row) {
+            $actual = is_object($row) ? get_class($row) : gettype($row);
+            throw new \UnexpectedValueException('Meta row factory returned "' . $actual . '".');
+        }
+
+        return $row;
+    }
+
+    private function createDelayedMeta(object|string $object, string $method, mixed $arguments): delayed
+    {
+        if (!is_callable($this->delayedFactory)) {
+            throw new \RuntimeException('Delayed meta factory is not configured for meta maker.');
+        }
+
+        $delayedMeta = ($this->delayedFactory)($object, $method, $arguments);
+        if (!$delayedMeta instanceof delayed) {
+            $actual = is_object($delayedMeta) ? get_class($delayedMeta) : gettype($delayedMeta);
+            throw new \UnexpectedValueException('Delayed meta factory returned "' . $actual . '".');
+        }
+
+        return $delayedMeta;
+    }
+
+    private function createBlockFatalException(string $message, int $code = E_USER_ERROR, ?\Exception $previous = null): \Throwable
+    {
+        if (!is_callable($this->blockExceptionFactory)) {
+            throw new \RuntimeException('Block exception factory is not configured for meta maker.');
+        }
+
+        $exception = ($this->blockExceptionFactory)(
+            '\fan\project\exception\block\fatal',
+            $this->block,
+            $message,
+            $code,
+            $previous
+        );
+        if (!$exception instanceof \Throwable) {
+            throw new \UnexpectedValueException('Block exception factory must return a throwable object.');
+        }
+
+        return $exception;
     }
 
 }

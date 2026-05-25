@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
+use fan\core\base\service\single;
+
 /**
  * Description of reflector
  *
@@ -17,10 +19,23 @@ namespace fan\core\service;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class reflector extends \fan\core\base\service\single
+class reflector extends single
 {
     private array $reflection = [];
     private array $parentChain = [];
+    private object $reflectionClassFactory;
+
+    public function __construct(
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?object $reflectionClassFactory = null
+    ) {
+        if ($reflectionClassFactory !== null) {
+            $this->reflectionClassFactory = $reflectionClassFactory;
+        }
+        parent::__construct(true, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
+    }
 
     public function setReflection(mixed &$className): static
     {
@@ -33,7 +48,7 @@ class reflector extends \fan\core\base\service\single
         }
 
         $parentChain = [];
-        $reflection  = new \ReflectionClass($className);
+        $reflection  = $this->reflectionClass($className);
         while (!empty($reflection)) {
             $tmpName = $reflection->getName();
             if (isset($this->reflection[$tmpName])) {
@@ -77,5 +92,19 @@ class reflector extends \fan\core\base\service\single
             $paths[$k] = $v->getFileName();
         }
         return $paths;
+    }
+
+    private function reflectionClass(object|string $className): \ReflectionClass
+    {
+        if (!isset($this->reflectionClassFactory) || !method_exists($this->reflectionClassFactory, 'create')) {
+            throw new \RuntimeException('Reflection class factory must expose create().');
+        }
+
+        $reflection = $this->reflectionClassFactory->create($className);
+        if (!$reflection instanceof \ReflectionClass) {
+            throw new \UnexpectedValueException('Reflection class factory must return a ReflectionClass.');
+        }
+
+        return $reflection;
     }
 }

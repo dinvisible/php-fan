@@ -3946,19 +3946,6 @@
 - Сигнатура: `function reset(): void`
 - Описание: Удаляет или сбрасывает состояние `состояние` для этого метода класса `fan\core\di\container_registry`.
 
-### `fan\core\di\container_registry::createDefaultContainer`
-
-- Расположение: `_core/di/container_registry.php:56`
-- Сигнатура: `function createDefaultContainer(): container`
-- Описание: Создает, разбирает, форматирует или конвертирует данные `default container` для этого метода класса `fan\core\di\container_registry`.
-
-### `fan\core\di\container_registry::callServiceInstance`
-
-- Расположение: `_core/di/container_registry.php:79`
-- Сигнатура: `function callServiceInstance(string $serviceName, array $arguments): mixed`
-- Описание: Выполняет логику `call service instance` и возвращает вычисленный результат.
-- Побочные эффекты: может выбрасывать исключения
-
 ## `_core/error/demonstrator.php`
 
 ### `fan\core\error\demonstrator::__construct`

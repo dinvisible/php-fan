@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\exception\block;
+use fan\core\block\base;
+
 /**
  * Exception a block fatal error
  *
@@ -20,13 +22,22 @@ namespace fan\core\exception\block;
  */
 class fatal extends local
 {
-    public function __construct(\fan\core\block\base $block, string $logErrMsg, int $code = E_USER_ERROR, ?\Throwable $previous = null)
+    public function __construct(
+        base $block,
+        string $logErrMsg,
+        int $code = E_USER_ERROR,
+        ?\Throwable $previous = null,
+        ?object $exceptionDatabaseConnections = null,
+        ?object $exceptionRuntimeLogger = null,
+        ?object $exceptionRequestService = null,
+        ?object $exceptionErrorService = null,
+        ?object $exceptionHeaderWriter = null
+    )
     {
-        if (!headers_sent()) {
-            header('HTTP/1.1 500 Internal Server Error');
-        }
+        $this->setExceptionDependencies($exceptionDatabaseConnections, $exceptionRuntimeLogger, $exceptionRequestService, $exceptionErrorService, $exceptionHeaderWriter);
+        $this->sendInternalServerErrorHeader();
 
-        parent::__construct($block, $logErrMsg, $code, $previous);
+        parent::__construct($block, $logErrMsg, $code, $previous, $exceptionDatabaseConnections, $exceptionRuntimeLogger, $exceptionRequestService, $exceptionErrorService, $exceptionHeaderWriter);
 
         $this->_logByService($logErrMsg, 'Block\'s exception (CLASS: ' . get_class($block) . ').');
     }

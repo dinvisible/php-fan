@@ -36,7 +36,6 @@ return [
         // quantifier params
         'quantifier' => [
             'allow'  => false,
-            'form'   => 'form/pager_quantifier',
             'label'  => 'Elements per page',
             'values' => '20,30,50,100', // comma separated values
         ],

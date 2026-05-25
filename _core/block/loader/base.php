@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\block\loader;
+use fan\core\block\base as block_base;
+
 /**
  * Base abstract loader block
  *
@@ -19,7 +21,7 @@ namespace fan\core\block\loader;
  * @version of file: 05.02.001 (10.03.2014)
  * @abstract
  */
-abstract class base extends \fan\core\block\base
+abstract class base extends block_base
 {
     private array $getData = [];
     private bool $isGetData = false;
@@ -29,7 +31,7 @@ abstract class base extends \fan\core\block\base
      */
     private ?object $loader = null;
 
-    public function finishConstruct(?\fan\core\block\base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
+    public function finishConstruct(?block_base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
     {
         parent::finishConstruct($container, $containerMeta, $allowSetEmbedded);
 
@@ -60,16 +62,16 @@ abstract class base extends \fan\core\block\base
     public function getDataLoader(): object
     {
         if (!$this->loader) {
-            $this->loader = new \fan\project\adapter\data_loader();
+            $this->loader = $this->dataLoaderService();
         }
         return $this->loader;
     }
 
     public function setJson(mixed $json, bool $merge = true): static
     {
-        $json = adduceToArray($json);
+        $json = ($this->arrayAdducer())($json);
         if ($merge) {
-            $json = array_merge_recursive_alt(adduceToArray($this->view->json), $json);
+            $json = ($this->recursiveMerger())(($this->arrayAdducer())($this->view->json), $json);
         }
         $this->view->json = $json;
         return $this;

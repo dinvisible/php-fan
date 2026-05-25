@@ -20,8 +20,6 @@ use fan\core\base\expression_evaluator;
  */
 class definer
 {
-    use \fan\core\di\container_aware_trait;
-
     /**
      * Regexp for parse key string of rule
      */
@@ -46,9 +44,16 @@ class definer
      */
     protected ?object $request = null;
 
-    public function __construct(array $config)
+    /**
+     * @var \fan\core\service\tab|null
+     */
+    protected ?object $tab = null;
+
+    public function __construct(array $config, ?object $request = null, ?object $tab = null)
     {
         $this->config = $config;
+        $this->request = $request;
+        $this->tab = $tab;
         if (empty($this->config['default_format'])) {
             $this->config['default_format'] = 'html';
         }
@@ -67,16 +72,14 @@ class definer
                 }
             }
         }
-        $tab = $this->containerService('tab');
-        /* @var $tab \fan\core\service\tab */
-        return $tab->getTabMeta('default_view_format', $this->config['default_format']);
+        return $this->getTab()->getTabMeta('default_view_format', $this->config['default_format']);
     }
     // ======== Private/Protected methods ======== \\
     public function _getConditions(): array
     {
         if (is_null($this->conditions)) {
             if (is_null($this->request)) {
-                $this->request = $this->containerService('request');
+                throw new \RuntimeException('Request service is not configured for view definer.');
             }
             $this->conditions = [];
             $matches    = null;
@@ -134,6 +137,15 @@ class definer
             }
         }
         return $this->conditions;
+    }
+
+    protected function getTab(): object
+    {
+        if (is_object($this->tab)) {
+            return $this->tab;
+        }
+
+        throw new \RuntimeException('Tab service is not configured for view definer.');
     }
 
     protected function _getConditionValue(mixed $val, $v3, $v2): mixed

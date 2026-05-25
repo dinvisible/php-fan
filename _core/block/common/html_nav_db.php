@@ -28,13 +28,7 @@ abstract class html_nav_db extends html_nav
 
     protected function _getNav(mixed $groupKey = null): array
     {
-        /*
-        $rowset = ge('menu_element')->getRowsetByKey('get_menu_list', [
-            'group_key'        => $groupKey ? $groupKey : $this->getMeta('group_key'),
-            'id_site_language' => service('language')->getIdSiteLanguage(),
-        ]);
-         */
-        $rowset = $this->containerService('entity')->getMenuElement($groupKey);
+        $rowset = $this->entityService()->getMenuElement($groupKey);
 
         $ret  = [];
         $chld = [];
@@ -42,7 +36,7 @@ abstract class html_nav_db extends html_nav
         foreach ($rowset as $e) {
             $id = $e->getId();
             $this->navElements[$id] = $e;
-            if (role($e->get___url_role())) {
+            if ($this->roleService()->check($e->get___url_role())) {
                 $v = $e->getFields();
                 $this->srcElements[$id] = [
                     'order_key'     => $v['order_key'],
@@ -70,10 +64,7 @@ abstract class html_nav_db extends html_nav
 
     protected function _getNavName(string $key = 'group_key'): string|false
     {
-        /*
-        $menuGroup = se('entity_menu_group')->loadByParam(['group_key' => $this->getMeta($key)]);
-         */
-        $menuGroup = $this->containerService('entity')->getMenuGroup($key);
+        $menuGroup = $this->entityService()->getMenuGroup($key);
         if ($menuGroup->checkIsLoad()) {
             return $menuGroup->group_name;
         }

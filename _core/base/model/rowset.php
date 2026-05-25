@@ -2,7 +2,10 @@
 declare(strict_types=1);
 
 namespace fan\core\base\model;
-use fan\project\exception\model\entity\fatal as fatalException;
+use fan\core\base\data;
+use fan\core\base\model\entity;
+use fan\core\base\model\row;
+
 /**
  * Description of rowset
  *
@@ -18,7 +21,7 @@ use fan\project\exception\model\entity\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class rowset extends \fan\core\base\data
+class rowset extends data
 {
     /**
      * Class of DB-table
@@ -26,13 +29,25 @@ class rowset extends \fan\core\base\data
      */
     protected ?object $entity = null;
 
-    public function __construct(\fan\core\base\model\entity $entity, array &$data)
+    public function __construct(
+        entity $entity,
+        array &$data,
+        callable $rowFactory,
+        ?callable $snapshotEncoder = null,
+        ?callable $snapshotDecoder = null
+    )
     {
+        parent::__construct(null, null, null, null, null, $snapshotEncoder, $snapshotDecoder);
         $this->entity = $entity;
 
         $rowClass = $entity->getRowClassName();
         foreach ($data as $k => &$v) {
-            $this->set($k, new $rowClass($entity, $v, $this));
+            $row = $rowFactory($rowClass, $entity, $v, $this);
+            if (!$row instanceof row) {
+                $actual = is_object($row) ? get_class($row) : gettype($row);
+                throw new \UnexpectedValueException('Row factory returned "' . $actual . '".');
+            }
+            $this->set($k, $row);
         }
 
         $this->_setSetter($this);
@@ -53,13 +68,10 @@ class rowset extends \fan\core\base\data
         return $ret;
     }
 
-    /**
-     * @throws fatalException
-     */
     public function getRowsById(): array
     {
         if (!$this->_isScalarId()) {
-            throw new fatalException($this->getEntity(), 'Method "getRowsById" allowed only for Scalar Id!');
+            throw $this->createRowsetFatalException('Method "getRowsById" allowed only for Scalar Id!');
         }
         $ret = [];
         foreach ($this->data as $v) {
@@ -68,13 +80,10 @@ class rowset extends \fan\core\base\data
         return $ret;
     }
 
-    /**
-     * @throws fatalException
-     */
     public function getArrayAssoc(string|array $fields = [], bool $excludeId = true, string|int|float|null $keyPrefix = null): array
     {
         if (!$this->_isScalarId()) {
-            throw new fatalException($this->getEntity(), 'Method "getArrayAssoc" allowed only for Scalar Id!');
+            throw $this->createRowsetFatalException('Method "getArrayAssoc" allowed only for Scalar Id!');
         }
         if (is_string($fields)) {
             if ($fields === '*') {
@@ -131,7 +140,7 @@ class rowset extends \fan\core\base\data
         return $ret;
     }
 
-    public function getEntity(): \fan\core\base\model\entity
+    public function getEntity(): entity
     {
         return $this->entity;
     }
@@ -143,10 +152,21 @@ class rowset extends \fan\core\base\data
         return !is_array($this->getEntity()->description->getPrimeryKey());
     }
 
+    private function createRowsetFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        $exception = $this->getEntity()->createRowsetFatalException($message, $code, $previous);
+        if (!$exception instanceof \Throwable) {
+            $actual = is_object($exception) ? get_class($exception) : gettype($exception);
+            throw new \UnexpectedValueException('Model rowset exception factory returned "' . $actual . '".');
+        }
+
+        return $exception;
+    }
+
     // ======== Required Interface methods ======== \\
 
     public function serialize(): string {
-        return \fan\core\adapter\safe_serializer::encodePhpSnapshot($this->__serialize());
+        return ($this->snapshotEncoder())($this->__serialize());
     }
 
     public function __serialize(): array
@@ -158,7 +178,7 @@ class rowset extends \fan\core\base\data
     }
 
     public function unserialize(string $recover): void {
-        $recover = \fan\core\adapter\safe_serializer::decodePhpSnapshot((string)$recover);
+        $recover = ($this->snapshotDecoder())((string)$recover);
         if (!is_array($recover)) {
             throw new \LogicException('A rowset snapshot must decode to an array.');
         }

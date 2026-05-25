@@ -2,6 +2,9 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
+use fan\core\base\service\single;
+use fan\core\service\matcher;
+
 /**
  * Service defines several parameters of locale:
  *  - language
@@ -23,7 +26,7 @@ namespace fan\core\service;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-class locale extends \fan\core\base\service\single
+class locale extends single
 {
     /**
      * List of Available Languages
@@ -69,14 +72,63 @@ class locale extends \fan\core\base\service\single
     protected ?object $session = null;
 
     /**
+     * @var callable|null
+     */
+    private $localeEntityFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $localeTabFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $localeSessionFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $localeRequestFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $localeCookieFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $localeMatcherFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $arrayAdducer = null;
+
+    /**
      * If is locale defined
      * @var boolean
      */
     protected bool $isDefined = false;
 
-    protected function __construct(bool $allowIni = true)
+    public function __construct(
+        bool $allowIni = true,
+        ?callable $entityFactory = null,
+        ?callable $tabFactory = null,
+        ?callable $sessionFactory = null,
+        ?callable $requestFactory = null,
+        ?callable $cookieFactory = null,
+        ?callable $matcherFactory = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?callable $arrayAdducer = null,
+        ?callable $classNameResolver = null
+    )
     {
-        parent::__construct($allowIni);
+        parent::__construct($allowIni, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory, null, null, $classNameResolver);
+        $this->setLocaleDependencies($entityFactory, $tabFactory, $sessionFactory, $requestFactory, $cookieFactory, $matcherFactory, $arrayAdducer);
         $this->_setBasicProp();
 
         $this->_subscribeForService('application', 'setAppName',   [$this, 'onAppChange']);
@@ -87,6 +139,29 @@ class locale extends \fan\core\base\service\single
     // ======== Static methods ======== \\
 
     // ======== Main Interface methods ======== \\
+
+    public function setLocaleDependencies(
+        ?callable $entityFactory = null,
+        ?callable $tabFactory = null,
+        ?callable $sessionFactory = null,
+        ?callable $requestFactory = null,
+        ?callable $cookieFactory = null,
+        ?callable $matcherFactory = null,
+        ?callable $arrayAdducer = null
+    ): static
+    {
+        $this->localeEntityFactory = $entityFactory;
+        $this->localeTabFactory = $tabFactory;
+        $this->localeSessionFactory = $sessionFactory;
+        $this->localeRequestFactory = $requestFactory;
+        $this->localeCookieFactory = $cookieFactory;
+        $this->localeMatcherFactory = $matcherFactory;
+        if ($arrayAdducer !== null) {
+            $this->arrayAdducer = \Closure::fromCallable($arrayAdducer);
+        }
+
+        return $this;
+    }
 
     public function getAvailableLanguages(): array
     {
@@ -113,7 +188,7 @@ class locale extends \fan\core\base\service\single
 
     public function getLanguageId(): mixed
     {
-        $serv = $this->containerService('entity');
+        $serv = $this->localeEntity();
         if (!$serv->getConfig(['delegate', 'getLngByName'], false)) {
             return null;
         }
@@ -217,7 +292,7 @@ class locale extends \fan\core\base\service\single
     public function getSwitcherLinks(?string $url = null, ?string $lng = null): array
     {
         $ret = [];
-        $tab = $this->containerService('tab');
+        $tab = $this->localeTab();
         /* @var $tab \fan\core\service\tab */
         if (empty($url)) {
             $url = $tab->getCurrentURI(false, true, true, true);
@@ -245,7 +320,7 @@ class locale extends \fan\core\base\service\single
         $this->_defineLocale();
     }
 
-    public function onSetNewUri(\fan\core\service\matcher $matcher): void
+    public function onSetNewUri(matcher $matcher): void
     {
         if ($this->isDefined) {
             $language = $this->_getLanguageByMatcher($matcher);
@@ -278,10 +353,10 @@ class locale extends \fan\core\base\service\single
 
     // ======== Private/Protected methods ======== \\
 
-    protected function _getSession(bool $forse = true): ?\fan\core\service\session
+    protected function _getSession(bool $forse = true): ?object
     {
         if (empty($this->session) && (class_exists('\fan\core\service\session', false) || $forse)) {
-            $this->session = $this->containerService('session', 'locale', 'service');
+            $this->session = $this->localeSession('locale', 'service');
         }
         return $this->session;
     }
@@ -298,7 +373,7 @@ class locale extends \fan\core\base\service\single
             $this->availableLng      = $this->_getDefultLanguages($availableLng);
             $this->currentLanguage   = $this->defaultLng;
         } else {
-            $this->availableLng = is_object($availableLng) && method_exists($availableLng, 'toArray') ? $availableLng->toArray() : adduceToArray($availableLng);
+            $this->availableLng = $this->arrayAdducer()($availableLng);
         }
         return $this;
     }
@@ -328,7 +403,7 @@ class locale extends \fan\core\base\service\single
         }
 
         // Define by GET or POST key
-        $req    = $this->containerService('request');
+        $req    = $this->localeRequest();
         $lngKey = $this->getConfig('LANGUAGE_KEY', 'lng');
         if ($this->_setCurrentLanguage($req->get($lngKey, 'GP'), $forse)) {
             return 2;
@@ -376,7 +451,7 @@ class locale extends \fan\core\base\service\single
                     $this->_getSession()->set('current_language', $language);
                 }
 
-                \fan\project\service\cookie::instance('/')->setByTime(
+                $this->localeCookie('/')->setByTime(
                         $this->getConfig('LANGUAGE_KEY', 'lng'),
                         $language,
                         (int)$this->getConfig('COOKIE_TIME', 2592000)
@@ -394,7 +469,7 @@ class locale extends \fan\core\base\service\single
 
     public function _getDefultLanguages(mixed $availableLng): array
     {
-        $availableLng = adduceToArray($availableLng);
+        $availableLng = $this->arrayAdducer()($availableLng);
         $k = $this->defaultLng;
         return isset($availableLng[$k]) ?
                 [$k => $availableLng[$k]] :
@@ -419,13 +494,76 @@ class locale extends \fan\core\base\service\single
         return $this;
     }
 
-    public function _getLanguageByMatcher(?\fan\core\service\matcher $matcher = null): ?string
+    public function _getLanguageByMatcher(?matcher $matcher = null): ?string
     {
         if (empty($matcher)) {
-            $matcher = \fan\project\service\matcher::instance();
+            $matcher = $this->localeMatcher();
         }
         $language = $matcher->getLastItem()->parsed->language;
         return empty($language) ? null : $language;
+    }
+
+    private function localeEntity(): object
+    {
+        if (!is_callable($this->localeEntityFactory)) {
+            throw new \RuntimeException('Entity service factory is not configured for locale service.');
+        }
+
+        return ($this->localeEntityFactory)();
+    }
+
+    private function localeTab(): object
+    {
+        if (!is_callable($this->localeTabFactory)) {
+            throw new \RuntimeException('Tab service factory is not configured for locale service.');
+        }
+
+        return ($this->localeTabFactory)();
+    }
+
+    private function localeSession(string $namespace, string $group): object
+    {
+        if (!is_callable($this->localeSessionFactory)) {
+            throw new \RuntimeException('Session service factory is not configured for locale service.');
+        }
+
+        return ($this->localeSessionFactory)($namespace, $group);
+    }
+
+    private function localeRequest(): object
+    {
+        if (!is_callable($this->localeRequestFactory)) {
+            throw new \RuntimeException('Request service factory is not configured for locale service.');
+        }
+
+        return ($this->localeRequestFactory)();
+    }
+
+    private function localeCookie(mixed $path = null, mixed $domain = null): object
+    {
+        if (!is_callable($this->localeCookieFactory)) {
+            throw new \RuntimeException('Cookie service factory is not configured for locale service.');
+        }
+
+        return ($this->localeCookieFactory)($path, $domain);
+    }
+
+    private function localeMatcher(): object
+    {
+        if (!is_callable($this->localeMatcherFactory)) {
+            throw new \RuntimeException('Matcher service factory is not configured for locale service.');
+        }
+
+        return ($this->localeMatcherFactory)();
+    }
+
+    private function arrayAdducer(): callable
+    {
+        if (!is_callable($this->arrayAdducer)) {
+            throw new \RuntimeException('Array adducer is not configured for locale service.');
+        }
+
+        return $this->arrayAdducer;
     }
 
     // ======== The magic methods ======== \\

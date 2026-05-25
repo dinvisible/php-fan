@@ -1,22 +1,27 @@
 <?php
 
 declare(strict_types=1);
+use FanTest\_core\base\DatabaseConnectionsStub;
+use fan\core\base\transfer\sham;
+use fan\core\base\transfer\transfer_int;
+use PHPUnit\Framework\TestCase;
+
 
 require_once __DIR__ . '/../../mock/_core/base/TransferStubs.php';
 require_once __DIR__ . '/../../../_core/base/transfer.php';
 require_once __DIR__ . '/../../../_core/base/transfer/transfer_int.php';
 require_once __DIR__ . '/../../../_core/base/transfer/sham.php';
 
-class TransferTest extends \PHPUnit\Framework\TestCase
+class TransferTest extends TestCase
 {
     protected function setUp(): void
     {
-        \fan\project\service\database::reset();
+        DatabaseConnectionsStub::reset();
     }
 
     public function testInternalTransferStoresTypeUriQueryAndNoticeMessage(): void
     {
-        $transfer = new \fan\core\base\transfer\transfer_int('/next?old=1', '?new=2');
+        $transfer = new transfer_int('/next?old=1', '?new=2');
 
         $this->assertSame('int', $transfer->getTransferType());
         $this->assertSame('/next?old=1', $transfer->getNewUri());
@@ -29,14 +34,14 @@ class TransferTest extends \PHPUnit\Framework\TestCase
 
     public function testRequestFallsBackToUriWhenQueryStringIsEmpty(): void
     {
-        $transfer = new \fan\core\base\transfer\transfer_int('/plain', '');
+        $transfer = new transfer_int('/plain', '');
 
         $this->assertSame('/plain', $transfer->getRequest());
     }
 
     public function testShamTransferDoesNotShiftCurrentMatcher(): void
     {
-        $transfer = new \fan\core\base\transfer\sham('/same', null);
+        $transfer = new sham('/same', null);
 
         $this->assertSame('sham', $transfer->getTransferType());
         $this->assertFalse($transfer->isShiftCurrent());
@@ -44,8 +49,8 @@ class TransferTest extends \PHPUnit\Framework\TestCase
 
     public function testExplicitDatabaseOperationIsForwardedToDatabaseService(): void
     {
-        new \fan\core\base\transfer\transfer_int('/next', null, 'rollback');
+        new transfer_int('/next', null, 'rollback', new DatabaseConnectionsStub());
 
-        $this->assertSame([['rollback', false]], \fan\project\service\database::$calls);
+        $this->assertSame([['rollback', false]], DatabaseConnectionsStub::$calls);
     }
 }

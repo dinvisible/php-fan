@@ -26,5 +26,35 @@ class arr extends base
      */
     protected string $fileExtention = 'php';
 
-    //put your code here
+    /**
+     * @var callable|null
+     */
+    private $phpArrayFileLoader = null;
+
+    public function setPhpArrayFileLoader(callable $phpArrayFileLoader): static
+    {
+        $this->phpArrayFileLoader = $phpArrayFileLoader;
+
+        return $this;
+    }
+
+    protected function _loadSourceData(string $srcFilePath): array
+    {
+        $data = ($this->phpArrayFileLoader())($srcFilePath, []);
+
+        if (!is_array($data)) {
+            return [];
+        }
+
+        return $data;
+    }
+
+    private function phpArrayFileLoader(): callable
+    {
+        if (!is_callable($this->phpArrayFileLoader)) {
+            throw new \RuntimeException('PHP-array file loader is not configured for config arr loader.');
+        }
+
+        return $this->phpArrayFileLoader;
+    }
 }

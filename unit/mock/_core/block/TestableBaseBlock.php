@@ -3,8 +3,12 @@
 declare(strict_types=1);
 
 namespace FanTest\_core\block;
+use fan\core\base\meta\maker;
+use fan\core\base\meta\row;
+use fan\core\block\base;
 
-class TestableBaseBlock extends \fan\core\block\base
+
+class TestableBaseBlock extends base
 {
     public static array $nextMeta = [];
 
@@ -84,7 +88,7 @@ class TestableBaseBlock extends \fan\core\block\base
         $this->_makeDynamicMeta($force);
     }
 
-    public function exposeSetRootBlockParameters(?\fan\core\block\base $root = null, $rootKeys = []): static
+    public function exposeSetRootBlockParameters(?base $root = null, $rootKeys = []): static
     {
         return $this->_setRootBlockParameters($root, $rootKeys);
     }
@@ -169,11 +173,13 @@ class TestableBaseBlock extends \fan\core\block\base
         $property->setValue($this, $view);
     }
 
-    public function setMetaRowForTest(\fan\core\base\meta\row $meta): void
+    public function setMetaRowForTest(row $meta): void
     {
         $property = new \ReflectionProperty('\fan\core\block\base', 'meta');
         $property->setValue($this, $meta);
         $this->createdMetaMaker->meta = $meta;
+        $makerRootRow = new \ReflectionProperty(maker::class, 'rootRow');
+        $makerRootRow->setValue($this->createdMetaMaker, $meta);
     }
 }
 

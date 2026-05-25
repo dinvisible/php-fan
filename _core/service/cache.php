@@ -2,8 +2,11 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\project\exception\service\fatal as fatalException;
 use fan\project\exception\error500 as error500;
+use fan\core\base\service\multi;
+use fan\core\service\cache\base;
+use fan\core\service\cache\memcache;
+
 /**
  * Cache service
  *
@@ -19,18 +22,12 @@ use fan\project\exception\error500 as error500;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-class cache extends \fan\core\base\service\multi
+class cache extends multi
 {
     /**
      * Type of cache for config
      */
     public const CONFIG_TYPE = 'config';
-
-    /**
-     * Service's Instances
-     * @var \fan\core\service\cache[]
-     */
-    private static array $instances = [];
 
     /**
      * Current cached data
@@ -50,62 +47,76 @@ class cache extends \fan\core\base\service\multi
      */
     protected ?array $configCache = null;
 
-    protected function __construct(string $type)
+    private ?object $runtime = null;
+
+    private \Closure $errorFactory;
+
+    private ?object $cacheState = null;
+
+    private ?object $memcacheState = null;
+
+    private mixed $cacheEngineFactory = null;
+
+    private ?object $sourceFileMetadata = null;
+
+    private \Closure $configCacheFatalExceptionFactory;
+
+    public function __construct(
+        string $type,
+        ?object $runtime = null,
+        ?callable $errorFactory = null,
+        ?object $cacheState = null,
+        ?object $memcacheState = null,
+        ?callable $cacheEngineFactory = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?object $sourceFileMetadata = null,
+        ?callable $configCacheFatalExceptionFactory = null
+    )
     {
+        $this->runtime = $runtime;
+        $this->errorFactory = \Closure::fromCallable(
+            $errorFactory ?? static function (): object {
+                throw new \RuntimeException('Error service factory is not configured for cache service.');
+            }
+        );
+        $this->cacheState = $cacheState;
+        $this->memcacheState = $memcacheState;
+        $this->cacheEngineFactory = $cacheEngineFactory;
+        $this->sourceFileMetadata = $sourceFileMetadata;
+        $this->configCacheFatalExceptionFactory = \Closure::fromCallable(
+            $configCacheFatalExceptionFactory ?? static function (
+                string $message,
+                int $code = E_USER_ERROR,
+                ?\Throwable $previous = null
+            ): \Throwable {
+                throw new \RuntimeException('Config cache fatal exception factory is not configured for cache service.');
+            }
+        );
+        $state = $this->state();
         $type = (string)$type;
         if ($type === self::CONFIG_TYPE) {
-            $this->configCache = \bootstrap::getConfigCache();
+            $this->configCache = $this->runtime()->getConfigCache();
             if (empty($this->configCache)) {
-                throw new \Exception('Config Cache in bootstrap isn\'t defined.', E_USER_ERROR);
+                throw $this->createConfigCacheFatalException('Config Cache in bootstrap isn\'t defined.');
             }
         } else {
-            parent::__construct(empty(self::$instances));
+            parent::__construct(!$state->hasInstances(), $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
         }
-        if (!isset(self::$instances[$type])) {
-            self::$instances[$type] = $this;
+        if ($state->getInstance($type) === null) {
+            $state->setInstance($type, $this);
         }
         $this->type = $type;
     }
 
-    // ======== Static methods ======== \\
-    /**
-     * @throws error500
-     */
-    public static function configInstance(): ?static
+    private function runtime(): object
     {
-        try {
-            if (!empty(self::$instances)) {
-                throw new error500('It\'s inpossible to get config-Instance after make another Instances.', E_USER_ERROR);
-            }
-            $configCache = new self(self::CONFIG_TYPE);
-            $configCache->get('service');
-        } catch (\Exception $exc) {
-            \bootstrap::logError($exc->getMessage());
-            return null;
+        if ($this->runtime !== null) {
+            return $this->runtime;
         }
-        return self::$instances[self::CONFIG_TYPE];
-    }
 
-    /**
-     * @throws fatalException
-     */
-    public static function instance(mixed $type = null): static
-    {
-        if (is_null($type)) {
-            $config = self::staticContainerService('config');
-            $type   = $config->get('cache')->get('DEFAULT_TYPE');
-            if (empty($type)) {
-                throw new fatalException($config, 'Default CACHE-type doesn\'t set in config-file.');
-            }
-        }
-        $type = (string)$type;
-        if ($type === self::CONFIG_TYPE) {
-            throw new error500('It\'s inpossible to get config-Instance by usual way.', E_USER_ERROR);
-        }
-        if (!isset(self::$instances[$type])) {
-            new self($type);
-        }
-        return self::$instances[$type];
+        throw new \RuntimeException('Bootstrap runtime service is not configured for cache service.');
     }
 
     // ======== Main Interface methods ======== \\
@@ -130,7 +141,7 @@ class cache extends \fan\core\base\service\multi
     /**
      * @param mixed $callBack Callable invoked to complete the delegated operation.
      *
-     * @throws fatalException
+     * @throws \fan\project\exception\service\fatal
      */
     public function getOrDefine(string $key, mixed $callBack, bool $autoSave = true): mixed
     {
@@ -138,10 +149,10 @@ class cache extends \fan\core\base\service\multi
         if ($engine->isLoaded()) {
             $result = $engine->get();
         } elseif (is_callable($callBack)) {
-            $result = call_user_func($callBack, $key);
+            $result = $callBack($key);
             $engine->set($result, $autoSave);
         } else {
-            throw new fatalException($this, 'Callback for cache is not callable.');
+            throw $this->createServiceFatalException('Callback for cache is not callable.');
         }
         return $result;
     }
@@ -203,7 +214,7 @@ class cache extends \fan\core\base\service\multi
             break;
 
         default:
-            throw new fatalException($this, 'Incorrect check method "' . $method . '", for verify Extra Meta.');
+            throw $this->createServiceFatalException('Incorrect check method "' . $method . '", for verify Extra Meta.');
         }
 
         if (!$result && $allowDelete) {
@@ -230,15 +241,15 @@ class cache extends \fan\core\base\service\multi
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\service\fatal
      */
     public function checkSourceFile(string $key, string $filePath): bool
     {
-        if (!is_file($filePath)) {
-            throw new fatalException($this, 'Incorrect path to  file "' . $filePath . '".');
+        if (!$this->sourceFileMetadata()->isFile($filePath)) {
+            throw $this->createServiceFatalException('Incorrect path to  file "' . $filePath . '".');
         }
-        return  $this->checkExtraMeta($key, 'file_size', filesize($filePath), 'equal', true) &&
-                $this->setStartLimit($key, date ('Y-m-d H:i:s', filemtime($filePath)));
+        return  $this->checkExtraMeta($key, 'file_size', $this->sourceFileMetadata()->size($filePath), 'equal', true) &&
+                $this->setStartLimit($key, date ('Y-m-d H:i:s', (int)$this->sourceFileMetadata()->modifiedTime($filePath)));
     }
 
     public function save(string $key): static
@@ -264,7 +275,16 @@ class cache extends \fan\core\base\service\multi
         return $this->getEngine($key)->isSaved();
     }
 
-    public function getEngine(string $key): \fan\core\service\cache\base
+    public function createCacheFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        if ($this->type === self::CONFIG_TYPE) {
+            return $this->createConfigCacheFatalException($message, $code, $previous);
+        }
+
+        return $this->createServiceFatalException($message, $code, $previous);
+    }
+
+    public function getEngine(string $key): base
     {
         if (!isset($this->engine[$key])) {
             if ($this->type === self::CONFIG_TYPE) {
@@ -272,16 +292,124 @@ class cache extends \fan\core\base\service\multi
             } elseif (($config = $this->getConfig(['TYPE', $this->type]))) {
                 $config = $config->toArray();
             } else {
-                throw new fatalException($this, 'Not found configuration for "' . $this->type . '".');
+                throw $this->createServiceFatalException('Not found configuration for "' . $this->type . '".');
             }
 
             if (empty($config['ENGINE'])) {
-                throw new fatalException($this, 'Cache engine isn\'t defined.');
+                throw $this->type === self::CONFIG_TYPE
+                    ? $this->createConfigCacheFatalException('Cache engine isn\'t defined.')
+                    : $this->createServiceFatalException('Cache engine isn\'t defined.');
             }
-            $class  = $this->_getEngine($config['ENGINE'], false);
-            $this->engine[$key] = new $class($this, $this->type, $key, $config);
+            $class = $this->type === self::CONFIG_TYPE
+                ? $this->getConfigCacheEngineClass((string)$config['ENGINE'])
+                : $this->_getEngine($config['ENGINE'], false);
+            $this->engine[$key] = $this->cacheEngine((string)$class, $key, $config);
         }
         return $this->engine[$key];
+    }
+
+    private function errorLogger(): object
+    {
+        if (!isset($this->errorFactory)) {
+            $this->errorFactory = \Closure::fromCallable(
+                static function (): object {
+                    throw new \RuntimeException('Error service factory is not configured for cache service.');
+                }
+            );
+        }
+
+        $errorLogger = ($this->errorFactory)();
+        if (!is_object($errorLogger)) {
+            throw new \UnexpectedValueException('Error service factory must return an object.');
+        }
+
+        return $errorLogger;
+    }
+
+    private function cacheEngine(string $class, string $key, array $config): object
+    {
+        if (!is_callable($this->cacheEngineFactory)) {
+            throw new \RuntimeException('Cache engine factory is not configured for cache service.');
+        }
+
+        return ($this->cacheEngineFactory)(
+            $class,
+            $this,
+            (string)$this->type,
+            $key,
+            $config,
+            $this->errorLogger(),
+            $this->runtime(),
+            is_a($class, memcache::class, true) ? $this->memcacheState() : null,
+            is_a($class, memcache::class, true) ? $this->configCacheFatalExceptionFactory() : null
+        );
+    }
+
+    private function getConfigCacheEngineClass(string $name): ?string
+    {
+        $class = get_class($this) . '\\' . $name;
+        if (substr($class, 0, 9) === 'fan\core\\') {
+            $class = 'fan\project\\' . substr($class, 9);
+        }
+
+        return $this->runtime()->loadClass($class, true) ? '\\' . $class : null;
+    }
+
+    private function state(): object
+    {
+        if ($this->cacheState === null) {
+            throw new \RuntimeException('Cache state is not configured for cache service.');
+        }
+
+        return $this->cacheState;
+    }
+
+    private function memcacheState(): object
+    {
+        if ($this->memcacheState === null) {
+            throw new \RuntimeException('Memcache state is not configured for cache service.');
+        }
+
+        return $this->memcacheState;
+    }
+
+    private function sourceFileMetadata(): object
+    {
+        if ($this->sourceFileMetadata === null) {
+            throw new \RuntimeException('Source file metadata adapter is not configured for cache service.');
+        }
+
+        return $this->sourceFileMetadata;
+    }
+
+    private function configCacheFatalExceptionFactory(): callable
+    {
+        if (!isset($this->configCacheFatalExceptionFactory)) {
+            $this->configCacheFatalExceptionFactory = \Closure::fromCallable(
+                static function (
+                    string $message,
+                    int $code = E_USER_ERROR,
+                    ?\Throwable $previous = null
+                ): \Throwable {
+                    throw new \RuntimeException('Config cache fatal exception factory is not configured for cache service.');
+                }
+            );
+        }
+
+        return $this->configCacheFatalExceptionFactory;
+    }
+
+    private function createConfigCacheFatalException(
+        string $message,
+        int $code = E_USER_ERROR,
+        ?\Throwable $previous = null
+    ): \Throwable {
+        $exception = ($this->configCacheFatalExceptionFactory())($message, $code, $previous);
+        if (!$exception instanceof \Throwable) {
+            throw new \UnexpectedValueException('Config cache fatal exception factory must return a throwable.');
+        }
+
+        return $exception;
     }
 
 

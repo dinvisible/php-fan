@@ -20,8 +20,6 @@ namespace fan\core\base;
  */
 abstract class timer_program
 {
-    use \fan\core\di\container_aware_trait;
-
     /**
      * @var entity_timer_program Entity of timer
      */

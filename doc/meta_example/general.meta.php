@@ -40,7 +40,7 @@ return [
             'main'     => '{MAIN}',
         ],
         /**
-         * It is recommend to set "carcass" and "root" blocks in tab.ini as default value and in main-content block for other value
+         * It is recommend to set "carcass" and "root" blocks in the tab configuration as default value and in main-content block for other value
          */
         'carcass'       => 'Path to main carcass block',
         'root'          => 'Path to root block',

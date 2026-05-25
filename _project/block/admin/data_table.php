@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\project\block\admin;
+use fan\core\block\admin\data_table as admin_data_table;
+
 /**
  * Admin table data class for loader block
  *
@@ -18,6 +20,6 @@ namespace fan\project\block\admin;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class data_table extends \fan\core\block\admin\data_table
+class data_table extends admin_data_table
 {
 }

@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\project\block;
+use fan\core\block\base as block_base;
+
 /**
  * Base abstract all type of block
  *
@@ -20,6 +22,6 @@ namespace fan\project\block;
  *
  * @abstract
  */
-abstract class base extends \fan\core\block\base
+abstract class base extends block_base
 {
 }

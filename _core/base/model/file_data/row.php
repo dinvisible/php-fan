@@ -3,7 +3,10 @@
 declare(strict_types=1);
 
 namespace fan\core\base\model\file_data;
-use fan\project\exception\model\entity\fatal as fatalException;
+use fan\core\base\model\entity as model_entity;
+use fan\core\base\model\row as model_row;
+use fan\core\base\model\rowset;
+
 /**
  * Row of file data
  *
@@ -19,7 +22,7 @@ use fan\project\exception\model\entity\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-abstract class row extends \fan\core\base\model\row
+abstract class row extends model_row
 {
     /**
      * @var \fan\core\model\access_type\row  entity access type
@@ -35,14 +38,134 @@ abstract class row extends \fan\core\base\model\row
 
     protected ?string $fileNs = null;
 
-    public function __construct(\fan\core\base\model\entity $entity, array &$data = [], ?\fan\core\base\model\rowset $rowset = null)
+    private ?object $runtime = null;
+
+    private mixed $headerFactory = null;
+
+    private mixed $curlFactory = null;
+
+    private mixed $requestFactory = null;
+
+    private mixed $entityFactory = null;
+
+    private mixed $roleFactory = null;
+
+    private mixed $currentUserFactory = null;
+
+    private mixed $phpArrayFileLoader = null;
+
+    private ?object $fileDataStorage = null;
+
+    public function __construct(model_entity $entity, array &$data = [], ?rowset $rowset = null)
     {
         parent::__construct($entity, $data, $rowset);
-        $this->storePath = \bootstrap::parsePath((string)$entity->getConfig('file_store'));
+        $this->setDependenciesFromEntityService($entity);
+        $this->storePath = $this->runtimeService()->parsePath((string)$entity->getConfig('file_store'));
         //$this->saveInfo  = $entity->getConfig('ALLOW_INFO_FILE', false);
         //$this->setAllowLoadInfo(@$_SERVER['HTTP_CACHE_CONTROL'] != 'no-cache' || !$entity->getConfig('ALLOW_CLEAR_INFO', false));
         $this->saveInfo = false;
         $this->loadInfo = false;
+    }
+
+    public function setFileDataRowDependencies(
+        ?object $runtime = null,
+        ?callable $headerFactory = null,
+        ?callable $curlFactory = null,
+        ?callable $requestFactory = null,
+        ?callable $entityFactory = null,
+        ?callable $roleFactory = null,
+        ?callable $currentUserFactory = null,
+        ?callable $phpArrayFileLoader = null,
+        ?object $fileDataStorage = null
+    ): static {
+        if ($runtime !== null) {
+            $this->runtime = $runtime;
+        }
+        if ($headerFactory !== null) {
+            $this->headerFactory = $headerFactory;
+        }
+        if ($curlFactory !== null) {
+            $this->curlFactory = $curlFactory;
+        }
+        if ($requestFactory !== null) {
+            $this->requestFactory = $requestFactory;
+        }
+        if ($entityFactory !== null) {
+            $this->entityFactory = $entityFactory;
+        }
+        if ($roleFactory !== null) {
+            $this->roleFactory = $roleFactory;
+        }
+        if ($currentUserFactory !== null) {
+            $this->currentUserFactory = $currentUserFactory;
+        }
+        if ($phpArrayFileLoader !== null) {
+            $this->phpArrayFileLoader = $phpArrayFileLoader;
+        }
+        if ($fileDataStorage !== null) {
+            $this->fileDataStorage = $fileDataStorage;
+        }
+
+        return $this;
+    }
+
+    protected function setDependenciesFromEntityService(model_entity $entity): void
+    {
+        parent::setDependenciesFromEntityService($entity);
+
+        $service = $entity->getService();
+        if (method_exists($service, 'getFileDataRowDependencies')) {
+            $this->setFileDataRowDependencies(...$service->getFileDataRowDependencies());
+        }
+    }
+
+    private function runtimeService(): object
+    {
+        return $this->runtime ?? throw new \RuntimeException('Bootstrap runtime service is not configured for file data row.');
+    }
+
+    private function headerService(): object
+    {
+        return $this->headerFactory !== null ? ($this->headerFactory)() : throw new \RuntimeException('Header service is not configured for file data row.');
+    }
+
+    private function curlService(string $url): object
+    {
+        return $this->curlFactory !== null ? ($this->curlFactory)($url) : throw new \RuntimeException('Curl service is not configured for file data row.');
+    }
+
+    private function requestService(): object
+    {
+        return $this->requestFactory !== null ? ($this->requestFactory)() : throw new \RuntimeException('Request service is not configured for file data row.');
+    }
+
+    private function entityService(mixed $collection = 0): object
+    {
+        return $this->entityFactory !== null ? ($this->entityFactory)($collection) : throw new \RuntimeException('Entity service is not configured for file data row.');
+    }
+
+    private function roleService(): object
+    {
+        return $this->roleFactory !== null ? ($this->roleFactory)() : throw new \RuntimeException('Role service is not configured for file data row.');
+    }
+
+    private function currentUserService(): mixed
+    {
+        return $this->currentUserFactory !== null ? ($this->currentUserFactory)() : throw new \RuntimeException('Current user service is not configured for file data row.');
+    }
+
+    private function loadPhpArrayFile(string $path, mixed $default = null): mixed
+    {
+        if (!is_callable($this->phpArrayFileLoader)) {
+            throw new \RuntimeException('PHP-array file loader is not configured for file data row.');
+        }
+
+        return ($this->phpArrayFileLoader)($path, $default);
+    }
+
+    private function fileDataStorage(): object
+    {
+        return $this->fileDataStorage ?? throw new \RuntimeException('File-data storage is not configured for file data row.');
     }
 
     protected function getInfoPath(mixed $idVal): string
@@ -52,7 +175,7 @@ abstract class row extends \fan\core\base\model\row
             $path = $this->getMainFilePath($idVal);
             $this->infoPath = empty($path) || !$this->saveInfo ?
                 '' :
-                \bootstrap::parsePath($this->getConfig('INFO_FILE_PATH', '{TEMP}/file_data/file_info/')) . $path . '.php';
+                $this->runtimeService()->parsePath($this->getConfig('INFO_FILE_PATH', '{TEMP}/file_data/file_info/')) . $path . '.php';
         }
          */
         $this->infoPath = '';
@@ -77,13 +200,13 @@ abstract class row extends \fan\core\base\model\row
         $path = $this->getInfoPath($idVal);
 
         // Try to load data from InfoFile
-        if ($this->loadInfo && !empty($path) && file_exists($path)) {
-            $row = \fan\project\adapter\php_array_file::load($path, []);
-            if (file_exists($this->getFilePath($row['id_file_data'], false, $row['src_name']))) {
+        if ($this->loadInfo && !empty($path) && $this->fileDataStorage()->exists($path)) {
+            $row = $this->loadPhpArrayFile($path, []);
+            if ($this->fileDataStorage()->exists((string)$this->getFilePath($row['id_file_data'], false, $row['src_name']))) {
                 $this->setMainProperty($row);
                 return true;
             }
-            unlink($path);
+            $this->fileDataStorage()->delete($path);
         }
 
         // Load data from DB
@@ -95,32 +218,6 @@ abstract class row extends \fan\core\base\model\row
 
     protected function saveInfoFile(mixed $path, mixed $addCond = true): bool
     {
-        /*
-        if (!empty($path)) {
-            $isInfFile = file_exists($path);
-            if ($addCond && $this->saveInfo) {
-                $row = $this->getFields();
-                if (!empty($row) && empty($row['id_file_access_type']) && empty($row['is_deleted']) && !empty($row['is_accessible'])) {
-                    // Check for Save if content is renewed
-                    if ($isInfFile) {
-                        $rowF = include($path);
-                        $comp = array_diff($row, $rowF);
-                        if (empty($comp)) {
-                            return true;
-                        }
-                    }
-                    // Save new file
-                    file_put_contents($path, '<?php
-return ' . var_export($row, true) . ';
-?>');
-                    return true;
-                }
-            }
-            if ($isInfFile) {
-                unlink($path);
-            }
-        }
-         */
         return false;
     }
 
@@ -136,7 +233,7 @@ return ' . var_export($row, true) . ';
         }
         $path = $this->getMainFilePath((int)$id);
         if (!empty($path) && (!$checkAddCondition || $this->get_is_accessible() && !$this->get_is_deleted())) {
-            $path = \bootstrap::parsePath((string)$this->getConfig('file_store') . $path);
+            $path = $this->runtimeService()->parsePath((string)$this->getConfig('file_store') . $path);
             $parts = pathinfo((string)$this->get_src_name($srcName, false));
             $path .= '.' . (empty($parts['extension']) || (string)$parts['extension'] === 'php' ? $this->getConfig('file_ext') : $parts['extension']);
             return $path;
@@ -161,42 +258,42 @@ return ' . var_export($row, true) . ';
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\model\entity\fatal
      */
     public function checkCreatedDir(string $filePath): string
     {
         $dir = dirname($filePath);
 
         // If path is link
-        while (is_link($dir)) {
+        while ($this->fileDataStorage()->isLink($dir)) {
             $lnk = $dir;
             for ($i = 0; $i < 10; $i++) {
-                $lnk = readlink($lnk);
-                if (is_dir($lnk)) {
+                $lnk = $this->fileDataStorage()->readLink($lnk);
+                if (is_string($lnk) && $this->fileDataStorage()->isDirectory($lnk)) {
                     break 2;
                 }
-                if (!is_link($lnk)) {
-                    throw new fatalException($this, 'Incorrect link to file: "' . $filePath . '". This "' . $lnk . '" isn\'t directory.');
+                if (!is_string($lnk) || !$this->fileDataStorage()->isLink($lnk)) {
+                    throw $this->createModelRowFatalException('Incorrect link to file: "' . $filePath . '". This "' . $lnk . '" isn\'t directory.');
                 }
             }
-            throw new fatalException($this, 'To many links to directory for file: "' . $filePath . '".');
+            throw $this->createModelRowFatalException('To many links to directory for file: "' . $filePath . '".');
         }
 
         // If directory already exists
-        if (is_dir($dir) || is_link($dir)) {
-            if (!is_writable($dir)) {
-                throw new fatalException($this, 'Directory: ' . $dir . ' is not writable.');
+        if ($this->fileDataStorage()->isDirectory($dir) || $this->fileDataStorage()->isLink($dir)) {
+            if (!$this->fileDataStorage()->isWritable($dir)) {
+                throw $this->createModelRowFatalException('Directory: ' . $dir . ' is not writable.');
             }
             return $dir;
         }
         // If file exists instead of directory
-        if (is_file($dir)) {
-            throw new fatalException($this, 'It is inpossible create directory: ' . $dir . ', because it is file there.');
+        if ($this->fileDataStorage()->isFile($dir)) {
+            throw $this->createModelRowFatalException('It is inpossible create directory: ' . $dir . ', because it is file there.');
         }
         // Try to create directory if it is not exist
         $this->checkCreatedDir($dir);
-        if (!mkdir($dir)) {
-            throw new fatalException($this, 'Can\'t create directory: ' . $dir . '.');
+        if (!$this->fileDataStorage()->makeDirectory($dir)) {
+            throw $this->createModelRowFatalException('Can\'t create directory: ' . $dir . '.');
         }
         return $dir;
     }
@@ -209,14 +306,14 @@ return ' . var_export($row, true) . ';
     public function prepareOutput(mixed $contentDisposition = null): ?string
     {
         $filePath = $this->getFilePath();
-        if ($filePath && file_exists($filePath)) {
-            $sh = service('headers');
+        if ($filePath && $this->fileDataStorage()->exists($filePath)) {
+            $sh = $this->headerService();
             /* @var $sh \fan\core\service\header */
             $sh->addHeader('contentType', $this->get_mime_type());
             $sh->addHeader('filename',    $this->get_src_name());
             $sh->addHeader('disposition', is_null($contentDisposition) ? $this->getContentDisposition() : $contentDisposition);
-            $sh->addHeader('length',      filesize($filePath));
-            $sh->addHeader('modified',    filemtime($filePath));
+            $sh->addHeader('length',      $this->fileDataStorage()->size($filePath));
+            $sh->addHeader('modified',    $this->fileDataStorage()->modifiedTime($filePath));
             $sh->addHeader('cacheLimit',  0);
             return $filePath;
         }
@@ -228,7 +325,7 @@ return ' . var_export($row, true) . ';
         if (!$this->getFileField('error', $formKey, $addKeys)) {
             $this->deleteCurrentFile();
             $filePath = $this->prepareUpdateFile((string)$this->getFileField('name', $formKey, $addKeys), (string)$this->getFileField('type', $formKey, $addKeys), $fileType, $decription);
-            if (move_uploaded_file((string)$this->getFileField('tmp_name', $formKey, $addKeys), str_replace('\\', '/', (string)$filePath))) {
+            if ($this->fileDataStorage()->moveUploadedFile((string)$this->getFileField('tmp_name', $formKey, $addKeys), str_replace('\\', '/', (string)$filePath))) {
                 return true;
             }
             $this->set_is_deleted(1);
@@ -242,7 +339,7 @@ return ' . var_export($row, true) . ';
      */
     public function setUrlFile(string $url, string $fileType = 'other', string $decription = ''): bool
     {
-        $curl = service('curl', $url);
+        $curl = $this->curlService($url);
         $data = $curl->exec();
         if (!$curl->getError() && $data) {
             $this->deleteCurrentFile();
@@ -257,7 +354,7 @@ return ' . var_export($row, true) . ';
                 }
             }
             $filePath = $this->prepareUpdateFile($name, (string)$curl->getInfo(CURLINFO_CONTENT_TYPE), $fileType, $decription);
-            if (file_put_contents($filePath, $data)) {
+            if ($this->fileDataStorage()->write($filePath, (string)$data)) {
                 return true;
             }
             $this->set_is_deleted(1);
@@ -269,14 +366,14 @@ return ' . var_export($row, true) . ';
     public function setLocalFile(string $srcPath, string $fileType = 'other', string $mimeType = 'application/octet-stream', string $decription = '', ?string $name = null, bool $deleteOrigin = false): bool
     {
         $srcPath = (string)$srcPath;
-        if ($srcPath && file_exists($srcPath)) {
+        if ($srcPath && $this->fileDataStorage()->exists($srcPath)) {
             $filePath = $this->prepareUpdateFile((string)($name ? $name : basename($srcPath)), (string)$mimeType, $fileType, $decription);
-            clearstatcache();
-            if (file_exists($filePath)) {
-                unlink($filePath);
+            $this->fileDataStorage()->clearStatCache();
+            if ($this->fileDataStorage()->exists($filePath)) {
+                $this->fileDataStorage()->delete($filePath);
             }
-            clearstatcache();
-            if ($deleteOrigin ? rename($srcPath, $filePath) : copy($srcPath, $filePath)) {
+            $this->fileDataStorage()->clearStatCache();
+            if ($deleteOrigin ? $this->fileDataStorage()->rename($srcPath, $filePath) : $this->fileDataStorage()->copy($srcPath, $filePath)) {
                 return true;
             }
             $this->set_is_deleted(1);
@@ -306,7 +403,7 @@ return ' . var_export($row, true) . ';
 
     protected function getFileField(string $keyType, string $formKey, array $addKeys = []): mixed
     {
-        $ret = $this->containerService('request')->get($formKey, 'F');
+        $ret = $this->requestService()->get($formKey, 'F');
         $ret = $ret[$keyType];
         foreach ($addKeys as $k) {
             $ret = $ret[$k];
@@ -320,11 +417,11 @@ return ' . var_export($row, true) . ';
             $filePath = $this->getFilePath();
             $infoPath = $this->getInfoPath($this->getId(false));
         }
-        if ($filePath && file_exists($filePath)) {
-            unlink($filePath);
+        if ($filePath && $this->fileDataStorage()->exists($filePath)) {
+            $this->fileDataStorage()->delete($filePath);
         }
-        if ($infoPath && file_exists($infoPath)) {
-            unlink($infoPath);
+        if ($infoPath && $this->fileDataStorage()->exists($infoPath)) {
+            $this->fileDataStorage()->delete($infoPath);
         }
     }
 
@@ -335,9 +432,9 @@ return ' . var_export($row, true) . ';
     public function setAccessType(string $key, bool $save = true): void
     {
         if ($key) {
-            $this->at = ge($this->_getFileNs() . 'file_access_type')->getRowByParam(['access_type' => $key]);
+            $this->at = $this->entityService()->get($this->_getFileNs() . 'file_access_type')->getRowByParam(['access_type' => $key]);
             if (!$this->at->checkIsLoad()) {
-                throw new fatalException($this, 'Incorrect Access Type Key!');
+                throw $this->createModelRowFatalException('Incorrect Access Type Key!');
             }
             $this->set_id_file_access_type($this->at->getId());
         } else {
@@ -365,9 +462,9 @@ return ' . var_export($row, true) . ';
 
     public function removePersonalAccess(int $removeType = 1, ?int $membId = null): void
     {
-        $pa = ge($this->_getFileNs() . 'file_personal_access')->getRowsetByParam(['id_file_data' => $this->getId()]);
+        $pa = $this->entityService()->get($this->_getFileNs() . 'file_personal_access')->getRowsetByParam(['id_file_data' => $this->getId()]);
         if ($removeType > 1 && !$membId) {
-            throw new fatalException($this, 'Member Id for remove access doesn\'t set!');
+            throw $this->createModelRowFatalException('Member Id for remove access doesn\'t set!');
         }
         foreach ($pa as $e) {
             $removeType = (int)$removeType;
@@ -383,7 +480,7 @@ return ' . var_export($row, true) . ';
         $ret = true;
         if ($this->get_id_file_access_type(false, true)) {
             if (!$this->at) {
-                $this->at = gr($this->_getFileNs() . 'file_access_type', $this->get_id_file_access_type());
+                $this->at = $this->entityService()->get($this->_getFileNs() . 'file_access_type')->getRowById($this->get_id_file_access_type());
             }
             $rule = $this->at->get_access_rule();
             if ($rule) { // Check access by rule
@@ -391,12 +488,12 @@ return ' . var_export($row, true) . ';
                 $matches = [];
                 foreach (explode(',', (string)$rule) as $s) {
                     if (preg_match('/^(?:([^\:]+)\:)?(.+)?$/', $s, $matches)) {
-                        if (role($matches[2], $matches[1])) {
+                        if ($this->roleService()->check($matches[2] ?? '')) {
                             $ret = true;
                             break;
                         }
                     } else {
-                        throw new fatalException($this, 'Incorret role rule "' . $rule . '"');
+                        throw $this->createModelRowFatalException('Incorret role rule "' . $rule . '"');
                     }
                 }
             }
@@ -432,13 +529,13 @@ return ' . var_export($row, true) . ';
     protected function getEntityPA(mixed $membId = null): mixed
     {
         if (!$membId) {
-            $member = getUser();
+            $member = $this->currentUserService();
             if (!$member || !$member->checkIsLoad()) {
                 return null;
             }
             $membId = $member->getId();
         }
-        $pa = ge($this->_getFileNs() . 'file_personal_access')->getRowsetByParam([
+        $pa = $this->entityService()->get($this->_getFileNs() . 'file_personal_access')->getRowsetByParam([
             'id_file_data' => $this->getId(),
             'id_member'    => $membId,
         ]);
@@ -468,7 +565,7 @@ return ' . var_export($row, true) . ';
     protected function _getFileNs(): string
     {
         if (is_null($this->fileNs)) {
-            $this->fileNs = (string)$this->containerService('entity')->getFileNsSuffix();
+            $this->fileNs = (string)$this->entityService()->getFileNsSuffix();
         }
         return $this->fileNs;
     }

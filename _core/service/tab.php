@@ -3,7 +3,15 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\adapter\twig_template_service;
+use fan\core\base\data;
+use fan\core\base\service_dependencies;
+use fan\core\base\service\single;
+use fan\core\base\transfer as base_transfer;
+use fan\core\block\base;
+use fan\core\view\parser;
+
+
 /**
  * Class of tab handler
  *
@@ -25,14 +33,12 @@ use fan\project\exception\service\fatal as fatalException;
  * @method string addQuery() addQuery(string $urn, string $key, string $val)
  * @method string getDefaultExtension() getDefaultExtension()
  */
-class tab extends \fan\core\base\service\single
+class tab extends single
 {
     /**
      *  Marker of URN application prefix
      */
     public const URN_AP = '~';
-
-    protected static array $errTransfer = [];
 
     protected array $engine = [];
 
@@ -44,6 +50,82 @@ class tab extends \fan\core\base\service\single
      * @var \fan\core\service\matcher
      */
     protected ?object $matcher = null;
+
+    protected ?object $request = null;
+
+    protected ?object $locale = null;
+
+    protected mixed $sessionFactory = null;
+
+    protected ?object $input = null;
+
+    protected ?object $runtime = null;
+
+    protected mixed $roleFactory = null;
+
+    protected mixed $transferFactory = null;
+
+    protected mixed $configFactory = null;
+
+    protected mixed $headerFactory = null;
+
+    protected mixed $applicationFactory = null;
+
+    protected mixed $debugFactory = null;
+
+    protected mixed $jsonFactory = null;
+
+    protected mixed $dataLoaderFactory = null;
+
+    protected mixed $arrayAdducer = null;
+
+    protected mixed $recursiveMerger = null;
+
+    protected mixed $arrayValueReader = null;
+
+    protected mixed $arrayLikeChecker = null;
+
+    protected mixed $shortClassNameResolver = null;
+
+    protected mixed $templateFactory = null;
+
+    protected mixed $errorFactory = null;
+
+    protected mixed $logFactory = null;
+
+    protected mixed $cookieFactory = null;
+
+    protected mixed $reflectorFactory = null;
+
+    protected mixed $entityFactory = null;
+    protected mixed $formFactory = null;
+    protected mixed $pagerFactory = null;
+    protected mixed $obfuscatorFactory = null;
+    protected mixed $imageModifyFactory = null;
+    protected mixed $databaseFactory = null;
+    protected mixed $userFactory = null;
+    protected mixed $dateFactory = null;
+    protected mixed $phpArrayFileLoader = null;
+    protected mixed $delegateFactory = null;
+    protected mixed $viewParserFactory = null;
+    protected mixed $blockFactory = null;
+    protected mixed $blockExceptionFactory = null;
+    protected mixed $metaMakerFactory = null;
+    protected mixed $metaRowFactory = null;
+    protected mixed $uploadSizeLimitProvider = null;
+    protected mixed $viewDefinerFactory = null;
+    protected mixed $viewRouterFactory = null;
+    protected mixed $viewLoaderStateFactory = null;
+    protected mixed $metaMakerStateFactory = null;
+    protected ?object $aliasFileStorage = null;
+    protected ?object $imageMetadataReader = null;
+    protected ?object $errorLogWriter = null;
+    protected ?object $blockFileStorage = null;
+    protected ?object $metaFileStorage = null;
+    protected ?object $projectToolFileStorage = null;
+    protected ?object $rootHtmlFileStorage = null;
+
+    private ?object $tabState = null;
 
     /**
      * View Type definder
@@ -142,20 +224,143 @@ class tab extends \fan\core\base\service\single
     protected ?bool $allowDebug = null;
 
 
-    protected function __construct(bool $allowIni = true)
+    public function __construct(
+        bool $allowIni = true,
+        ?object $matcher = null,
+        ?object $request = null,
+        ?object $locale = null,
+        ?callable $sessionFactory = null,
+        ?object $input = null,
+        ?object $runtime = null,
+        ?callable $roleFactory = null,
+        ?callable $transferFactory = null,
+        ?callable $configFactory = null,
+        ?callable $headerFactory = null,
+        ?callable $applicationFactory = null,
+        ?callable $debugFactory = null,
+        ?callable $jsonFactory = null,
+        ?callable $dataLoaderFactory = null,
+        ?callable $templateFactory = null,
+        ?callable $errorFactory = null,
+        ?callable $logFactory = null,
+        ?callable $cookieFactory = null,
+        ?callable $reflectorFactory = null,
+        ?callable $entityFactory = null,
+        ?callable $formFactory = null,
+        ?callable $pagerFactory = null,
+        ?callable $obfuscatorFactory = null,
+        ?callable $imageModifyFactory = null,
+        ?callable $databaseFactory = null,
+        ?callable $userFactory = null,
+        ?callable $dateFactory = null,
+        ?object $tabState = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?callable $phpArrayFileLoader = null,
+        ?callable $delegateFactory = null,
+        ?callable $viewParserFactory = null,
+        ?callable $blockFactory = null,
+        ?callable $blockExceptionFactory = null,
+        ?callable $metaRowFactory = null,
+        ?object $aliasFileStorage = null,
+        ?callable $viewDefinerFactory = null,
+        ?callable $metaMakerFactory = null,
+        ?callable $viewRouterFactory = null,
+        ?callable $viewLoaderStateFactory = null,
+        ?callable $metaMakerStateFactory = null,
+        ?callable $arrayAdducer = null,
+        ?callable $recursiveMerger = null,
+        ?callable $arrayValueReader = null,
+        ?callable $classNameResolver = null,
+        ?callable $arrayLikeChecker = null,
+        ?callable $shortClassNameResolver = null,
+        ?object $imageMetadataReader = null,
+        ?object $errorLogWriter = null,
+        ?object $blockFileStorage = null,
+        ?object $metaFileStorage = null,
+        ?object $projectToolFileStorage = null,
+        ?object $rootHtmlFileStorage = null,
+        ?tab_dependencies $tabDependencies = null,
+        ?service_dependencies $serviceDependencies = null
+    )
     {
-        parent::__construct($allowIni);
-        $this->matcher = \fan\project\service\matcher::instance();
-    }
-
-    // ======== Static methods ======== \\
-
-    public static function getContent(): mixed
-    {
-        return self::staticContainerService('tab')->_controlTabTransfer()->content;
+        $this->matcher = $matcher;
+        $this->request = $request;
+        $this->locale = $locale;
+        $this->sessionFactory = $sessionFactory;
+        $this->input = $input;
+        $this->applyTabDependencies($tabDependencies ?? tab_dependencies::fromLegacy(
+            $runtime,
+            $roleFactory,
+            $transferFactory,
+            $configFactory,
+            $headerFactory,
+            $applicationFactory,
+            $debugFactory,
+            $jsonFactory,
+            $dataLoaderFactory,
+            $templateFactory,
+            $errorFactory,
+            $logFactory,
+            $cookieFactory,
+            $reflectorFactory,
+            $entityFactory,
+            $formFactory,
+            $pagerFactory,
+            $obfuscatorFactory,
+            $imageModifyFactory,
+            $databaseFactory,
+            $userFactory,
+            $dateFactory,
+            $phpArrayFileLoader,
+            $delegateFactory,
+            $viewParserFactory,
+            $blockFactory,
+            $blockExceptionFactory,
+            $metaRowFactory,
+            null,
+            $aliasFileStorage,
+            $viewDefinerFactory,
+            $metaMakerFactory,
+            $viewRouterFactory,
+            $viewLoaderStateFactory,
+            $metaMakerStateFactory,
+            $arrayAdducer,
+            $recursiveMerger,
+            $arrayValueReader,
+            $arrayLikeChecker,
+            $shortClassNameResolver,
+            $imageMetadataReader,
+            $errorLogWriter,
+            $blockFileStorage,
+            $metaFileStorage,
+            $projectToolFileStorage,
+            $rootHtmlFileStorage,
+            $tabState
+        ));
+        parent::__construct(
+            $allowIni,
+            $serviceDependencies ?? service_dependencies::fromLegacy(
+                $serviceBootstrapRuntime,
+                $serviceConfigurator,
+                $serviceCacheFactory,
+                null,
+                null,
+                null,
+                null,
+                $classNameResolver,
+                $arrayValueReader
+            )
+        );
     }
 
     // ======== Main Interface methods ======== \\
+
+    public function handleContent(): mixed
+    {
+        return $this->_controlTabTransfer()->content;
+    }
 
     public function getMainBlock(): ?object
     {
@@ -175,7 +380,15 @@ class tab extends \fan\core\base\service\single
     public function getViewDefiner(): object
     {
         if (empty($this->viewDefiner)) {
-            $this->viewDefiner = new \fan\project\view\definer($this->config->get('VIEW_DEFINER', [])->toArray());
+            $viewDefinerFactory = $this->viewDefinerFactory();
+            $this->viewDefiner = $viewDefinerFactory(
+                $this->config->get('VIEW_DEFINER', [])->toArray(),
+                $this->requestService(),
+                $this
+            );
+            if (!is_object($this->viewDefiner)) {
+                throw new \UnexpectedValueException('View definer factory must return an object.');
+            }
         }
         return $this->viewDefiner;
     }
@@ -184,7 +397,512 @@ class tab extends \fan\core\base\service\single
         return $this->viewClass;
     }
 
-    public function checkBlockStatus(\fan\core\block\base $block): array
+    public function setTabDependencies(
+        ?object $runtime = null,
+        ?callable $roleFactory = null,
+        ?callable $transferFactory = null,
+        ?callable $configFactory = null,
+        ?callable $headerFactory = null,
+        ?callable $applicationFactory = null,
+        ?callable $debugFactory = null,
+        ?callable $jsonFactory = null,
+        ?callable $dataLoaderFactory = null,
+        ?callable $templateFactory = null,
+        ?callable $errorFactory = null,
+        ?callable $logFactory = null,
+        ?callable $cookieFactory = null,
+        ?callable $reflectorFactory = null,
+        ?callable $entityFactory = null,
+        ?callable $formFactory = null,
+        ?callable $pagerFactory = null,
+        ?callable $obfuscatorFactory = null,
+        ?callable $imageModifyFactory = null,
+        ?callable $databaseFactory = null,
+        ?callable $userFactory = null,
+        ?callable $dateFactory = null,
+        ?callable $phpArrayFileLoader = null,
+        ?callable $delegateFactory = null,
+        ?callable $viewParserFactory = null,
+        ?callable $blockFactory = null,
+        ?callable $blockExceptionFactory = null,
+        ?callable $metaRowFactory = null,
+        ?callable $uploadSizeLimitProvider = null,
+        ?object $aliasFileStorage = null,
+        ?callable $viewDefinerFactory = null,
+        ?callable $metaMakerFactory = null,
+        ?callable $viewRouterFactory = null,
+        ?callable $viewLoaderStateFactory = null,
+        ?callable $metaMakerStateFactory = null,
+        ?callable $arrayAdducer = null,
+        ?callable $recursiveMerger = null,
+        ?callable $arrayValueReader = null,
+        ?callable $arrayLikeChecker = null,
+        ?callable $shortClassNameResolver = null,
+        ?object $imageMetadataReader = null,
+        ?object $errorLogWriter = null,
+        ?object $blockFileStorage = null,
+        ?object $metaFileStorage = null,
+        ?object $projectToolFileStorage = null,
+        ?object $rootHtmlFileStorage = null
+    ): static
+    {
+        $this->applyTabDependencies(tab_dependencies::fromLegacy(
+            $runtime,
+            $roleFactory,
+            $transferFactory,
+            $configFactory,
+            $headerFactory,
+            $applicationFactory,
+            $debugFactory,
+            $jsonFactory,
+            $dataLoaderFactory,
+            $templateFactory,
+            $errorFactory,
+            $logFactory,
+            $cookieFactory,
+            $reflectorFactory,
+            $entityFactory,
+            $formFactory,
+            $pagerFactory,
+            $obfuscatorFactory,
+            $imageModifyFactory,
+            $databaseFactory,
+            $userFactory,
+            $dateFactory,
+            $phpArrayFileLoader,
+            $delegateFactory,
+            $viewParserFactory,
+            $blockFactory,
+            $blockExceptionFactory,
+            $metaRowFactory,
+            $uploadSizeLimitProvider,
+            $aliasFileStorage,
+            $viewDefinerFactory,
+            $metaMakerFactory,
+            $viewRouterFactory,
+            $viewLoaderStateFactory,
+            $metaMakerStateFactory,
+            $arrayAdducer,
+            $recursiveMerger,
+            $arrayValueReader,
+            $arrayLikeChecker,
+            $shortClassNameResolver,
+            $imageMetadataReader,
+            $errorLogWriter,
+            $blockFileStorage,
+            $metaFileStorage,
+            $projectToolFileStorage,
+            $rootHtmlFileStorage
+        ));
+
+        return $this;
+    }
+
+    public function applyTabDependencies(tab_dependencies $dependencies): static
+    {
+        if ($dependencies->runtime !== null) {
+            $this->runtime = $dependencies->runtime;
+        }
+        if ($dependencies->tabState !== null) {
+            $this->tabState = $dependencies->tabState;
+        }
+
+        foreach ([
+            'roleFactory' => $dependencies->serviceFactories->roleFactory,
+            'transferFactory' => $dependencies->serviceFactories->transferFactory,
+            'configFactory' => $dependencies->serviceFactories->configFactory,
+            'headerFactory' => $dependencies->serviceFactories->headerFactory,
+            'applicationFactory' => $dependencies->serviceFactories->applicationFactory,
+            'debugFactory' => $dependencies->serviceFactories->debugFactory,
+            'jsonFactory' => $dependencies->serviceFactories->jsonFactory,
+            'dataLoaderFactory' => $dependencies->serviceFactories->dataLoaderFactory,
+            'templateFactory' => $dependencies->serviceFactories->templateFactory,
+            'errorFactory' => $dependencies->serviceFactories->errorFactory,
+            'logFactory' => $dependencies->serviceFactories->logFactory,
+            'cookieFactory' => $dependencies->serviceFactories->cookieFactory,
+            'reflectorFactory' => $dependencies->serviceFactories->reflectorFactory,
+            'entityFactory' => $dependencies->serviceFactories->entityFactory,
+            'formFactory' => $dependencies->serviceFactories->formFactory,
+            'pagerFactory' => $dependencies->serviceFactories->pagerFactory,
+            'obfuscatorFactory' => $dependencies->serviceFactories->obfuscatorFactory,
+            'imageModifyFactory' => $dependencies->serviceFactories->imageModifyFactory,
+            'databaseFactory' => $dependencies->serviceFactories->databaseFactory,
+            'userFactory' => $dependencies->serviceFactories->userFactory,
+            'dateFactory' => $dependencies->serviceFactories->dateFactory,
+            'phpArrayFileLoader' => $dependencies->serviceFactories->phpArrayFileLoader,
+            'delegateFactory' => $dependencies->viewFactories->delegateFactory,
+            'viewParserFactory' => $dependencies->viewFactories->viewParserFactory,
+            'blockFactory' => $dependencies->viewFactories->blockFactory,
+            'blockExceptionFactory' => $dependencies->viewFactories->blockExceptionFactory,
+            'metaMakerFactory' => $dependencies->viewFactories->metaMakerFactory,
+            'metaRowFactory' => $dependencies->viewFactories->metaRowFactory,
+            'uploadSizeLimitProvider' => $dependencies->viewFactories->uploadSizeLimitProvider,
+            'viewDefinerFactory' => $dependencies->viewFactories->viewDefinerFactory,
+            'viewRouterFactory' => $dependencies->viewFactories->viewRouterFactory,
+            'viewLoaderStateFactory' => $dependencies->viewFactories->viewLoaderStateFactory,
+            'metaMakerStateFactory' => $dependencies->viewFactories->metaMakerStateFactory,
+            'arrayAdducer' => $dependencies->utilityDependencies->arrayAdducer,
+            'recursiveMerger' => $dependencies->utilityDependencies->recursiveMerger,
+            'arrayValueReader' => $dependencies->utilityDependencies->arrayValueReader,
+            'arrayLikeChecker' => $dependencies->utilityDependencies->arrayLikeChecker,
+            'shortClassNameResolver' => $dependencies->utilityDependencies->shortClassNameResolver,
+            'aliasFileStorage' => $dependencies->storageDependencies->aliasFileStorage,
+            'imageMetadataReader' => $dependencies->storageDependencies->imageMetadataReader,
+            'errorLogWriter' => $dependencies->storageDependencies->errorLogWriter,
+            'blockFileStorage' => $dependencies->storageDependencies->blockFileStorage,
+            'metaFileStorage' => $dependencies->storageDependencies->metaFileStorage,
+            'projectToolFileStorage' => $dependencies->storageDependencies->projectToolFileStorage,
+            'rootHtmlFileStorage' => $dependencies->storageDependencies->rootHtmlFileStorage,
+        ] as $property => $dependency) {
+            if ($dependency !== null) {
+                $this->$property = $dependency;
+            }
+        }
+
+        return $this;
+    }
+
+    public function setUploadSizeLimitProvider(callable $uploadSizeLimitProvider): static
+    {
+        $this->uploadSizeLimitProvider = $uploadSizeLimitProvider;
+
+        return $this;
+    }
+
+    public function getBlockDependencies(): array
+    {
+        $dependencies = [
+            'tab' => $this,
+            'requestFactory' => fn(): object => $this->requestService(),
+            'roleFactory' => fn(): object => $this->roleService(),
+            'sessionFactory' => fn(string $nameSpace, string $group = 'block'): object => $this->sessionService($nameSpace, $group),
+            'reflectorFactory' => fn(): object => $this->reflectorService(),
+            'runtime' => $this->runtimeService(),
+            'localeFactory' => fn(): object => $this->localeService(),
+            'entityFactory' => fn(mixed ...$arguments): object => $this->tabFactoryService('entityFactory', 'Entity', ...$arguments),
+            'matcherFactory' => fn(): object => $this->matcherService(),
+            'requestInputFactory' => fn(): object => $this->inputService(),
+            'jsonFactory' => fn(bool $useBase64 = false): object => $this->jsonService($useBase64),
+            'dataLoaderFactory' => fn(): object => $this->dataLoaderService(),
+            'arrayAdducer' => $this->arrayAdducer(),
+            'recursiveMerger' => $this->recursiveMerger(),
+            'arrayValueReader' => $this->arrayValueReader(),
+            'arrayLikeChecker' => $this->arrayLikeChecker(),
+            'shortClassNameResolver' => $this->shortClassNameResolver(),
+            'pagerFactory' => fn(mixed ...$arguments): object => $this->tabFactoryService('pagerFactory', 'Pager', ...$arguments),
+            'templateFactory' => fn(): object => $this->templateService(),
+            'applicationFactory' => fn(): object => $this->applicationService(),
+            'obfuscatorFactory' => fn(mixed ...$arguments): object => $this->tabFactoryService('obfuscatorFactory', 'Obfuscator', ...$arguments),
+            'imageModifyFactory' => fn(mixed ...$arguments): object => $this->tabFactoryService('imageModifyFactory', 'Image modify', ...$arguments),
+            'configFactory' => fn(string $type = 'service', string $sourceType = 'arr'): object => $this->configService($type, $sourceType),
+            'databaseFactory' => fn(mixed ...$arguments): object => $this->tabFactoryService('databaseFactory', 'Database', ...$arguments),
+            'userFactory' => fn(mixed ...$arguments): object => $this->tabFactoryService('userFactory', 'User', ...$arguments),
+            'logFactory' => null,
+            'transferFactory' => fn(): object => $this->transferService(),
+            'errorFactory' => fn(): object => $this->errorService(),
+            'dateFactory' => fn(mixed ...$arguments): object => $this->tabFactoryService('dateFactory', 'Date', ...$arguments),
+            'viewRouterFactory' => $this->viewRouterFactory(),
+            'viewLoaderState' => method_exists($this->runtimeService(), 'viewLoaderState')
+                ? $this->runtimeService()->viewLoaderState()
+                : ($this->viewLoaderStateFactory())(),
+            'metaMakerState' => method_exists($this->runtimeService(), 'metaMakerState')
+                ? $this->runtimeService()->metaMakerState()
+                : ($this->metaMakerStateFactory())(),
+            'metaMakerFactory' => $this->metaMakerFactory(),
+            'phpArrayFileLoader' => $this->phpArrayFileLoader(),
+            'metaRowFactory' => $this->metaRowFactory(),
+            'blockFactory' => $this->blockFactory,
+            'blockExceptionFactory' => $this->blockExceptionFactory,
+            'imageMetadataReader' => $this->imageMetadataReader,
+            'errorLogWriter' => $this->errorLogWriter,
+            'blockFileStorage' => $this->blockFileStorage,
+            'metaFileStorage' => $this->metaFileStorage,
+            'projectToolFileStorage' => $this->projectToolFileStorage,
+            'rootHtmlFileStorage' => $this->rootHtmlFileStorage,
+        ];
+
+        if (is_callable($this->uploadSizeLimitProvider)) {
+            $dependencies['uploadSizeLimitProvider'] = $this->uploadSizeLimitProvider;
+        }
+
+        return $dependencies;
+    }
+
+    private function phpArrayFileLoader(): callable
+    {
+        if (!is_callable($this->phpArrayFileLoader)) {
+            throw new \RuntimeException('PHP array file loader is not configured for tab service.');
+        }
+
+        return $this->phpArrayFileLoader;
+    }
+
+    private function metaRowFactory(): callable
+    {
+        if (!is_callable($this->metaRowFactory)) {
+            throw new \RuntimeException('Meta row factory is not configured for tab service.');
+        }
+
+        return $this->metaRowFactory;
+    }
+
+    private function metaMakerFactory(): callable
+    {
+        if (!is_callable($this->metaMakerFactory)) {
+            throw new \RuntimeException('Meta maker factory is not configured for tab service.');
+        }
+
+        return $this->metaMakerFactory;
+    }
+
+    private function viewRouterFactory(): callable
+    {
+        if (!is_callable($this->viewRouterFactory)) {
+            throw new \RuntimeException('View router factory is not configured for tab service.');
+        }
+
+        return $this->viewRouterFactory;
+    }
+
+    private function viewLoaderStateFactory(): callable
+    {
+        if (!is_callable($this->viewLoaderStateFactory)) {
+            throw new \RuntimeException('View loader state factory is not configured for tab service.');
+        }
+
+        return $this->viewLoaderStateFactory;
+    }
+
+    private function metaMakerStateFactory(): callable
+    {
+        if (!is_callable($this->metaMakerStateFactory)) {
+            throw new \RuntimeException('Meta maker state factory is not configured for tab service.');
+        }
+
+        return $this->metaMakerStateFactory;
+    }
+
+    private function aliasFileStorage(): object
+    {
+        return $this->aliasFileStorage ?? throw new \RuntimeException('Tab alias file storage is not configured for tab service.');
+    }
+
+    private function viewDefinerFactory(): callable
+    {
+        if (!is_callable($this->viewDefinerFactory)) {
+            throw new \RuntimeException('View definer factory is not configured for tab service.');
+        }
+
+        return $this->viewDefinerFactory;
+    }
+
+    protected function _getDelegate(mixed $class): mixed
+    {
+        if ($class !== 'urlMaker') {
+            return parent::_getDelegate($class);
+        }
+        if (!empty($this->delegate[$class])) {
+            return $this->delegate[$class];
+        }
+
+        $className = $this->_getEngine('delegate\\' . $class, false);
+        if (empty($className)) {
+            throw $this->createServiceFatalException('Delegate service class "' . $class . '" isn\'t found!');
+        }
+
+        $this->delegate[$class] = $this->createDelegate(
+            $className,
+            $this->matcherService(),
+            $this->requestService(),
+            $this->localeService(),
+            $this->sessionFactory,
+            $this->inputService(),
+            $this->arrayValueReader()
+        );
+        $this->delegate[$class]->setFacade($this);
+
+        return $this->delegate[$class];
+    }
+
+    private function createDelegate(
+        string $className,
+        object $matcher,
+        object $request,
+        object $locale,
+        ?callable $sessionFactory,
+        object $input,
+        callable $arrayValueReader
+    ): object
+    {
+        if (!is_callable($this->delegateFactory)) {
+            throw new \RuntimeException('Tab delegate factory is not configured for tab service.');
+        }
+
+        $delegate = ($this->delegateFactory)($className, $matcher, $request, $locale, $sessionFactory, $input, $arrayValueReader);
+        if (!is_object($delegate)) {
+            throw new \UnexpectedValueException('Tab delegate factory must return an object.');
+        }
+
+        return $delegate;
+    }
+
+    private function matcherService(): object
+    {
+        if ($this->matcher !== null) {
+            return $this->matcher;
+        }
+
+        throw new \RuntimeException('Matcher service is not configured for tab service.');
+    }
+
+    private function requestService(): object
+    {
+        if ($this->request !== null) {
+            return $this->request;
+        }
+
+        throw new \RuntimeException('Request service is not configured for tab service.');
+    }
+
+    private function localeService(): object
+    {
+        if ($this->locale !== null) {
+            return $this->locale;
+        }
+
+        throw new \RuntimeException('Locale service is not configured for tab service.');
+    }
+
+    private function inputService(): object
+    {
+        if ($this->input !== null) {
+            return $this->input;
+        }
+
+        throw new \RuntimeException('Request input service is not configured for tab service.');
+    }
+
+    private function runtimeService(): object
+    {
+        return $this->runtime ?? throw new \RuntimeException('Bootstrap runtime service is not configured for tab service.');
+    }
+
+    private function roleService(): object
+    {
+        return $this->roleFactory !== null ? ($this->roleFactory)() : throw new \RuntimeException('Role service is not configured for tab service.');
+    }
+
+    private function sessionService(string $nameSpace = '', string $group = 'custom'): object
+    {
+        return $this->sessionFactory !== null ? ($this->sessionFactory)($nameSpace, $group) : throw new \RuntimeException('Session service is not configured for tab service.');
+    }
+
+    private function transferService(): object
+    {
+        return $this->transferFactory !== null ? ($this->transferFactory)() : throw new \RuntimeException('Transfer service is not configured for tab service.');
+    }
+
+    private function configService(string $type = 'service', string $sourceType = 'arr'): object
+    {
+        return $this->configFactory !== null ? ($this->configFactory)($type, $sourceType) : throw new \RuntimeException('Config service is not configured for tab service.');
+    }
+
+    private function headerService(): object
+    {
+        return $this->headerFactory !== null ? ($this->headerFactory)() : throw new \RuntimeException('Header service is not configured for tab service.');
+    }
+
+    private function applicationService(): object
+    {
+        return $this->applicationFactory !== null ? ($this->applicationFactory)() : throw new \RuntimeException('Application service is not configured for tab service.');
+    }
+
+    private function debugService(): object
+    {
+        return $this->debugFactory !== null ? ($this->debugFactory)() : throw new \RuntimeException('Debug service is not configured for tab service.');
+    }
+
+    private function jsonService(bool $useBase64 = false): object
+    {
+        return $this->jsonFactory !== null ? ($this->jsonFactory)($useBase64) : throw new \RuntimeException('Json service is not configured for tab service.');
+    }
+
+    private function dataLoaderService(): object
+    {
+        return $this->dataLoaderFactory !== null ? ($this->dataLoaderFactory)() : throw new \RuntimeException('Data loader service is not configured for tab service.');
+    }
+
+    private function arrayAdducer(): callable
+    {
+        return is_callable($this->arrayAdducer) ? $this->arrayAdducer : throw new \RuntimeException('Array adducer is not configured for tab service.');
+    }
+
+    private function recursiveMerger(): callable
+    {
+        return is_callable($this->recursiveMerger) ? $this->recursiveMerger : throw new \RuntimeException('Recursive merger is not configured for tab service.');
+    }
+
+    protected function arrayValueReader(): callable
+    {
+        return is_callable($this->arrayValueReader) ? $this->arrayValueReader : throw new \RuntimeException('Array value reader is not configured for tab service.');
+    }
+
+    private function arrayLikeChecker(): callable
+    {
+        return is_callable($this->arrayLikeChecker) ? $this->arrayLikeChecker : throw new \RuntimeException('Array-like checker is not configured for tab service.');
+    }
+
+    private function shortClassNameResolver(): callable
+    {
+        return is_callable($this->shortClassNameResolver) ? $this->shortClassNameResolver : throw new \RuntimeException('Short class name resolver is not configured for tab service.');
+    }
+
+    private function templateService(): object
+    {
+        if ($this->templateFactory !== null) {
+            try {
+                $template = ($this->templateFactory)();
+                if (is_object($template)) {
+                    return $template;
+                }
+            } catch (\RuntimeException $exception) {
+                if ($exception->getMessage() !== 'Template service has been removed.') {
+                    throw $exception;
+                }
+            }
+        }
+
+        return new twig_template_service();
+    }
+
+    private function errorService(): object
+    {
+        return $this->errorFactory !== null ? ($this->errorFactory)() : throw new \RuntimeException('Error service is not configured for tab service.');
+    }
+
+    private function logService(): object
+    {
+        return $this->logFactory !== null ? ($this->logFactory)() : throw new \RuntimeException('Log service is not configured for tab service.');
+    }
+
+    private function cookieService(): object
+    {
+        return $this->cookieFactory !== null ? ($this->cookieFactory)() : throw new \RuntimeException('Cookie service is not configured for tab service.');
+    }
+
+    private function reflectorService(): object
+    {
+        return $this->reflectorFactory !== null ? ($this->reflectorFactory)() : throw new \RuntimeException('Reflector service is not configured for tab service.');
+    }
+
+    private function tabFactoryService(string $factoryKey, string $serviceName, mixed ...$arguments): object
+    {
+        return $this->$factoryKey !== null ?
+            ($this->$factoryKey)(...$arguments) :
+            throw new \RuntimeException($serviceName . ' service is not configured for tab service.');
+    }
+
+    public function checkBlockStatus(base $block): array
     {
         return [$block === $this->rootBlock, $block === $this->mainBlock];
     }
@@ -214,7 +932,7 @@ class tab extends \fan\core\base\service\single
         if ($cond) {
             do {
                 foreach ($cond as $v) {
-                    if (!role($v['condition'])) {
+                    if (!$this->roleService()->check($v['condition'])) {
                         $transfer = $v;
                         break 2;
                     }
@@ -223,17 +941,17 @@ class tab extends \fan\core\base\service\single
             } while (false);
 
             if ($allowTransfer) {
-                $servSes = $this->containerService('session');
+                $servSes = $this->sessionService();
                 $expire_URL = $servSes->isExpired() && !$this->getTabMeta('notRedirectByExpire', false) ? $this->config['EXPIRE_URL'] : null;
 
                 if ($expire_URL) {
-                    transfer_out($expire_URL, null, $dbOper);
+                    $this->transferService()->out($expire_URL, null, $dbOper);
                 } elseif (!empty($transfer['transfer_sham'])) {
-                    transfer_sham($this->getURI($transfer['transfer_sham']), null, $dbOper);
+                    $this->transferService()->sham($this->getURI($transfer['transfer_sham']), null, $dbOper);
                 } elseif (!empty($transfer['transfer_int'])) {
-                    transfer_int($this->getURI($transfer['transfer_int']), null, $dbOper);
+                    $this->transferService()->int($this->getURI($transfer['transfer_int']), null, $dbOper);
                 } elseif (!empty($transfer['transfer_out'])) {
-                    transfer_out($this->getURI($transfer['transfer_out']), null, $dbOper);
+                    $this->transferService()->out($this->getURI($transfer['transfer_out']), null, $dbOper);
                 } else {
                     $this->_parseError403();
                 }
@@ -253,11 +971,11 @@ class tab extends \fan\core\base\service\single
         if (substr($path, -4) !== '.php') {
             $path .= '.php';
         }
-        $loader = \bootstrap::getLoader();
+        $loader = $this->runtimeService()->getLoader();
         return $loader->loadBlockByPath($path);
     }
 
-    public function setCurrentBlock(\fan\core\block\base $block): static
+    public function setCurrentBlock(base $block): static
     {
         $this->currentBlock = $block;
         return $this;
@@ -271,10 +989,10 @@ class tab extends \fan\core\base\service\single
     /**
      * @throws \fan\project\exception\service\fatal
      */
-    public function setTabBlock(\fan\core\block\base $block, string $name): static
+    public function setTabBlock(base $block, string $name): static
     {
         if (isset($this->blocks[$name])) {
-            throw new fatalException($this, 'Set dublicate of block with name "' . $name . '"');
+            throw $this->createServiceFatalException('Set dublicate of block with name "' . $name . '"');
         }
         $this->blocks[$name] = $block;
         $order = $block->getMeta('initOrder', $this->getDefaultInitNum());
@@ -289,7 +1007,7 @@ class tab extends \fan\core\base\service\single
     {
         if (!isset($this->blocks[$blockName])) {
             if ($allowException) {
-                throw new fatalException($this, 'Call undefined block with name "' . $blockName . '"');
+                throw $this->createServiceFatalException('Call undefined block with name "' . $blockName . '"');
             }
             return null;
         }
@@ -311,11 +1029,17 @@ class tab extends \fan\core\base\service\single
         return $this->getConfig('INIT_ORDER_NUM', 1000);
     }
 
+    public function createServiceFatalExceptionForSubObject(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
+    {
+        return $this->createServiceFatalException($message, $code, $previous);
+    }
+
     public function isDebugAllowed(): bool
     {
         if (is_null($this->allowDebug)) {
-            $debugConfig      = $this->containerService('config')->get('debug');
-            $this->allowDebug = $debugConfig['ENABLED'] && $debugConfig['DEBUG_IP'] && !empty($_SERVER['SERVER_ADDR']) && preg_match($debugConfig['DEBUG_IP'], $_SERVER['SERVER_ADDR']);
+            $debugConfig      = $this->configService()->get('debug');
+            $serverAddr = $this->inputService()->serverValue('SERVER_ADDR', '');
+            $this->allowDebug = $debugConfig['ENABLED'] && $debugConfig['DEBUG_IP'] && !empty($serverAddr) && preg_match($debugConfig['DEBUG_IP'], (string)$serverAddr);
         }
         return $this->allowDebug;
     }
@@ -351,7 +1075,7 @@ class tab extends \fan\core\base\service\single
     // ======== Private/Protected methods ======== \\
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\service\fatal
      */
     protected function _controlTabTransfer(): static
     {
@@ -376,7 +1100,7 @@ class tab extends \fan\core\base\service\single
                 }
 
                 return $this;
-            } catch (\fan\core\base\transfer $e) {
+            } catch (base_transfer $e) {
                 // Catch and make transfer
                 $transferType = $e->getTransferType();
 
@@ -385,7 +1109,7 @@ class tab extends \fan\core\base\service\single
 
                 // Out transfer
                 if ($transferType === 'out') {
-                    $this->containerService('header')->sendLocation($uri);
+                    $this->headerService()->sendLocation($uri);
                 }
 
                 $this->matcher->setUri($uri, $e->getHost(), $e->isShiftCurrent());
@@ -397,16 +1121,16 @@ class tab extends \fan\core\base\service\single
         foreach ($this->matcher->getStack() as $v) {
             $trList .= "\n" . $v['source'];
         }
-        throw new fatalException($this, 'To many transfers: ' . $trList);
+        throw $this->createServiceFatalException('To many transfers: ' . $trList);
     }
 
     protected function _checkAlias(): static
     {
         if ($this->matcher->getCurrentIndex() === 0) {
             $reqData   = $this->matcher->getLastItem()->getParsedSrc();
-            $aliasFile = (string)\bootstrap::parsePath((string)$this->getConfig('ALIAS_FILE_PATH', '{PROJECT}/data/url_alias.php'));
-            if (!empty($reqData) && is_readable($aliasFile)) {
-                $aliasData = \fan\project\adapter\php_array_file::load($aliasFile, []);
+            $aliasFile = (string)$this->runtimeService()->parsePath((string)$this->getConfig('ALIAS_FILE_PATH', '{PROJECT}/data/url_alias.php'));
+            if (!empty($reqData) && $this->aliasFileStorage()->isReadable($aliasFile)) {
+                $aliasData = $this->phpArrayFileLoader()($aliasFile, []);
                 if (!empty($aliasData)) {
                     $reqPath = '/' . implode('/', $reqData);
                     array_unshift($reqData, $reqPath);
@@ -436,19 +1160,20 @@ class tab extends \fan\core\base\service\single
 
                             // Validate data
                             if (empty($type) || !in_array($type, ['out', 'int', 'sham'])) {
-                                throw new fatalException($this, 'Alias transfer type has incorrect value "' . $type . '" for request "' . $reqPath . '".');
+                                throw $this->createServiceFatalException('Alias transfer type has incorrect value "' . $type . '" for request "' . $reqPath . '".');
                             }
                             if (empty($destPath)) {
-                                throw new fatalException($this, 'Alias transfer doesn\'t have path for "' . $reqPath . '".');
+                                throw $this->createServiceFatalException('Alias transfer doesn\'t have path for "' . $reqPath . '".');
                             }
                             if (!is_string($destPath)) {
-                                throw new fatalException($this, 'Alias transfer has icorrect path for "' . $reqPath . '".');
+                                throw $this->createServiceFatalException('Alias transfer has icorrect path for "' . $reqPath . '".');
                             }
 
                             if (substr($destPath, -1) !== '/') {
                                 $destPath = $this->_getPathWithExt($destPath);
                             }
-                            call_user_func('transfer_' . $type, $destPath);
+                            $transferFunction = 'transfer_' . $type;
+                            $transferFunction($destPath);
                         }
                     }
                 }
@@ -468,7 +1193,7 @@ class tab extends \fan\core\base\service\single
         $this->initOrder   = [];
         $this->viewClass   = null;
         $this->content     = '';
-        $this->appName     = $this->containerService('application')->getAppName();
+        $this->appName     = $this->applicationService()->getAppName();
         $this->currentData = $this->matcher->getCurrentParsedData();
         $this->lastData    = $this->matcher->getLastParsedData();
         $this->timesStamp  = [];
@@ -479,14 +1204,15 @@ class tab extends \fan\core\base\service\single
     public function _parseError(): static
     {
         $mainRequest = $this->lastData['main_request'];
-        if (empty($mainRequest) && (empty(self::$errTransfer) || (int)end(self::$errTransfer) === 404)) {
+        $state = $this->tabState();
+        if (empty($mainRequest) && ($state->isErrorTransferEmpty() || $state->lastErrorTransferCode() === 404)) {
             $transferor = $this->getConfig('transferor');
             if (!empty($transferor)) {
-                if (!is_array_alt($transferor)) {
-                    throw new fatalException($this, 'Point transferor isn\'t array.');
+                if (!is_array($transferor)) {
+                    throw $this->createServiceFatalException('Point transferor isn\'t array.');
                 }
                 foreach ($transferor as $class) {
-                    call_user_func([$class, 'checkRequest'], $this->lastData['src_path'], $this->lastData['app_prefix']);
+                    $class::checkRequest($this->lastData['src_path'], $this->lastData['app_prefix']);
                 }
             }
             $this->content = $this->_parseError404(false);
@@ -496,7 +1222,7 @@ class tab extends \fan\core\base\service\single
         if (!empty($mainRequest)) {
             $file = $this->lastData['file'];
             if (!empty($file)) {
-                $loader = \bootstrap::getLoader();
+                $loader = $this->runtimeService()->getLoader();
                 if (!$loader->loadBlockByPath($file)) {
                     $this->content = $this->_parseError404(true);
                     return $this;
@@ -540,11 +1266,11 @@ class tab extends \fan\core\base\service\single
     protected function _setViewClass(string $viewClass): static
     {
         if (empty($viewClass)) {
-            throw new fatalException($this, 'Type of view can\'t be empty.');
+            throw $this->createServiceFatalException('Type of view can\'t be empty.');
         }
         $class = '\fan\project\view\parser\\' . $viewClass;
         if (!class_exists($class, true)) {
-            throw new fatalException($this, 'Class "' . $class . '" isn\'t found. Please check your "View definer"');
+            throw $this->createServiceFatalException('Class "' . $class . '" isn\'t found. Please check your "View definer"');
         }
         $this->viewClass = $class;
         return $this;
@@ -599,7 +1325,7 @@ class tab extends \fan\core\base\service\single
         return $this;
     } // _runAfterInit
 
-    protected function _getFinalContent(\fan\core\block\base $rootBlock): mixed
+    protected function _getFinalContent(base $rootBlock): mixed
     {
         $debugMode = $this->_getDebugMode();
         if ($debugMode > 0) {
@@ -607,27 +1333,78 @@ class tab extends \fan\core\base\service\single
         } else {
             $class = (string)$this->getViewClass();
             if ($this->isDebugAllowed()) {
-                $debug = \fan\project\service\debug::instance();
+                $debug = $this->debugService();
                 /* @var $debug \fan\core\service\debug */
                 $debug->setExtFiles($rootBlock, false);
             }
         }
         /* @var $viewParser \fan\core\view\parser */
-        $viewParser = new $class($this->mainBlock);
+        $jsonFactory = fn(bool $useBase64 = false): mixed => $this->jsonService($useBase64);
+        $templateFactory = fn(string $template, mixed $tplParentClass, base $block): mixed =>
+            $this->templateService()->get($template, $tplParentClass, $block);
+        $dataLoaderFactory = fn(): object => $this->dataLoaderService();
+        $header = $this->headerService();
+        $locale = $this->localeService();
+        $viewParser = $this->createViewParser(
+            $class,
+            $debugMode,
+            $this->mainBlock,
+            $jsonFactory,
+            $debugMode > 0 ? $this->debugService() : null,
+            $templateFactory,
+            $header,
+            $locale,
+            $dataLoaderFactory
+        );
         $viewParser->startParsing($rootBlock);
         return $viewParser->getFinalContent();
+    }
+
+    private function createViewParser(
+        string $className,
+        int $debugMode,
+        base $mainBlock,
+        callable $jsonFactory,
+        ?object $debug,
+        callable $templateFactory,
+        object $header,
+        object $locale,
+        callable $dataLoaderFactory
+    ): parser
+    {
+        if (!is_callable($this->viewParserFactory)) {
+            throw new \RuntimeException('Tab view parser factory is not configured for tab service.');
+        }
+
+        $viewParser = ($this->viewParserFactory)(
+            $className,
+            $debugMode,
+            $mainBlock,
+            $jsonFactory,
+            $debug,
+            $templateFactory,
+            $header,
+            $locale,
+            $dataLoaderFactory
+        );
+        if (!$viewParser instanceof parser) {
+            throw new \UnexpectedValueException('Tab view parser factory must return a view parser object.');
+        }
+
+        return $viewParser;
     }
 
     protected function _defineRootBlock(array $rootMeta): ?object
     {
         $defaultMeta = $this->getDefaultMeta();
+        $arrayValueReader = $this->arrayValueReader();
         $rootPath = $this->getTabMeta(
                 'root',
-                array_val($defaultMeta, ['main', 'root'])
+                $arrayValueReader($defaultMeta, ['main', 'root'])
         );
         $carcassPath = $this->getTabMeta(
                 'carcass',
-                array_val($defaultMeta, ['main', 'carcass'])
+                $arrayValueReader($defaultMeta, ['main', 'carcass'])
         );
 
         $blockName = 'root';
@@ -653,7 +1430,7 @@ class tab extends \fan\core\base\service\single
             return null;
         }
 
-        $rootBlock = new $rootClass($blockName, $this, null, $rootMeta, true);
+        $rootBlock = $this->createBlock($rootClass, $blockName, null, $rootMeta, true);
         return $rootBlock;
     }
 
@@ -664,14 +1441,15 @@ class tab extends \fan\core\base\service\single
             $defaultMeta = method_exists($defaultMeta, 'toArray') ? $defaultMeta->toArray() : [];
         }
 
-        $locale = $this->containerService('locale');
+        $locale = $this->localeService();
         if ($locale->isEnabled() && empty($defaultMeta['common']['tplVars']['sLng'])) {
             $defaultMeta['common']['tplVars']['sLng'] = $locale->getLanguage();
         }
 
+        $arrayValueReader = $this->arrayValueReader();
         return [
-            'own'    => array_val($defaultMeta, 'root',   []),
-            'common' => array_val($defaultMeta, 'common', []),
+            'own'    => $arrayValueReader($defaultMeta, 'root',   []),
+            'common' => $arrayValueReader($defaultMeta, 'common', []),
         ];
     }
 
@@ -683,47 +1461,50 @@ class tab extends \fan\core\base\service\single
 
     protected function _parseError403(): mixed
     {
-        $this->containerService('header')->error403(false);
-        if (!in_array(403, self::$errTransfer)) {
-            array_push(self::$errTransfer, 403);
+        $this->headerService()->error403(false);
+        $state = $this->tabState();
+        if (!$state->hasErrorTransferCode(403)) {
+            $state->pushErrorTransferCode(403);
             $urn = $this->getConfig('error_403', self::URN_AP . '/error403');
-            transfer_sham($this->_getPathWithExt($urn));
+            $this->transferService()->sham($this->_getPathWithExt($urn));
         }
 
         $firstItem = $this->matcher->getItem(0);
-        $runner    = \bootstrap::getRunner();
+        $runner    = $this->runtimeService()->getRunner();
         return $runner->showError(['urn', $firstItem['source']['request']], 'error_403', false);
     }
 
     protected function _parseError404(bool $forse): mixed
     {
-        $this->containerService('header')->error404(false);
-        if (empty($forse) && empty(self::$errTransfer)) {
-            array_push(self::$errTransfer, 404);
+        $this->headerService()->error404(false);
+        $state = $this->tabState();
+        if (empty($forse) && $state->isErrorTransferEmpty()) {
+            $state->pushErrorTransferCode(404);
             $urn = $this->getConfig('error_404', self::URN_AP . '/error404');
-            transfer_sham($this->_getPathWithExt($urn));
+            $this->transferService()->sham($this->_getPathWithExt($urn));
         }
 
         $firstItem = $this->matcher->getItem(0);
-        \bootstrap::logError(var_export($firstItem->parsed->toArray(), true));
+        $this->runtimeService()->logError(var_export($firstItem->parsed->toArray(), true));
 
-        $runner = \bootstrap::getRunner();
+        $runner = $this->runtimeService()->getRunner();
         return $runner->showError(['urn', $firstItem['source']['request']], 'error_404', false);
     }
 
     protected function _parseError500(?string $errorLog = null): mixed
     {
         if (!empty($errorLog)) {
-            $this->containerService('error')->logErrorMessage($errorLog, 'Tab Error');
+            $this->errorService()->logErrorMessage($errorLog, 'Tab Error');
         }
-        $this->containerService('header')->error500(false);
-        if (!in_array(500, self::$errTransfer)) {
-            array_push(self::$errTransfer, 500);
+        $this->headerService()->error500(false);
+        $state = $this->tabState();
+        if (!$state->hasErrorTransferCode(500)) {
+            $state->pushErrorTransferCode(500);
             $urn = $this->getConfig('error_500', self::URN_AP . '/error500');
-            transfer_sham($this->_getPathWithExt($urn));
+            $this->transferService()->sham($this->_getPathWithExt($urn));
         }
 
-        $runner = \bootstrap::getRunner();
+        $runner = $this->runtimeService()->getRunner();
         return $runner->showError([], 'error_500', false);
     }
 
@@ -740,16 +1521,54 @@ class tab extends \fan\core\base\service\single
                 $urn . $ext;
     }
 
+    private function tabState(): object
+    {
+        if ($this->tabState === null) {
+            throw new \RuntimeException('Tab state service is not configured for tab service.');
+        }
+
+        return $this->tabState;
+    }
+
     protected function _setMainBlock(): static
     {
         $mainRequest = $this->lastData['main_request'];
-        $class = \bootstrap::getLoader()->loadBlockByMR($this->appName, $mainRequest);
+        $class = $this->runtimeService()->getLoader()->loadBlockByMR($this->appName, $mainRequest);
         if (empty($class)) { // ToDo: check it!
             $this->content = $this->_parseError500('Main class for Main Request "' . implode('/', $mainRequest) . '" isn\'t found.');
         } else {
-            $this->mainBlock = new $class('main', $this, null, [], false);
+            $this->mainBlock = $this->createBlock($class, 'main', null, [], false);
         }
         return $this;
+    }
+
+    private function createBlock(
+        string $className,
+        string $blockName,
+        ?base $container,
+        array $meta,
+        bool $allowMeta
+    ): base
+    {
+        if (!is_callable($this->blockFactory)) {
+            throw new \RuntimeException('Tab block factory is not configured for tab service.');
+        }
+
+        $block = ($this->blockFactory)(
+            $className,
+            $blockName,
+            $this,
+            $container,
+            $meta,
+            $allowMeta,
+            null,
+            $this->getBlockDependencies()
+        );
+        if (!$block instanceof base) {
+            throw new \UnexpectedValueException('Tab block factory must return a block object.');
+        }
+
+        return $block;
     }
 
     protected function _setTabMeta(): static
@@ -775,7 +1594,7 @@ class tab extends \fan\core\base\service\single
 
     protected function readArrayConfigValue(mixed $value, string $configPath): array
     {
-        if ($value instanceof \fan\core\base\data) {
+        if ($value instanceof data) {
             return $value->toArray();
         }
 
@@ -792,8 +1611,8 @@ class tab extends \fan\core\base\service\single
     {
         $debugMode = 0;
         if ($this->isDebugAllowed()) {
-            $sr    = $this->containerService('request');
-            $sc    = \fan\project\service\cookie::instance();
+            $sr    = $this->requestService();
+            $sc    = $this->cookieService();
             $key   = $this->getConfig('debug_key', 'debug');
             $debug = $sr->get($key, 'PGC', 0);
             if (in_array($debug, [1, 2, 10, 20])) {
@@ -847,7 +1666,13 @@ class tab extends \fan\core\base\service\single
                 $v = sprintf(str_repeat(' ', $len - strlen($k)) . '%01.6f', $v);
             }
 
-            l('<pre style="font-family: Courier, monospace">' . htmlentities(var_export($this->timesStamp, true), ENT_NOQUOTES, 'UTF-8') . '</pre>', 'Estimate Performance by elements');
+            if ($this->logFactory !== null) {
+                $this->logService()->logMessage(
+                    'custom',
+                    '<pre style="font-family: Courier, monospace">' . htmlentities(var_export($this->timesStamp, true), ENT_NOQUOTES, 'UTF-8') . '</pre>',
+                    'Estimate Performance by elements'
+                );
+            }
         }
     }
 

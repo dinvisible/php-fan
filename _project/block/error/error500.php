@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\project\block\error;
+use fan\core\block\error\error500 as error_error500;
+
 /**
  * Block for show error 500
  *
@@ -18,7 +20,7 @@ namespace fan\project\block\error;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.007 (31.08.2015)
  */
-class error500 extends \fan\core\block\error\error500
+class error500 extends error_error500
 {
     public function init(): void
     {

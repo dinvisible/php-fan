@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
+use fan\core\base\service\single;
+use fan\core\base\timer_program;
+use fan\model\timer_program\row as timer_program_row;
+
 /**
  * Cron-timer manager service
  *
@@ -18,7 +22,7 @@ namespace fan\core\service;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.007 (31.08.2015)
  */
-class timer extends \fan\core\base\service\single
+class timer extends single
 {
     /**
      * Limit jointly runned program (default)
@@ -43,21 +47,86 @@ class timer extends \fan\core\base\service\single
      */
     protected ?string $baseNS = null;
 
-    protected function __construct()
+    private ?object $timerRuntime = null;
+
+    /**
+     * @var callable|null
+     */
+    private $timerDateFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $timerEntityFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $timerErrorFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $timerLogFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $timerEmailFactory = null;
+
+    /**
+     * @var callable|null
+     */
+    private $timerProgramFactory = null;
+
+    public function __construct(
+        ?object $runtime = null,
+        ?callable $dateFactory = null,
+        ?callable $entityFactory = null,
+        ?callable $errorFactory = null,
+        ?callable $logFactory = null,
+        ?callable $emailFactory = null,
+        ?callable $programFactory = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null
+    )
     {
-        parent::__construct();
+        $this->setTimerDependencies($runtime, $dateFactory, $entityFactory, $errorFactory, $logFactory, $emailFactory, $programFactory);
+        parent::__construct(true, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
         $this->ettName  = (string)$this->getConfig('ENTITY', 'timer_program');
-        $this->basePath = \bootstrap::parsePath((string)$this->getConfig('TIMER_DIR', '{PROJECT}/cli/timer/'));
-        $this->baseNS   = (string)$this->getConfig('BASE_NS', '\fan\project\cli\timer');
+        $this->basePath = $this->timerRuntime()->parsePath((string)$this->getConfig('TIMER_DIR', '{PROJECT}/timer/'));
+        $this->baseNS   = (string)$this->getConfig('BASE_NS', '\fan\project\timer');
+    }
+
+    public function setTimerDependencies(
+        ?object $runtime = null,
+        ?callable $dateFactory = null,
+        ?callable $entityFactory = null,
+        ?callable $errorFactory = null,
+        ?callable $logFactory = null,
+        ?callable $emailFactory = null,
+        ?callable $programFactory = null
+    ): static
+    {
+        $this->timerRuntime = $runtime;
+        $this->timerDateFactory = $dateFactory;
+        $this->timerEntityFactory = $entityFactory;
+        $this->timerErrorFactory = $errorFactory;
+        $this->timerLogFactory = $logFactory;
+        $this->timerEmailFactory = $emailFactory;
+        $this->timerProgramFactory = $programFactory;
+
+        return $this;
     }
 
     public function chargeProgram(mixed $startTime, string $className, string $methodName, array $param, int|float $period = 0, int|float|null $overcall = null, bool $isShell = true): mixed
     {
-        $startTime = is_numeric($startTime) ? service('date', [date('Y-m-d H:i:s'), 'mysql'])->shiftDate($startTime) : $startTime;
+        $startTime = is_numeric($startTime) ? $this->timerDate(date('Y-m-d H:i:s'), 'mysql')->shiftDate($startTime) : $startTime;
         if (!$startTime) {
             return null;
         }
-        $row = gr($this->ettName);
+        $row = $this->timerEntity()->get($this->ettName)->getNewRow();
         $row->setFields([
             'start_time'     => $startTime,
             'class_name'     => $className,
@@ -74,7 +143,7 @@ class timer extends \fan\core\base\service\single
             // Emulate work of Crontab-line by "at"-command in Windows
             $command = $this->_getCommandLine('CRON_FILE') . $row->getId();
 
-            $date = service('date', [$row->get_start_time(), 'mysql'])->getDateAsArray();
+            $date = $this->timerDate($row->get_start_time(), 'mysql')->getDateAsArray();
             $date[4] += ($date[5] > 55 ? 2 : 1);
             if ($date[4] > 59) {
                 $date[4] -= 60;
@@ -94,7 +163,7 @@ class timer extends \fan\core\base\service\single
 
     public function modifyChargedProgram(string $className, string $methodName, ?array $param = null, int|float|null $period = null, int|float|null $overcall = null): mixed
     {
-        $row = ge($this->ettName)->getRowByParam([
+        $row = $this->timerEntity()->get($this->ettName)->getRowByParam([
             'class_name'  => $className,
             'method_name' => $methodName,
         ]);
@@ -108,7 +177,7 @@ class timer extends \fan\core\base\service\single
 
     public function modifyChargedProgramByPID(string $pid, ?array $param = null, int|float|null $period = null, int|float|null $overcall = null): ?string
     {
-        $row = gr($this->ettName, $pid);
+        $row = $this->timerEntity()->get($this->ettName)->getRowById($pid);
         if ($row->checkIsLoad()) {
             $this->_modifyProgram($row, $param, $period, $overcall);
             return $pid;
@@ -120,14 +189,14 @@ class timer extends \fan\core\base\service\single
     public function runCronProgram(?string $pid = null): bool
     {
         if ($pid) {
-            $row = gr($this->ettName, $pid);
+            $row = $this->timerEntity()->get($this->ettName)->getRowById($pid);
             if ($row->checkIsLoad()) {
                 $this->_runProgram($row);
                 return true;
             }
             return false;
         } else {
-            $ett = ge($this->ettName);
+            $ett = $this->timerEntity()->get($this->ettName);
             if ($this->getConfig('ENABLE_EXEC')) {
                 $rowset = $ett->getRowsetByParam('start_time <= \'' . date('Y-m-d H:i:s') . '\'', -1, -1, 'ORDER BY `last_start`');
                 $jointlyLimit = $this->getConfig('JOINTLY_LIMIT', self::JOINTLY_LIMIT_DEFAULT);
@@ -157,7 +226,7 @@ class timer extends \fan\core\base\service\single
          // If process is started by PID shift time for many hour ahed so disable casual run by CRON
         $pid = $this->chargeProgram($isExec ? 10000 : 0, $className, $methodName, $param, 0, $overcall, false);
         if ($isExec) {
-            ge($this->ettName)->getConnection()->commit(); // ToDo: rebuild it
+            $this->timerEntity()->get($this->ettName)->getConnection()->commit(); // ToDo: rebuild it
             $this->_runBackground((string)$pid);
         }
         return $pid;
@@ -181,9 +250,9 @@ class timer extends \fan\core\base\service\single
 
     // =========================================================== \\
 
-    protected function _runProgram(\fan\model\timer_program\row $timerRow): static
+    protected function _runProgram(timer_program_row $timerRow): static
     {
-        $error = $this->containerService('error');
+        $error = $this->timerError();
         /* @var $error \fan\core\service\error */
         $className = $timerRow->get_class_name();
 
@@ -196,7 +265,9 @@ class timer extends \fan\core\base\service\single
             }
             if ($qttLimit > -1) {
                 $qtt = $timerRow->get_overcall_qtt() + 1;
-                service('log')->logMessage('overcall', 'Quantity of owercall is ' . $qtt . ($qtt > $qttLimit ? ".\nIt is critical quantity (limit = " . $qttLimit . ').' : '.'), 'Timer program overcall', $className);
+                if (is_callable($this->timerLogFactory)) {
+                    $this->timerLog()->logMessage('overcall', 'Quantity of owercall is ' . $qtt . ($qtt > $qttLimit ? ".\nIt is critical quantity (limit = " . $qttLimit . ').' : '.'), 'Timer program overcall', $className);
+                }
                 if ($qtt > $qttLimit) {
                     $error->makeErrorEmail('overcall', 'Timer program overcall', 'Quantity of owercall (' . $qtt . ") is more limit.\n\n" . $className);
                     if (!$period) {
@@ -217,7 +288,7 @@ class timer extends \fan\core\base\service\single
             'is_active'    => 1,
             'last_start'   => date('Y-m-d H:i:s'),
         ]);
-        $prevDate = service('date', [$timerRow->get_start_time(), 'mysql']);
+        $prevDate = $this->timerDate($timerRow->get_start_time(), 'mysql');
         if ($period > 0) {
             $difference = $prevDate->getDifference(date('Y-m-d H:i:s'));
             $startTime  = $prevDate->shiftDate($period * ceil($difference / $period));
@@ -233,15 +304,19 @@ class timer extends \fan\core\base\service\single
             $error->logErrorMessage('Class "'. $className . '" for timer doesn\'t exists.', 'Error run timer proggamm');
             return $this;
         }
-        $obj = new $className();
-        if (!$obj instanceof \fan\core\base\timer_program) {
+        $obj = $this->timerProgram($className);
+        if (!$obj instanceof timer_program) {
             $error->logErrorMessage('Class "'. $className . ' isn\'t instance of \fan\core\base\timer_program.', 'Error run timer proggamm');
             return $this;
         }
 
         // Run Timer-class
         $obj->setTimerRow($timerRow);
-        call_user_func_array([$obj, (string)$timerRow->get_method_name()], (array)$timerRow->get_parameters());
+        if (method_exists($obj, 'setTimerDependencies')) {
+            $obj->setTimerDependencies($error, $this->timerEmail('timer_email'));
+        }
+        $methodName = (string)$timerRow->get_method_name();
+        $obj->{$methodName}(...(array)$timerRow->get_parameters());
 
         // Fix result of Timer-class
         $period2 = $obj->getPeriod();
@@ -261,7 +336,7 @@ class timer extends \fan\core\base\service\single
         return $this;
     }
 
-    protected function _modifyProgram(\fan\core\base\timer_program $row, mixed $param, int|float|null $period, int|float|null $overcall): void
+    protected function _modifyProgram(timer_program $row, mixed $param, int|float|null $period, int|float|null $overcall): void
     {
         if (!is_null($param)) {
             $row->set_parameters($param);
@@ -283,8 +358,71 @@ class timer extends \fan\core\base\service\single
     protected function _getCommandLine(string $key): string
     {
         $separator = defined('DIR_SEPARATOR') ? DIR_SEPARATOR : '/';
-        $command   = str_replace($separator, DIRECTORY_SEPARATOR, \bootstrap::parsePath((string)$this->getConfig($key)));
+        $command   = str_replace($separator, DIRECTORY_SEPARATOR, $this->timerRuntime()->parsePath((string)$this->getConfig($key)));
         return (string)$this->getConfig('PHP_INTERPRETER') . ' ' . $command . ' ';
+    }
+
+    private function timerRuntime(): object
+    {
+        if ($this->timerRuntime === null) {
+            throw new \RuntimeException('Bootstrap runtime service is not configured for timer service.');
+        }
+
+        return $this->timerRuntime;
+    }
+
+    private function timerDate(?string $date = null, mixed $format = null): object
+    {
+        if (!is_callable($this->timerDateFactory)) {
+            throw new \RuntimeException('Date service factory is not configured for timer service.');
+        }
+
+        return ($this->timerDateFactory)($date, $format);
+    }
+
+    private function timerEntity(): object
+    {
+        if (!is_callable($this->timerEntityFactory)) {
+            throw new \RuntimeException('Entity service factory is not configured for timer service.');
+        }
+
+        return ($this->timerEntityFactory)();
+    }
+
+    private function timerError(): object
+    {
+        if (!is_callable($this->timerErrorFactory)) {
+            throw new \RuntimeException('Error service factory is not configured for timer service.');
+        }
+
+        return ($this->timerErrorFactory)();
+    }
+
+    private function timerLog(): object
+    {
+        if (!is_callable($this->timerLogFactory)) {
+            throw new \RuntimeException('Log service factory is not configured for timer service.');
+        }
+
+        return ($this->timerLogFactory)();
+    }
+
+    private function timerEmail(string $name): object
+    {
+        if (!is_callable($this->timerEmailFactory)) {
+            throw new \RuntimeException('Email service factory is not configured for timer service.');
+        }
+
+        return ($this->timerEmailFactory)($name);
+    }
+
+    private function timerProgram(string $className): object
+    {
+        if (!is_callable($this->timerProgramFactory)) {
+            throw new \RuntimeException('Timer program factory is not configured for timer service.');
+        }
+
+        return ($this->timerProgramFactory)($className);
     }
 
 }

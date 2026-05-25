@@ -3,7 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service\user;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\base\model\row;
+
 /**
  * User-data engine by data from entity
  *
@@ -33,11 +34,20 @@ class entity extends base
      */
     protected array $mapping = [];
 
+    private mixed $entityFactory = null;
+
     // ======== Static methods ======== \\
     // ======== Main Interface methods ======== \\
+    public function setEntityFactory(callable $entityFactory): static
+    {
+        $this->entityFactory = $entityFactory;
+
+        return $this;
+    }
+
     public function makePasswordHash(string $password): string
     {
-        $login = array_val($this->data, 'login', $this->identifyer);
+        $login = $this->arrayValueReader()($this->data, 'login', $this->identifyer);
         return $login ? md5((string)$login . $password . (string)$this->config->get('ENGINE_KEY')) : '';
     }
 
@@ -48,7 +58,7 @@ class entity extends base
         $conf = $this->config;
         $this->row = null;
         foreach ($conf->get('IDENTIFYERS') as $v) {
-            $row = ge((string)$conf->get('ENGINE_KEY'))->getRowByParam([$v => $this->identifyer]);
+            $row = $this->entityService()->get((string)$conf->get('ENGINE_KEY'))->getRowByParam([$v => $this->identifyer]);
             if ($row->checkIsLoad()) {
                 $this->row  = $row;
                 $this->data = $this->_getEntityData();
@@ -89,7 +99,7 @@ class entity extends base
         if (!empty($methods)) {
             $required = ['id' => 0, 'password' => 0, 'login' => 0, 'roles' => 0];
             if (count(array_intersect_key($methods, $required)) < 4) {
-                throw new fatalException($this->facade, 'Required keys "' . implode('", "', array_keys($required)) . '" are not get by method "getGettingMap".');
+                throw $this->createUserFatalException('Required keys "' . implode('", "', array_keys($required)) . '" are not get by method "getGettingMap".');
             }
         }
 
@@ -109,13 +119,10 @@ class entity extends base
         return $data;
     }
 
-    /**
-     * @throws fatalException
-     */
     protected function _getMethodList(string $type): ?array
     {
         if (!in_array($type, ['Getting', 'Setting'])) {
-            throw new fatalException($this->facade, 'Incorrect type of mapping "' . $type . '".');
+            throw $this->createUserFatalException('Incorrect type of mapping "' . $type . '".');
         }
 
         while (!isset($this->mapping[$type])) {
@@ -131,25 +138,25 @@ class entity extends base
             } elseif ($type === 'Getting') {
                 $map = null;
             } else {
-                $err  = 'Method for mapping User-data "' . get_class_alt($row) . '::' . $method . '()" isn\'t set.' . "\n";
+                $err  = 'Method for mapping User-data "' . $this->className($row) . '::' . $method . '()" isn\'t set.' . "\n";
                 $err .= 'Keys: ("' . implode('", "', array_keys($keys)) . '").';
-                throw new fatalException($this->facade, $err);
+                throw $this->createUserFatalException($err);
             }
 
-            $this->mapping[$type] = empty($map) ? [] : array_intersect_key(adduceToArray($map), $keys);
+            $this->mapping[$type] = empty($map) ? [] : array_intersect_key($this->arrayAdducer()($map), $keys);
         }
 
         return $this->mapping[$type];
     }
 
-    protected function _getRow(): ?\fan\core\base\model\row
+    protected function _getRow(): ?row
     {
         if (empty($this->row)) {
             $ettKey = $this->config->get('ENGINE_KEY');
             if ($this->isNew) {
-                $this->row = gr((string)$ettKey);
+                $this->row = $this->entityService()->get((string)$ettKey)->getNewRow();
             } elseif (!empty($this->data['id'])) {
-                $this->row = gr((string)$ettKey, $this->data['id']);
+                $this->row = $this->entityService()->get((string)$ettKey)->getRowById($this->data['id']);
             } else {
                 return null;
             }
@@ -157,6 +164,15 @@ class entity extends base
             return null;
         }
         return $this->row;
+    }
+
+    private function entityService(): object
+    {
+        if (is_callable($this->entityFactory)) {
+            return ($this->entityFactory)();
+        }
+
+        throw new \RuntimeException('Entity service is not configured for user entity engine.');
     }
 
     // ======== The magic methods ======== \\

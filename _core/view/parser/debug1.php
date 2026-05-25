@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\view\parser;
+use fan\core\block\base;
+
 /**
  * View parser HTML-type
  *
@@ -24,17 +26,23 @@ class debug1 extends html
      */
     protected ?object $debug = null;
 
-    public function __construct(\fan\core\block\base $mainBlock)
-    {
-        parent::__construct($mainBlock);
-        $this->debug = \fan\project\service\debug::instance();
+    public function __construct(
+        base $mainBlock,
+        ?callable $jsonFactory,
+        object $debug,
+        ?callable $templateFactory = null,
+        ?object $header = null,
+        ?object $locale = null
+    ) {
+        parent::__construct($mainBlock, $jsonFactory, $templateFactory, $header, $locale);
+        $this->debug = $debug;
     }
 
     // ======== Static methods ======== \\
     // ======== The magic methods ======== \\
     // ======== Required Interface methods ======== \\
     // ======== Main Interface methods ======== \\
-    public function getResultData(\fan\core\block\base $rootBlock): array
+    public function getResultData(base $rootBlock): array
     {
         $this->debug->setExtFiles($rootBlock, true);
 
@@ -55,7 +63,7 @@ class debug1 extends html
     }
 
     // ======== Protected methods ======== \\
-    public function _getInternalResultData(\fan\core\block\base $block): array
+    public function _getInternalResultData(base $block): array
     {
         $tplVar = $block->getViewData();
 

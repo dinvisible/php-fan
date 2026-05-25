@@ -1,10 +1,13 @@
 <?php
 
 declare(strict_types=1);
+use fan\core\base\meta\delayed;
+use PHPUnit\Framework\TestCase;
+
 
 require_once __DIR__ . '/../../../../_core/base/meta/delayed.php';
 
-class DelayedTest extends \PHPUnit\Framework\TestCase
+class DelayedTest extends TestCase
 {
     public function testCallsObjectMethodWithArrayArguments(): void
     {
@@ -15,7 +18,7 @@ class DelayedTest extends \PHPUnit\Framework\TestCase
             }
         };
 
-        $delayed = new \fan\core\base\meta\delayed($target, 'build', ['alpha', 'beta']);
+        $delayed = new delayed($target, 'build', ['alpha', 'beta']);
 
         $this->assertSame('alpha:beta', $delayed->getValue());
     }
@@ -32,7 +35,7 @@ class DelayedTest extends \PHPUnit\Framework\TestCase
             }
         };
 
-        $delayed = new \fan\core\base\meta\delayed($target, 'repeat', 'x');
+        $delayed = new delayed($target, 'repeat', 'x');
 
         $this->assertSame('xx', $delayed->getValue());
     }
@@ -46,7 +49,7 @@ class DelayedTest extends \PHPUnit\Framework\TestCase
             }
         };
 
-        $delayed = new \fan\core\base\meta\delayed($target, 'value', null);
+        $delayed = new delayed($target, 'value', null);
 
         $this->assertSame(42, $delayed->getValue());
     }

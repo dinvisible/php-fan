@@ -2,6 +2,9 @@
 declare(strict_types=1);
 
 namespace fan\core\base\model\spec_file\image;
+use fan\core\base\model\rowset;
+use fan\core\base\model\spec_file\entity as spec_file_entity;
+
 /**
  * Entity of image file
  *
@@ -18,7 +21,7 @@ namespace fan\core\base\model\spec_file\image;
  * @version of file: 05.02.006 (20.04.2015)
  * @abstract
  */
-abstract class entity extends \fan\core\base\model\spec_file\entity
+abstract class entity extends spec_file_entity
 {
     protected string $imgRegExp = '/\{IMG(?:_(\d+)|-(\d+))\s*(.*?)\}/is';
 
@@ -104,7 +107,7 @@ abstract class entity extends \fan\core\base\model\spec_file\entity
         return $code;
     }
 
-    private function prepareImgEtt(&$repl, array $matches, array $pos, ?array $linkTbl, string $keyField, bool $adv): \fan\core\base\model\rowset
+    private function prepareImgEtt(&$repl, array $matches, array $pos, ?array $linkTbl, string $keyField, bool $adv): rowset
     {
         // Define by ID
         foreach ($matches[$pos['id']] as $k => $id) {
@@ -122,7 +125,7 @@ abstract class entity extends \fan\core\base\model\spec_file\entity
         if ($linkTbl) {
             foreach ($matches[$pos['num']] as $k => $n) {
                 if ($n) {
-                    $row = gr($linkTbl[0])->loadByParam([
+                    $row = $this->getService()->get($linkTbl[0])->getNewRow()->loadByParam([
                         $linkTbl[1] => $linkTbl[2],
                         'order_num'  => $n,
                     ]);

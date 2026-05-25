@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Basiс xhtml_1 Meta data
+ * Basic admin root Meta data
  *
  * This file is part PHP-FAN (php-framework of Alexandr Nosov)
  * Copyright (C) 2005-2007 Alexandr Nosov, http://www.alex.4n.com.ua/

@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 namespace fan\core\block\admin;
+use fan\core\base\model\row;
+use fan\core\exception\base as exception_base;
+
 /**
  * Admin data class for loader block
  *
@@ -46,13 +49,13 @@ abstract class data extends base
 
     public function init(): void
     {
-        $this->containerService('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
+        $this->roleService()->setSessionRoles('admin', $this->getMeta('login_timeout'));
 
         $data = $this->getData();
 
 
         // ====== Parse gotten data ======= \\
-        $this->containerService('error')->setParseDBerror(false);
+        $this->errorService()->setParseDBerror(false);
         do {
             if (isset($data['edit']) || isset($data['ins'])) {
                 if (empty($data['edit'])) {
@@ -79,7 +82,7 @@ abstract class data extends base
                 }
             }
         } while (false);
-        $this->containerService('error')->setParseDBerror(true);
+        $this->errorService()->setParseDBerror(true);
         if ($this->isError) {
             $this->setText(implode("\n", $this->errorMsg));
             return;
@@ -107,7 +110,7 @@ abstract class data extends base
         return $this;
     }
 
-    public function saveRow(\fan\core\base\model\row $row, array $data, array $fields, array $addFields = []): static
+    public function saveRow(row $row, array $data, array $fields, array $addFields = []): static
     {
         $edtType = $this->getMeta('editableTypes', []);
         $data2 = [];
@@ -130,7 +133,7 @@ abstract class data extends base
     {
     }
 
-    protected function checkDBerror(\fan\core\base\model\row $row, string $errPref = ''): bool
+    protected function checkDBerror(row $row, string $errPref = ''): bool
     {
         $con = $row->getEntity()->getConnection();
         if ($con->isError()) {
@@ -196,12 +199,12 @@ abstract class data extends base
 
     public function getAddParam(): array
     {
-        $ret    = adduceToArray($this->getMeta('addParam', []));
+        $ret    = ($this->arrayAdducer())($this->getMeta('addParam', []));
         $entity = $this->getMeta('entity', []);
         if ($entity) {
-            $ret['id_name'] = ge((string)$entity)->getDescription()->getPrimeryKey();
+            $ret['id_name'] = $this->entityService()->get((string)$entity)->getDescription()->getPrimeryKey();
         }
-        return array_merge_recursive_alt($ret, $this->addParam);
+        return ($this->recursiveMerger())($ret, $this->addParam);
     }
 
     public function getExtraData(): array
@@ -211,7 +214,7 @@ abstract class data extends base
         if ($tagId) {
             $ret['tagId'] = 'cont_' . $tagId;
         }
-        return array_merge_recursive_alt($ret, $this->extraData);
+        return ($this->recursiveMerger())($ret, $this->extraData);
     }
 
     public function getCondition(): array
@@ -219,7 +222,7 @@ abstract class data extends base
         $cond = $this->getMeta('condition', [], true);
         $data = $this->getData();
         if (!empty($data['cond'])) {
-            $cond = array_merge_recursive_alt($cond, $data['cond']);
+            $cond = ($this->recursiveMerger())($cond, $data['cond']);
         }
         return $cond;
     }
@@ -258,7 +261,7 @@ abstract class data extends base
                         if (!isset($data[$fld])) {
                             $data[$fld] = null;
                         }
-                        if (!$this->$method($data[$fld], adduceToArray($rule['rule_data'] ?? []), $type, $id)) {
+                        if (!$this->$method($data[$fld], ($this->arrayAdducer())($rule['rule_data'] ?? []), $type, $id)) {
                             $err[$fld] = str_replace('{FIELD_LABEL}', $this->getFieldLabel($fld), !empty($rule['error_msg']) ? $rule['error_msg'] : 'Error');
                             continue 2;
                         }
@@ -321,9 +324,9 @@ abstract class data extends base
     {
         $value = str_replace(',', '.', (string)$value);
         try {
-            $dateService = service('date', $value);
+            $dateService = $this->dateService($value);
             /* @var $dateService \fan\core\service\date */
-        } catch (\fan\core\exception\base $e) {
+        } catch (exception_base $e) {
             return false;
         }
         $date = $dateService->get('mysql');
@@ -415,8 +418,8 @@ abstract class data extends base
         }
         $dataType = (string)($data['data_type'] ?? '');
         if ($dataType === 'DATE' || $dataType === 'DATETIME') {
-            $value = dateL2M((string)$value);
-            $value2 = dateL2M((string)$value2);
+            $value = $this->dateService((string)$value, 'euro')->get('mysql');
+            $value2 = $this->dateService((string)$value2, 'euro')->get('mysql');
         }
         if ($value <= $value2) {
             return false;
@@ -435,8 +438,8 @@ abstract class data extends base
         }
         $dataType = (string)($data['data_type'] ?? '');
         if ($dataType === 'DATE' || $dataType === 'DATETIME') {
-            $value = dateL2M((string)$value);
-            $value2 = dateL2M((string)$value2);
+            $value = $this->dateService((string)$value, 'euro')->get('mysql');
+            $value2 = $this->dateService((string)$value2, 'euro')->get('mysql');
         }
         if ($value >= $value2) {
             return false;

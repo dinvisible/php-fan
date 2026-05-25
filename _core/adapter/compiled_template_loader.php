@@ -6,29 +6,55 @@ namespace fan\core\adapter;
 
 class compiled_template_loader
 {
-    private static array $paths = [];
-    private static bool $registered = false;
+    private compiled_template_loader_state $state;
 
-    public static function load(string $className, string $path): bool
-    {
-        self::$paths[ltrim($className, '\\')] = $path;
-        self::register();
+    private \Closure $classExists;
+    private \Closure $isReadable;
+    private \Closure $fileLoader;
 
-        return class_exists($className, true);
+    public function __construct(
+        compiled_template_loader_state $state,
+        ?callable $classExists = null,
+        ?callable $isReadable = null,
+        ?callable $fileLoader = null
+    ) {
+        $this->state = $state;
+        $this->classExists = \Closure::fromCallable(
+            $classExists ?? static fn(string $className, bool $autoload = true): bool => class_exists($className, $autoload)
+        );
+        $this->isReadable = \Closure::fromCallable(
+            $isReadable ?? static fn(string $path): bool => is_readable($path)
+        );
+        $this->fileLoader = \Closure::fromCallable(
+            $fileLoader ?? static function (string $path): void {
+                require_once $path;
+            }
+        );
     }
 
-    private static function register(): void
+    public function load(string $className, string $path): bool
     {
-        if (self::$registered) {
+        $this->state->setPath($className, $path);
+        $this->register();
+
+        return ($this->classExists)($className, true);
+    }
+
+    private function register(): void
+    {
+        if ($this->state->isRegistered()) {
             return;
         }
 
-        spl_autoload_register(static function (string $class): void {
-            $path = self::$paths[ltrim($class, '\\')] ?? null;
-            if (is_string($path) && is_readable($path)) {
-                require_once $path;
+        $state = $this->state;
+        $isReadable = $this->isReadable;
+        $fileLoader = $this->fileLoader;
+        spl_autoload_register(static function (string $class) use ($state, $isReadable, $fileLoader): void {
+            $path = $state->getPath($class);
+            if (is_string($path) && $isReadable($path)) {
+                $fileLoader($path);
             }
         });
-        self::$registered = true;
+        $state->markRegistered();
     }
 }

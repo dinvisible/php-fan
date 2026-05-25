@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\base\transfer;
+use fan\core\base\transfer;
+
 /**
  * Outer transfer
  *
@@ -18,14 +20,19 @@ namespace fan\core\base\transfer;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class out extends \fan\core\base\transfer
+class out extends transfer
 {
-    public function __construct(string $newUrn, ?string $newQueryString = null, ?string $dbOper = null)
+    public function __construct(
+        string $newUrn,
+        ?string $newQueryString = null,
+        ?string $dbOper = null,
+        ?object $databaseConnections = null
+    )
     {
         $this->transferType = 'out';
         if ($dbOper !== 'rollback') {
             $dbOper = 'commit';
         }
-        parent::__construct($newUrn, $newQueryString, $dbOper);
+        parent::__construct($newUrn, $newQueryString, $dbOper, $databaseConnections);
     }
 }

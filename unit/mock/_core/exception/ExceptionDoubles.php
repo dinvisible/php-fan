@@ -8,8 +8,6 @@ namespace {
     require_once __DIR__ . '/../../../mock/_core/block/FakeServices.php';
     require_once __DIR__ . '/../../../mock/_core/base/TransferStubs.php';
     require_once __DIR__ . '/../../../../_core/base/service.php';
-    require_once __DIR__ . '/../../../../_core/base/service/multi.php';
-    require_once __DIR__ . '/../../../../_core/service/database.php';
     require_once __DIR__ . '/../../../../_core/base/model/entity.php';
 }
 
@@ -85,12 +83,24 @@ namespace FanTest\_core\exception {
         }
     }
 
-    class TestDatabaseService extends \fan\core\service\database
+    class TestDatabaseService extends \fan\core\base\service
     {
+        private ?string $connectionName = null;
+
         public function __construct(?string $connectionName = 'main', ?string $logType = 'nothing')
         {
             $this->connectionName = $connectionName;
             $this->setExceptionLogType($logType);
+        }
+
+        public function isSingleton(): bool
+        {
+            return false;
+        }
+
+        public function getConnectionName(): ?string
+        {
+            return $this->connectionName;
         }
     }
 

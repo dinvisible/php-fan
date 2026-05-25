@@ -2,7 +2,9 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\base\service\multi;
+
+
 /**
  * CURL service
  *
@@ -18,10 +20,8 @@ use fan\project\exception\service\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.005 (12.02.2015)
  */
-class curl extends \fan\core\base\service\multi
+class curl extends multi
 {
-    private static ?array $instances = null;
-
     /**
      * @var handle CURL instance
      */
@@ -46,16 +46,35 @@ class curl extends \fan\core\base\service\multi
 
     protected bool $separateResponse = true;
 
+    private ?object $state = null;
+    private ?object $curlAdapter = null;
+    private mixed $arrayAdducer = null;
+    private mixed $curlArrayValueReader = null;
+
     /**
      * @param mixed $url URL used as the external request target.
      */
-    protected function __construct(string $url, int|float|string $index)
+    public function __construct(
+        string $url,
+        int|float|string $index,
+        ?object $state = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?object $curlAdapter = null,
+        ?callable $arrayAdducer = null,
+        ?callable $arrayValueReader = null
+    )
     {
         $this->index = $index;
         $this->url   = (string)$url;
-        parent::__construct(true);
+        $this->state = $state;
+        $this->curlAdapter = $curlAdapter ?? throw new \RuntimeException('Curl adapter is not configured for curl service.');
+        $this->arrayAdducer = $arrayAdducer;
+        $this->curlArrayValueReader = $arrayValueReader;
+        parent::__construct(true, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
 
-        $this->curl = curl_init($this->url);
+        $this->curl = $this->curlAdapter->init($this->url);
 
         $this->setOption(CURLOPT_RETURNTRANSFER, 1);
         $this->setOption(CURLOPT_HEADER, 1);
@@ -75,28 +94,16 @@ class curl extends \fan\core\base\service\multi
         $this->close();
     }
 
-    /**
-     * @param mixed $url URL used as the external request target.
-     */
-    public static function instance(string $url, int|float|string $index = 0): static
-    {
-        $url = (string)$url;
-        if (!isset(self::$instances[$index][$url])) {
-            new self($url, $index);
-        }
-        return self::$instances[$index][$url];
-    }
-
     public function setOption(int $key, mixed $val): static
     {
-        curl_setopt($this->curl, $key, $val);
+        $this->curlAdapter->setOption($this->curl, $key, $val);
         return $this;
     }
 
     public function setHeaders(array $headers = []): static
     {
         if ($headers) {
-            $this->setOption(CURLOPT_HTTPHEADER, adduceToArray($headers));
+            $this->setOption(CURLOPT_HTTPHEADER, $this->arrayAdducer()($headers));
         }
         return $this;
     }
@@ -110,13 +117,14 @@ class curl extends \fan\core\base\service\multi
     public function setCookies(mixed $cookies): static
     {
         if (is_array($cookies)) {
-            $cookies = '';
+            $cookieString = '';
             foreach ($cookies as $k => $v) {
-                if (!empty ($cookies)) {
-                    $cookies .= '; ';
+                if (!empty($cookieString)) {
+                    $cookieString .= '; ';
                 }
-                $cookies .= $k . '=' . $v;
+                $cookieString .= $k . '=' . $v;
             }
+            $cookies = $cookieString;
         } else {
             $cookies = (string)$cookies;
         }
@@ -132,7 +140,7 @@ class curl extends \fan\core\base\service\multi
             foreach ($matches as $v){
                 $result[$v[1]] = $v[2];
             }
-            return $key ? array_val($result, $key) : $result;
+            return $key ? $this->curlArrayValueReader()($result, $key) : $result;
         }
         return null;
     }
@@ -140,9 +148,9 @@ class curl extends \fan\core\base\service\multi
     public function close(): static
     {
         if (!is_null($this->curl)) {
-            curl_close($this->curl);
+            $this->curlAdapter->close($this->curl);
             $this->curl = null;
-            self::$instances[$this->url] = null;
+            $this->state?->removeInstance($this->index, $this->url);
         }
         return $this;
     }
@@ -154,12 +162,12 @@ class curl extends \fan\core\base\service\multi
 
     public function getInfo(int|float|null $option = null): mixed
     {
-        return is_null($option) ? curl_getinfo($this->curl) : curl_getinfo($this->curl, (int)$option);
+        return $this->curlAdapter->getInfo($this->curl, $option);
     }
 
     public function getError(): string
     {
-        return curl_error($this->curl);
+        return $this->curlAdapter->error($this->curl);
     }
 
     public function exec(mixed $postData = null, bool $allowExcept = true): ?string
@@ -185,7 +193,7 @@ class curl extends \fan\core\base\service\multi
         $this->headers = [];
         $this->content = null;
 
-        $data = curl_exec($this->curl);
+        $data = $this->curlAdapter->exec($this->curl);
         if ($data) {
             $separator = $this->_getSeparator($data);
             list($headers, $body) = explode($separator . $separator, $data, 2);
@@ -213,7 +221,7 @@ class curl extends \fan\core\base\service\multi
 
         $err = $this->getError();
         if ($err && $allowExcept) {
-            throw new fatalException($this, 'There is CURL error ocured: <b>' . $err . '</b>');
+            throw $this->createServiceFatalException('There is CURL error ocured: <b>' . $err . '</b>');
         }
 
         return $this->getContent();
@@ -227,7 +235,7 @@ class curl extends \fan\core\base\service\multi
 
     public function getResponseHeaders(?string $key = null): mixed
     {
-        return $key ? array_val($this->headers, $key) : $this->headers;
+        return $key ? $this->curlArrayValueReader()($this->headers, $key) : $this->headers;
     }
 
     public function getContent(): ?string
@@ -236,12 +244,6 @@ class curl extends \fan\core\base\service\multi
     }
 
     // ======== Private/Protected methods ======== \\
-
-    protected function _saveInstance(): static
-    {
-        self::$instances[$this->index][$this->url] = $this;
-        return $this;
-    }
 
     protected function _getSeparator(?string $data = null): string
     {
@@ -264,6 +266,24 @@ class curl extends \fan\core\base\service\multi
             }
         }
         return $this;
+    }
+
+    private function arrayAdducer(): callable
+    {
+        if (is_callable($this->arrayAdducer)) {
+            return $this->arrayAdducer;
+        }
+
+        throw new \RuntimeException('Array adducer is not configured for curl service.');
+    }
+
+    private function curlArrayValueReader(): callable
+    {
+        if (is_callable($this->curlArrayValueReader)) {
+            return $this->curlArrayValueReader;
+        }
+
+        throw new \RuntimeException('Array value reader is not configured for curl service.');
     }
 
 }

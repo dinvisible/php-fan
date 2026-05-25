@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\base\model\spec_file;
+use fan\core\base\model\entity as model_entity;
+
 /**
  * Entity of special files
  *
@@ -18,6 +20,6 @@ namespace fan\core\base\model\spec_file;
  * @version of file: 05.02.001 (10.03.2014)
  * @abstract
  */
-abstract class entity extends \fan\core\base\model\entity
+abstract class entity extends model_entity
 {
 }

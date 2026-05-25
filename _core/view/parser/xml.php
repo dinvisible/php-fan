@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\view\parser;
+use fan\core\view\parser;
+
 /**
  * View parser XML-type
  *
@@ -17,10 +19,10 @@ namespace fan\core\view\parser;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
  */
-class xml extends \fan\core\view\parser
+class xml extends parser
 {
     // ======== Static methods ======== \\
-    final static public function getFormat(): string {
+    final static public function getFormat(?callable $exceptionFactory = null): string {
         return 'xml';
     }
 

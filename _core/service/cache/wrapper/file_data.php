@@ -2,6 +2,9 @@
 declare(strict_types=1);
 
 namespace fan\core\service\cache\wrapper;
+use fan\core\base\model\file_data\row;
+use fan\core\service\cache;
+
 /**
  * Cache for save data of file class
  *
@@ -20,8 +23,6 @@ namespace fan\core\service\cache\wrapper;
 
 class file_data
 {
-    use \fan\core\di\container_aware_trait;
-
     /**
      * Row ID
      * @var integer
@@ -48,16 +49,42 @@ class file_data
      */
     protected ?object $cache = null;
 
-    public function __construct(int|\fan\core\base\model\file_data\row $rowData, ?bool $idIsEncrypt = null)
+    private \Closure $cacheFactory;
+
+    private \Closure $entityFactory;
+
+    private ?object $runtime = null;
+
+    private ?object $fileMetadata = null;
+
+    public function __construct(
+        int|row $rowData,
+        ?bool $idIsEncrypt = null,
+        ?callable $cacheFactory = null,
+        ?callable $entityFactory = null,
+        ?object $runtime = null,
+        ?object $fileMetadata = null
+    )
     {
+        $this->cacheFactory = \Closure::fromCallable(
+            $cacheFactory ?? static function (string $type): cache {
+                throw new \RuntimeException('Cache dependency is not configured for file data cache wrapper.');
+            }
+        );
+        $this->entityFactory = \Closure::fromCallable(
+            $entityFactory ?? static function (): object {
+                throw new \RuntimeException('Entity dependency is not configured for file data cache wrapper.');
+            }
+        );
+        $this->runtime = $runtime;
+        $this->fileMetadata = $fileMetadata;
+
         if (is_integer($rowData)) {
             $this->id          = $rowData;
             $this->idIsEncrypt = is_null($idIsEncrypt) ? null : (bool)$idIsEncrypt;
-        } elseif (is_object($rowData) && $rowData instanceof \fan\core\base\model\file_data\row) {
+        } else {
             $this->row = $rowData;
             $this->id  = $rowData->getId();
-        } else {
-            throw new \fan\project\exception\error500('Incorrect call of \fan\core\service\cache\wrapper\file_data');
         }
     }
 
@@ -68,7 +95,7 @@ class file_data
     {
         while (empty($this->data)) {
             $this->data  = $this->_getCache()->get((string)$this->id);
-            if (!empty($this->data)) { // && $this->data['fileDate'] == filemtime($this->data['filePath']) && $this->data['headers']['length'] == filesize($this->data['filePath'])
+            if (!empty($this->data)) {
                 break;
             }
 
@@ -86,10 +113,10 @@ class file_data
                 // ToDo: Additional operation there
                 return false;
             } else {
-                $filePath = \bootstrap::parsePath($row->getFilePath());
+                $filePath = $this->runtime()->parsePath((string)$row->getFilePath());
                 $this->data = [
                     'filePath' => $filePath,
-                    'fileDate' => filemtime($filePath),
+                    'fileDate' => $this->fileMetadata()->modifiedTime($filePath),
                     'rowData'  => $row->toArray(),
                 ];
                 // ToDo: Save cache only if file do not need to check access
@@ -101,10 +128,13 @@ class file_data
 
     // ======== Private/Protected methods ======== \\
 
-    protected function _getRow(): ?\fan\core\base\model\file_data\row
+    protected function _getRow(): ?row
     {
         if (is_null($this->row)) {
-            $this->row = gr($this->containerService('entity')->getFileNsSuffix() . 'file_data');
+            $entityService = $this->entity();
+            $this->row = $entityService
+                ->get($entityService->getFileNsSuffix() . 'file_data')
+                ->getNewRow();
             if (is_null($this->idIsEncrypt)) {
                 $this->row->loadById($this->id, false); // !is_numeric($this->id)
                 if (!$this->row->checkIsLoad()) {
@@ -117,12 +147,66 @@ class file_data
         return $this->row->checkIsLoad() ? $this->row : null;
     }
 
-    protected function _getCache(): \fan\core\service\cache
+    protected function _getCache(): cache
     {
         if (is_null($this->cache)) {
-            $this->cache = $this->containerService('cache', 'file_store');
+            $this->cache = $this->cache('file_store');
         }
         return $this->cache;
+    }
+
+    private function cache(string $type): cache
+    {
+        if (!isset($this->cacheFactory)) {
+            $this->cacheFactory = \Closure::fromCallable(
+                static function (string $type): cache {
+                    throw new \RuntimeException('Cache dependency is not configured for file data cache wrapper.');
+                }
+            );
+        }
+
+        $cache = ($this->cacheFactory)($type);
+        if (!$cache instanceof cache) {
+            throw new \UnexpectedValueException('Cache dependency must be an instance of ' . cache::class . '.');
+        }
+
+        return $cache;
+    }
+
+    private function entity(): object
+    {
+        if (!isset($this->entityFactory)) {
+            $this->entityFactory = \Closure::fromCallable(
+                static function (): object {
+                    throw new \RuntimeException('Entity dependency is not configured for file data cache wrapper.');
+                }
+            );
+        }
+
+        $entity = ($this->entityFactory)();
+        if (!is_object($entity)) {
+            throw new \UnexpectedValueException('Entity dependency must be an object.');
+        }
+
+        return $entity;
+    }
+
+    private function runtime(): object
+    {
+        if ($this->runtime === null) {
+            throw new \RuntimeException('Bootstrap runtime dependency is not configured for file data cache wrapper.');
+        }
+
+        return $this->runtime;
+    }
+
+    private function fileMetadata(): object
+    {
+        if ($this->fileMetadata === null) {
+            throw new \RuntimeException('File metadata dependency is not configured for file data cache wrapper.');
+        }
+
+        return $this->fileMetadata;
     }
 
     // ======== The magic methods ======== \\

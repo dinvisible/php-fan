@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\block\admin;
+use fan\core\block\root\html;
+
 /**
  * Admin root block
  *
@@ -18,7 +20,7 @@ namespace fan\core\block\admin;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class root extends \fan\core\block\root\html
+class root extends html
 {
 
 }

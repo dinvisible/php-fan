@@ -2,7 +2,9 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\base\service\single;
+
+
 /**
  * Class of plain handler
  *
@@ -18,7 +20,7 @@ use fan\project\exception\service\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.008 (15.09.2015)
  */
-class plain extends \fan\core\base\service\single
+class plain extends single
 {
 
     /**
@@ -56,22 +58,40 @@ class plain extends \fan\core\base\service\single
         'cacheLimit'  => 0,
     ];
 
-    protected function __construct(bool $allowIni = true)
-    {
-        parent::__construct($allowIni);
-        $this->matcher = \fan\project\service\matcher::instance();
-    }
+    protected mixed $plainConfigFactory = null;
 
-    // ======== Static methods ======== \\
+    protected ?object $header = null;
 
-    public static function getContent(int|string $key, string $controllerClass, string $method): mixed
+    protected mixed $controllerDependenciesFactory = null;
+
+    protected mixed $controllerFactory = null;
+
+    public function __construct(
+        bool $allowIni = true,
+        ?object $matcher = null,
+        ?callable $plainConfigFactory = null,
+        ?object $header = null,
+        ?callable $controllerDependenciesFactory = null,
+        ?callable $controllerFactory = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null
+    )
     {
-        $instance = \fan\project\service\plain::instance();
-        /* @var $instance \fan\core\service\plain */
-        return $instance->_setController($key, $controllerClass)->_getFinalContent($method);
+        $this->matcher = $matcher;
+        $this->plainConfigFactory = $plainConfigFactory;
+        $this->header = $header;
+        $this->controllerDependenciesFactory = $controllerDependenciesFactory;
+        $this->controllerFactory = $controllerFactory;
+        parent::__construct($allowIni, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
     }
 
     // ======== Main Interface methods ======== \\
+
+    public function handleContent(int|string $key, string $controllerClass, string $method): mixed
+    {
+        return $this->_setController($key, $controllerClass)->_getFinalContent($method);
+    }
 
     public function getHandleData(): array
     {
@@ -85,18 +105,20 @@ class plain extends \fan\core\base\service\single
     {
         $this->matcher->setUri($request, $host, $shiftCurrent);
         $handler = $this->matcher->getCurrentHandler(true)->toArray();
-        return call_user_func_array($handler['method'], empty($handler['param']) ? [] : $handler['param']);
+        $method = $handler['method'];
+
+        return $method(...(empty($handler['param']) ? [] : $handler['param']));
     }
 
     /**
      * @param string $value Value that should be applied or transformed.
      *
-     * @throws fatalException
+     * @throws \fan\project\exception\service\fatal
      */
     public function addHeader(string $key, mixed $value): static
     {
         if (!array_key_exists($key, $this->headers)) {
-            throw new fatalException($this, 'Unknown header key "' . $key . '"');
+            throw $this->createServiceFatalException('Unknown header key "' . $key . '"');
         }
         $this->headers[$key] = $value;
         return $this;
@@ -111,14 +133,14 @@ class plain extends \fan\core\base\service\single
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\service\fatal
      */
     public function setErrorMessage(string $errMsg, int|float $errCode = 404): static
     {
         if (is_numeric($errCode) && $errCode >= 400 && $errCode <= 599) {
             $this->errCode = $errCode;
         } else {
-            throw new fatalException($this, 'Error code has incorrect value "' . $errCode . '". It must be number between 400 and 599');
+            throw $this->createServiceFatalException('Error code has incorrect value "' . $errCode . '". It must be number between 400 and 599');
         }
 
         if (!empty($errMsg)) {
@@ -136,12 +158,12 @@ class plain extends \fan\core\base\service\single
     // ======== Private/Protected methods ======== \\
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\service\fatal
      */
     protected function _getFinalContent(string $method): mixed
     {
         if (empty($this->controller)) {
-            throw new fatalException($this, 'Engine for plain content isn\'t set.');
+            throw $this->createServiceFatalException('Engine for plain content isn\'t set.');
         }
         $result = $this->controller->$method();
         if ($this->isError()) {
@@ -153,25 +175,72 @@ class plain extends \fan\core\base\service\single
     }
 
     /**
-     * @throws fatalException
+     * @throws \fan\project\exception\service\fatal
      */
     protected function _setController(int|string $controllerKey, string $controllerClass): static
     {
         if (!class_exists($controllerClass)) {
-            throw new fatalException($this, 'Can\'t find class "' . $controllerClass . '" for plain content.');
+            throw $this->createServiceFatalException('Can\'t find class "' . $controllerClass . '" for plain content.');
         }
-        $this->controller = new $controllerClass($this, $controllerKey);
+        $this->controller = $this->createController(
+            $controllerClass,
+            $controllerKey,
+            $this->controllerDependencies($controllerClass, $controllerKey)
+        );
         if (method_exists($this->controller, 'setConfig')) {
-            $config = \fan\core\service\config::instance('plain')->getControllerConfig($this->controller, $controllerKey);
+            $config = $this->plainConfig()->getControllerConfig($this->controller, $controllerKey);
             $this->controller->setConfig($config);
         }
         return $this;
     }
 
+    protected function controllerDependencies(string $controllerClass, int|string $controllerKey): array
+    {
+        if (!is_callable($this->controllerDependenciesFactory)) {
+            return [];
+        }
+
+        $dependencies = ($this->controllerDependenciesFactory)($controllerClass, $controllerKey, $this);
+
+        return is_array($dependencies) ? $dependencies : [];
+    }
+
+    protected function createController(string $controllerClass, int|string $controllerKey, array $dependencies): object
+    {
+        if (!is_callable($this->controllerFactory)) {
+            throw new \RuntimeException('Plain controller factory is not configured for plain service.');
+        }
+
+        $controller = ($this->controllerFactory)($controllerClass, $this, $controllerKey, $dependencies);
+        if (!is_object($controller)) {
+            throw new \UnexpectedValueException('Plain controller factory must return an object.');
+        }
+
+        return $controller;
+    }
+
     protected function _assignHeaders(): static
     {
-        $this->containerService('header')->setHeaders($this->headers);
+        $this->header()->setHeaders($this->headers);
         return $this;
+    }
+
+    private function plainConfig(): object
+    {
+        if (!is_callable($this->plainConfigFactory)) {
+            throw new \RuntimeException('Plain config service factory is not configured for plain service.');
+        }
+
+        return ($this->plainConfigFactory)();
+    }
+
+    private function header(): object
+    {
+        if ($this->header !== null) {
+            return $this->header;
+        }
+
+        throw new \RuntimeException('Header service is not configured for plain service.');
     }
 
     protected function _defineError404(): static

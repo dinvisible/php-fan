@@ -20,19 +20,48 @@ namespace fan\core\exception;
  */
 class fatal extends base
 {
-    public function __construct(string $logErrMsg, string $showErrMsg = '', string $errorFile = '', int $code = E_USER_ERROR, ?\Throwable $previous = null)
+    public function __construct(
+        string $logErrMsg,
+        string $showErrMsg = '',
+        string $errorFile = '',
+        int $code = E_USER_ERROR,
+        ?\Throwable $previous = null,
+        ?object $requestInput = null,
+        ?object $exceptionDatabaseConnections = null,
+        ?object $exceptionRuntimeLogger = null,
+        ?object $exceptionRequestService = null,
+        ?object $exceptionErrorService = null,
+        ?callable $requestInputFactory = null,
+        ?object $exceptionHeaderWriter = null
+    )
     {
-        if (!headers_sent()) {
-            header('HTTP/1.1 500 Internal Server Error');
-        }
+        $this->setExceptionDependencies($exceptionDatabaseConnections, $exceptionRuntimeLogger, $exceptionRequestService, $exceptionErrorService, $exceptionHeaderWriter);
+        $this->sendInternalServerErrorHeader();
 
         $this->showErrMsg = $showErrMsg;
         if ($errorFile) {
             $this->showErrFile = $errorFile;
         }
 
-        parent::__construct($showErrMsg, $code, $previous);
+        parent::__construct($showErrMsg, $code, $previous, $exceptionDatabaseConnections, $exceptionRuntimeLogger, $exceptionRequestService, $exceptionErrorService, $exceptionHeaderWriter);
 
-        $this->_logByPhp('Fatal error (http://' . ($_SERVER['HTTP_HOST'] ?? '') . ($_SERVER['REQUEST_URI'] ?? '') . '). ' . $logErrMsg);
+        $input = $requestInput ?? $this->createDefaultRequestInput($requestInputFactory);
+        $host = (string)$input->serverValue('HTTP_HOST', '');
+        $requestUri = (string)$input->serverValue('REQUEST_URI', '');
+        $this->_logByPhp('Fatal error (http://' . $host . $requestUri . '). ' . $logErrMsg);
+    }
+
+    private function createDefaultRequestInput(?callable $requestInputFactory): object
+    {
+        if ($requestInputFactory !== null) {
+            $requestInput = $requestInputFactory();
+            if (!is_object($requestInput)) {
+                throw new \RuntimeException('Fatal exception request input factory must return an object.');
+            }
+
+            return $requestInput;
+        }
+
+        throw new \RuntimeException('Fatal exception request input dependency is not configured.');
     }
 }

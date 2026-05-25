@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service\matcher;
+use fan\core\base\service;
+
 /**
  * Description of stack
  *
@@ -25,10 +27,41 @@ class stack extends \ArrayIterator
      */
     protected ?object $facade = null;
     protected int $current = 0;
+    protected ?object $input = null;
+    protected ?object $runtime = null;
+    protected ?object $locale = null;
+    protected ?object $application = null;
+    protected ?object $routeFileStorage = null;
+    protected mixed $itemFactory = null;
+    protected mixed $itemComponentFactory = null;
+    protected mixed $serviceExceptionFactory = null;
 
-    public function setFacade(\fan\core\base\service $facade): static
+    public function setFacade(service $facade): static
     {
         $this->facade = $facade;
+
+        return $this;
+    }
+
+    public function setItemDependencies(
+        ?object $input = null,
+        ?object $runtime = null,
+        ?object $locale = null,
+        ?object $application = null,
+        ?object $routeFileStorage = null,
+        ?callable $itemFactory = null,
+        ?callable $itemComponentFactory = null,
+        ?callable $serviceExceptionFactory = null
+    ): static
+    {
+        $this->input = $input;
+        $this->runtime = $runtime;
+        $this->locale = $locale;
+        $this->application = $application;
+        $this->routeFileStorage = $routeFileStorage;
+        $this->itemFactory = $itemFactory;
+        $this->itemComponentFactory = $itemComponentFactory;
+        $this->serviceExceptionFactory = $serviceExceptionFactory;
 
         return $this;
     }
@@ -40,11 +73,11 @@ class stack extends \ArrayIterator
             $this->current = $index;
         }
 
-        $item = new \fan\project\service\matcher\item($index);
+        $item = $this->matcherItem($index);
         $this[$index] = $item;
         $item->setFacade($this->facade);
 
-        if (\bootstrap::isCli()) {
+        if ($this->runtime()->isCli()) {
             $item->initCli($request, (string)$position);
             // Pre-Parse Request
             //$item->preParseRequest($shiftCurrent);
@@ -55,6 +88,33 @@ class stack extends \ArrayIterator
         }
 
         return $this;
+    }
+
+    private function matcherItem(int $index): object
+    {
+        if (!is_callable($this->itemFactory)) {
+            throw new \RuntimeException('Matcher item factory is not configured for matcher stack.');
+        }
+
+        return ($this->itemFactory)(
+            $index,
+            $this->input,
+            $this->runtime,
+            $this->locale,
+            $this->application,
+            $this->routeFileStorage,
+            $this->itemComponentFactory,
+            $this->serviceExceptionFactory
+        );
+    }
+
+    protected function runtime(): object
+    {
+        if ($this->runtime !== null) {
+            return $this->runtime;
+        }
+
+        throw new \RuntimeException('Bootstrap runtime service is not configured for matcher stack.');
     }
 
     public function getLastIndex(): int

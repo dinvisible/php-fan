@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\app\frontend\common;
+use fan\project\block\root\html5;
+
 /**
  * Viewer root block
  *
@@ -18,6 +20,6 @@ namespace fan\app\frontend\common;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class root extends \fan\project\block\root\html5
+class root extends html5
 {
 }

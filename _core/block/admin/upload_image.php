@@ -3,6 +3,11 @@
 declare(strict_types=1);
 
 namespace fan\core\block\admin;
+use fan\core\base\model\entity;
+use fan\core\base\model\row;
+use fan\core\base\model\spec_file\image\row as image_row;
+use fan\core\block\base as block_base;
+
 /**
  * Admin upload image file class for loader block
  *
@@ -20,6 +25,7 @@ namespace fan\core\block\admin;
  */
 class upload_image extends base
 {
+    use upload_size_limit_provider_aware_trait;
 
     protected ?array $image = [];
 
@@ -27,10 +33,10 @@ class upload_image extends base
 
     protected ?string $fileNs = null;
 
-    public function finishConstruct(?\fan\core\block\base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
+    public function finishConstruct(?block_base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
     {
         parent::finishConstruct($container, $containerMeta, $allowSetEmbedded);
-        $this->image = $this->containerService('request')->get('image', 'F');
+        $this->image = $this->requestService()->get('image', 'F');
         if (!is_array($this->image)) {
             $this->image = null;
             return;
@@ -43,25 +49,24 @@ class upload_image extends base
             $this->error = 'File was broken!';
         } elseif ($uploadError === UPLOAD_ERR_INI_SIZE || $uploadError === UPLOAD_ERR_FORM_SIZE) {
             $this->image = null;
-            $this->error = 'Incorrect file size (there is limit ' . ini_get('upload_max_filesize') . ')!';
+            $this->error = 'Incorrect file size (there is limit ' . $this->uploadSizeLimit() . ')!';
         } elseif (!$this->image['tmp_name'] || $this->image['error']) {
             $this->image = null;
         } else {
-            $par = getimagesize((string)$this->image['tmp_name']);
+            $par = $this->imageMetadataReader()->size((string)$this->image['tmp_name']);
             if (!$par) {
                 $this->image = null;
                 $this->error = 'It isn\'t image!';
             }
         }
         if (!$this->error && $this->image && $this->getMeta('max_size')) {
-            $par = getimagesize((string)$this->image['tmp_name']);
             $w = $this->getMeta(['max_size', 'width']);
             $h = $this->getMeta(['max_size', 'height']);
             $w = is_null($w) ? null : (int)$w;
             $h = is_null($h) ? null : (int)$h;
 
             $color = $this->getMeta('b_color', 0XFFFFFF);
-            $img = service('image_modify', (string)$this->image['tmp_name']);
+            $img = $this->imageModifyService((string)$this->image['tmp_name']);
             if ($par[0] > $w || $par[1] > $h) {
                 $img->scal($w, $h, (int)$this->getMeta('mode', 1), is_array($color) ? $color : (int)$color);
             } elseif ($this->getMeta('allow_relocate', false)) {
@@ -78,7 +83,7 @@ class upload_image extends base
 
     public function init(): void
     {
-        $this->containerService('role')->setSessionRoles('admin', $this->getMeta('login_timeout'));
+        $this->roleService()->setSessionRoles('admin', $this->getMeta('login_timeout'));
 
         if ($this->error) {
             $this->setText($this->error);
@@ -127,7 +132,7 @@ class upload_image extends base
         $this->setText('ok');
     }
 
-    public function operationDeleteImage(array &$data, \fan\core\base\model\row $mainRow, ?\fan\core\base\model\row $linkRow, \fan\core\base\model\spec_file\image\row $img, array $main, ?array $link): void
+    public function operationDeleteImage(array &$data, row $mainRow, ?row $linkRow, image_row $img, array $main, ?array $link): void
     {
         if ($img->checkIsLoad()) {
             if ($link) {
@@ -141,9 +146,9 @@ class upload_image extends base
         }
     }
 
-    public function operationUploadImage(array &$data, \fan\core\base\model\row $mainRow, ?\fan\core\base\model\row $linkRow, \fan\core\base\model\spec_file\image\row $img, array $main, ?array $link): void
+    public function operationUploadImage(array &$data, row $mainRow, ?row $linkRow, image_row $img, array $main, ?array $link): void
     {
-        $req = $this->containerService('request');
+        $req = $this->requestService();
         $img->setFormFile('image', [], $req->get('description', 'P', ''), $req->get('alt_txt', 'P', ''));
         if ($img->checkIsLoad() && empty($data['imgId'])) {
             $img->getEntity()->getConnection()->commit();
@@ -155,7 +160,7 @@ class upload_image extends base
         }
     }
 
-    public function operationSetAttributes(array &$data, \fan\core\base\model\spec_file\image\row $img): void
+    public function operationSetAttributes(array &$data, image_row $img): void
     {
         if ($img->checkIsLoad()) {
             $img->setFields(['alt' => $data['alt']], true);
@@ -201,7 +206,7 @@ class upload_image extends base
         return $ret;
     }
 
-    public function getImageOneData(\fan\core\base\model\row $mainRow, array $main, mixed $link): ?array
+    public function getImageOneData(row $mainRow, array $main, mixed $link): ?array
     {
         if ($link) {
             $lstId = $this->getEntity((string)$link['entity'])->getRowsetByParam($link['main_id'])->getColumn($link['img_id']);
@@ -227,9 +232,9 @@ class upload_image extends base
     /**
      * @param mixed $id Unique identifier used to locate the target item.
      */
-    private function getRow(string $ettName, mixed $id = null): \fan\core\base\model\row
+    private function getRow(string $ettName, mixed $id = null): row
     {
-        $row = gr($ettName);
+        $row = $this->entityService()->get($ettName)->getNewRow();
         $con = $this->getMeta('connection');
         if ($con) {
             $row->setConnection($con);
@@ -238,16 +243,18 @@ class upload_image extends base
         return $row;
     }
 
-    private function getEntity(string $ettName): \fan\core\base\model\entity
+    private function getEntity(string $ettName): entity
     {
         $connection = $this->getMeta('connection');
-        return empty($connection) ? ge($ettName) : ge($ettName, 1)->setConnection($connection);
+        return empty($connection)
+            ? $this->entityService()->get($ettName)
+            : $this->entityService(1)->get($ettName)->setConnection($connection);
     }
 
     private function getEttImageName(): string
     {
         if (is_null($this->fileNs)) {
-            $this->fileNs = $this->containerService('entity')->getFileNsSuffix() . 'image';
+            $this->fileNs = $this->entityService()->getFileNsSuffix() . 'image';
         }
         return $this->fileNs;
     }

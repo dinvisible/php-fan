@@ -2,7 +2,8 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\project\exception\service\fatal as fatalException;
+use fan\core\base\service\single;
+
 /**
  * Request service
  *
@@ -18,7 +19,7 @@ use fan\project\exception\service\fatal as fatalException;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.007 (31.08.2015)
  */
-class request extends \fan\core\base\service\single
+class request extends single
 {
     private array $data = [
         'A0' => null, // Add(itional) request (See \fan\core\service\matcher\item\parsed)
@@ -72,7 +73,7 @@ class request extends \fan\core\base\service\single
     /**
      * @var \fan\core\service\matcher
      */
-    private mixed $matcher = '';
+    private mixed $matcher = null;
 
     private ?string $order = null;
 
@@ -82,21 +83,53 @@ class request extends \fan\core\base\service\single
      */
     private ?string $rawPost = null;
 
+    private ?object $input = null;
 
-    protected function __construct()
+    private ?object $runtime = null;
+
+    private mixed $jsonFactory = null;
+
+    private mixed $cookieFactory = null;
+
+    private mixed $matcherFactory = null;
+
+    private mixed $arrayAdducer = null;
+
+    private mixed $recursiveMerger = null;
+
+    private mixed $arrayValueReader = null;
+
+    public function __construct(
+        ?object $input = null,
+        ?object $runtime = null,
+        ?callable $jsonFactory = null,
+        ?callable $cookieFactory = null,
+        ?callable $matcherFactory = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?callable $arrayAdducer = null,
+        ?callable $recursiveMerger = null,
+        ?callable $arrayValueReader = null,
+        ?callable $classNameResolver = null
+    )
     {
-        parent::__construct();
+        $this->input = $input;
+        $this->runtime = $runtime;
+        $this->jsonFactory = $jsonFactory;
+        $this->cookieFactory = $cookieFactory;
+        $this->matcherFactory = $matcherFactory;
+        $this->arrayAdducer = $arrayAdducer;
+        $this->recursiveMerger = $recursiveMerger;
+        $this->arrayValueReader = $arrayValueReader;
+        parent::__construct(true, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory, null, null, $classNameResolver, $arrayValueReader);
         $this->order = strtoupper((string)$this->getConfig('DEFAULT_ORDER', 'PAG'));
 
         // Set all basic data
         foreach ($this->correspondence as $k => $v) {
-            if (empty($GLOBALS[$v])) {
-                $this->data[$k] = [];
-            } else {
-                $this->data[$k] = $GLOBALS[$v];
-            }
+            $this->data[$k] = $this->input()->globalArray($v);
         }
-        if (\bootstrap::isCli()) {
+        if ($this->runtime()->isCli()) {
             $this->data['O'] = $this->_makeOptions();
         } else {
             $this->data['H'] = $this->_makeHeaders();
@@ -144,9 +177,10 @@ class request extends \fan\core\base\service\single
     public function getAll(?string $order = null, mixed $default = [], bool $extraAdd = true): mixed
     {
         $result = [];
+        $recursiveMerger = $this->recursiveMerger();
         foreach ($this->_separateData($order, $extraAdd) as $v) {
             if (!empty($v)) {
-                $result = array_merge_recursive_alt($v, $result);
+                $result = $recursiveMerger($v, $result);
             }
         }
         return empty($result) ? $default : $result;
@@ -155,20 +189,16 @@ class request extends \fan\core\base\service\single
     public function getRawPost(string $convFormat = 'json', bool $useBase64 = false): mixed
     {
         if (is_null($this->rawPost)) {
-            $this->rawPost = (string)file_get_contents('php://input'); // ToDo: Define different source there
+            $this->rawPost = $this->input()->rawPost();
         }
         switch (strtolower($convFormat)) {
         case 'json':
-            return $this->containerService('json', (bool)$useBase64)->decode($this->rawPost);
+            return $this->getJsonDecoder((bool)$useBase64)->decode($this->rawPost);
         case 'xml':
-            function conv(mixed $item): mixed
-            {
-                if (is_object($item) || is_array($item)) {
-                    return array_map('conv', (array)$item);
-                }
-                return $item;
-            }
-            return array_map('conv', (array)simplexml_load_string($this->rawPost));
+            return array_map(
+                fn(mixed $item): mixed => $this->convertXmlRawPostItem($item),
+                (array)simplexml_load_string($this->rawPost)
+            );
         }
         return $this->rawPost;
     }
@@ -185,13 +215,13 @@ class request extends \fan\core\base\service\single
 
     public function remove(string $key, string $type = 'G', bool $fullUnset = false): void
     {
-        $glob = adduceToArray($this->getConfig('ALLOW_SET', ['G' => '_GET', 'P' => '_POST', 'R' => '_REQUEST']));
+        $glob = $this->arrayAdducer()($this->getConfig('ALLOW_SET', ['G' => '_GET', 'P' => '_POST', 'R' => '_REQUEST']));
         for ($i = 0; $i < strlen($type); $i++) {
             $k = $type[$i];
             if ($this->_isAllowToSet($k)) {
                 unset($this->data[$k][$key]);
-                if ($fullUnset && isset($GLOBALS[$glob[$k]][$key])) {
-                    unset($GLOBALS[$glob[$k]][$key]);
+                if ($fullUnset && isset($glob[$k])) {
+                    $this->input()->unsetGlobalValue((string)$glob[$k], $key);
                 }
             }
         }
@@ -201,7 +231,7 @@ class request extends \fan\core\base\service\single
     {
         $matcher = $this->_getMatcher();
         if ($byGetData || empty($matcher)) {
-            $get = $current && !empty($matcher) ? $this->getAll('G') : $_GET;
+            $get = $current && !empty($matcher) ? $this->getAll('G') : $this->input()->get();
             return http_build_query($get, '', ($sprtr ? : '&'));
         }
         $item = $current ? $matcher->getCurrentItem() : $matcher->getItem(0);
@@ -213,8 +243,9 @@ class request extends \fan\core\base\service\single
         $keys = ['HTTP_HOST', 'HTTP_REFERER', 'HTTP_USER_AGENT', 'REMOTE_ADDR', 'REMOTE_PORT', 'REQUEST_METHOD', 'QUERY_STRING', 'REQUEST_URI'];
         $info = '';
         foreach ($keys as $key) {
-            if (isset($_SERVER[$key])) {
-                $info .= $key . ' = ' . $_SERVER[$key] . ";\n";
+            $value = $this->input()->serverValue($key);
+            if ($value !== null) {
+                $info .= $key . ' = ' . $value . ";\n";
             }
         }
         return trim($info);
@@ -246,6 +277,7 @@ class request extends \fan\core\base\service\single
         $order   = empty($order) ? (string)$this->order : strtoupper($order);
         $matcher = $this->_getMatcher();
         $index   = empty($matcher) ? -1 : $matcher->getCurrentIndex();
+        $arrayValueReader = $this->arrayValueReader();
 
         for ($i = 0; $i < strlen($order); $i++) {
             $k0 = $k1 = $order[$i];
@@ -253,13 +285,14 @@ class request extends \fan\core\base\service\single
                 $k1 .= $extraAdd ? '0' : '1';
             }
             if (array_key_exists($k1, $this->data)) {
-                if (isset($this->maker[$k0]) && array_val($this->makerIndex, $k1) !== $index) {
-                    $this->data[$k1] = call_user_func([$this, $this->maker[$k0]], $extraAdd);
+                if (isset($this->maker[$k0]) && $arrayValueReader($this->makerIndex, $k1) !== $index) {
+                    $maker = $this->maker[$k0];
+                    $this->data[$k1] = $this->{$maker}($extraAdd);
                     $this->makerIndex[$k1] = $index;
                 }
                 $data[$k0] = $this->data[$k1];
             } else {
-                throw new fatalException($this, 'Incorrect symbols in order "' . $order . '". Possible symbols "' . implode('', array_keys($this->data)) . '".');
+                throw $this->createServiceFatalException('Incorrect symbols in order "' . $order . '". Possible symbols "' . implode('', array_keys($this->data)) . '".');
             }
         }
         return $data;
@@ -267,24 +300,7 @@ class request extends \fan\core\base\service\single
 
     protected function _makeHeaders(): array
     {
-        if (function_exists('apache_request_headers')) {
-            return apache_request_headers();
-        }
-
-        $headers = [];
-        foreach ($_SERVER as $k => $v) {
-            if (substr($k, 0, 5) === 'HTTP_') {
-                $k = substr($k, 5);
-                $keys = explode('_', $k);
-                if (true) { // ToDo: Disable for some $k
-                    foreach ($keys as &$key) {
-                        $key = ucfirst(strtolower($key));
-                    }
-                }
-                $headers[implode('-', $keys)] = $v;
-            }
-        }
-        return $headers;
+        return $this->input()->headers();
     }
 
     protected function _makeAddRequest(bool $extraAdd): array
@@ -331,13 +347,12 @@ class request extends \fan\core\base\service\single
 
     protected function _makeCookies(): array
     {
-        return \fan\project\service\cookie::instance()->getAll();
+        return $this->getCookieService()->getAll();
     }
 
     protected function _makeOptions(): array
     {
-        global $argv;
-        $options = $argv;
+        $options = $this->input()->argv();
         array_shift($options);
         return $options;
     }
@@ -348,26 +363,98 @@ class request extends \fan\core\base\service\single
         return $matcher ? $matcher->getCurrentItem()->parsed->$prop : [];
     }
 
-    /**
-     * @throws fatalException
-     */
     protected function _isAllowToSet(string $type): bool
     {
         if (in_array($type, ['A', 'B', 'M'])) {
             return false;
         }
         if (strlen($type) !== 1 || !array_key_exists($type, $this->data)) {
-            throw new fatalException($this, 'Incorrect type for set "' . $type . '". Possible one of symbols "' . implode('', array_keys($this->data)) . '".');
+            throw $this->createServiceFatalException('Incorrect type for set "' . $type . '". Possible one of symbols "' . implode('', array_keys($this->data)) . '".');
         }
-        $allowSet = adduceToArray($this->getConfig('ALLOW_SET', ['G' => '_GET', 'P' => '_POST', 'R' => '_REQUEST']));
+        $allowSet = $this->arrayAdducer()($this->getConfig('ALLOW_SET', ['G' => '_GET', 'P' => '_POST', 'R' => '_REQUEST']));
         return !empty($allowSet[$type]);
     }
 
     protected function _getMatcher(): mixed
     {
-        if (empty($this->matcher) && class_exists('\fan\core\service\matcher', false)) {
-            $this->matcher = \fan\project\service\matcher::instance();
+        if (empty($this->matcher) && is_callable($this->matcherFactory)) {
+            $this->matcher = ($this->matcherFactory)();
         }
         return $this->matcher;
+    }
+
+    private function input(): object
+    {
+        if ($this->input !== null) {
+            return $this->input;
+        }
+
+        throw new \RuntimeException('Request input service is not configured for request service.');
+    }
+
+    private function runtime(): object
+    {
+        if ($this->runtime !== null) {
+            return $this->runtime;
+        }
+
+        throw new \RuntimeException('Bootstrap runtime service is not configured for request service.');
+    }
+
+    private function getJsonDecoder(bool $useBase64): object
+    {
+        if (is_callable($this->jsonFactory)) {
+            return ($this->jsonFactory)($useBase64);
+        }
+
+        throw new \RuntimeException('JSON service factory is not configured for request service.');
+    }
+
+    private function getCookieService(): object
+    {
+        if (is_callable($this->cookieFactory)) {
+            return ($this->cookieFactory)();
+        }
+
+        throw new \RuntimeException('Cookie service factory is not configured for request service.');
+    }
+
+    private function arrayAdducer(): callable
+    {
+        if (is_callable($this->arrayAdducer)) {
+            return $this->arrayAdducer;
+        }
+
+        throw new \RuntimeException('Array adducer is not configured for request service.');
+    }
+
+    private function recursiveMerger(): callable
+    {
+        if (is_callable($this->recursiveMerger)) {
+            return $this->recursiveMerger;
+        }
+
+        throw new \RuntimeException('Recursive merger is not configured for request service.');
+    }
+
+    protected function arrayValueReader(): callable
+    {
+        if (is_callable($this->arrayValueReader)) {
+            return $this->arrayValueReader;
+        }
+
+        throw new \RuntimeException('Array value reader is not configured for request service.');
+    }
+
+    private function convertXmlRawPostItem(mixed $item): mixed
+    {
+        if (is_object($item) || is_array($item)) {
+            return array_map(
+                fn(mixed $value): mixed => $this->convertXmlRawPostItem($value),
+                (array)$item
+            );
+        }
+
+        return $item;
     }
 }

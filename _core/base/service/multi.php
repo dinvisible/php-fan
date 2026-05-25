@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 namespace fan\core\base\service;
+use fan\core\base\service;
+
 /**
  * Base abstract service
  *
@@ -19,7 +21,7 @@ namespace fan\core\base\service;
  * @version of file: 05.02.001 (10.03.2014)
  * @abstract
  */
-abstract class multi extends \fan\core\base\service
+abstract class multi extends service
 {
     // ======== Static methods ======== \\
 

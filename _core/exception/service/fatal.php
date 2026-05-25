@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 namespace fan\core\exception\service;
+use fan\core\base\service;
+use fan\core\exception\base;
+
 /**
  * Exception a service fatal error
  *
@@ -18,7 +21,7 @@ namespace fan\core\exception\service;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.011 (03.10.2015)
  */
-class fatal extends \fan\core\exception\base
+class fatal extends base
 {
 
     /**
@@ -26,16 +29,25 @@ class fatal extends \fan\core\exception\base
      */
     protected ?object $service = null;
 
-    public function __construct(\fan\core\base\service $service, string $logErrMsg, int $code = E_USER_ERROR, ?\Throwable $previous = null)
+    public function __construct(
+        service $service,
+        string $logErrMsg,
+        int $code = E_USER_ERROR,
+        ?\Throwable $previous = null,
+        ?object $exceptionDatabaseConnections = null,
+        ?object $exceptionRuntimeLogger = null,
+        ?object $exceptionRequestService = null,
+        ?object $exceptionErrorService = null
+    )
     {
         $this->service = $service;
 
-        parent::__construct($logErrMsg, $code, $previous);
+        parent::__construct($logErrMsg, $code, $previous, $exceptionDatabaseConnections, $exceptionRuntimeLogger, $exceptionRequestService, $exceptionErrorService);
 
         $this->_logErrorMessage($service->getExceptionLogType());
     }
 
-    public function getService(): \fan\core\base\service
+    public function getService(): service
     {
         return $this->service;
     }
@@ -44,7 +56,13 @@ class fatal extends \fan\core\exception\base
     {
         if (in_array($logType, ['php', 'service'])) {
             $logMethod = $logType === 'php' ? '_logByPhp' : '_logByService';
-            $this->$logMethod('Service fatal error (' . get_class($this->service) . '). ' . $this->logErrMsg);
+            try {
+                $this->$logMethod('Service fatal error (' . get_class($this->service) . '). ' . $this->logErrMsg);
+            } catch (\RuntimeException $exception) {
+                if (!str_starts_with($exception->getMessage(), 'Exception ') || !str_contains($exception->getMessage(), ' dependency is not configured.')) {
+                    throw $exception;
+                }
+            }
         }
         return $this;
     }

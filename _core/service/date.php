@@ -2,8 +2,9 @@
 declare(strict_types=1);
 
 namespace fan\core\service;
-use fan\project\exception\service\fatal as fatalException;
-use fan\project\exception\service\date as dateException;
+use fan\core\base\service\multi;
+
+
 /**
  * Timer manager service
  *
@@ -20,16 +21,8 @@ use fan\project\exception\service\date as dateException;
  * @version of file: 05.02.009 (23.09.2015)
  */
 // ToDo: redesign this class
-class date extends \fan\core\base\service\multi
+class date extends multi
 {
-    /**
-     * @var boolean Is Global init
-     * @var \fan\core\service\config\row
-     */
-    private static ?object $globalConfig = null;
-
-    private static array $instances = [];
-
     protected ?object $date = null;
 
     protected ?string $format = null;
@@ -40,86 +33,53 @@ class date extends \fan\core\base\service\multi
 
     protected bool $save = true;
 
-    protected function __construct(\DateTime $date, mixed $format, bool $isTime, mixed $timezone, bool $save)
+    private ?object $state = null;
+
+    private mixed $dateFactory = null;
+
+    private mixed $dateInstanceFactory = null;
+
+    private ?object $dateServiceBootstrapRuntime = null;
+
+    private ?object $dateServiceConfigurator = null;
+
+    private mixed $dateServiceCacheFactory = null;
+
+    private mixed $dateClassNameResolver = null;
+
+    private mixed $dateArrayValueReader = null;
+
+    public function __construct(
+        \DateTime $date,
+        mixed $format,
+        bool $isTime,
+        mixed $timezone,
+        bool $save,
+        ?object $state = null,
+        ?callable $dateFactory = null,
+        ?object $serviceBootstrapRuntime = null,
+        ?object $serviceConfigurator = null,
+        ?callable $serviceCacheFactory = null,
+        ?callable $classNameResolver = null,
+        ?callable $arrayValueReader = null,
+        ?callable $dateInstanceFactory = null
+    )
     {
         $this->date     = $date;
         $this->format   = $format === null ? null : (string)$format;
         $this->isTime   = (bool)$isTime;
         $this->timezone = $timezone === null ? null : (string)$timezone;
         $this->save     = (bool)$save;
-        parent::__construct();
+        $this->state    = $state;
+        $this->dateFactory = $dateFactory;
+        $this->dateServiceBootstrapRuntime = $serviceBootstrapRuntime;
+        $this->dateServiceConfigurator = $serviceConfigurator;
+        $this->dateServiceCacheFactory = $serviceCacheFactory;
+        $this->dateClassNameResolver = $classNameResolver;
+        $this->dateArrayValueReader = $arrayValueReader;
+        $this->dateInstanceFactory = $dateInstanceFactory;
+        parent::__construct(true, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory, null, null, $classNameResolver, $arrayValueReader);
 
-    }
-
-    // ======== Static methods ======== \\
-
-    /**
-     * @throws \fan\core\exception\service\date
-     */
-    public static function instance(?string $date = null, mixed $format = null, mixed $timezone = null, bool $save = true): static
-    {
-        $config = self::_getGlobalConfig();
-        $timezoneDefault = (string)$config->get('TIMEZONE', 'Europe/Kiev');
-        if (empty(self::$instances)) {
-            date_default_timezone_set($timezoneDefault);
-        }
-        if (is_null($timezone)) {
-            $timezone = $timezoneDefault;
-        }
-
-        if (is_null($format)) {
-            $date = null;
-            foreach ($config->get('DEFAULT_FORMAT', []) as $v) {
-                list($isTime, $date) = self::_getDate($config, $date, (string)$v, (string)$timezone);
-                if (!is_null($date)) {
-                    $format = (string)$v;
-                    break;
-                }
-            }
-        } else {
-            list($isTime, $date) = self::_getDate($config, $date, (string)$format, (string)$timezone);
-        }
-
-        if (is_null($date)) {
-            throw new dateException('Can\'t get date by "' . $date . '" format "' . $format . '".');
-        }
-
-        $key0 = $isTime ? 1 : 0;
-        $key3 = $date->format('YmdHisu');
-        if (!$save || !isset(self::$instances[$key0][$timezone][$format][$key3])) {
-            return new self($date, $format, $isTime, $timezone, $save);
-        }
-        return self::$instances[$key0][$timezone][$format][$key3];
-    }
-    protected static function _getGlobalConfig(): \fan\core\service\config\row
-    {
-        if (empty(self::$globalConfig)) {
-            self::$globalConfig = self::staticContainerService('config')->get('date');
-        }
-        return self::$globalConfig;
-    }
-    /**
-     * @throws \fan\core\exception\service\date
-     */
-    protected static function _getDate(\fan\core\service\config\row $config, ?string $date, string $format, string $timezone): array
-    {
-        $confFormat = $config->get(['FORMAT', $format]);
-        if (is_null($confFormat)) {
-            throw new dateException('Requested format "' . $format . '" isn\'t found.');
-        }
-
-        $timezone = new \DateTimeZone($timezone);
-        $dateValue = (string)$date;
-
-        $fullFormat = $confFormat->get('full_pattern');
-        $date = \DateTime::createFromFormat((string)$fullFormat, $dateValue, $timezone);
-        if (!is_bool($date)) {
-            return [true, $date];
-        }
-
-        $shortFormat = (string)$confFormat->get('short_pattern') . ' H:i:s';
-        $date = \DateTime::createFromFormat($shortFormat, $dateValue . ' 00:00:00', $timezone);
-        return is_bool($date) ? [null, null] : [false, $date];
     }
 
     // ======== Main Interface methods ======== \\
@@ -140,10 +100,10 @@ class date extends \fan\core\base\service\multi
     public function setFormat(string $format): static
     {
         if ($this->save) {
-            throw new fatalException($this, 'You can change format only for not saved date.');
+            throw $this->createServiceFatalException('You can change format only for not saved date.');
         }
         if (!isset($this->config['FORMAT'][$format])) {
-            throw new fatalException($this, 'Unknown date format "' . $format . '"');
+            throw $this->createServiceFatalException('Unknown date format "' . $format . '"');
         }
         $this->format = $format;
         return $this;
@@ -172,7 +132,7 @@ class date extends \fan\core\base\service\multi
 
     public function getDifference(string $date2, bool $abs = true): int
     {
-        $date2 = service('date', [$date2, $this->format, $this->timezone, $this->save]);
+        $date2 = $this->createDate($date2, $this->format, $this->timezone, $this->save);
         $ret = $this->getTimeStamp() - $date2->getTimeStamp();
         return $abs ? abs($ret) : $ret;
     }
@@ -187,15 +147,29 @@ class date extends \fan\core\base\service\multi
         $date = clone $this->date;
         $result = $date->modify($modify);
         if (is_bool($result)) {
-            throw new fatalException($this, 'Can\'t modify date by "' . $modify . '"');
+            throw $this->createServiceFatalException('Can\'t modify date by "' . $modify . '"');
         }
 
         $key0 = $this->isTime ? 1 : 0;
         $key3 = $date->format('YmdHisu');
-        if (!$this->save || !isset(self::$instances[$key0][$this->timezone][$this->format][$key3])) {
-            return new self($result, $this->format, $this->isTime, $this->timezone, $this->save);
+        $saved = $this->state?->getInstance($this->isTime, (string)$this->timezone, (string)$this->format, $key3);
+        if (!$this->save || $saved === null) {
+            return $this->createDateInstance(
+                $result,
+                $this->format,
+                $this->isTime,
+                $this->timezone,
+                $this->save,
+                $this->state,
+                $this->dateFactory,
+                $this->dateServiceBootstrapRuntime,
+                $this->dateServiceConfigurator,
+                $this->dateServiceCacheFactory,
+                $this->dateClassNameResolver,
+                $this->dateArrayValueReader
+            );
         }
-        return self::$instances[$key0][$this->timezone][$this->format][$key3];
+        return $saved;
     }
 
     public function toArray(): array
@@ -213,9 +187,8 @@ class date extends \fan\core\base\service\multi
     protected function _saveInstance(): static
     {
         if ($this->save) {
-            $key0 = $this->isTime ? 1 : 0;
             $key3 = $this->date->format('YmdHisu');
-            self::$instances[$key0][$this->timezone][$this->format][$key3] = $this;
+            $this->state?->setInstance($this->isTime, (string)$this->timezone, (string)$this->format, $key3, $this);
         }
         return $this;
     }
@@ -225,9 +198,58 @@ class date extends \fan\core\base\service\multi
         if (is_null($format)) {
             $format = $this->format;
         } elseif (!isset($this->config['FORMAT'][$format])) {
-            throw new fatalException($this, 'Unknown data format "' . $format . '"');
+            throw $this->createServiceFatalException('Unknown data format "' . $format . '"');
         }
         return (string)$this->config['FORMAT'][$format][$this->isTime ? 'full_pattern' : 'short_pattern'];
+    }
+
+    private function createDate(?string $date, mixed $format, mixed $timezone, bool $save): object
+    {
+        if (!is_callable($this->dateFactory)) {
+            throw new \RuntimeException('Date service factory is not configured for date service.');
+        }
+
+        return ($this->dateFactory)($date, $format, $timezone, $save);
+    }
+
+    private function createDateInstance(
+        \DateTime $date,
+        mixed $format,
+        bool $isTime,
+        mixed $timezone,
+        bool $save,
+        ?object $state,
+        ?callable $dateFactory,
+        ?object $serviceBootstrapRuntime,
+        ?object $serviceConfigurator,
+        ?callable $serviceCacheFactory,
+        ?callable $classNameResolver = null,
+        ?callable $arrayValueReader = null
+    ): static {
+        if (!is_callable($this->dateInstanceFactory)) {
+            throw new \RuntimeException('Date instance factory is not configured for date service.');
+        }
+
+        $instance = ($this->dateInstanceFactory)(
+            $date,
+            $format,
+            $isTime,
+            $timezone,
+            $save,
+            $state,
+            $dateFactory,
+            $serviceBootstrapRuntime,
+            $serviceConfigurator,
+            $serviceCacheFactory,
+            $classNameResolver,
+            $arrayValueReader
+        );
+        if (!$instance instanceof self) {
+            $actual = is_object($instance) ? get_class($instance) : gettype($instance);
+            throw new \UnexpectedValueException('Date instance factory returned "' . $actual . '".');
+        }
+
+        return $instance;
     }
 
     // ======== The magic methods ======== \\
