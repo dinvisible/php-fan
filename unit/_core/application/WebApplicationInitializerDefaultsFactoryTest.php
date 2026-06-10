@@ -31,6 +31,12 @@ final class WebApplicationInitializerDefaultsFactoryTest extends TestCase
         $source = file_get_contents(dirname(__DIR__, 3) . '/_core/factory/web_application_initializer_defaults_factory.php');
         $entrypointSource = file_get_contents(dirname(__DIR__, 3) . '/htdocs/index.php');
         $composerAutoloadSource = file_get_contents(dirname(__DIR__, 3) . '/tools/composer_autoload.php');
+        $composerConfig = json_decode(
+            (string)file_get_contents(dirname(__DIR__, 3) . '/composer.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
 
         $this->assertIsString($source);
         $this->assertIsString($entrypointSource);
@@ -53,10 +59,18 @@ final class WebApplicationInitializerDefaultsFactoryTest extends TestCase
         $this->assertStringNotContainsString('new request_runner_defaults_factory()', $entrypointSource);
         $this->assertFileDoesNotExist(dirname(__DIR__, 3) . '/htdocs/autoload.php');
 
-        $this->assertStringContainsString("'fan\\\\core\\\\bootstrap\\\\' => \$phpFanRoot . '/_core/application/'", $composerAutoloadSource);
-        $this->assertStringContainsString("if (str_contains(\$relativeClass, 'factory'))", $composerAutoloadSource);
-        $this->assertStringContainsString("if (!function_exists('array_val'))", $composerAutoloadSource);
-        $this->assertStringContainsString("require_once \$phpFanRoot . '/_core/functions.php';", $composerAutoloadSource);
+        $this->assertContains('_core/functions.php', $composerConfig['autoload']['files']);
+        $this->assertSame(['_core/application/', '_core/factory/'], $composerConfig['autoload']['psr-4']['fan\\core\\bootstrap\\']);
+        $this->assertSame(['_core/di/', '_core/factory/'], $composerConfig['autoload']['psr-4']['fan\\core\\di\\']);
+        $this->assertSame(['_core/adapter/', '_core/factory/adapter/'], $composerConfig['autoload']['psr-4']['fan\\core\\adapter\\']);
+        $this->assertSame(['_core/runtime/', '_core/factory/runtime/'], $composerConfig['autoload']['psr-4']['fan\\core\\runtime\\']);
+
+        $this->assertStringContainsString('$projectPrefix = \'fan\\\\project\\\\\';', $composerAutoloadSource);
+        $this->assertStringNotContainsString('$phpFanRoot', $composerAutoloadSource);
+        $this->assertStringNotContainsString('$bootstrapApplicationRoots', $composerAutoloadSource);
+        $this->assertStringNotContainsString('$factoryRoots', $composerAutoloadSource);
+        $this->assertStringNotContainsString("if (!function_exists('array_val'))", $composerAutoloadSource);
+        $this->assertStringNotContainsString('require_once', $composerAutoloadSource);
     }
 }
 
