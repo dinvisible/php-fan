@@ -106,7 +106,10 @@ final class application_service_registrar_defaults_provider_factory
         );
     }
 
-    public function __invoke(): application_service_registrar_defaults_provider
+    /**
+     * @return array<string, object>
+     */
+    public function __invoke(): array
     {
         $coreServiceRegistrar = ($this->coreServiceRegistrarFactory)();
         $infrastructureServiceRegistrar = ($this->infrastructureServiceRegistrarFactory)();
@@ -119,9 +122,9 @@ final class application_service_registrar_defaults_provider_factory
         $sessionServiceRegistrar = ($this->sessionServiceRegistrarFactory)();
         $userServiceRegistrar = ($this->userServiceRegistrarFactory)();
 
-        return new application_service_registrar_defaults_provider(
-            ($this->supportServiceRegistrarFactory)(),
-            ($this->serviceGraphRegistrarFactory)(
+        return [
+            'supportServiceRegistrar' => ($this->supportServiceRegistrarFactory)(),
+            'serviceGraphRegistrar' => ($this->serviceGraphRegistrarFactory)(
                 $coreServiceRegistrar,
                 $infrastructureServiceRegistrar,
                 $contentServiceRegistrar,
@@ -133,16 +136,16 @@ final class application_service_registrar_defaults_provider_factory
                 $sessionServiceRegistrar,
                 $userServiceRegistrar
             ),
-            $coreServiceRegistrar,
-            $infrastructureServiceRegistrar,
-            $contentServiceRegistrar,
-            $navigationServiceRegistrar,
-            $controllerServiceRegistrar,
-            $clientServiceRegistrar,
-            $pagerServiceRegistrar,
-            $utilityServiceRegistrar,
-            $sessionServiceRegistrar,
-            $userServiceRegistrar
-        );
+            'coreServiceRegistrar' => $coreServiceRegistrar,
+            'infrastructureServiceRegistrar' => $infrastructureServiceRegistrar,
+            'contentServiceRegistrar' => $contentServiceRegistrar,
+            'navigationServiceRegistrar' => $navigationServiceRegistrar,
+            'controllerServiceRegistrar' => $controllerServiceRegistrar,
+            'clientServiceRegistrar' => $clientServiceRegistrar,
+            'pagerServiceRegistrar' => $pagerServiceRegistrar,
+            'utilityServiceRegistrar' => $utilityServiceRegistrar,
+            'sessionServiceRegistrar' => $sessionServiceRegistrar,
+            'userServiceRegistrar' => $userServiceRegistrar,
+        ];
     }
 }

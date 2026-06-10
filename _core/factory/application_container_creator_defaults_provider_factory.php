@@ -25,6 +25,6 @@ final class application_container_creator_defaults_provider_factory
     {
         $creatorDefaultsProviderFactory = ($this->creatorDefaultsProviderFactoryProvider)();
 
-        return static fn(): application_service_creator_defaults_provider => $creatorDefaultsProviderFactory();
+        return static fn(): array => $creatorDefaultsProviderFactory();
     }
 }

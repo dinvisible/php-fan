@@ -17,9 +17,7 @@ use fan\core\di\application_factory_provider_defaults_provider;
 use fan\core\di\application_factory_provider_defaults_provider_factory;
 use fan\core\di\application_registry_defaults_provider;
 use fan\core\di\application_registry_defaults_provider_factory;
-use fan\core\di\application_service_creator_defaults_provider;
 use fan\core\di\application_service_creator_defaults_provider_factory;
-use fan\core\di\application_service_registrar_defaults_provider;
 use fan\core\di\application_service_registrar_defaults_provider_factory;
 use fan\core\service\bootstrap_runtime;
 
@@ -271,9 +269,9 @@ final class FunctionsServiceContainerTest extends TestCase
             $this->assertStringNotContainsString('self::get()->get', $this->methodSource($sessionServiceCreatorCode, $methodName));
         }
 
-        $serviceCreatorDefaultsProviderCode = file_get_contents(dirname(__DIR__, 2) . '/_core/di/application_service_creator_defaults_provider.php');
+        $serviceCreatorDefaultsProviderCode = file_get_contents(dirname(__DIR__, 2) . '/_core/factory/application_service_creator_defaults_provider_factory.php');
         $this->assertIsString($serviceCreatorDefaultsProviderCode);
-        $this->assertStringNotContainsString('applicationEmailServiceCreator', $serviceCreatorDefaultsProviderCode);
+        $this->assertStringNotContainsString('emailServiceCreator', $serviceCreatorDefaultsProviderCode);
 
         $userServiceCreatorCode = $this->applicationUserServiceCreatorCode();
         foreach ([
@@ -1020,8 +1018,8 @@ final class FunctionsServiceContainerTest extends TestCase
             static fn(
                 application_adapter_registry $adapterRegistry
             ): application_factory_provider_defaults_provider => (new application_factory_provider_defaults_provider_factory())($adapterRegistry),
-            static fn(): application_service_registrar_defaults_provider => (new application_service_registrar_defaults_provider_factory())(),
-            static fn(): application_service_creator_defaults_provider => (new application_service_creator_defaults_provider_factory())()
+            static fn(): array => (new application_service_registrar_defaults_provider_factory())(),
+            static fn(): array => (new application_service_creator_defaults_provider_factory())()
         );
         $factoryOptions ??= new application_service_factory_options();
 

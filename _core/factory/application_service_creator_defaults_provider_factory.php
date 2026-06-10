@@ -78,19 +78,22 @@ final class application_service_creator_defaults_provider_factory
         );
     }
 
-    public function __invoke(): application_service_creator_defaults_provider
+    /**
+     * @return array<string, object>
+     */
+    public function __invoke(): array
     {
-        return new application_service_creator_defaults_provider(
-            ($this->coreServiceCreatorFactory)(),
-            ($this->contentServiceCreatorFactory)(),
-            ($this->navigationServiceCreatorFactory)(),
-            ($this->controllerServiceCreatorFactory)(),
-            ($this->infrastructureServiceCreatorFactory)(),
-            ($this->clientServiceCreatorFactory)(),
-            ($this->pagerServiceCreatorFactory)(),
-            ($this->utilityServiceCreatorFactory)(),
-            ($this->sessionServiceCreatorFactory)(),
-            ($this->userServiceCreatorFactory)()
-        );
+        return [
+            'coreServiceCreator' => ($this->coreServiceCreatorFactory)(),
+            'contentServiceCreator' => ($this->contentServiceCreatorFactory)(),
+            'navigationServiceCreator' => ($this->navigationServiceCreatorFactory)(),
+            'controllerServiceCreator' => ($this->controllerServiceCreatorFactory)(),
+            'infrastructureServiceCreator' => ($this->infrastructureServiceCreatorFactory)(),
+            'clientServiceCreator' => ($this->clientServiceCreatorFactory)(),
+            'pagerServiceCreator' => ($this->pagerServiceCreatorFactory)(),
+            'utilityServiceCreator' => ($this->utilityServiceCreatorFactory)(),
+            'sessionServiceCreator' => ($this->sessionServiceCreatorFactory)(),
+            'userServiceCreator' => ($this->userServiceCreatorFactory)(),
+        ];
     }
 }

@@ -10,7 +10,6 @@ use fan\core\di\application_pager_service_registrar;
 use fan\core\di\application_infrastructure_service_registrar;
 use fan\core\di\application_navigation_service_registrar;
 use fan\core\di\application_service_graph_registrar;
-use fan\core\di\application_service_registrar_defaults_provider;
 use fan\core\di\application_service_registrar_defaults_provider_factory;
 use fan\core\di\application_session_service_registrar;
 use fan\core\di\application_support_service_registrar;
@@ -25,24 +24,24 @@ final class ApplicationServiceRegistrarDefaultsProviderFactoryTest extends TestC
 {
     public function testFactoryCreatesApplicationServiceRegistrarDefaultsProvider(): void
     {
-        $provider = (new application_service_registrar_defaults_provider_factory())();
+        $defaults = (new application_service_registrar_defaults_provider_factory())();
 
-        $this->assertInstanceOf(application_service_registrar_defaults_provider::class, $provider);
+        $this->assertIsArray($defaults);
         $this->assertTrue(class_exists(plain_exception_factory::class));
-        $this->assertInstanceOf(application_support_service_registrar::class, $provider->applicationSupportServiceRegistrar());
-        $this->assertInstanceOf(application_service_graph_registrar::class, $provider->applicationServiceGraphRegistrar());
-        $this->assertInstanceOf(application_core_service_registrar::class, $provider->applicationCoreServiceRegistrar());
-        $this->assertInstanceOf(application_infrastructure_service_registrar::class, $provider->applicationInfrastructureServiceRegistrar());
-        $this->assertInstanceOf(application_content_service_registrar::class, $provider->applicationContentServiceRegistrar());
-        $this->assertInstanceOf(application_navigation_service_registrar::class, $provider->applicationNavigationServiceRegistrar());
-        $this->assertInstanceOf(application_controller_service_registrar::class, $provider->applicationControllerServiceRegistrar());
-        $this->assertInstanceOf(application_client_service_registrar::class, $provider->applicationClientServiceRegistrar());
-        $this->assertInstanceOf(application_pager_service_registrar::class, $provider->applicationPagerServiceRegistrar());
-        $this->assertInstanceOf(application_utility_service_registrar::class, $provider->applicationUtilityServiceRegistrar());
-        $this->assertFalse(method_exists($provider, 'applicationDatabaseServiceRegistrar'));
-        $this->assertFalse(method_exists($provider, 'applicationEmailServiceRegistrar'));
-        $this->assertInstanceOf(application_session_service_registrar::class, $provider->applicationSessionServiceRegistrar());
-        $this->assertInstanceOf(application_user_service_registrar::class, $provider->applicationUserServiceRegistrar());
+        $this->assertInstanceOf(application_support_service_registrar::class, $defaults['supportServiceRegistrar']);
+        $this->assertInstanceOf(application_service_graph_registrar::class, $defaults['serviceGraphRegistrar']);
+        $this->assertInstanceOf(application_core_service_registrar::class, $defaults['coreServiceRegistrar']);
+        $this->assertInstanceOf(application_infrastructure_service_registrar::class, $defaults['infrastructureServiceRegistrar']);
+        $this->assertInstanceOf(application_content_service_registrar::class, $defaults['contentServiceRegistrar']);
+        $this->assertInstanceOf(application_navigation_service_registrar::class, $defaults['navigationServiceRegistrar']);
+        $this->assertInstanceOf(application_controller_service_registrar::class, $defaults['controllerServiceRegistrar']);
+        $this->assertInstanceOf(application_client_service_registrar::class, $defaults['clientServiceRegistrar']);
+        $this->assertInstanceOf(application_pager_service_registrar::class, $defaults['pagerServiceRegistrar']);
+        $this->assertInstanceOf(application_utility_service_registrar::class, $defaults['utilityServiceRegistrar']);
+        $this->assertArrayNotHasKey('databaseServiceRegistrar', $defaults);
+        $this->assertArrayNotHasKey('emailServiceRegistrar', $defaults);
+        $this->assertInstanceOf(application_session_service_registrar::class, $defaults['sessionServiceRegistrar']);
+        $this->assertInstanceOf(application_user_service_registrar::class, $defaults['userServiceRegistrar']);
     }
 
     public function testFactoryAcceptsInjectedRegistrarDefaults(): void
@@ -60,7 +59,7 @@ final class ApplicationServiceRegistrarDefaultsProviderFactoryTest extends TestC
         $userRegistrar = new application_user_service_registrar();
         $graphRegistrar = null;
 
-        $provider = (new application_service_registrar_defaults_provider_factory(
+        $defaults = (new application_service_registrar_defaults_provider_factory(
             static fn(): application_support_service_registrar => $supportRegistrar,
             function (
                 application_core_service_registrar $core,
@@ -122,17 +121,17 @@ final class ApplicationServiceRegistrarDefaultsProviderFactoryTest extends TestC
             static fn(): application_user_service_registrar => $userRegistrar
         ))();
 
-        $this->assertSame($supportRegistrar, $provider->applicationSupportServiceRegistrar());
-        $this->assertSame($graphRegistrar, $provider->applicationServiceGraphRegistrar());
-        $this->assertSame($coreRegistrar, $provider->applicationCoreServiceRegistrar());
-        $this->assertSame($infrastructureRegistrar, $provider->applicationInfrastructureServiceRegistrar());
-        $this->assertSame($contentRegistrar, $provider->applicationContentServiceRegistrar());
-        $this->assertSame($navigationRegistrar, $provider->applicationNavigationServiceRegistrar());
-        $this->assertSame($controllerRegistrar, $provider->applicationControllerServiceRegistrar());
-        $this->assertSame($clientRegistrar, $provider->applicationClientServiceRegistrar());
-        $this->assertSame($formRegistrar, $provider->applicationPagerServiceRegistrar());
-        $this->assertSame($utilityRegistrar, $provider->applicationUtilityServiceRegistrar());
-        $this->assertSame($sessionRegistrar, $provider->applicationSessionServiceRegistrar());
-        $this->assertSame($userRegistrar, $provider->applicationUserServiceRegistrar());
+        $this->assertSame($supportRegistrar, $defaults['supportServiceRegistrar']);
+        $this->assertSame($graphRegistrar, $defaults['serviceGraphRegistrar']);
+        $this->assertSame($coreRegistrar, $defaults['coreServiceRegistrar']);
+        $this->assertSame($infrastructureRegistrar, $defaults['infrastructureServiceRegistrar']);
+        $this->assertSame($contentRegistrar, $defaults['contentServiceRegistrar']);
+        $this->assertSame($navigationRegistrar, $defaults['navigationServiceRegistrar']);
+        $this->assertSame($controllerRegistrar, $defaults['controllerServiceRegistrar']);
+        $this->assertSame($clientRegistrar, $defaults['clientServiceRegistrar']);
+        $this->assertSame($formRegistrar, $defaults['pagerServiceRegistrar']);
+        $this->assertSame($utilityRegistrar, $defaults['utilityServiceRegistrar']);
+        $this->assertSame($sessionRegistrar, $defaults['sessionServiceRegistrar']);
+        $this->assertSame($userRegistrar, $defaults['userServiceRegistrar']);
     }
 }

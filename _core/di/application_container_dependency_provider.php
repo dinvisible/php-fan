@@ -12,8 +12,8 @@ final class application_container_dependency_provider
     private \Closure $creatorDefaultsProviderFactory;
     private ?application_registry_defaults_provider $registryDefaultsProvider = null;
     private ?application_factory_provider_defaults_provider $factoryProviderDefaultsProvider = null;
-    private ?application_service_registrar_defaults_provider $registrarDefaultsProvider = null;
-    private ?application_service_creator_defaults_provider $creatorDefaultsProvider = null;
+    private ?array $registrarDefaults = null;
+    private ?array $creatorDefaults = null;
 
     public function __construct(
         callable $registryDefaultsProviderFactory,
@@ -59,126 +59,146 @@ final class application_container_dependency_provider
 
     public function applicationSupportServiceRegistrar(): application_support_service_registrar
     {
-        return $this->registrarDefaultsProvider()->applicationSupportServiceRegistrar();
+        return $this->registrarDefault('supportServiceRegistrar', application_support_service_registrar::class);
     }
 
     public function applicationServiceGraphRegistrar(): application_service_graph_registrar
     {
-        return $this->registrarDefaultsProvider()->applicationServiceGraphRegistrar();
+        return $this->registrarDefault('serviceGraphRegistrar', application_service_graph_registrar::class);
     }
 
     public function applicationCoreServiceRegistrar(): application_core_service_registrar
     {
-        return $this->registrarDefaultsProvider()->applicationCoreServiceRegistrar();
+        return $this->registrarDefault('coreServiceRegistrar', application_core_service_registrar::class);
     }
 
     public function applicationInfrastructureServiceRegistrar(): application_infrastructure_service_registrar
     {
-        return $this->registrarDefaultsProvider()->applicationInfrastructureServiceRegistrar();
+        return $this->registrarDefault('infrastructureServiceRegistrar', application_infrastructure_service_registrar::class);
     }
 
     public function applicationContentServiceRegistrar(): application_content_service_registrar
     {
-        return $this->registrarDefaultsProvider()->applicationContentServiceRegistrar();
+        return $this->registrarDefault('contentServiceRegistrar', application_content_service_registrar::class);
     }
 
     public function applicationNavigationServiceRegistrar(): application_navigation_service_registrar
     {
-        return $this->registrarDefaultsProvider()->applicationNavigationServiceRegistrar();
+        return $this->registrarDefault('navigationServiceRegistrar', application_navigation_service_registrar::class);
     }
 
     public function applicationControllerServiceRegistrar(): application_controller_service_registrar
     {
-        return $this->registrarDefaultsProvider()->applicationControllerServiceRegistrar();
+        return $this->registrarDefault('controllerServiceRegistrar', application_controller_service_registrar::class);
     }
 
     public function applicationClientServiceRegistrar(): application_client_service_registrar
     {
-        return $this->registrarDefaultsProvider()->applicationClientServiceRegistrar();
+        return $this->registrarDefault('clientServiceRegistrar', application_client_service_registrar::class);
     }
 
     public function applicationPagerServiceRegistrar(): application_pager_service_registrar
     {
-        return $this->registrarDefaultsProvider()->applicationPagerServiceRegistrar();
+        return $this->registrarDefault('pagerServiceRegistrar', application_pager_service_registrar::class);
     }
 
     public function applicationUtilityServiceRegistrar(): application_utility_service_registrar
     {
-        return $this->registrarDefaultsProvider()->applicationUtilityServiceRegistrar();
+        return $this->registrarDefault('utilityServiceRegistrar', application_utility_service_registrar::class);
     }
 
     public function applicationSessionServiceRegistrar(): application_session_service_registrar
     {
-        return $this->registrarDefaultsProvider()->applicationSessionServiceRegistrar();
+        return $this->registrarDefault('sessionServiceRegistrar', application_session_service_registrar::class);
     }
 
     public function applicationUserServiceRegistrar(): application_user_service_registrar
     {
-        return $this->registrarDefaultsProvider()->applicationUserServiceRegistrar();
+        return $this->registrarDefault('userServiceRegistrar', application_user_service_registrar::class);
     }
 
     public function applicationCoreServiceCreator(): application_core_service_creator
     {
-        return $this->creatorDefaultsProvider()->applicationCoreServiceCreator();
+        return $this->creatorDefault('coreServiceCreator', application_core_service_creator::class);
     }
 
     public function applicationContentServiceCreator(): application_content_service_creator
     {
-        return $this->creatorDefaultsProvider()->applicationContentServiceCreator();
+        return $this->creatorDefault('contentServiceCreator', application_content_service_creator::class);
     }
 
     public function applicationNavigationServiceCreator(): application_navigation_service_creator
     {
-        return $this->creatorDefaultsProvider()->applicationNavigationServiceCreator();
+        return $this->creatorDefault('navigationServiceCreator', application_navigation_service_creator::class);
     }
 
     public function applicationControllerServiceCreator(): application_controller_service_creator
     {
-        return $this->creatorDefaultsProvider()->applicationControllerServiceCreator();
+        return $this->creatorDefault('controllerServiceCreator', application_controller_service_creator::class);
     }
 
     public function applicationInfrastructureServiceCreator(): application_infrastructure_service_creator
     {
-        return $this->creatorDefaultsProvider()->applicationInfrastructureServiceCreator();
+        return $this->creatorDefault('infrastructureServiceCreator', application_infrastructure_service_creator::class);
     }
 
     public function applicationClientServiceCreator(): application_client_service_creator
     {
-        return $this->creatorDefaultsProvider()->applicationClientServiceCreator();
+        return $this->creatorDefault('clientServiceCreator', application_client_service_creator::class);
     }
 
     public function applicationPagerServiceCreator(): application_pager_service_creator
     {
-        return $this->creatorDefaultsProvider()->applicationPagerServiceCreator();
+        return $this->creatorDefault('pagerServiceCreator', application_pager_service_creator::class);
     }
 
     public function applicationUtilityServiceCreator(): application_utility_service_creator
     {
-        return $this->creatorDefaultsProvider()->applicationUtilityServiceCreator();
+        return $this->creatorDefault('utilityServiceCreator', application_utility_service_creator::class);
     }
 
     public function applicationSessionServiceCreator(): application_session_service_creator
     {
-        return $this->creatorDefaultsProvider()->applicationSessionServiceCreator();
+        return $this->creatorDefault('sessionServiceCreator', application_session_service_creator::class);
     }
 
     public function applicationUserServiceCreator(): application_user_service_creator
     {
-        return $this->creatorDefaultsProvider()->applicationUserServiceCreator();
+        return $this->creatorDefault('userServiceCreator', application_user_service_creator::class);
     }
 
-    private function registrarDefaultsProvider(): application_service_registrar_defaults_provider
+    private function registrarDefault(string $key, string $class): object
+    {
+        $value = $this->registrarDefaults()[$key] ?? null;
+        if (!$value instanceof $class) {
+            throw new \UnexpectedValueException('Application registrar default "' . $key . '" must be an instance of ' . $class . '.');
+        }
+
+        return $value;
+    }
+
+    private function creatorDefault(string $key, string $class): object
+    {
+        $value = $this->creatorDefaults()[$key] ?? null;
+        if (!$value instanceof $class) {
+            throw new \UnexpectedValueException('Application creator default "' . $key . '" must be an instance of ' . $class . '.');
+        }
+
+        return $value;
+    }
+
+    private function registrarDefaults(): array
     {
         $factory = $this->registrarDefaultsProviderFactory;
 
-        return $this->registrarDefaultsProvider ??= $factory();
+        return $this->registrarDefaults ??= $this->assertDefaults($factory(), 'registrar');
     }
 
-    private function creatorDefaultsProvider(): application_service_creator_defaults_provider
+    private function creatorDefaults(): array
     {
         $factory = $this->creatorDefaultsProviderFactory;
 
-        return $this->creatorDefaultsProvider ??= $factory();
+        return $this->creatorDefaults ??= $this->assertDefaults($factory(), 'creator');
     }
 
     private function registryDefaultsProvider(): application_registry_defaults_provider
@@ -195,5 +215,14 @@ final class application_container_dependency_provider
         return $this->factoryProviderDefaultsProvider ??= $factory(
             $this->applicationAdapterRegistry()
         );
+    }
+
+    private function assertDefaults(mixed $defaults, string $type): array
+    {
+        if (!is_array($defaults)) {
+            throw new \UnexpectedValueException('Application ' . $type . ' defaults factory must return an array.');
+        }
+
+        return $defaults;
     }
 }

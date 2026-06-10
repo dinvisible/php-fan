@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use fan\core\di\application_container_registrar_defaults_provider_factory;
-use fan\core\di\application_service_registrar_defaults_provider;
 use PHPUnit\Framework\TestCase;
 
 final class ApplicationContainerRegistrarDefaultsProviderFactoryTest extends TestCase
@@ -13,7 +12,7 @@ final class ApplicationContainerRegistrarDefaultsProviderFactoryTest extends Tes
         $factory = (new application_container_registrar_defaults_provider_factory())();
 
         $this->assertIsCallable($factory);
-        $this->assertInstanceOf(application_service_registrar_defaults_provider::class, $factory());
+        $this->assertIsArray($factory());
     }
 
     public function testFactoryUsesInjectedRegistrarDefaultsProviderFactory(): void
@@ -21,7 +20,7 @@ final class ApplicationContainerRegistrarDefaultsProviderFactoryTest extends Tes
         $defaultFactory = (new application_container_registrar_defaults_provider_factory())();
         $expected = $defaultFactory();
         $factory = (new application_container_registrar_defaults_provider_factory(
-            static fn(): application_service_registrar_defaults_provider => $expected
+            static fn(): array => $expected
         ))();
 
         $this->assertSame($expected, $factory());
@@ -33,7 +32,7 @@ final class ApplicationContainerRegistrarDefaultsProviderFactoryTest extends Tes
         $calls = 0;
         $factory = (new application_container_registrar_defaults_provider_factory(
             registrarDefaultsProviderFactoryProvider: static function () use (&$calls, $expected): callable {
-                return static function () use (&$calls, $expected): application_service_registrar_defaults_provider {
+                return static function () use (&$calls, $expected): array {
                     $calls++;
 
                     return $expected;
@@ -58,7 +57,7 @@ final class ApplicationContainerRegistrarDefaultsProviderFactoryTest extends Tes
         $this->assertStringContainsString('? static fn(): callable => $registrarDefaultsProviderFactory', $source);
         $this->assertStringContainsString('public function __invoke(): callable', $source);
         $this->assertStringContainsString('$registrarDefaultsProviderFactory = ($this->registrarDefaultsProviderFactoryProvider)();', $source);
-        $this->assertStringContainsString('return static fn(): application_service_registrar_defaults_provider => $registrarDefaultsProviderFactory();', $source);
+        $this->assertStringContainsString('return static fn(): array => $registrarDefaultsProviderFactory();', $source);
         $this->assertStringNotContainsString("require_once __DIR__ . '/../factory/application_service_registrar_defaults_provider_factory.php';", $source);
         $this->assertStringContainsString('?? static fn(): callable => new application_service_registrar_defaults_provider_factory()', $source);
         $this->assertStringNotContainsString('private ?\Closure $registrarDefaultsProviderFactory', $source);

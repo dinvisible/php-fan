@@ -46,9 +46,7 @@ use fan\core\di\application_service_sub_factory_defaults_provider;
 use fan\core\di\application_service_sub_factory_defaults_provider_factory;
 use fan\core\di\application_service_graph_registrar;
 use fan\core\di\application_service_graph_registration_context;
-use fan\core\di\application_service_creator_defaults_provider;
 use fan\core\di\application_service_creator_defaults_provider_factory;
-use fan\core\di\application_service_registrar_defaults_provider;
 use fan\core\di\application_service_registrar_defaults_provider_factory;
 use fan\core\di\application_session_service_creator;
 use fan\core\di\application_session_service_factory_defaults_provider;
@@ -167,9 +165,7 @@ final class ApplicationContainerDependencyProviderTest extends TestCase
         $engineDefaultsProviderFactorySource = file_get_contents(dirname(__DIR__, 3) . '/_core/factory/application_service_engine_factory_defaults_provider_factory.php');
         $subDefaultsProviderFactorySource = file_get_contents(dirname(__DIR__, 3) . '/_core/factory/application_service_sub_factory_defaults_provider_factory.php');
         $coreDefaultsProviderFactorySource = file_get_contents(dirname(__DIR__, 3) . '/_core/factory/application_core_service_factory_defaults_provider_factory.php');
-        $registrarDefaultsSource = file_get_contents(dirname(__DIR__, 3) . '/_core/di/application_service_registrar_defaults_provider.php');
         $registrarDefaultsProviderFactorySource = file_get_contents(dirname(__DIR__, 3) . '/_core/factory/application_service_registrar_defaults_provider_factory.php');
-        $creatorDefaultsSource = file_get_contents(dirname(__DIR__, 3) . '/_core/di/application_service_creator_defaults_provider.php');
         $creatorDefaultsProviderFactorySource = file_get_contents(dirname(__DIR__, 3) . '/_core/factory/application_service_creator_defaults_provider_factory.php');
         $subDefaultsSource = file_get_contents(dirname(__DIR__, 3) . '/_core/factory/application_service_sub_factory_defaults_provider.php');
         $coreDefaultsSource = file_get_contents(dirname(__DIR__, 3) . '/_core/factory/application_core_service_factory_defaults_provider.php');
@@ -201,9 +197,7 @@ final class ApplicationContainerDependencyProviderTest extends TestCase
         $this->assertIsString($engineDefaultsProviderFactorySource);
         $this->assertIsString($subDefaultsProviderFactorySource);
         $this->assertIsString($coreDefaultsProviderFactorySource);
-        $this->assertIsString($registrarDefaultsSource);
         $this->assertIsString($registrarDefaultsProviderFactorySource);
-        $this->assertIsString($creatorDefaultsSource);
         $this->assertIsString($creatorDefaultsProviderFactorySource);
         $this->assertIsString($subDefaultsSource);
         $this->assertIsString($coreDefaultsSource);
@@ -1168,7 +1162,6 @@ final class ApplicationContainerDependencyProviderTest extends TestCase
         $this->assertStringContainsString('return ($this->deferredServiceFactoryProviderFactory)();', $source);
         $source = $dependencyProviderSource;
         $this->assertStringContainsString('public function applicationDeferredServiceFactoryProvider(): application_deferred_service_factory_provider', $source);
-        $this->assertTrue(class_exists(application_service_registrar_defaults_provider::class));
         $this->assertTrue(class_exists(application_service_registrar_defaults_provider_factory::class));
         $this->assertStringNotContainsString('application_container_registrar_defaults_provider_factory::class', $bootstrapSource);
         $this->assertStringNotContainsString("'application_container_registrar_defaults_provider_factory.php'", $bootstrapSource);
@@ -1181,31 +1174,31 @@ final class ApplicationContainerDependencyProviderTest extends TestCase
         $this->assertStringNotContainsString("'application_service_registrar_defaults_provider.php'", $source);
         $this->assertStringNotContainsString('new application_service_registrar_defaults_provider(', $source);
         $this->assertStringContainsString('public function applicationSupportServiceRegistrar(): application_support_service_registrar', $source);
-        $this->assertStringContainsString('return $this->registrarDefaultsProvider()->applicationSupportServiceRegistrar();', $source);
+        $this->assertStringContainsString("return \$this->registrarDefault('supportServiceRegistrar', application_support_service_registrar::class);", $source);
         $this->assertStringContainsString('public function applicationCoreServiceRegistrar(): application_core_service_registrar', $source);
-        $this->assertStringContainsString('return $this->registrarDefaultsProvider()->applicationCoreServiceRegistrar();', $source);
+        $this->assertStringContainsString("return \$this->registrarDefault('coreServiceRegistrar', application_core_service_registrar::class);", $source);
         $this->assertStringContainsString('public function applicationInfrastructureServiceRegistrar(): application_infrastructure_service_registrar', $source);
-        $this->assertStringContainsString('return $this->registrarDefaultsProvider()->applicationInfrastructureServiceRegistrar();', $source);
+        $this->assertStringContainsString("return \$this->registrarDefault('infrastructureServiceRegistrar', application_infrastructure_service_registrar::class);", $source);
         $this->assertStringContainsString('public function applicationContentServiceRegistrar(): application_content_service_registrar', $source);
-        $this->assertStringContainsString('return $this->registrarDefaultsProvider()->applicationContentServiceRegistrar();', $source);
+        $this->assertStringContainsString("return \$this->registrarDefault('contentServiceRegistrar', application_content_service_registrar::class);", $source);
         $this->assertStringContainsString('public function applicationNavigationServiceRegistrar(): application_navigation_service_registrar', $source);
-        $this->assertStringContainsString('return $this->registrarDefaultsProvider()->applicationNavigationServiceRegistrar();', $source);
+        $this->assertStringContainsString("return \$this->registrarDefault('navigationServiceRegistrar', application_navigation_service_registrar::class);", $source);
         $this->assertStringContainsString('public function applicationControllerServiceRegistrar(): application_controller_service_registrar', $source);
-        $this->assertStringContainsString('return $this->registrarDefaultsProvider()->applicationControllerServiceRegistrar();', $source);
+        $this->assertStringContainsString("return \$this->registrarDefault('controllerServiceRegistrar', application_controller_service_registrar::class);", $source);
         $this->assertStringContainsString('public function applicationClientServiceRegistrar(): application_client_service_registrar', $source);
-        $this->assertStringContainsString('return $this->registrarDefaultsProvider()->applicationClientServiceRegistrar();', $source);
+        $this->assertStringContainsString("return \$this->registrarDefault('clientServiceRegistrar', application_client_service_registrar::class);", $source);
         $this->assertStringContainsString('public function applicationPagerServiceRegistrar(): application_pager_service_registrar', $source);
-        $this->assertStringContainsString('return $this->registrarDefaultsProvider()->applicationPagerServiceRegistrar();', $source);
+        $this->assertStringContainsString("return \$this->registrarDefault('pagerServiceRegistrar', application_pager_service_registrar::class);", $source);
         $this->assertStringContainsString('public function applicationUtilityServiceRegistrar(): application_utility_service_registrar', $source);
-        $this->assertStringContainsString('return $this->registrarDefaultsProvider()->applicationUtilityServiceRegistrar();', $source);
+        $this->assertStringContainsString("return \$this->registrarDefault('utilityServiceRegistrar', application_utility_service_registrar::class);", $source);
         $this->assertStringNotContainsString('applicationDatabaseServiceRegistrar', $source);
         $this->assertStringNotContainsString('applicationEmailServiceRegistrar', $source);
         $this->assertStringContainsString('public function applicationSessionServiceRegistrar(): application_session_service_registrar', $source);
-        $this->assertStringContainsString('return $this->registrarDefaultsProvider()->applicationSessionServiceRegistrar();', $source);
+        $this->assertStringContainsString("return \$this->registrarDefault('sessionServiceRegistrar', application_session_service_registrar::class);", $source);
         $this->assertStringContainsString('public function applicationUserServiceRegistrar(): application_user_service_registrar', $source);
-        $this->assertStringContainsString('return $this->registrarDefaultsProvider()->applicationUserServiceRegistrar();', $source);
+        $this->assertStringContainsString("return \$this->registrarDefault('userServiceRegistrar', application_user_service_registrar::class);", $source);
         $this->assertStringContainsString('public function applicationServiceGraphRegistrar(): application_service_graph_registrar', $source);
-        $this->assertStringContainsString('return $this->registrarDefaultsProvider()->applicationServiceGraphRegistrar();', $source);
+        $this->assertStringContainsString("return \$this->registrarDefault('serviceGraphRegistrar', application_service_graph_registrar::class);", $source);
         $this->assertStringNotContainsString("application_core_service_registrar::class => 'application_core_service_registrar.php'", $registrarDefaultsProviderFactorySource);
         $this->assertStringNotContainsString("application_infrastructure_service_registrar::class => 'application_infrastructure_service_registrar.php'", $registrarDefaultsProviderFactorySource);
         $this->assertStringNotContainsString("application_content_service_registrar::class => 'application_content_service_registrar.php'", $registrarDefaultsProviderFactorySource);
@@ -1229,24 +1222,11 @@ final class ApplicationContainerDependencyProviderTest extends TestCase
         $this->assertStringContainsString('new application_service_graph_registrar(', $registrarDefaultsProviderFactorySource);
         $this->assertStringContainsString('new application_user_service_registrar()', $registrarDefaultsProviderFactorySource);
         $this->assertStringContainsString('$coreServiceRegistrar = ($this->coreServiceRegistrarFactory)();', $registrarDefaultsProviderFactorySource);
-        $this->assertStringContainsString('($this->supportServiceRegistrarFactory)(),', $registrarDefaultsProviderFactorySource);
+        $this->assertStringContainsString("'supportServiceRegistrar' => (\$this->supportServiceRegistrarFactory)(),", $registrarDefaultsProviderFactorySource);
         $this->assertStringContainsString('($this->serviceGraphRegistrarFactory)(', $registrarDefaultsProviderFactorySource);
         $this->assertStringNotContainsString('new application_core_service_registrar()', $source);
         $this->assertStringNotContainsString('new application_service_graph_registrar(', $source);
         $this->assertStringNotContainsString('new application_user_service_registrar()', $source);
-        $this->assertStringContainsString('final class application_service_registrar_defaults_provider', $registrarDefaultsSource);
-        $this->assertStringContainsString('private application_support_service_registrar $supportServiceRegistrar,', $registrarDefaultsSource);
-        $this->assertStringContainsString('private application_service_graph_registrar $serviceGraphRegistrar,', $registrarDefaultsSource);
-        $this->assertStringContainsString('private application_core_service_registrar $coreServiceRegistrar,', $registrarDefaultsSource);
-        $this->assertStringContainsString('return $this->supportServiceRegistrar;', $registrarDefaultsSource);
-        $this->assertStringContainsString('return $this->serviceGraphRegistrar;', $registrarDefaultsSource);
-        $this->assertStringContainsString('return $this->coreServiceRegistrar;', $registrarDefaultsSource);
-        $this->assertStringNotContainsString('self::loadClass(', $registrarDefaultsSource);
-        $this->assertStringNotContainsString('new application_support_service_registrar()', $registrarDefaultsSource);
-        $this->assertStringNotContainsString('new application_service_graph_registrar(', $registrarDefaultsSource);
-        $this->assertStringNotContainsString('new application_core_service_registrar()', $registrarDefaultsSource);
-        $this->assertStringNotContainsString('new application_user_service_registrar()', $registrarDefaultsSource);
-        $this->assertTrue(class_exists(application_service_creator_defaults_provider::class));
         $this->assertTrue(class_exists(application_service_creator_defaults_provider_factory::class));
         $this->assertStringNotContainsString('application_container_creator_defaults_provider_factory::class', $bootstrapSource);
         $this->assertStringNotContainsString("'application_container_creator_defaults_provider_factory.php'", $bootstrapSource);
@@ -1259,18 +1239,18 @@ final class ApplicationContainerDependencyProviderTest extends TestCase
         $this->assertStringNotContainsString("'application_service_creator_defaults_provider.php'", $source);
         $this->assertStringNotContainsString('new application_service_creator_defaults_provider(', $source);
         $this->assertStringContainsString('public function applicationUserServiceCreator(): application_user_service_creator', $source);
-        $this->assertStringContainsString('return $this->creatorDefaultsProvider()->applicationCoreServiceCreator();', $source);
-        $this->assertStringContainsString('return $this->creatorDefaultsProvider()->applicationContentServiceCreator();', $source);
-        $this->assertStringContainsString('return $this->creatorDefaultsProvider()->applicationNavigationServiceCreator();', $source);
-        $this->assertStringContainsString('return $this->creatorDefaultsProvider()->applicationControllerServiceCreator();', $source);
-        $this->assertStringContainsString('return $this->creatorDefaultsProvider()->applicationInfrastructureServiceCreator();', $source);
-        $this->assertStringContainsString('return $this->creatorDefaultsProvider()->applicationClientServiceCreator();', $source);
-        $this->assertStringContainsString('return $this->creatorDefaultsProvider()->applicationPagerServiceCreator();', $source);
-        $this->assertStringContainsString('return $this->creatorDefaultsProvider()->applicationUtilityServiceCreator();', $source);
+        $this->assertStringContainsString("return \$this->creatorDefault('coreServiceCreator', application_core_service_creator::class);", $source);
+        $this->assertStringContainsString("return \$this->creatorDefault('contentServiceCreator', application_content_service_creator::class);", $source);
+        $this->assertStringContainsString("return \$this->creatorDefault('navigationServiceCreator', application_navigation_service_creator::class);", $source);
+        $this->assertStringContainsString("return \$this->creatorDefault('controllerServiceCreator', application_controller_service_creator::class);", $source);
+        $this->assertStringContainsString("return \$this->creatorDefault('infrastructureServiceCreator', application_infrastructure_service_creator::class);", $source);
+        $this->assertStringContainsString("return \$this->creatorDefault('clientServiceCreator', application_client_service_creator::class);", $source);
+        $this->assertStringContainsString("return \$this->creatorDefault('pagerServiceCreator', application_pager_service_creator::class);", $source);
+        $this->assertStringContainsString("return \$this->creatorDefault('utilityServiceCreator', application_utility_service_creator::class);", $source);
         $this->assertStringNotContainsString('applicationDatabaseServiceCreator', $source);
         $this->assertStringNotContainsString('applicationEmailServiceCreator', $source);
-        $this->assertStringContainsString('return $this->creatorDefaultsProvider()->applicationSessionServiceCreator();', $source);
-        $this->assertStringContainsString('return $this->creatorDefaultsProvider()->applicationUserServiceCreator();', $source);
+        $this->assertStringContainsString("return \$this->creatorDefault('sessionServiceCreator', application_session_service_creator::class);", $source);
+        $this->assertStringContainsString("return \$this->creatorDefault('userServiceCreator', application_user_service_creator::class);", $source);
         $this->assertStringNotContainsString("application_core_service_creator::class => 'application_core_service_creator.php'", $creatorDefaultsProviderFactorySource);
         $this->assertStringNotContainsString("application_user_service_creator::class => 'application_user_service_creator.php'", $creatorDefaultsProviderFactorySource);
         $this->assertStringContainsString('private \Closure $coreServiceCreatorFactory;', $creatorDefaultsProviderFactorySource);
@@ -1293,24 +1273,6 @@ final class ApplicationContainerDependencyProviderTest extends TestCase
         $this->assertStringNotContainsString('new application_utility_service_creator(', $source);
         $this->assertStringNotContainsString('new application_session_service_creator(', $source);
         $this->assertStringNotContainsString('new application_user_service_creator()', $source);
-        $this->assertStringContainsString('final class application_service_creator_defaults_provider', $creatorDefaultsSource);
-        $this->assertStringContainsString('private application_core_service_creator $coreServiceCreator,', $creatorDefaultsSource);
-        $this->assertStringContainsString('private application_user_service_creator $userServiceCreator', $creatorDefaultsSource);
-        $this->assertStringContainsString('return $this->coreServiceCreator;', $creatorDefaultsSource);
-        $this->assertStringContainsString('return $this->userServiceCreator;', $creatorDefaultsSource);
-        $this->assertStringNotContainsString('self::loadClass(', $creatorDefaultsSource);
-        $this->assertStringNotContainsString('new application_core_service_creator()', $creatorDefaultsSource);
-        $this->assertStringNotContainsString('new application_content_service_creator()', $creatorDefaultsSource);
-        $this->assertStringNotContainsString('new application_navigation_service_creator()', $creatorDefaultsSource);
-        $this->assertStringNotContainsString('new application_controller_service_creator()', $creatorDefaultsSource);
-        $this->assertStringNotContainsString('new application_infrastructure_service_creator()', $creatorDefaultsSource);
-        $this->assertStringNotContainsString('new application_client_service_creator()', $creatorDefaultsSource);
-        $this->assertStringNotContainsString('new application_pager_service_creator()', $creatorDefaultsSource);
-        $this->assertStringNotContainsString('new application_utility_service_creator()', $creatorDefaultsSource);
-        $this->assertStringNotContainsString('new application_database_service_creator()', $creatorDefaultsSource);
-        $this->assertStringNotContainsString('new application_session_service_creator()', $creatorDefaultsSource);
-        $this->assertStringNotContainsString('new application_email_service_creator()', $creatorDefaultsSource);
-        $this->assertStringNotContainsString('new application_user_service_creator()', $creatorDefaultsSource);
         $this->assertStringNotContainsString("require_once __DIR__ . '/' . \$fileName;", $source);
         $this->assertStringContainsString('private application_container_dependency_bundle $dependencyBundle;', $containerSource);
         $this->assertStringContainsString('public application_container_dependency_provider $dependencyProvider,', $bundleSource);
@@ -1338,8 +1300,8 @@ final class ApplicationContainerDependencyProviderTest extends TestCase
             static fn(
                 application_adapter_registry $adapterRegistry
             ): application_factory_provider_defaults_provider => (new application_factory_provider_defaults_provider_factory())($adapterRegistry),
-            static fn(): application_service_registrar_defaults_provider => (new application_service_registrar_defaults_provider_factory())(),
-            static fn(): application_service_creator_defaults_provider => (new application_service_creator_defaults_provider_factory())()
+            static fn(): array => (new application_service_registrar_defaults_provider_factory())(),
+            static fn(): array => (new application_service_creator_defaults_provider_factory())()
         );
     }
 }

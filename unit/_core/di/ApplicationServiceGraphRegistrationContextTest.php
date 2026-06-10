@@ -16,9 +16,7 @@ use fan\core\di\application_factory_provider_defaults_provider;
 use fan\core\di\application_factory_provider_defaults_provider_factory;
 use fan\core\di\application_registry_defaults_provider;
 use fan\core\di\application_registry_defaults_provider_factory;
-use fan\core\di\application_service_creator_defaults_provider;
 use fan\core\di\application_service_creator_defaults_provider_factory;
-use fan\core\di\application_service_registrar_defaults_provider;
 use fan\core\di\application_service_registrar_defaults_provider_factory;
 
 
@@ -101,8 +99,8 @@ final class ApplicationServiceGraphRegistrationContextTest extends TestCase
             static fn(
                 application_adapter_registry $adapterRegistry
             ): application_factory_provider_defaults_provider => (new application_factory_provider_defaults_provider_factory())($adapterRegistry),
-            static fn(): application_service_registrar_defaults_provider => (new application_service_registrar_defaults_provider_factory())(),
-            static fn(): application_service_creator_defaults_provider => (new application_service_creator_defaults_provider_factory())()
+            static fn(): array => (new application_service_registrar_defaults_provider_factory())(),
+            static fn(): array => (new application_service_creator_defaults_provider_factory())()
         );
     }
 

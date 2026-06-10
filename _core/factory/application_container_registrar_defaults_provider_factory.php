@@ -25,6 +25,6 @@ final class application_container_registrar_defaults_provider_factory
     {
         $registrarDefaultsProviderFactory = ($this->registrarDefaultsProviderFactoryProvider)();
 
-        return static fn(): application_service_registrar_defaults_provider => $registrarDefaultsProviderFactory();
+        return static fn(): array => $registrarDefaultsProviderFactory();
     }
 }

@@ -11,13 +11,11 @@ final class ApplicationUserServiceRegistrarTest extends TestCase
     {
         $source = file_get_contents(dirname(__DIR__, 3) . '/_core/di/application_user_service_registrar.php');
         $graphSource = file_get_contents(dirname(__DIR__, 3) . '/_core/di/application_service_graph_registrar.php');
-        $providerSource = file_get_contents(dirname(__DIR__, 3) . '/_core/di/application_service_registrar_defaults_provider.php');
         $dependencyProviderSource = file_get_contents(dirname(__DIR__, 3) . '/_core/di/application_container_dependency_provider.php');
         $registrarDefaultsProviderFactorySource = file_get_contents(dirname(__DIR__, 3) . '/_core/factory/application_service_registrar_defaults_provider_factory.php');
 
         $this->assertIsString($source);
         $this->assertIsString($graphSource);
-        $this->assertIsString($providerSource);
         $this->assertIsString($dependencyProviderSource);
         $this->assertIsString($registrarDefaultsProviderFactorySource);
         $this->assertStringContainsString('final class application_user_service_registrar', $source);
@@ -35,7 +33,6 @@ final class ApplicationUserServiceRegistrarTest extends TestCase
         }
         $this->assertStringContainsString('private application_user_service_registrar $userServiceRegistrar', $graphSource);
         $this->assertStringContainsString('$this->userServiceRegistrar->register(', $graphSource);
-        $this->assertStringNotContainsString('new application_user_service_registrar()', $providerSource);
         $this->assertStringContainsString('new application_user_service_registrar()', $registrarDefaultsProviderFactorySource);
         $this->assertStringNotContainsString('new application_user_service_registrar()', $dependencyProviderSource);
         $this->assertStringNotContainsString("->factory(\n                'user'", $graphSource);

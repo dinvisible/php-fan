@@ -11,13 +11,11 @@ final class ApplicationClientServiceRegistrarTest extends TestCase
     {
         $source = file_get_contents(dirname(__DIR__, 3) . '/_core/di/application_client_service_registrar.php');
         $graphSource = file_get_contents(dirname(__DIR__, 3) . '/_core/di/application_service_graph_registrar.php');
-        $providerSource = file_get_contents(dirname(__DIR__, 3) . '/_core/di/application_service_registrar_defaults_provider.php');
         $dependencyProviderSource = file_get_contents(dirname(__DIR__, 3) . '/_core/di/application_container_dependency_provider.php');
         $registrarDefaultsProviderFactorySource = file_get_contents(dirname(__DIR__, 3) . '/_core/factory/application_service_registrar_defaults_provider_factory.php');
 
         $this->assertIsString($source);
         $this->assertIsString($graphSource);
-        $this->assertIsString($providerSource);
         $this->assertIsString($dependencyProviderSource);
         $this->assertIsString($registrarDefaultsProviderFactorySource);
         $this->assertStringContainsString('final class application_client_service_registrar', $source);
@@ -34,7 +32,6 @@ final class ApplicationClientServiceRegistrarTest extends TestCase
         }
         $this->assertStringContainsString('private application_client_service_registrar $clientServiceRegistrar', $graphSource);
         $this->assertStringContainsString('$this->clientServiceRegistrar->register(', $graphSource);
-        $this->assertStringNotContainsString('new application_client_service_registrar()', $providerSource);
         $this->assertStringContainsString('new application_client_service_registrar()', $registrarDefaultsProviderFactorySource);
         $this->assertStringNotContainsString('new application_client_service_registrar()', $dependencyProviderSource);
         $this->assertStringNotContainsString("->factory(\n                'cookie'", $graphSource);
