@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 $phpFanRoot = dirname(__DIR__);
 
+if (!function_exists('array_val')) {
+    require_once $phpFanRoot . '/_core/functions.php';
+}
+
 spl_autoload_register(static function (string $class) use ($phpFanRoot): void {
     if (class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false)) {
         return;

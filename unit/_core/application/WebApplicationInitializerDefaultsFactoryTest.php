@@ -55,6 +55,8 @@ final class WebApplicationInitializerDefaultsFactoryTest extends TestCase
 
         $this->assertStringContainsString("'fan\\\\core\\\\bootstrap\\\\' => \$phpFanRoot . '/_core/application/'", $composerAutoloadSource);
         $this->assertStringContainsString("if (str_contains(\$relativeClass, 'factory'))", $composerAutoloadSource);
+        $this->assertStringContainsString("if (!function_exists('array_val'))", $composerAutoloadSource);
+        $this->assertStringContainsString("require_once \$phpFanRoot . '/_core/functions.php';", $composerAutoloadSource);
     }
 }
 
