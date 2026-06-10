@@ -15,12 +15,12 @@ final class IndexSourceTest extends TestCase
         $this->assertStringContainsString('use fan\core\di\web_application_initializer_defaults_factory;', $source);
         $this->assertStringContainsString('((new web_application_initializer_defaults_factory())())->run();', $source);
         $this->assertStringNotContainsString("require_once __DIR__ . '/autoload.php';", $source);
-        $this->assertStringNotContainsString("require_once __DIR__ . '/../_core/factory/request_runner_defaults_provider_factory.php';", $source);
+        $this->assertStringNotContainsString("require_once __DIR__ . '/../core/factory/request_runner_defaults_provider_factory.php';", $source);
         $this->assertStringNotContainsString('$requestRunnerDefaults = new request_runner_defaults_factory();', $source);
         $this->assertStringNotContainsString('$requestRunner = $requestRunnerDefaults();', $source);
-        $this->assertStringNotContainsString("require_once __DIR__ . '/../_core/factory/request_runner_defaults_factory.php';", $source);
+        $this->assertStringNotContainsString("require_once __DIR__ . '/../core/factory/request_runner_defaults_factory.php';", $source);
         $this->assertStringNotContainsString('$requestRunner = (new \fan\core\bootstrap\request_runner_defaults_factory())();', $source);
-        $this->assertStringNotContainsString("require_once __DIR__ . '/../_core/bootstrap.php';", $source);
+        $this->assertStringNotContainsString("require_once __DIR__ . '/../core/bootstrap.php';", $source);
         $this->assertStringNotContainsString('\bootstrap::run', $source);
         $this->assertStringNotContainsString('new \fan\core\bootstrap\application()', $source);
     }

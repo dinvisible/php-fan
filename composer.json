@@ -15,27 +15,27 @@
   "autoload": {
     "psr-4": {
       "fan\\core\\adapter\\": [
-        "_core/adapter/",
-        "_core/factory/adapter/"
+        "core/adapter/",
+        "core/factory/adapter/"
       ],
       "fan\\core\\bootstrap\\": [
-        "_core/application/",
-        "_core/factory/"
+        "core/application/",
+        "core/factory/"
       ],
       "fan\\core\\di\\": [
-        "_core/di/",
-        "_core/factory/"
+        "core/di/",
+        "core/factory/"
       ],
       "fan\\core\\runtime\\": [
-        "_core/runtime/",
-        "_core/factory/runtime/"
+        "core/runtime/",
+        "core/factory/runtime/"
       ],
-      "fan\\core\\": "_core/",
-      "fan\\project\\": "_project/",
-      "fan\\app\\": "_project/app/"
+      "fan\\core\\": "core/",
+      "fan\\project\\": "project/",
+      "fan\\app\\": "project/app/"
     },
     "files": [
-      "_core/functions.php",
+      "core/functions.php",
       "tools/composer_autoload.php"
     ]
   },

@@ -8,7 +8,7 @@ declare(strict_types=1);
  */
 final class fully_qualified_name_importer
 {
-    private const TARGET_DIRS = ['_core', '_project', 'htdocs', 'unit', 'tools'];
+    private const TARGET_DIRS = ['core', 'project', 'htdocs', 'unit', 'tools'];
 
     private bool $dryRun;
     private bool $fromHead;
