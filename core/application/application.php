@@ -6,6 +6,7 @@ namespace fan\core\bootstrap;
 use fan\core\di\context_defaults_factory;
 use fan\core\di\container_interface;
 use fan\core\di\fatal_exception_factory;
+use fan\core\di\service_id;
 
 
 final class application
@@ -118,9 +119,9 @@ final class application
         $state->setLoader($this->defineObj('loader', loader::class, '{CORE_DIR}/application/loader.php'));
         $container = $this->container();
         $state->initializer()->initAfterLoader(
-            $container->get('matcher'),
-            $container->get('request_input'),
-            $container->get('bootstrap_runtime')
+            $container->get(service_id::MATCHER),
+            $container->get(service_id::REQUEST_INPUT),
+            $container->get(service_id::BOOTSTRAP_RUNTIME)
         );
         $state->setRunner($this->defineObj('runner', runner::class, '{CORE_DIR}/application/runner.php'));
 

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use fan\core\di\application_core_service_registrar;
+use fan\core\di\service_id;
 use PHPUnit\Framework\TestCase;
 
 final class ApplicationCoreServiceRegistrarTest extends TestCase
@@ -20,19 +21,21 @@ final class ApplicationCoreServiceRegistrarTest extends TestCase
         $this->assertIsString($registrarDefaultsProviderFactorySource);
         $this->assertStringContainsString('final class application_core_service_registrar', $source);
         foreach ([
-            "'request',",
-            "'role',",
-            "'error',",
-            "'header',",
-            "'locale',",
-            "'application',",
-            "'matcher',",
-            "'reflector',",
-            "'debug',",
-            "'timer',",
+            'service_id::REQUEST,',
+            'service_id::ROLE,',
+            'service_id::ERROR,',
+            'service_id::HEADER,',
+            'service_id::LOCALE,',
+            'service_id::APPLICATION,',
+            'service_id::MATCHER,',
+            'service_id::REFLECTOR,',
+            'service_id::DEBUG,',
+            'service_id::TIMER,',
         ] as $registration) {
             $this->assertStringContainsString($registration, $source);
         }
+        $this->assertSame('request', service_id::REQUEST);
+        $this->assertSame('matcher', service_id::MATCHER);
         $this->assertStringContainsString('private application_core_service_registrar $coreServiceRegistrar', $graphSource);
         $this->assertStringContainsString('$this->coreServiceRegistrar->register($container, $context)', $graphSource);
         $this->assertStringContainsString('new application_core_service_registrar()', $registrarDefaultsProviderFactorySource);

@@ -86,7 +86,7 @@ final class ApplicationServiceGraphRegistrarTest extends TestCase
         $this->assertStringContainsString('$this->userServiceRegistrar->register(', $source);
         $this->assertStringContainsString('final class application_service_graph_registration_context', $contextSource);
         $this->assertStringContainsString('application_service_graph_registration_context $context', $source);
-        foreach (["'request',", "'role',", "'timer',"] as $registration) {
+        foreach (['service_id::REQUEST,', 'service_id::ROLE,', 'service_id::TIMER,'] as $registration) {
             $this->assertStringContainsString($registration, $coreRegistrarSource);
         }
         foreach (["'config',", "'cache'", "'json',", "'file_system',"] as $registration) {

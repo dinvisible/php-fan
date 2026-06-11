@@ -12,37 +12,37 @@ final class application_core_service_registrar
 
         return $container
             ->factory(
-                'request',
+                service_id::REQUEST,
                 static fn(container_interface $container): mixed => $coreServiceCreator->createRequestService($container, $context->requestServiceFactory)
             )
             ->factory(
-                'role',
+                service_id::ROLE,
                 static fn(container_interface $container): mixed => $coreServiceCreator->createRoleService($container, $context->roleServiceFactory)
             )
             ->factory(
-                'error',
+                service_id::ERROR,
                 static fn(container_interface $container): mixed => $coreServiceCreator->createErrorService($container, $context->errorServiceFactory)
             )
             ->factory(
-                'header',
+                service_id::HEADER,
                 static fn(container_interface $container): mixed => $coreServiceCreator->createHeaderService($container, $context->headerServiceFactory)
             )
             ->factory(
-                'locale',
+                service_id::LOCALE,
                 static fn(container_interface $container): mixed => $coreServiceCreator->createLocaleService(
                     $container,
                     $context->localeServiceFactory
                 )
             )
             ->factory(
-                'application',
+                service_id::APPLICATION,
                 static fn(container_interface $container): mixed => $coreServiceCreator->createApplicationService(
                     $container,
                     $context->applicationServiceFactory
                 )
             )
             ->factory(
-                'matcher',
+                service_id::MATCHER,
                 static fn(container_interface $container): mixed => $coreServiceCreator->createMatcherService(
                     $container,
                     $context->matcherItemFactory,
@@ -51,18 +51,18 @@ final class application_core_service_registrar
                 )
             )
             ->factory(
-                'reflector',
+                service_id::REFLECTOR,
                 static fn(container_interface $container): mixed => $coreServiceCreator->createReflectorService(
                     $container,
                     $context->reflectorServiceFactory
                 )
             )
             ->factory(
-                'debug',
+                service_id::DEBUG,
                 static fn(container_interface $container): mixed => $coreServiceCreator->createDebugService($container, $context->debugServiceFactory)
             )
             ->factory(
-                'timer',
+                service_id::TIMER,
                 static fn(container_interface $container): mixed => $coreServiceCreator->createTimerService(
                     $container,
                     $context->timerProgramFactory,
