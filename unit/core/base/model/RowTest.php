@@ -203,6 +203,51 @@ class BaseModelRowTest extends SourceFileContractTestCase
         $this->assertSame('fan\core\base\model', $row->exposeNamespaceName('fan\core\base\model\row', 1));
     }
 
+    public function testTopRowUsesEntityLookupBoundary(): void
+    {
+        $topEntity = new BaseModelRowEntityDouble();
+        $entity = new BaseModelRowEntityDouble(
+            new BaseModelRowDescriptionDouble(
+                relations: [
+                    ['field' => 'role_id', 'ref_table' => 'roles', 'ref_field' => 'id'],
+                ],
+                extraFields: [
+                    'role_id' => ['type' => 'int', 'default' => null, 'null' => false, 'auto_increment' => false],
+                ]
+            ),
+            lookupResult: $topEntity
+        );
+        $data = ['id' => 7, 'role_id' => 5];
+        $row = new row($entity, $data);
+        $row->setRowDependencies(errorFactory: static fn(): BaseModelRowErrorDouble => new BaseModelRowErrorDouble());
+
+        $this->assertInstanceOf(row::class, $row->getTopRow('role_id'));
+        $this->assertSame([['roles', 'default']], $entity->lookupCalls);
+        $this->assertSame([[['id' => 5], 0, null]], $topEntity->rowByParamCalls);
+    }
+
+    public function testBottomRowsetUsesEntityLookupBoundary(): void
+    {
+        $bottomEntity = new BaseModelRowEntityDouble(
+            new BaseModelRowDescriptionDouble(
+                relations: [
+                    ['field' => 'user_id', 'ref_table' => 'users'],
+                ],
+                extraFields: [
+                    'user_id' => ['type' => 'int', 'default' => null, 'null' => false, 'auto_increment' => false],
+                ]
+            )
+        );
+        $entity = new BaseModelRowEntityDouble(lookupResult: $bottomEntity);
+        $data = ['id' => 7];
+        $row = new row($entity, $data);
+        $row->setRowDependencies(errorFactory: static fn(): BaseModelRowErrorDouble => new BaseModelRowErrorDouble());
+
+        $this->assertInstanceOf(\fan\core\base\model\rowset::class, $row->getBottomRowset('orders', 10, 2, 'created_at desc'));
+        $this->assertSame([['orders', 'default']], $entity->lookupCalls);
+        $this->assertSame([[['user_id' => 7], 10, 2, 'created_at desc']], $bottomEntity->rowsetByParamCalls);
+    }
+
     public function testSourceNoLongerCallsContainerServiceDirectly(): void
     {
         $code = $this->sourceCode();
@@ -241,6 +286,9 @@ class BaseModelRowTest extends SourceFileContractTestCase
         $this->assertStringNotContainsString('private ?\Closure $namespaceResolver', $code);
         $this->assertStringNotContainsString('$this->namespaceResolver === null', $code);
         $this->assertStringNotContainsString('get_ns_name(', $code);
+        $this->assertStringContainsString('$ett->findEntityByTable((string)$rel[\'ref_table\'], $ett->getConnectionName())', $code);
+        $this->assertStringContainsString('$curEtt->findEntityByTable((string)$tableName, $curEtt->getConnectionName())', $code);
+        $this->assertStringNotContainsString('getEntityByTable', $code);
     }
 
 }
@@ -269,11 +317,22 @@ final class BaseModelRowEntityDouble extends entity
 {
     private BaseModelRowDescriptionDouble $descriptionDouble;
 
-    public function __construct()
+    public array $lookupCalls = [];
+
+    public array $rowByParamCalls = [];
+
+    public array $rowsetByParamCalls = [];
+
+    public function __construct(
+        ?BaseModelRowDescriptionDouble $description = null,
+        private ?object $lookupResult = null
+    )
     {
         $this->tableName = 'users';
         $this->name = 'users';
-        $this->descriptionDouble = new BaseModelRowDescriptionDouble();
+        $this->rowClassName = row::class;
+        $this->rowsetClassName = \fan\core\base\model\rowset::class;
+        $this->descriptionDouble = $description ?? new BaseModelRowDescriptionDouble();
     }
 
     public function getDescription(array $param = []): object
@@ -309,11 +368,46 @@ final class BaseModelRowEntityDouble extends entity
     {
         return $this;
     }
+
+    public function getConnectionName(): ?string
+    {
+        return 'default';
+    }
+
+    public function findEntityByTable(string $tableName, ?string $connectionName = null): ?object
+    {
+        $this->lookupCalls[] = [$tableName, $connectionName];
+
+        return $this->lookupResult;
+    }
+
+    public function getRowByParam(mixed $param = null, int|float $offset = 0, ?string $orderBy = null): row
+    {
+        $this->rowByParamCalls[] = [$param, $offset, $orderBy];
+        $data = ['id' => 42, 'name' => 'top'];
+
+        return new row($this, $data);
+    }
+
+    public function getRowsetByParam(mixed $param = null, int|float $qtt = -1, int|float $offset = -1, string $orderBy = ''): \fan\core\base\model\rowset
+    {
+        $this->rowsetByParamCalls[] = [$param, $qtt, $offset, $orderBy];
+        $data = [];
+
+        return new \fan\core\base\model\rowset(
+            $this,
+            $data,
+            static fn(string $rowClass, entity $entity, array &$data, \fan\core\base\model\rowset $rowset): row => new row($entity, $data, $rowset)
+        );
+    }
 }
 
 final class BaseModelRowDescriptionDouble
 {
-    public function __construct()
+    public function __construct(
+        public array $relations = [],
+        private array $extraFields = []
+    )
     {
     }
 
@@ -324,13 +418,13 @@ final class BaseModelRowDescriptionDouble
 
     public function getFields(mixed $force = false): array
     {
-        return [
+        return array_merge([
             'id' => ['type' => 'int', 'default' => null, 'null' => false, 'auto_increment' => true],
             'name' => ['type' => 'varchar', 'length' => 3, 'charset' => 'utf8', 'default' => '', 'null' => false, 'auto_increment' => false],
             'age' => ['type' => 'int', 'default' => 18, 'null' => false, 'auto_increment' => false],
             'title_en' => ['type' => 'varchar', 'length' => 20, 'charset' => 'utf8', 'default' => '', 'null' => false, 'auto_increment' => false],
             'title_de' => ['type' => 'varchar', 'length' => 20, 'charset' => 'utf8', 'default' => '', 'null' => false, 'auto_increment' => false],
-        ];
+        ], $this->extraFields);
     }
 }
 

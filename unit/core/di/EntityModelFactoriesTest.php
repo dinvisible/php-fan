@@ -65,7 +65,7 @@ final class EntityModelFactoriesTest extends TestCase
 
     public function testEntityEncapsulantFactoryCreatesEncapsulantForService(): void
     {
-        $entityService = new stdClass();
+        $entityService = new EntityModelFactoriesEntityServiceDouble();
         $delegatedClass = null;
         $delegatedArguments = null;
         $factory = new entity_encapsulant_factory(
@@ -86,7 +86,7 @@ final class EntityModelFactoriesTest extends TestCase
 
     public function testModelEntityFactoryCreatesModelEntityWithDependencies(): void
     {
-        $entityService = new stdClass();
+        $entityService = new EntityModelFactoriesEntityServiceDouble();
         $entityConfigFactory = static fn(): object => new stdClass();
         $databaseFactory = static fn(): object => new stdClass();
         $reflectorFactory = static fn(): object => new stdClass();
@@ -124,16 +124,36 @@ final class EntityModelFactoriesTest extends TestCase
         );
 
         $this->assertSame(EntityModelFactoriesConstructedModelEntityDouble::class, $delegatedClass);
-        $this->assertInstanceOf(Closure::class, $delegatedArguments[12]);
+        for ($i = 12; $i <= 17; $i++) {
+            $this->assertInstanceOf(Closure::class, $delegatedArguments[$i]);
+        }
         $this->assertSame(
             [$entityService, 'users', ['flag' => true], $entityConfigFactory, $databaseFactory, $reflectorFactory, $rowFactory, $rowsetFactory, $requestLoaderFactory, $modelEntityExceptionFactory, $namespaceResolver, $reflectionClassFactory],
             array_slice($delegatedArguments, 0, 12)
         );
         $this->assertInstanceOf(EntityModelFactoriesConstructedModelEntityDouble::class, $entity);
-        $this->assertInstanceOf(Closure::class, $entity->dependencies[12]);
+        for ($i = 12; $i <= 17; $i++) {
+            $this->assertInstanceOf(Closure::class, $entity->dependencies[$i]);
+        }
         $this->assertSame(
             [$entityService, 'users', ['flag' => true], $entityConfigFactory, $databaseFactory, $reflectorFactory, $rowFactory, $rowsetFactory, $requestLoaderFactory, $modelEntityExceptionFactory, $namespaceResolver, $reflectionClassFactory],
             array_slice($entity->dependencies, 0, 12)
+        );
+        $this->assertSame(15, ($entity->dependencies[12])('encrypted-15'));
+        $this->assertSame($entityService->linkedEntity, ($entity->dependencies[13])('roles', 'main'));
+        $this->assertSame($entityService->designer, ($entity->dependencies[14])($entityService->linkedEntity, 'update'));
+        $this->assertSame($entityService->description, ($entity->dependencies[15])($entityService->linkedEntity, ['force' => true]));
+        $this->assertSame('\Project\\', ($entity->dependencies[16])($entityService->linkedEntity));
+        $this->assertSame('default', ($entity->dependencies[17])($entityService->linkedEntity));
+        $this->assertSame(
+            [
+                ['getEntityByTable', 'roles', 'main'],
+                ['getDesigner', $entityService->linkedEntity, 'update'],
+                ['getDescription', $entityService->linkedEntity, ['force' => true]],
+                ['getNsPrefix'],
+                ['getCollectionKey'],
+            ],
+            $entityService->calls
         );
     }
 
@@ -306,7 +326,12 @@ final class EntityModelFactoriesConstructedModelEntityDouble
         ?callable $modelEntityExceptionFactory,
         ?callable $namespaceResolver = null,
         ?object $reflectionClassFactory = null,
-        ?callable $entityIdDecoder = null
+        ?callable $entityIdDecoder = null,
+        ?callable $entityLookup = null,
+        ?callable $designerFactory = null,
+        ?callable $descriptionProvider = null,
+        ?callable $namespacePrefixResolver = null,
+        ?callable $collectionKeyProvider = null
     ) {
         $this->dependencies = [
             $entityService,
@@ -322,7 +347,75 @@ final class EntityModelFactoriesConstructedModelEntityDouble
             $namespaceResolver,
             $reflectionClassFactory,
             $entityIdDecoder,
+            $entityLookup,
+            $designerFactory,
+            $descriptionProvider,
+            $namespacePrefixResolver,
+            $collectionKeyProvider,
         ];
+    }
+}
+
+final class EntityModelFactoriesEntityServiceDouble
+{
+    public object $linkedEntity;
+
+    public object $designer;
+
+    public object $description;
+
+    public array $calls = [];
+
+    public function __construct()
+    {
+        $this->linkedEntity = new stdClass();
+        $this->designer = new stdClass();
+        $this->description = new stdClass();
+    }
+
+    public function getEncapsulant(): object
+    {
+        return new class {
+            public function decryptId(string $rowId): int
+            {
+                return (int)str_replace('encrypted-', '', $rowId);
+            }
+        };
+    }
+
+    public function getEntityByTable(string $tableName, ?string $connectionName = null): object
+    {
+        $this->calls[] = ['getEntityByTable', $tableName, $connectionName];
+
+        return $this->linkedEntity;
+    }
+
+    public function getDesigner(object $entity, string $type): object
+    {
+        $this->calls[] = ['getDesigner', $entity, $type];
+
+        return $this->designer;
+    }
+
+    public function getDescription(object $entity, array $param): object
+    {
+        $this->calls[] = ['getDescription', $entity, $param];
+
+        return $this->description;
+    }
+
+    public function getNsPrefix(): string
+    {
+        $this->calls[] = ['getNsPrefix'];
+
+        return '\Project\\';
+    }
+
+    public function getCollectionKey(): string
+    {
+        $this->calls[] = ['getCollectionKey'];
+
+        return 'default';
     }
 }
 

@@ -98,6 +98,42 @@ final class LegacyDiSourceInventoryTest extends TestCase
         ];
     }
 
+    #[DataProvider('rawCoreDiServiceIdProvider')]
+    public function testCoreDiServiceIdsUseNamedConstants(string $label, string $pattern): void
+    {
+        $matches = [];
+        foreach ($this->productionPhpFiles() as $file) {
+            $relativePath = $this->relativePath($file);
+            if (!str_starts_with($relativePath, 'core/di/')) {
+                continue;
+            }
+
+            $source = file_get_contents($file);
+            $this->assertIsString($source);
+            if (preg_match($pattern, $source) === 1) {
+                $matches[] = $relativePath;
+            }
+        }
+
+        $this->assertSame([], $matches, $label . ' found in: ' . implode(', ', $matches));
+    }
+
+    public static function rawCoreDiServiceIdProvider(): iterable
+    {
+        yield 'raw factory service id' => [
+            'raw factory service id',
+            '/->\s*factory\s*\(\s*[\'"][^\'"]+[\'"]/',
+        ];
+        yield 'raw alias service id' => [
+            'raw alias service id',
+            '/->\s*alias\s*\(\s*[\'"][^\'"]+[\'"]/',
+        ];
+        yield 'raw container get service id' => [
+            'raw container get service id',
+            '/(?:\$container|\$this->container\(\)|\$this->context\(\)->container\(\))\s*->\s*get\s*\(\s*[\'"][^\'"]+[\'"]/',
+        ];
+    }
+
     public function testDynamicConstructionIsLimitedToExplicitFactoryBoundaries(): void
     {
         $allowedFiles = [
@@ -126,7 +162,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $allowedCounts = [
             'core/base/model/entity.php' => 7,
             'core/base/model/file_data/row.php' => 1,
-            'core/base/model/row.php' => 3,
+            'core/base/model/row.php' => 1,
             'core/base/model/spec_file/image/entity.php' => 1,
             'core/base/model/spec_file/image/row.php' => 1,
             'core/base/model/spec_file/row.php' => 1,

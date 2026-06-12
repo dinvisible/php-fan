@@ -53,6 +53,69 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertSame(['encrypted-77', 'encrypted-77'], $calls);
     }
 
+    public function testFindEntityByTableUsesInjectedLookup(): void
+    {
+        $entity = new BaseModelEntityProbe('users', 'users_table', primaryKey: 'id');
+        $linkedEntity = new stdClass();
+        $calls = [];
+        $entity->setEntityDependencies(
+            entityLookup: static function (string $tableName, ?string $connectionName = null) use (&$calls, $linkedEntity): object {
+                $calls[] = [$tableName, $connectionName];
+
+                return $linkedEntity;
+            }
+        );
+
+        $this->assertSame($linkedEntity, $entity->findEntityByTable('roles', 'main'));
+        $this->assertSame([['roles', 'main']], $calls);
+    }
+
+    public function testDesignerDescriptionPrefixAndCollectionUseInjectedCollaborators(): void
+    {
+        $entity = new BaseModelEntityProbe('users', 'users_table', primaryKey: 'id');
+        $entity->resetDescriptionForTest();
+        $designer = new stdClass();
+        $description = new BaseModelEntityDescriptionDouble('id');
+        $calls = [];
+        $entity->setEntityDependencies(
+            designerFactory: static function (entity $modelEntity, string $type) use (&$calls, $entity, $designer): object {
+                $calls[] = ['designer', $modelEntity, $type];
+
+                return $designer;
+            },
+            descriptionProvider: static function (entity $modelEntity, array $param) use (&$calls, $entity, $description): object {
+                $calls[] = ['description', $modelEntity, $param];
+
+                return $description;
+            },
+            namespacePrefixResolver: static function (entity $modelEntity) use (&$calls, $entity): string {
+                $calls[] = ['prefix', $modelEntity];
+
+                return '\Injected\\';
+            },
+            collectionKeyProvider: static function (entity $modelEntity) use (&$calls, $entity): string {
+                $calls[] = ['collection', $modelEntity];
+
+                return 'injected-collection';
+            },
+            reflectionClassFactory: new BaseModelEntityReflectionClassFactoryDouble(entity::class)
+        );
+
+        $this->assertSame($designer, $entity->getDesigner('update'));
+        $this->assertSame($description, $entity->getDescription(['force' => true]));
+        $this->assertSame('injected-collection', $entity->getMainParam()['collection']);
+        $this->assertSame('\fan\project\base\model\entity', $entity->exposeClassName('entity'));
+        $this->assertSame(
+            [
+                ['designer', $entity, 'update'],
+                ['description', $entity, ['force' => true, 'seed' => true]],
+                ['collection', $entity],
+                ['prefix', $entity],
+            ],
+            $calls
+        );
+    }
+
     public function testGetCheckKeyHashesTableStatusAndCanReduceOutput(): void
     {
         $connection = new BaseModelEntityConnectionDouble([
@@ -247,12 +310,29 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertStringContainsString('private \Closure $namespaceResolver;', $code);
         $this->assertStringContainsString('private ?object $reflectionClassFactory = null;', $code);
         $this->assertStringContainsString('private mixed $entityIdDecoder = null;', $code);
+        $this->assertStringContainsString('private mixed $entityLookup = null;', $code);
+        $this->assertStringContainsString('private mixed $designerFactory = null;', $code);
+        $this->assertStringContainsString('private mixed $descriptionProvider = null;', $code);
+        $this->assertStringContainsString('private mixed $namespacePrefixResolver = null;', $code);
+        $this->assertStringContainsString('private mixed $collectionKeyProvider = null;', $code);
         $this->assertStringContainsString('?callable $namespaceResolver = null', $code);
         $this->assertStringContainsString('?object $reflectionClassFactory = null', $code);
         $this->assertStringContainsString('?callable $entityIdDecoder = null', $code);
+        $this->assertStringContainsString('?callable $entityLookup = null', $code);
+        $this->assertStringContainsString('?callable $designerFactory = null', $code);
+        $this->assertStringContainsString('?callable $descriptionProvider = null', $code);
+        $this->assertStringContainsString('?callable $namespacePrefixResolver = null', $code);
+        $this->assertStringContainsString('?callable $collectionKeyProvider = null', $code);
         $this->assertStringContainsString('public function decodeEntityId(string $rowId): mixed', $code);
+        $this->assertStringContainsString('public function findEntityByTable(string $tableName, ?string $connectionName = null): ?object', $code);
         $this->assertStringContainsString('return ($this->entityIdDecoder)($rowId);', $code);
         $this->assertStringContainsString('$this->decodeEntityId((string)$rowId)', $code);
+        $this->assertStringContainsString('private function createDesigner(string $type): object', $code);
+        $this->assertStringContainsString('private function loadDescription(array $param): object', $code);
+        $this->assertStringContainsString('private function entityNamespacePrefix(): string', $code);
+        $this->assertStringContainsString('private function entityCollectionKey(): mixed', $code);
+        $this->assertStringNotContainsString('string|designer', $code);
+        $this->assertStringNotContainsString('instanceof designer', $code);
         $this->assertStringContainsString('$this->namespaceResolver = $this->defaultNamespaceResolver();', $code);
         $this->assertStringContainsString('$ns     = $this->namespaceName($this, 2);', $code);
         $this->assertStringContainsString('private function namespaceName(object|string $object, int $depth = 1): string', $code);
@@ -294,6 +374,11 @@ final class BaseModelEntityProbe extends entity
     public function exposeClassName(string $key): string
     {
         return $this->_getClassName($key);
+    }
+
+    public function resetDescriptionForTest(): void
+    {
+        $this->description = null;
     }
 }
 

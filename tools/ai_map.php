@@ -337,11 +337,11 @@ function php_fan_ai_service_map(string $root, array $relativePhpFiles): array
         'aliases' => $aliases,
         'referenced' => php_fan_ai_sorted_occurrences($referenced),
         'constants' => $constants,
-        'descriptors' => php_fan_ai_service_descriptors($root, $relativePhpFiles, $registered, $constants),
+        'descriptors' => php_fan_ai_service_descriptors($root, $relativePhpFiles, $registered, $aliases, $constants),
     ];
 }
 
-function php_fan_ai_service_descriptors(string $root, array $relativePhpFiles, array $registered, array $constants): array
+function php_fan_ai_service_descriptors(string $root, array $relativePhpFiles, array $registered, array $aliases, array $constants): array
 {
     $registrations = php_fan_ai_service_registrations($root, $relativePhpFiles, $constants);
     $creatorMethods = php_fan_ai_service_creator_methods($root, $relativePhpFiles, $constants);
@@ -351,10 +351,12 @@ function php_fan_ai_service_descriptors(string $root, array $relativePhpFiles, a
         $registration = $registrations[$id] ?? [
             'creator_methods' => [],
             'dependencies' => [],
+            'runtime_arguments' => [],
             'shared' => null,
         ];
         $methods = $registration['creator_methods'];
         $dependencies = $registration['dependencies'];
+        $runtimeArguments = $registration['runtime_arguments'];
 
         foreach ($methods as $method) {
             if (!isset($creatorMethods[$method])) {
@@ -365,13 +367,25 @@ function php_fan_ai_service_descriptors(string $root, array $relativePhpFiles, a
 
         $dependencies = array_values(array_diff(array_unique($dependencies), [$id]));
         sort($dependencies);
+        $runtimeArguments = array_values(array_unique($runtimeArguments));
+        sort($runtimeArguments);
+        $aliasIds = php_fan_ai_aliases_for_service($id, $aliases);
 
         $descriptor = new \fan\core\di\service_descriptor(
             $id,
             $registrarFiles,
             array_values(array_unique($methods)),
             $registration['shared'],
-            $dependencies
+            $dependencies,
+            [
+                'registrar_files' => $registrarFiles,
+                'creator_methods' => array_values(array_unique($methods)),
+            ],
+            [
+                'container_dependencies' => $dependencies,
+                'runtime_arguments' => $runtimeArguments,
+            ],
+            $aliasIds
         );
         $descriptors[$id] = $descriptor->toArray();
     }
@@ -403,6 +417,7 @@ function php_fan_ai_service_registrations(string $root, array $relativePhpFiles,
 
             $registrations[$id]['creator_methods'] ??= [];
             $registrations[$id]['dependencies'] ??= [];
+            $registrations[$id]['runtime_arguments'] ??= [];
             $registrations[$id]['shared'] ??= true;
             $registrations[$id]['creator_methods'] = array_merge(
                 $registrations[$id]['creator_methods'],
@@ -411,6 +426,10 @@ function php_fan_ai_service_registrations(string $root, array $relativePhpFiles,
             $registrations[$id]['dependencies'] = array_merge(
                 $registrations[$id]['dependencies'],
                 php_fan_ai_container_dependencies_from_source($call, $constants)
+            );
+            $registrations[$id]['runtime_arguments'] = array_merge(
+                $registrations[$id]['runtime_arguments'],
+                php_fan_ai_runtime_arguments_from_source($call)
             );
             if (preg_match('/,\s*false\s*\)\s*$/s', $call) === 1) {
                 $registrations[$id]['shared'] = false;
@@ -423,10 +442,26 @@ function php_fan_ai_service_registrations(string $root, array $relativePhpFiles,
         sort($registration['creator_methods']);
         $registration['dependencies'] = array_values(array_unique($registration['dependencies']));
         sort($registration['dependencies']);
+        $registration['runtime_arguments'] = array_values(array_unique($registration['runtime_arguments']));
+        sort($registration['runtime_arguments']);
         $registrations[$id] = $registration;
     }
 
     return $registrations;
+}
+
+function php_fan_ai_aliases_for_service(string $id, array $aliases): array
+{
+    $result = [];
+    foreach ($aliases as $alias => $entry) {
+        if (($entry['target'] ?? null) === $id) {
+            $result[] = $alias;
+        }
+    }
+
+    sort($result);
+
+    return $result;
 }
 
 function php_fan_ai_service_creator_methods(string $root, array $relativePhpFiles, array $constants): array
@@ -549,6 +584,30 @@ function php_fan_ai_creator_methods_from_source(string $source): array
     sort($methods);
 
     return $methods;
+}
+
+function php_fan_ai_runtime_arguments_from_source(string $source): array
+{
+    if (preg_match('/(?:static\s+)?(?:function|fn)\s*\(([^)]*)\)/s', $source, $match) !== 1) {
+        return [];
+    }
+
+    $arguments = [];
+    foreach (explode(',', $match[1]) as $parameter) {
+        if (preg_match('/\$([A-Za-z_][A-Za-z0-9_]*)/', $parameter, $parameterMatch) !== 1) {
+            continue;
+        }
+        $name = $parameterMatch[1];
+        if ($name === 'container') {
+            continue;
+        }
+        $arguments[] = $name;
+    }
+
+    $arguments = array_values(array_unique($arguments));
+    sort($arguments);
+
+    return $arguments;
 }
 
 function php_fan_ai_extract_public_creator_methods(string $source): array
@@ -853,13 +912,31 @@ function php_fan_ai_validate_map_contract(string $root, array $map): array
         if (($descriptor['id'] ?? null) !== $id) {
             $errors[] = 'AI map descriptor id mismatch for service: ' . $id;
         }
-        foreach (['registrar_files', 'creator_methods', 'dependencies'] as $listKey) {
+        foreach (['registrar_files', 'creator_methods', 'dependencies', 'aliases'] as $listKey) {
             if (!isset($descriptor[$listKey]) || !php_fan_ai_is_string_list($descriptor[$listKey])) {
                 $errors[] = 'AI map descriptor "' . $id . '" must have string-list key: ' . $listKey;
             }
         }
         if (array_key_exists('shared', $descriptor) && !is_bool($descriptor['shared']) && $descriptor['shared'] !== null) {
             $errors[] = 'AI map descriptor "' . $id . '" shared must be boolean or null.';
+        }
+        if (!isset($descriptor['factory_origin']) || !is_array($descriptor['factory_origin'])) {
+            $errors[] = 'AI map descriptor "' . $id . '" must have factory_origin.';
+        } else {
+            foreach (['registrar_files', 'creator_methods'] as $listKey) {
+                if (!isset($descriptor['factory_origin'][$listKey]) || !php_fan_ai_is_string_list($descriptor['factory_origin'][$listKey])) {
+                    $errors[] = 'AI map descriptor "' . $id . '" factory_origin must have string-list key: ' . $listKey;
+                }
+            }
+        }
+        if (!isset($descriptor['factory_arguments']) || !is_array($descriptor['factory_arguments'])) {
+            $errors[] = 'AI map descriptor "' . $id . '" must have factory_arguments.';
+        } else {
+            foreach (['container_dependencies', 'runtime_arguments'] as $listKey) {
+                if (!isset($descriptor['factory_arguments'][$listKey]) || !php_fan_ai_is_string_list($descriptor['factory_arguments'][$listKey])) {
+                    $errors[] = 'AI map descriptor "' . $id . '" factory_arguments must have string-list key: ' . $listKey;
+                }
+            }
         }
     }
 

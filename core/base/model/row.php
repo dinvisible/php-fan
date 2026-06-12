@@ -485,7 +485,7 @@ class row implements \ArrayAccess
             return null;
         }
 
-        $topEtt = $ett->getService()->getEntityByTable($rel['ref_table'], $ett->getConnectionName());
+        $topEtt = $ett->findEntityByTable((string)$rel['ref_table'], $ett->getConnectionName());
         if (empty($topEtt)) {
             $err->logErrorMessage('Linked entity for field "' . $byField . '" is not found', $errHeader);
             return null;
@@ -500,7 +500,7 @@ class row implements \ArrayAccess
         $errHeader = 'Error while get Bottom Rowset';
 
         $curEtt    = $this->getEntity();
-        $bottomEtt = $curEtt->getService()->getEntityByTable((string)$tableName, $curEtt->getConnectionName());
+        $bottomEtt = $curEtt->findEntityByTable((string)$tableName, $curEtt->getConnectionName());
         if (empty($bottomEtt)) {
             $err->logErrorMessage('Can\'t get entity for table "' . $tableName . '"', $errHeader);
             return null;

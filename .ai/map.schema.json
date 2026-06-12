@@ -183,7 +183,10 @@
         "registrar_files",
         "creator_methods",
         "shared",
-        "dependencies"
+        "dependencies",
+        "factory_origin",
+        "factory_arguments",
+        "aliases"
       ],
       "properties": {
         "id": {
@@ -202,6 +205,41 @@
           ]
         },
         "dependencies": {
+          "$ref": "#/$defs/stringList"
+        },
+        "factory_origin": {
+          "type": "object",
+          "required": [
+            "registrar_files",
+            "creator_methods"
+          ],
+          "properties": {
+            "registrar_files": {
+              "$ref": "#/$defs/stringList"
+            },
+            "creator_methods": {
+              "$ref": "#/$defs/stringList"
+            }
+          },
+          "additionalProperties": false
+        },
+        "factory_arguments": {
+          "type": "object",
+          "required": [
+            "container_dependencies",
+            "runtime_arguments"
+          ],
+          "properties": {
+            "container_dependencies": {
+              "$ref": "#/$defs/stringList"
+            },
+            "runtime_arguments": {
+              "$ref": "#/$defs/stringList"
+            }
+          },
+          "additionalProperties": false
+        },
+        "aliases": {
           "$ref": "#/$defs/stringList"
         }
       },

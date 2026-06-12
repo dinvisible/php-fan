@@ -53,6 +53,8 @@ class obfuscator extends multi
         'META'    => 'metaDir',
     ];
 
+    private ?object $engine = null;
+
     /**
      * @var callable|null
      */

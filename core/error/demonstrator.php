@@ -227,6 +227,8 @@ class demonstrator
         if (!$headerWriter->sent()) {
             foreach ($this->headers as $v) {
                 if (!empty($v)) {
+                    $file = null;
+                    $line = null;
                     if ($headerWriter->sent($file, $line)) {
                         $this->errorLogWriter()->write('Cannot send error demonstrator header "' . $v . '": headers already sent in "' . $file . '" on line ' . $line . '.');
                     } else {

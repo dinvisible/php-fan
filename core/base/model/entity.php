@@ -118,6 +118,16 @@ abstract class entity
 
     private mixed $entityIdDecoder = null;
 
+    private mixed $entityLookup = null;
+
+    private mixed $designerFactory = null;
+
+    private mixed $descriptionProvider = null;
+
+    private mixed $namespacePrefixResolver = null;
+
+    private mixed $collectionKeyProvider = null;
+
     public function __construct(
         object $service,
         mixed $name,
@@ -131,7 +141,12 @@ abstract class entity
         ?callable $modelEntityExceptionFactory = null,
         ?callable $namespaceResolver = null,
         ?object $reflectionClassFactory = null,
-        ?callable $entityIdDecoder = null
+        ?callable $entityIdDecoder = null,
+        ?callable $entityLookup = null,
+        ?callable $designerFactory = null,
+        ?callable $descriptionProvider = null,
+        ?callable $namespacePrefixResolver = null,
+        ?callable $collectionKeyProvider = null
     )
     {
         $param = (array)$param;
@@ -148,7 +163,12 @@ abstract class entity
             $modelEntityExceptionFactory,
             $namespaceResolver,
             $reflectionClassFactory,
-            $entityIdDecoder
+            $entityIdDecoder,
+            $entityLookup,
+            $designerFactory,
+            $descriptionProvider,
+            $namespacePrefixResolver,
+            $collectionKeyProvider
         );
 
         $this->bakParam = $param;
@@ -174,7 +194,12 @@ abstract class entity
         ?callable $modelEntityExceptionFactory = null,
         ?callable $namespaceResolver = null,
         ?object $reflectionClassFactory = null,
-        ?callable $entityIdDecoder = null
+        ?callable $entityIdDecoder = null,
+        ?callable $entityLookup = null,
+        ?callable $designerFactory = null,
+        ?callable $descriptionProvider = null,
+        ?callable $namespacePrefixResolver = null,
+        ?callable $collectionKeyProvider = null
     ): static
     {
         if ($configFactory !== null) {
@@ -206,6 +231,21 @@ abstract class entity
         }
         if ($entityIdDecoder !== null) {
             $this->entityIdDecoder = \Closure::fromCallable($entityIdDecoder);
+        }
+        if ($entityLookup !== null) {
+            $this->entityLookup = \Closure::fromCallable($entityLookup);
+        }
+        if ($designerFactory !== null) {
+            $this->designerFactory = \Closure::fromCallable($designerFactory);
+        }
+        if ($descriptionProvider !== null) {
+            $this->descriptionProvider = \Closure::fromCallable($descriptionProvider);
+        }
+        if ($namespacePrefixResolver !== null) {
+            $this->namespacePrefixResolver = \Closure::fromCallable($namespacePrefixResolver);
+        }
+        if ($collectionKeyProvider !== null) {
+            $this->collectionKeyProvider = \Closure::fromCallable($collectionKeyProvider);
         }
 
         return $this;
@@ -386,7 +426,7 @@ abstract class entity
         return $this->getRowByQuery($designer, $param, $offset);
     }
 
-    public function getRowByQuery(string|designer $query, mixed $param = null, int|float $offset = 0): row
+    public function getRowByQuery(string|object $query, mixed $param = null, int|float $offset = 0): row
     {
         $data  =& $this->getDataByQuery($query, $param, 1, $offset, true);
         return $this->_getRowByData($data);
@@ -405,7 +445,7 @@ abstract class entity
         return $this->getRowsetByQuery($designer, $param, $qtt, $offset);
     }
 
-    public function getRowsetByQuery(string|designer $query, mixed $param = null, int|float $qtt = -1, int|float $offset = -1): rowset
+    public function getRowsetByQuery(string|object $query, mixed $param = null, int|float $qtt = -1, int|float $offset = -1): rowset
     {
         $data  =& $this->getDataByQuery($query, $param, $qtt, $offset);
         return $this->createRowset($data);
@@ -424,7 +464,7 @@ abstract class entity
         return $this->getCountByQuery($query, $param);
     }
 
-    public function getCountByQuery(string|designer $query, mixed $param = null): mixed
+    public function getCountByQuery(string|object $query, mixed $param = null): mixed
     {
         list($query, $newParam) = $this->_getSqlAsString($query, $param);
         // ToDo: Take account of Union
@@ -496,6 +536,15 @@ abstract class entity
         return $this->getService()->getEncapsulant()->decryptId($rowId);
     }
 
+    public function findEntityByTable(string $tableName, ?string $connectionName = null): ?object
+    {
+        $entity = is_callable($this->entityLookup)
+            ? ($this->entityLookup)($tableName, $connectionName)
+            : $this->getService()->getEntityByTable($tableName, $connectionName);
+
+        return is_object($entity) ? $entity : null;
+    }
+
     public function &getDataByParam(mixed $param = null, int|float $qtt = -1, int|float $offset = -1, ?string $orderBy = null, bool $onlyOne = false): array
     {
         $query =  $this->getDesigner('select')->setSelectByParam($param, $orderBy);
@@ -506,7 +555,7 @@ abstract class entity
     /**
      * @throws \fan\project\exception\model\entity\fatal
      */
-    public function &getDataByQuery(string|designer $query, mixed $param = null, int|float $qtt = -1, int|float $offset = -1, bool $onlyOne = false): array
+    public function &getDataByQuery(string|object $query, mixed $param = null, int|float $qtt = -1, int|float $offset = -1, bool $onlyOne = false): array
     {
         list($query, $newParam) = $this->_getSqlAsString($query, $param, false);
         $data = $this->getConnection()->getAllLimit($query, $newParam, $qtt, $offset);
@@ -588,7 +637,7 @@ abstract class entity
     public function getMainParam(): array
     {
         return [
-            'collection' => $this->getService()->getCollectionKey(),
+            'collection' => $this->entityCollectionKey(),
             'name'       => $this->getName(),
             'class'      => get_class($this),
             'param'      => $this->bakParam,
@@ -624,13 +673,13 @@ abstract class entity
 
     public function getDesigner(string $type = 'select'): object
     {
-        return $this->getService()->getDesigner($this, $type);
+        return $this->createDesigner($type);
     }
 
     public function getDescription(array $param = []): object
     {
         if (is_null($this->description)) {
-            $this->description = $this->getService()->getDescription($this, array_merge((array)$param, $this->bakParam));
+            $this->description = $this->loadDescription(array_merge((array)$param, $this->bakParam));
         }
         return $this->description;
     }
@@ -732,7 +781,7 @@ abstract class entity
             while (empty($connectionName)) {
                 $globalConf = $this->configService()->get('common');
                 if (isset($globalConf['CONNECTIONS'])) {
-                    $prefix = trim($this->getService()->getNsPrefix(), '\\');
+                    $prefix = trim($this->entityNamespacePrefix(), '\\');
                     $len    = strlen($prefix);
                     $ns     = $this->namespaceName($this, 2);
                     for ($i = 0; $i < 2; $i++) {
@@ -798,6 +847,52 @@ abstract class entity
         return $reflection;
     }
 
+    private function createDesigner(string $type): object
+    {
+        $designer = is_callable($this->designerFactory)
+            ? ($this->designerFactory)($this, $type)
+            : $this->getService()->getDesigner($this, $type);
+        if (!is_object($designer)) {
+            $actual = gettype($designer);
+            throw new \UnexpectedValueException('Entity designer factory returned "' . $actual . '".');
+        }
+
+        return $designer;
+    }
+
+    private function loadDescription(array $param): object
+    {
+        $description = is_callable($this->descriptionProvider)
+            ? ($this->descriptionProvider)($this, $param)
+            : $this->getService()->getDescription($this, $param);
+        if (!is_object($description)) {
+            $actual = gettype($description);
+            throw new \UnexpectedValueException('Entity description provider returned "' . $actual . '".');
+        }
+
+        return $description;
+    }
+
+    private function entityNamespacePrefix(): string
+    {
+        $prefix = is_callable($this->namespacePrefixResolver)
+            ? ($this->namespacePrefixResolver)($this)
+            : $this->getService()->getNsPrefix();
+        if (!is_string($prefix)) {
+            $actual = is_object($prefix) ? get_class($prefix) : gettype($prefix);
+            throw new \UnexpectedValueException('Entity namespace prefix resolver returned "' . $actual . '".');
+        }
+
+        return $prefix;
+    }
+
+    private function entityCollectionKey(): mixed
+    {
+        return is_callable($this->collectionKeyProvider)
+            ? ($this->collectionKeyProvider)($this)
+            : $this->getService()->getCollectionKey();
+    }
+
     private function namespaceResolver(): callable
     {
         if (!isset($this->namespaceResolver)) {
@@ -823,7 +918,7 @@ abstract class entity
         if (empty($name)) {
             $className = '';
         } else {
-            $prefix = $this->getService()->getNsPrefix();
+            $prefix = $this->entityNamespacePrefix();
             if (empty($prefix)) {
                 throw $this->createModelEntityFatalException('In config prefix doesn\'t set for "' . $key . '".');
             }
@@ -848,9 +943,9 @@ abstract class entity
     /**
      * @throws \fan\project\exception\model\entity\fatal
      */
-    protected function _getSqlAsString(string|designer $query, mixed $param): array
+    protected function _getSqlAsString(string|object $query, mixed $param): array
     {
-        if (is_object($query) && $query instanceof designer) {
+        if (is_object($query) && method_exists($query, 'assemble') && method_exists($query, 'getAdjustedParam')) {
             return [$query->assemble($param), $query->getAdjustedParam()];
         } elseif (!is_string($query)) {
             return [$query, $param];

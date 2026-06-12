@@ -29,10 +29,21 @@ final class AiToolingTest extends TestCase
             $this->assertArrayHasKey($serviceId, $map['services']['descriptors']);
             $this->assertSame($serviceId, $map['services']['descriptors'][$serviceId]['id']);
             $this->assertNotSame([], $map['services']['descriptors'][$serviceId]['registrar_files']);
+            $this->assertSame(
+                $map['services']['descriptors'][$serviceId]['dependencies'],
+                $map['services']['descriptors'][$serviceId]['factory_arguments']['container_dependencies']
+            );
+            $this->assertSame(
+                $map['services']['descriptors'][$serviceId]['registrar_files'],
+                $map['services']['descriptors'][$serviceId]['factory_origin']['registrar_files']
+            );
         }
         $this->assertContains('createRequestService', $map['services']['descriptors'][service_id::REQUEST]['creator_methods']);
+        $this->assertContains('createRequestService', $map['services']['descriptors'][service_id::REQUEST]['factory_origin']['creator_methods']);
         $this->assertContains(service_id::CONFIG, $map['services']['descriptors'][service_id::REQUEST]['dependencies']);
+        $this->assertContains('type', $map['services']['descriptors'][service_id::CACHE]['factory_arguments']['runtime_arguments']);
         $this->assertFalse($map['services']['descriptors'][service_id::CACHE]['shared']);
+        $this->assertIsArray($map['services']['descriptors'][service_id::CACHE]['aliases']);
         $this->assertSame('.ai/meta.schema.json', $map['metadata']['meta_schema']);
         $this->assertArrayHasKey('own', $map['metadata']['meta']['top_level_key_usage']);
         $this->assertArrayHasKey('json', $map['metadata']['meta']['own_key_usage']);

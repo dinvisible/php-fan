@@ -42,6 +42,11 @@ final class model_entity_factory
     ): object {
         $entityIdDecoder = $this->entityIdDecoder
             ?? static fn(string $rowId): mixed => $entityService->getEncapsulant()->decryptId($rowId);
+        $entityLookup = static fn(string $tableName, ?string $connectionName = null): mixed => $entityService->getEntityByTable($tableName, $connectionName);
+        $designerFactory = static fn(object $entity, string $type = 'select'): object => $entityService->getDesigner($entity, $type);
+        $descriptionProvider = static fn(object $entity, array $param = []): object => $entityService->getDescription($entity, $param);
+        $namespacePrefixResolver = static fn(object $entity): string => $entityService->getNsPrefix();
+        $collectionKeyProvider = static fn(object $entity): mixed => $entityService->getCollectionKey();
 
         return ($this->configuredServiceFactory)($entityClass, [
             $entityService,
@@ -56,7 +61,12 @@ final class model_entity_factory
             $this->modelEntityExceptionFactory,
             $namespaceResolver,
             $this->reflectionClassFactory,
-            $entityIdDecoder
+            $entityIdDecoder,
+            $entityLookup,
+            $designerFactory,
+            $descriptionProvider,
+            $namespacePrefixResolver,
+            $collectionKeyProvider
         ]);
     }
 

@@ -27,7 +27,7 @@
 - реальные `phpstan`/`php-cs-fixer` dev tools с baseline gate;
 - hygiene guard против tracked dependency/runtime noise.
 
-Следующий лучший ход не "переписать как Laravel" и не "ввести DDD везде". Теперь цель - добивать migration debt маленькими срезами: дальнейшее уменьшение `getService()` allowlist, расширение service descriptors до constructor-level metadata и постепенное ужесточение static-analysis/style baseline.
+Следующий лучший ход не "переписать как Laravel" и не "ввести DDD везде". P14-P18 закрыли следующий AI-friendly слой: `row.php` больше не дергает `getEntityByTable()` напрямую, `core/di` защищен от raw service ids, PHPStan baseline уменьшен, AI map descriptors получили factory metadata, а ключевые `entity.php` service calls заведены за collaborators. Теперь цель - добивать оставшиеся BC fallback-и и static baseline маленькими срезами.
 
 ## Статус миграции
 
@@ -657,15 +657,180 @@ php fan ai:map --json
 php vendor/bin/phpunit --configuration phpunit.xml unit/core/AiToolingTest.php
 ```
 
-## Рекомендуемые следующие PR-срезы после P1-P13
+### P14. EntityLookup collaborator for model rows
+
+Статус: выполнено 2026-06-12.
+
+Цель: убрать прямые `$entity->getService()->getEntityByTable()` из `core/base/model/row.php` и уменьшить `getService()` allowlist.
+
+Почему это первый следующий шаг:
+
+- `EntityIdCodec` уже закрыт в P10;
+- `getEntityByTable()` остался ровно в двух runtime call sites:
+  - `row::getTopRow()`;
+  - `row::getBottomRowset()`;
+- поведение можно покрыть локальными unit tests без поднятия полного app bootstrap.
+
+План:
+
+1. Добавить в `core/base/model/entity.php` метод-границу, например `findEntityByTable(string $tableName, ?string $connectionName = null): ?object`.
+2. Поддержать optional collaborator/callable, например `entityLookup`, в `entity::__construct()` и `setEntityDependencies()`.
+3. Прокинуть default lookup из `model_entity_factory` через `$entityService->getEntityByTable(...)`.
+4. Заменить в `core/base/model/row.php`:
+   - `$ett->getService()->getEntityByTable(...)`;
+   - `$curEtt->getService()->getEntityByTable(...)`;
+   на `$ett->findEntityByTable(...)` / `$curEtt->findEntityByTable(...)`.
+5. Добавить/обновить tests:
+   - `unit/core/base/model/EntityTest.php`;
+   - `unit/core/base/model/RowTest.php`;
+   - `unit/core/di/EntityModelFactoriesTest.php`;
+   - `unit/core/LegacyDiSourceInventoryTest.php`.
+6. Уменьшить allowlist в `testModelServiceLocatorUsageIsPinnedToMigrationAllowlist()`:
+   - `core/base/model/row.php`: с `3` до `1`.
+
+Проверка:
+
+```bash
+php vendor/bin/phpunit --configuration phpunit.xml unit/core/base/model/EntityTest.php unit/core/base/model/RowTest.php unit/core/di/EntityModelFactoriesTest.php unit/core/LegacyDiSourceInventoryTest.php
+php tools/ai_verify.php --changed
+```
+
+Итог:
+
+- `entity::findEntityByTable()` добавлен как явная граница;
+- `model_entity_factory` передает default lookup из entity service;
+- `row::getTopRow()` и `row::getBottomRowset()` больше не вызывают `getService()->getEntityByTable()`;
+- `core/base/model/row.php` allowlist снижен с `3` до `1`.
+
+### P15. PHPUnit guard for raw service ids in `core/di`
+
+Статус: выполнено 2026-06-12.
+
+Цель: закрепить P9 не grep-командой, а постоянным regression guard.
+
+План:
+
+1. Добавить тест в `unit/core/LegacyDiSourceInventoryTest.php` или отдельный `unit/core/di/ServiceIdSourceInventoryTest.php`.
+2. Проверять production files под `core/di` на запрет:
+   - `->factory('...')`;
+   - `->alias('...')`;
+   - `$container->get('...')`;
+   - `$this->container()->get('...')`;
+   - `$this->context()->container()->get('...')`.
+3. Разрешать raw strings только там, где это не service id:
+   - config section names;
+   - project class suffixes вроде `getProjectServiceClassName('curl')`;
+   - runtime scalar arguments.
+4. Если появятся false positives, добавлять узкий allowlist с file+pattern, а не общий skip.
+
+Проверка:
+
+```bash
+php vendor/bin/phpunit --configuration phpunit.xml unit/core/LegacyDiSourceInventoryTest.php
+php tools/ai_verify.php --changed
+```
+
+Итог: `LegacyDiSourceInventoryTest::testCoreDiServiceIdsUseNamedConstants()` закрепляет запрет на raw service-id strings для production files в `core/di`.
+
+### P16. PHPStan baseline burn-down, first 3 entries
+
+Статус: выполнено 2026-06-12.
+
+Цель: начать уменьшать `phpstan-baseline.neon`, не расширяя suppression.
+
+Первый порядок лучше такой:
+
+1. `core/error/demonstrator.php`: исправить undefined `$file`/`$line`.
+   - Это, вероятно, настоящий bug/edge-case.
+   - Риск низкий: локальная ошибка переменных.
+2. `core/service/obfuscator.php`: объявить/инъецировать `$engine` явно или заменить доступ на существующий accessor/state.
+   - Риск средний: надо понять runtime contract сервиса.
+3. `core/base/model/entity.php`: решить `designer` type alias.
+   - Варианты: import/rename concrete designer type, interface, или осознанный docblock.
+   - Риск средний: затрагивает model query API.
+
+Правило: после каждого fixed error перегенерировать baseline и проверять, что count уменьшается, а не переписывается шумом.
+
+Проверка:
+
+```bash
+php tools/ai_static_check.php
+php tools/ai_verify.php --changed
+```
+
+Итог:
+
+- `core/error/demonstrator.php`: `$file`/`$line` инициализируются перед `headers_sent`;
+- `core/service/obfuscator.php`: добавлено явное поле `$engine`;
+- `core/base/model/entity.php`: фантомный `designer` type заменен на `object` contract с проверкой `assemble()`/`getAdjustedParam()`;
+- `phpstan-baseline.neon` уменьшен на закрытые entries.
+
+### P17. Expand AI map descriptors to constructor/factory origins
+
+Статус: выполнено 2026-06-12.
+
+Цель: сделать `ai_map.services.descriptors` полезнее для автоматического рефакторинга DI.
+
+План:
+
+1. Для каждого service descriptor добавить:
+   - `factory_origin`: registrar file + creator method/factory callable;
+   - `factory_arguments`: container deps vs runtime args;
+   - `shared`: уже есть, сохранить;
+   - `aliases`: обратная связь alias -> target.
+2. В `.ai/map.schema.json` добавить новые optional fields.
+3. Обновить `php_fan_ai_validate_map_contract()`.
+4. Добавить assertions в `unit/core/AiToolingTest.php`.
+
+Проверка:
+
+```bash
+php fan ai:map --validate --json
+php vendor/bin/phpunit --configuration phpunit.xml unit/core/AiToolingTest.php
+php tools/ai_verify.php --changed
+```
+
+Итог: service descriptors теперь включают `factory_origin`, `factory_arguments.container_dependencies`, `factory_arguments.runtime_arguments` и обратные `aliases`; schema и contract validation обновлены.
+
+### P18. Next entity service-locator extractions after `EntityLookup`
+
+Статус: выполнено 2026-06-12.
+
+Цель: продолжать выносить hidden service calls из `entity.php` по одному use case.
+
+Порядок:
+
+1. `EntityDescriptionProvider`: заменить `getDescription()` service call.
+2. `EntityDesignerFactory`: заменить `getDesigner()` service call.
+3. `EntityNamespaceResolver`: закрыть оставшиеся `getNsPrefix()` call sites или явно закрепить их как BC-boundary.
+4. `EntityMainParamProvider`: заменить `getCollectionKey()` в `getMainParam()`.
+
+Правило: каждый срез должен уменьшать `getService()` allowlist или документировать, почему конкретный call site остается BC-boundary.
+
+Проверка:
+
+```bash
+php vendor/bin/phpunit --configuration phpunit.xml unit/core/base/model/EntityTest.php unit/core/LegacyDiSourceInventoryTest.php
+php tools/ai_verify.php --changed
+```
+
+Итог:
+
+- `getDescription()` идет через injected `descriptionProvider`;
+- `getDesigner()` идет через injected `designerFactory`;
+- `getNsPrefix()` закрыт `namespacePrefixResolver`;
+- `getCollectionKey()` закрыт `collectionKeyProvider`;
+- legacy fallback-и внутри `entity.php` оставлены как BC-boundary до следующего среза.
+
+## Рекомендуемые следующие PR-срезы после P14-P18
 
 | PR | Название | Почему следующий | Основная проверка |
 |---:|---|---|---|
-| 1 | Continue `getService()` allowlist extraction | `EntityIdCodec` закрыт; следующий хвост - `EntityLookup`/`getEntityByTable()` в `row.php`. | `unit/core/base/model`; `unit/core/LegacyDiSourceInventoryTest.php`; `php tools/ai_verify.php --changed` |
-| 2 | Tighten PHPStan baseline | Теперь реальные tools подключены; можно по одному гасить baseline entries вместо расширения suppression. | `php tools/ai_static_check.php`; targeted unit tests |
-| 3 | Expand AI map descriptors | Service descriptors уже есть; следующий слой - constructor parameter names/types and factory origin. | `php fan ai:map --validate`; `unit/core/AiToolingTest.php` |
-| 4 | Add raw service-id source guard test for all `core/di` | P9 проверен grep-ом; стоит закрепить это отдельным PHPUnit guard. | `unit/core/di` или `LegacyDiSourceInventoryTest.php` |
-| 5 | Optional AI map snapshot workflow | Snapshot не нужен в commit по умолчанию, но можно добавить release-only update command/documentation. | `php tools/ai_map.php --write`; no dirty generated churn in normal dev |
+| 1 | P19 Collapse `entity.php` BC fallback count | Новые collaborators уже есть; следующий выигрыш - убрать fallback `getService()` там, где factory всегда инъектит dependency. | `unit/core/base/model/EntityTest.php`; `LegacyDiSourceInventoryTest.php`; `php tools/ai_verify.php --changed` |
+| 2 | P20 PHPStan baseline burn-down #2 | Следующие самые изолированные entries: `pear_http_session` adapter/loader или `file_data/entity_member`. | `php tools/ai_static_check.php`; focused adapter tests |
+| 3 | P21 AI map JSON Schema validation runner | Schema уже богаче; можно добавить реальную JSON Schema validation command/test, а не только hand-written contract checks. | `php fan ai:map --validate --json`; `unit/core/AiToolingTest.php` |
+| 4 | P22 Runtime argument descriptors for creator methods | Сейчас runtime args извлекаются из registration closures; следующий слой - public creator method signatures. | `unit/core/AiToolingTest.php`; `php tools/ai_map.php --json` |
+| 5 | P23 Source inventory for direct `$this->service` usage | После `getService()` allowlist стоит закрепить и прямой доступ к service property как explicit BC-boundary. | `unit/core/LegacyDiSourceInventoryTest.php` |
 
 ## Что не делать сейчас
 
