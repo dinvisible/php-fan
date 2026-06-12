@@ -12,7 +12,7 @@ final class application_navigation_service_registrar
 
         return $container
             ->factory(
-                'tab',
+                service_id::TAB,
                 static fn(container_interface $container): mixed => $navigationServiceCreator->createTabService(
                     $container,
                     $context->tabDelegateFactory,

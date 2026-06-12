@@ -86,14 +86,52 @@ class BaseModelRequestTest extends SourceFileContractTestCase
         $this->assertSame([$sqlPath], $fileStorage->readCalls);
     }
 
+    public function testLoadsSqlFileUsingInjectedSqlDirectoryResolver(): void
+    {
+        $dir = sys_get_temp_dir() . '/fan-model-request-' . uniqid('', true);
+        $entityPath = $dir . '/Entity.php';
+        $sqlPath = $dir . '/queries/find.sql';
+        $fileStorage = new BaseModelRequestFileStorageDouble([
+            $sqlPath => 'SELECT * FROM users',
+        ]);
+
+        $request = new request(
+            new BaseModelRequestEntityDouble(new BaseModelRequestEntityServiceDouble('legacy')),
+            new BaseModelRequestReflectorDouble([$entityPath]),
+            $fileStorage,
+            static fn(entity $entity): string => 'queries'
+        );
+
+        $this->assertSame('SELECT * FROM users', $request->get('find'));
+        $this->assertSame([$sqlPath], $fileStorage->existsCalls);
+    }
+
+    public function testSqlDirectoryResolverMustReturnString(): void
+    {
+        $request = new request(
+            new BaseModelRequestEntityDouble(),
+            new BaseModelRequestReflectorDouble([__FILE__]),
+            new BaseModelRequestFileStorageDouble([]),
+            static fn(entity $entity): array => []
+        );
+
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('Model request SQL directory resolver must return a string.');
+
+        $request->get('find');
+    }
+
     public function testSourceUsesInjectedReflectorInsteadOfEntityServiceLocator(): void
     {
         $source = $this->sourceCode();
 
         $this->assertStringContainsString('private ?object $reflector', $source);
         $this->assertStringContainsString('private ?object $fileStorage = null;', $source);
+        $this->assertStringContainsString('private \Closure $sqlDirectoryResolver;', $source);
         $this->assertStringContainsString('$this->fileStorage()->read($fileName)', $source);
         $this->assertStringContainsString('$this->fileStorage()->exists($fileName)', $source);
+        $this->assertStringContainsString('private function sqlDirectory(entity $entity): string', $source);
+        $this->assertStringNotContainsString('$entity->getService()->getSqlDir()', $source);
         $this->assertStringContainsString('private function createRequestFatalException(', $source);
         $this->assertStringContainsString('$this->getEntity()->createRequestFatalException($message, $code, $previous)', $source);
         $this->assertStringNotContainsString('new fatalException', $source);

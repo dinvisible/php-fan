@@ -19,7 +19,7 @@ final class ApplicationClientServiceRegistrarTest extends TestCase
         $this->assertIsString($dependencyProviderSource);
         $this->assertIsString($registrarDefaultsProviderFactorySource);
         $this->assertStringContainsString('final class application_client_service_registrar', $source);
-        foreach (["'cookie',", "'curl',", "'rest',"] as $registration) {
+        foreach (['service_id::COOKIE', 'service_id::CURL', 'service_id::REST'] as $registration) {
             $this->assertStringContainsString($registration, $source);
         }
         foreach ([

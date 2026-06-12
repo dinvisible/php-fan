@@ -19,7 +19,7 @@ final class ApplicationNavigationServiceRegistrarTest extends TestCase
         $this->assertIsString($dependencyProviderSource);
         $this->assertIsString($registrarDefaultsProviderFactorySource);
         $this->assertStringContainsString('final class application_navigation_service_registrar', $source);
-        $this->assertStringContainsString("'tab',", $source);
+        $this->assertStringContainsString('service_id::TAB', $source);
         $this->assertStringContainsString('private application_navigation_service_registrar $navigationServiceRegistrar', $graphSource);
         $this->assertStringContainsString('$this->navigationServiceRegistrar->register(', $graphSource);
         $this->assertStringContainsString('new application_navigation_service_registrar()', $registrarDefaultsProviderFactorySource);

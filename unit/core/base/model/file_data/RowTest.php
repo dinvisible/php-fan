@@ -95,6 +95,8 @@ class BaseModelFileDataRowTest extends SourceFileContractTestCase
         $this->assertStringContainsString('$this->loadPhpArrayFile($path, [])', $source);
         $this->assertStringContainsString('parent::setDependenciesFromEntityService($entity);', $source);
         $this->assertStringContainsString('$this->createModelRowFatalException(', $source);
+        $this->assertStringContainsString('$this->getEntity()->decodeEntityId((string)$idVal)', $source);
+        $this->assertStringNotContainsString('getEncapsulant()->decryptId', $source);
         $this->assertStringNotContainsString('containerService(', $source);
         $this->assertStringNotContainsString('new fatalException', $source);
         $this->assertStringNotContainsString('use fan\project\exception\model\entity\fatal as fatalException;', $source);

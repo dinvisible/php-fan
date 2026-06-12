@@ -12,15 +12,19 @@ final class model_entity_factory
 
     private ?object $reflectionClassFactory = null;
 
+    private mixed $entityIdDecoder = null;
+
     public function __construct(
         callable $configuredServiceFactory,
         callable $modelEntityExceptionFactory,
-        ?object $reflectionClassFactory = null
+        ?object $reflectionClassFactory = null,
+        ?callable $entityIdDecoder = null
     )
     {
         $this->configuredServiceFactory = \Closure::fromCallable($configuredServiceFactory);
         $this->modelEntityExceptionFactory = \Closure::fromCallable($modelEntityExceptionFactory);
         $this->reflectionClassFactory = $reflectionClassFactory;
+        $this->entityIdDecoder = $entityIdDecoder === null ? null : \Closure::fromCallable($entityIdDecoder);
     }
 
     public function __invoke(
@@ -36,6 +40,9 @@ final class model_entity_factory
         ?callable $requestLoaderFactory,
         ?callable $namespaceResolver = null
     ): object {
+        $entityIdDecoder = $this->entityIdDecoder
+            ?? static fn(string $rowId): mixed => $entityService->getEncapsulant()->decryptId($rowId);
+
         return ($this->configuredServiceFactory)($entityClass, [
             $entityService,
             $name,
@@ -48,7 +55,8 @@ final class model_entity_factory
             $requestLoaderFactory,
             $this->modelEntityExceptionFactory,
             $namespaceResolver,
-            $this->reflectionClassFactory
+            $this->reflectionClassFactory,
+            $entityIdDecoder
         ]);
     }
 

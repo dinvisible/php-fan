@@ -12,11 +12,11 @@ final class application_content_service_registrar
 
         return $container
             ->factory(
-                'block_factory',
+                service_id::BLOCK_FACTORY,
                 static fn(container_interface $container): callable => $context->blockFactory
             )
             ->factory(
-                'translation',
+                service_id::TRANSLATION,
                 static fn(container_interface $container): mixed => $contentServiceCreator->createTranslationService(
                     $container,
                     $context->translationServiceFactory

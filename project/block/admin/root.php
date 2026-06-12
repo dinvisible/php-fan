@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 namespace fan\project\block\admin;
-use fan\project\block\admin\root as admin_root;
+use fan\core\block\admin\root as admin_root;
 
 /**
  * Admin root block

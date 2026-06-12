@@ -1,0 +1,121 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Call to static method clear\(\) on an unknown class HTTP_Session\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/adapter/pear_http_session.php
+
+		-
+			message: '#^Call to static method destroy\(\) on an unknown class HTTP_Session\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/adapter/pear_http_session.php
+
+		-
+			message: '#^Call to static method get\(\) on an unknown class HTTP_Session\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/adapter/pear_http_session.php
+
+		-
+			message: '#^Call to static method id\(\) on an unknown class HTTP_Session\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/adapter/pear_http_session.php
+
+		-
+			message: '#^Call to static method set\(\) on an unknown class HTTP_Session\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/adapter/pear_http_session.php
+
+		-
+			message: '#^Call to static method setContainer\(\) on an unknown class HTTP_Session\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/adapter/pear_http_session.php
+
+		-
+			message: '#^Call to static method start\(\) on an unknown class HTTP_Session\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/adapter/pear_http_session.php
+
+		-
+			message: '#^Call to static method useCookies\(\) on an unknown class HTTP_Session\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/adapter/pear_http_session.php
+
+		-
+			message: '#^Call to an undefined static method fan\\core\\adapter\\pear_http_session\:\:ensureAvailable\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
+			path: core/adapter/pear_http_session_loader.php
+
+		-
+			message: '#^Class fan\\core\\base\\model\\designer not found\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/base/model/entity.php
+
+		-
+			message: '#^Parameter \$query of method fan\\core\\base\\model\\entity\:\:_getSqlAsString\(\) has invalid type fan\\core\\base\\model\\designer\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/base/model/entity.php
+
+		-
+			message: '#^Parameter \$query of method fan\\core\\base\\model\\entity\:\:getCountByQuery\(\) has invalid type fan\\core\\base\\model\\designer\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/base/model/entity.php
+
+		-
+			message: '#^Parameter \$query of method fan\\core\\base\\model\\entity\:\:getDataByQuery\(\) has invalid type fan\\core\\base\\model\\designer\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/base/model/entity.php
+
+		-
+			message: '#^Parameter \$query of method fan\\core\\base\\model\\entity\:\:getRowByQuery\(\) has invalid type fan\\core\\base\\model\\designer\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/base/model/entity.php
+
+		-
+			message: '#^Parameter \$query of method fan\\core\\base\\model\\entity\:\:getRowsetByQuery\(\) has invalid type fan\\core\\base\\model\\designer\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/base/model/entity.php
+
+		-
+			message: '#^Call to static method getCurrentMember\(\) on an unknown class fan\\core\\base\\model\\file_data\\entity_member\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/base/model/file_data/row.php
+
+		-
+			message: '#^Undefined variable\: \$file$#'
+			identifier: variable.undefined
+			count: 2
+			path: core/error/demonstrator.php
+
+		-
+			message: '#^Undefined variable\: \$line$#'
+			identifier: variable.undefined
+			count: 2
+			path: core/error/demonstrator.php
+
+		-
+			message: '#^Access to an undefined property fan\\core\\service\\obfuscator\:\:\$engine\.$#'
+			identifier: property.notFound
+			count: 1
+			path: core/service/obfuscator.php
+
+		-
+			message: '#^Parameter \$timerRow of method fan\\core\\service\\timer\:\:_runProgram\(\) has invalid type fan\\model\\timer_program\\row\.$#'
+			identifier: class.notFound
+			count: 1
+			path: core/service/timer.php

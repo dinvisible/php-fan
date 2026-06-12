@@ -30,9 +30,9 @@ final class application_session_service_creator
             throw $this->createFatalException($container, 'Unset group name for \fan\core\service\session.');
         }
         if ($nameSpace === null) {
-            $config = $container->get('config')->get('session');
+            $config = $container->get(service_id::CONFIG)->get('session');
             $group = 'app';
-            $nameSpace = $container->get('application')->getAppName();
+            $nameSpace = $container->get(service_id::APPLICATION)->getAppName();
             $replacementName = $config->get(['REPLACE_APP', $nameSpace]);
             if ($replacementName) {
                 $nameSpace = (string)$replacementName;
@@ -52,23 +52,23 @@ final class application_session_service_creator
                 $className,
                 $nameSpace,
                 $group,
-                $container->get('config')->get('database'),
-                $container->get('request_input'),
-                static fn(): mixed => $container->get('error'),
-                $container->get('request'),
+                $container->get(service_id::CONFIG)->get('database'),
+                $container->get(service_id::REQUEST_INPUT),
+                static fn(): mixed => $container->get(service_id::ERROR),
+                $container->get(service_id::REQUEST),
                 null,
-                static fn(string $namespace, string $group): mixed => $container->get('session', $namespace, $group),
-                static fn(string $date): mixed => $container->get('date', $date),
-                static fn(mixed $path, mixed $domain): mixed => $container->get('cookie', $path, $domain),
-                $container->get('pear_http_session_loader'),
+                static fn(string $namespace, string $group): mixed => $container->get(service_id::SESSION, $namespace, $group),
+                static fn(string $date): mixed => $container->get(service_id::DATE, $date),
+                static fn(mixed $path, mixed $domain): mixed => $container->get(service_id::COOKIE, $path, $domain),
+                $container->get(service_id::PEAR_HTTP_SESSION_LOADER),
                 $sessionEngineFactory,
                 $sessionState,
-                $container->get('bootstrap_runtime'),
-                $container->get('config'),
-                static fn(string $type): mixed => $container->get('cache', $type),
-                $container->get('php_runtime_settings'),
-                $container->get('native_session'),
-                $container->get('array_value_reader')
+                $container->get(service_id::BOOTSTRAP_RUNTIME),
+                $container->get(service_id::CONFIG),
+                static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+                $container->get(service_id::PHP_RUNTIME_SETTINGS),
+                $container->get(service_id::NATIVE_SESSION),
+                $container->get(service_id::ARRAY_VALUE_READER)
             );
         }
 
@@ -79,8 +79,8 @@ final class application_session_service_creator
     {
         $exception = ($this->fatalExceptionFactory)(
             $message,
-            requestInput: $container->get('request_input'),
-            exceptionHeaderWriter: $container->get('header_writer')
+            requestInput: $container->get(service_id::REQUEST_INPUT),
+            exceptionHeaderWriter: $container->get(service_id::HEADER_WRITER)
         );
         if (!$exception instanceof \Throwable) {
             throw new \UnexpectedValueException('Fatal exception factory must return a throwable object.');

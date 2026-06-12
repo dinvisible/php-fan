@@ -150,7 +150,7 @@ final class application_storage_adapter_defaults_provider
         $this->errorDemonstratorLoaderFactory = \Closure::fromCallable(
             $errorDemonstratorLoaderFactory
                 ?? static fn(container_interface $container): object => new error_demonstrator_loader(
-                    $container->get('error_demonstrator_file_storage')
+                    $container->get(service_id::ERROR_DEMONSTRATOR_FILE_STORAGE)
                 )
         );
         $this->logFileStorageFactory = \Closure::fromCallable(

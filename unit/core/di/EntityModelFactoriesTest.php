@@ -124,14 +124,16 @@ final class EntityModelFactoriesTest extends TestCase
         );
 
         $this->assertSame(EntityModelFactoriesConstructedModelEntityDouble::class, $delegatedClass);
+        $this->assertInstanceOf(Closure::class, $delegatedArguments[12]);
         $this->assertSame(
             [$entityService, 'users', ['flag' => true], $entityConfigFactory, $databaseFactory, $reflectorFactory, $rowFactory, $rowsetFactory, $requestLoaderFactory, $modelEntityExceptionFactory, $namespaceResolver, $reflectionClassFactory],
-            $delegatedArguments
+            array_slice($delegatedArguments, 0, 12)
         );
         $this->assertInstanceOf(EntityModelFactoriesConstructedModelEntityDouble::class, $entity);
+        $this->assertInstanceOf(Closure::class, $entity->dependencies[12]);
         $this->assertSame(
             [$entityService, 'users', ['flag' => true], $entityConfigFactory, $databaseFactory, $reflectorFactory, $rowFactory, $rowsetFactory, $requestLoaderFactory, $modelEntityExceptionFactory, $namespaceResolver, $reflectionClassFactory],
-            $entity->dependencies
+            array_slice($entity->dependencies, 0, 12)
         );
     }
 
@@ -303,7 +305,8 @@ final class EntityModelFactoriesConstructedModelEntityDouble
         ?callable $requestLoaderFactory,
         ?callable $modelEntityExceptionFactory,
         ?callable $namespaceResolver = null,
-        ?object $reflectionClassFactory = null
+        ?object $reflectionClassFactory = null,
+        ?callable $entityIdDecoder = null
     ) {
         $this->dependencies = [
             $entityService,
@@ -318,6 +321,7 @@ final class EntityModelFactoriesConstructedModelEntityDouble
             $modelEntityExceptionFactory,
             $namespaceResolver,
             $reflectionClassFactory,
+            $entityIdDecoder,
         ];
     }
 }

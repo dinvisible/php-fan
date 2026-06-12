@@ -19,7 +19,7 @@ final class ApplicationPagerServiceRegistrarTest extends TestCase
         $this->assertIsString($dependencyProviderSource);
         $this->assertIsString($registrarDefaultsProviderFactorySource);
         $this->assertStringContainsString('final class application_pager_service_registrar', $source);
-        $this->assertStringContainsString("'pager',", $source);
+        $this->assertStringContainsString('service_id::PAGER,', $source);
         $this->assertStringNotContainsString("'form',", $source);
         $this->assertStringContainsString('$pagerServiceCreator->createPagerService(', $source);
         $this->assertStringNotContainsString('createFormService(', $source);

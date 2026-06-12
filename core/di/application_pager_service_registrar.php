@@ -17,10 +17,10 @@ final class application_pager_service_registrar
 
         return $container
             ->factory(
-                'pager',
+                service_id::PAGER,
                 static fn(container_interface $container, string|base $block): mixed => $pagerServiceCreator->createPagerService(
                     $container,
-                    $container->get('pager_state'),
+                    $container->get(service_id::PAGER_STATE),
                     $pagerServiceFactory,
                     $block
                 ),

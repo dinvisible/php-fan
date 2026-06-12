@@ -514,7 +514,7 @@ final class FunctionsServiceContainerTest extends TestCase
         $this->assertStringNotContainsString('new safe_serializer_operations(', $adapterDefaultsProviderCode);
         $this->assertStringContainsString('$this->serializerOperationsFactory = \Closure::fromCallable($defaultsProvider->serializerOperationsFactory());', $adapterRegistryCode);
         $this->assertStringNotContainsString('new safe_serializer_operations($warningCapture)', $this->applicationRuntimeFactoryProviderCode());
-        $this->assertStringContainsString("'serializer_operations'", $supportRegistrarCode);
+        $this->assertStringContainsString('service_id::SERIALIZER_OPERATIONS', $supportRegistrarCode);
         $this->assertStringNotContainsString('safe_serializer::', $factoryCode);
     }
 

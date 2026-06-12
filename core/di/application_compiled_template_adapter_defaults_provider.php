@@ -25,7 +25,7 @@ final class application_compiled_template_adapter_defaults_provider
         $this->compiledTemplateLoaderFactory = \Closure::fromCallable(
             $compiledTemplateLoaderFactory
                 ?? static fn(container_interface $container): object => new compiled_template_loader(
-                    $container->get('compiled_template_loader_state')
+                    $container->get(service_id::COMPILED_TEMPLATE_LOADER_STATE)
                 )
         );
     }

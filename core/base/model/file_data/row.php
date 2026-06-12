@@ -195,7 +195,7 @@ abstract class row extends model_row
         }
 
         if ($idIsEncrypt) {
-            $idVal = $this->getEntity()->getService()->getEncapsulant()->decryptId((string)$idVal);
+            $idVal = $this->getEntity()->decodeEntityId((string)$idVal);
         }
         $path = $this->getInfoPath($idVal);
 

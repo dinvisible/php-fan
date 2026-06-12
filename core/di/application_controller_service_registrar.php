@@ -12,7 +12,7 @@ final class application_controller_service_registrar
 
         return $container
             ->factory(
-                'plain',
+                service_id::PLAIN,
                 static fn(container_interface $container): mixed => $controllerServiceCreator->createPlainService(
                     $container,
                     $context->plainControllerFactory,

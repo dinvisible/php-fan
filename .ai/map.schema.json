@@ -1,0 +1,310 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://php-fan.local/schemas/ai-map.schema.json",
+  "title": "PHP-FAN AI map",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "entrypoints",
+    "source_roots",
+    "test_roots",
+    "autoload",
+    "ai_docs",
+    "commands",
+    "counts",
+    "files",
+    "services",
+    "metadata",
+    "dynamic_boundaries",
+    "verification"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "entrypoints": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "source_roots": {
+      "$ref": "#/$defs/stringList"
+    },
+    "test_roots": {
+      "$ref": "#/$defs/stringList"
+    },
+    "autoload": {
+      "type": "object",
+      "required": [
+        "psr-4",
+        "files",
+        "dev_psr-4"
+      ],
+      "additionalProperties": true
+    },
+    "ai_docs": {
+      "$ref": "#/$defs/stringList"
+    },
+    "commands": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "files": {
+      "type": "object",
+      "required": [
+        "meta",
+        "templates"
+      ],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/stringList"
+        },
+        "templates": {
+          "$ref": "#/$defs/stringList"
+        }
+      },
+      "additionalProperties": false
+    },
+    "services": {
+      "type": "object",
+      "required": [
+        "registered",
+        "aliases",
+        "referenced",
+        "constants",
+        "descriptors"
+      ],
+      "properties": {
+        "registered": {
+          "$ref": "#/$defs/occurrenceMap"
+        },
+        "aliases": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "target",
+              "file"
+            ],
+            "properties": {
+              "target": {
+                "type": "string"
+              },
+              "file": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "referenced": {
+          "$ref": "#/$defs/occurrenceMap"
+        },
+        "constants": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "descriptors": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/serviceDescriptor"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "meta_schema",
+        "meta",
+        "templates"
+      ],
+      "properties": {
+        "meta_schema": {
+          "const": ".ai/meta.schema.json"
+        },
+        "meta": {
+          "$ref": "#/$defs/metaMetadata"
+        },
+        "templates": {
+          "$ref": "#/$defs/templateMetadata"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dynamic_boundaries": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "stringList": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "occurrenceMap": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/stringList"
+      }
+    },
+    "serviceDescriptor": {
+      "type": "object",
+      "required": [
+        "id",
+        "registrar_files",
+        "creator_methods",
+        "shared",
+        "dependencies"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "registrar_files": {
+          "$ref": "#/$defs/stringList"
+        },
+        "creator_methods": {
+          "$ref": "#/$defs/stringList"
+        },
+        "shared": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "dependencies": {
+          "$ref": "#/$defs/stringList"
+        }
+      },
+      "additionalProperties": false
+    },
+    "metaMetadata": {
+      "type": "object",
+      "required": [
+        "files",
+        "top_level_key_usage",
+        "own_key_usage",
+        "common_key_usage"
+      ],
+      "properties": {
+        "files": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/metaFileEntry"
+          }
+        },
+        "top_level_key_usage": {
+          "$ref": "#/$defs/usageMap"
+        },
+        "own_key_usage": {
+          "$ref": "#/$defs/usageMap"
+        },
+        "common_key_usage": {
+          "$ref": "#/$defs/usageMap"
+        }
+      },
+      "additionalProperties": false
+    },
+    "metaFileEntry": {
+      "type": "object",
+      "required": [
+        "top_level_keys",
+        "own_keys",
+        "common_keys",
+        "paired_template"
+      ],
+      "properties": {
+        "top_level_keys": {
+          "$ref": "#/$defs/stringList"
+        },
+        "own_keys": {
+          "$ref": "#/$defs/stringList"
+        },
+        "common_keys": {
+          "$ref": "#/$defs/stringList"
+        },
+        "paired_template": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "templateMetadata": {
+      "type": "object",
+      "required": [
+        "files",
+        "placeholder_usage"
+      ],
+      "properties": {
+        "files": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/templateFileEntry"
+          }
+        },
+        "placeholder_usage": {
+          "$ref": "#/$defs/usageMap"
+        }
+      },
+      "additionalProperties": false
+    },
+    "templateFileEntry": {
+      "type": "object",
+      "required": [
+        "placeholders",
+        "paired_meta"
+      ],
+      "properties": {
+        "placeholders": {
+          "$ref": "#/$defs/stringList"
+        },
+        "paired_meta": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "usageMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      }
+    }
+  }
+}

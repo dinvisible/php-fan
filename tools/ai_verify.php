@@ -8,17 +8,27 @@ declare(strict_types=1);
  * Usage:
  *   php tools/ai_verify.php
  *   php tools/ai_verify.php --json
+ *   php tools/ai_verify.php --changed
+ *   php tools/ai_verify.php --no-phpunit
  *   php tools/ai_verify.php --skip-phpunit
  */
 
+require_once __DIR__ . '/ai_map.php';
+
 function php_fan_ai_verify(string $root, array $argv): array
 {
+    $changedOnly = in_array('--changed', $argv, true);
+    $skipPhpunit = in_array('--skip-phpunit', $argv, true) || in_array('--no-phpunit', $argv, true);
     $checks = [];
     $checks[] = php_fan_ai_verify_tracked_noise($root);
     $checks[] = php_fan_ai_verify_diff_check($root);
     $checks[] = php_fan_ai_verify_changed_php_lint($root);
+    $checks[] = php_fan_ai_verify_ai_map($root);
+    $checks[] = php_fan_ai_verify_static_baseline($root);
 
-    if (!in_array('--skip-phpunit', $argv, true)) {
+    if ($changedOnly && !$skipPhpunit) {
+        $checks[] = php_fan_ai_verify_focused_phpunit($root);
+    } elseif (!$skipPhpunit) {
         $checks[] = php_fan_ai_verify_phpunit($root);
     }
 
@@ -76,13 +86,58 @@ function php_fan_ai_verify_changed_php_lint(string $root): array
 {
     $files = php_fan_ai_verify_changed_php_files($root);
     foreach ($files as $file) {
-        $result = php_fan_ai_verify_run(['php', '-l', $file], $root);
+        $result = php_fan_ai_verify_run([PHP_BINARY, '-l', $file], $root);
         if ($result['exit_code'] !== 0) {
             return php_fan_ai_verify_check('php_lint_changed', 'fail', 'PHP lint failed for ' . $file, $result);
         }
     }
 
     return php_fan_ai_verify_check('php_lint_changed', 'pass', 'PHP lint passed for ' . count($files) . ' changed PHP file(s).');
+}
+
+function php_fan_ai_verify_ai_map(string $root): array
+{
+    try {
+        $map = php_fan_ai_build_map($root);
+        json_encode($map, JSON_THROW_ON_ERROR);
+    } catch (\Throwable $exception) {
+        return php_fan_ai_verify_check('ai_map_build', 'fail', 'AI map failed to build.', [
+            'exception' => get_class($exception),
+            'message' => $exception->getMessage(),
+        ]);
+    }
+
+    foreach (['schema_version', 'services', 'metadata', 'commands'] as $requiredKey) {
+        if (!array_key_exists($requiredKey, $map)) {
+            return php_fan_ai_verify_check('ai_map_build', 'fail', 'AI map is missing key: ' . $requiredKey);
+        }
+    }
+    $contractErrors = php_fan_ai_validate_map_contract($root, $map);
+    if ($contractErrors !== []) {
+        return php_fan_ai_verify_check('ai_map_build', 'fail', 'AI map contract validation failed.', [
+            'errors' => $contractErrors,
+        ]);
+    }
+
+    return php_fan_ai_verify_check(
+        'ai_map_build',
+        'pass',
+        'AI map built and encoded with ' . count($map['services']['descriptors']) . ' service descriptor(s).'
+    );
+}
+
+function php_fan_ai_verify_static_baseline(string $root): array
+{
+    $files = ['phpstan.neon.dist', 'phpstan-baseline.neon', '.php-cs-fixer.dist.php'];
+    $missing = array_values(array_filter($files, static fn(string $file): bool => !is_file($root . '/' . $file)));
+
+    if ($missing !== []) {
+        return php_fan_ai_verify_check('static_baseline', 'fail', 'Missing static tooling baseline: ' . implode(', ', $missing));
+    }
+
+    return php_fan_ai_verify_check('static_baseline', 'pass', 'Static analysis and formatter baseline config is present.', [
+        'files' => $files,
+    ]);
 }
 
 function php_fan_ai_verify_phpunit(string $root): array
@@ -92,12 +147,60 @@ function php_fan_ai_verify_phpunit(string $root): array
         return php_fan_ai_verify_check('phpunit', 'fail', 'Missing vendor/bin/phpunit. Run Composer install first.');
     }
 
-    $result = php_fan_ai_verify_run(['php', 'vendor/bin/phpunit', '--configuration', 'phpunit.xml'], $root);
+    $result = php_fan_ai_verify_run([PHP_BINARY, 'vendor/bin/phpunit', '--configuration', 'phpunit.xml'], $root);
     if ($result['exit_code'] !== 0) {
         return php_fan_ai_verify_check('phpunit', 'fail', 'PHPUnit failed.', $result);
     }
 
     return php_fan_ai_verify_check('phpunit', 'pass', 'PHPUnit passed.', $result);
+}
+
+function php_fan_ai_verify_focused_phpunit(string $root): array
+{
+    $phpunit = $root . '/vendor/bin/phpunit';
+    if (!is_file($phpunit)) {
+        return php_fan_ai_verify_check('phpunit_changed', 'fail', 'Missing vendor/bin/phpunit. Run Composer install first.');
+    }
+
+    $testFiles = [
+        'unit/core/AiToolingTest.php' => true,
+        'unit/core/LegacyDiSourceInventoryTest.php' => true,
+    ];
+    foreach (php_fan_ai_verify_changed_php_files($root) as $file) {
+        foreach (php_fan_ai_verify_related_test_files($root, $file) as $testFile) {
+            $testFiles[$testFile] = true;
+        }
+    }
+
+    $testFiles = array_keys($testFiles);
+    sort($testFiles);
+    $result = php_fan_ai_verify_run(array_merge([PHP_BINARY, 'vendor/bin/phpunit', '--configuration', 'phpunit.xml'], $testFiles), $root);
+    if ($result['exit_code'] !== 0) {
+        return php_fan_ai_verify_check('phpunit_changed', 'fail', 'Focused PHPUnit failed.', $result);
+    }
+
+    return php_fan_ai_verify_check('phpunit_changed', 'pass', 'Focused PHPUnit passed for ' . count($testFiles) . ' test file(s).', [
+        'test_files' => $testFiles,
+    ]);
+}
+
+function php_fan_ai_verify_related_test_files(string $root, string $relativeFile): array
+{
+    if (str_starts_with($relativeFile, 'unit/')) {
+        return [$relativeFile];
+    }
+
+    $stem = strtolower(pathinfo($relativeFile, PATHINFO_FILENAME));
+    $expectedBasename = $stem . 'test.php';
+    $tests = [];
+    foreach (php_fan_ai_php_files($root, ['unit']) as $testFile) {
+        if (strtolower(basename($testFile)) === $expectedBasename) {
+            $tests[] = $testFile;
+        }
+    }
+    sort($tests);
+
+    return $tests;
 }
 
 function php_fan_ai_verify_changed_php_files(string $root): array
@@ -130,8 +233,37 @@ function php_fan_ai_verify_check(string $name, string $status, string $message, 
         'name' => $name,
         'status' => $status,
         'message' => $message,
-        'details' => $details,
+        'details' => php_fan_ai_verify_details($details),
     ];
+}
+
+function php_fan_ai_verify_details(array $details): array
+{
+    if (!isset($details['command'], $details['exit_code'], $details['stdout'], $details['stderr'])) {
+        return $details;
+    }
+
+    return [
+        'command' => $details['command'],
+        'exit_code' => $details['exit_code'],
+        'stdout_tail' => php_fan_ai_verify_tail((string)$details['stdout']),
+        'stderr_tail' => php_fan_ai_verify_tail((string)$details['stderr']),
+    ];
+}
+
+function php_fan_ai_verify_tail(string $output, int $lines = 40): string
+{
+    $output = trim($output);
+    if ($output === '') {
+        return '';
+    }
+
+    $parts = explode("\n", $output);
+    if (count($parts) <= $lines) {
+        return $output;
+    }
+
+    return implode("\n", array_slice($parts, -$lines));
 }
 
 function php_fan_ai_verify_run(array $command, string $cwd): array

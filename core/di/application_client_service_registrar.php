@@ -17,10 +17,10 @@ final class application_client_service_registrar
 
         return $container
             ->factory(
-                'cookie',
+                service_id::COOKIE,
                 static fn(container_interface $container, mixed $path = null, mixed $domain = null, bool $secure = false): mixed => $clientServiceCreator->createCookieService(
                     $container,
-                    $container->get('cookie_state'),
+                    $container->get(service_id::COOKIE_STATE),
                     $cookieServiceFactory,
                     $path,
                     $domain,
@@ -29,10 +29,10 @@ final class application_client_service_registrar
                 false
             )
             ->factory(
-                'curl',
+                service_id::CURL,
                 static fn(container_interface $container, string $url, int|float|string $index = 0): mixed => $clientServiceCreator->createCurlService(
                     $container,
-                    $container->get('curl_state'),
+                    $container->get(service_id::CURL_STATE),
                     $curlServiceFactory,
                     $url,
                     $index
@@ -40,10 +40,10 @@ final class application_client_service_registrar
                 false
             )
             ->factory(
-                'rest',
+                service_id::REST,
                 static fn(container_interface $container, ?string $connectionName = null): mixed => $clientServiceCreator->createRestService(
                     $container,
-                    $container->get('rest_state'),
+                    $container->get(service_id::REST_STATE),
                     $restServiceFactory,
                     $connectionName
                 ),

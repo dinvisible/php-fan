@@ -121,6 +121,31 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertSame([], $matches, 'Dynamic construction outside explicit factory boundaries found in: ' . implode(', ', $matches));
     }
 
+    public function testModelServiceLocatorUsageIsPinnedToMigrationAllowlist(): void
+    {
+        $allowedCounts = [
+            'core/base/model/entity.php' => 7,
+            'core/base/model/file_data/row.php' => 1,
+            'core/base/model/row.php' => 3,
+            'core/base/model/spec_file/image/entity.php' => 1,
+            'core/base/model/spec_file/image/row.php' => 1,
+            'core/base/model/spec_file/row.php' => 1,
+        ];
+        $actualCounts = [];
+
+        foreach ($this->productionPhpFiles() as $file) {
+            $source = file_get_contents($file);
+            $this->assertIsString($source);
+            $count = preg_match_all('/->\s*getService\s*\(/', $source);
+            if ($count > 0) {
+                $actualCounts[$this->relativePath($file)] = $count;
+            }
+        }
+        ksort($actualCounts);
+
+        $this->assertSame($allowedCounts, $actualCounts);
+    }
+
     public function testMigratedBlockArrayHelpersUseInjectedDependencies(): void
     {
         $migratedFiles = [
@@ -155,7 +180,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('($this->arrayValueReader)($this->bufferData, $key, $default)', $stateSource);
         $this->assertStringNotContainsString('array_val(', $stateSource);
         $this->assertStringContainsString(
-            "new session_state(\$container->get('array_value_reader'))",
+            'new session_state($container->get(service_id::ARRAY_VALUE_READER))',
             $registrySource
         );
     }
@@ -286,7 +311,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('get_class_alt(', $source);
         $this->assertStringContainsString('private mixed $classNameResolver = null', $factorySource);
         $this->assertStringContainsString('static fn(object $object): string => \get_class_alt($object) ?? get_class($object)', $factorySource);
-        $this->assertStringContainsString("\$container->get('class_name_resolver')", $registrarSource);
+        $this->assertStringContainsString('$container->get(service_id::CLASS_NAME_RESOLVER)', $registrarSource);
     }
 
     public function testProjectFatalExceptionConstructionIsLimitedToExplicitFactory(): void
@@ -685,9 +710,9 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
         $this->assertStringContainsString('static fn(mixed ...$values): mixed => \array_merge_recursive_alt(...$values)', $factorySource);
         $this->assertStringContainsString('static fn(array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed => \array_val($array, $key, $default)', $factorySource);
-        $this->assertStringContainsString("\$container->get('array_adducer')", $creatorSource);
-        $this->assertStringContainsString("\$container->get('recursive_merger')", $creatorSource);
-        $this->assertStringContainsString("\$container->get('array_value_reader')", $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::RECURSIVE_MERGER)', $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::ARRAY_VALUE_READER)', $creatorSource);
     }
 
     public function testServiceEngineFactoryDoesNotOwnConfiguredServiceDefault(): void
@@ -731,8 +756,8 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('adduceToArray(', $source);
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
         $this->assertStringContainsString('static fn(array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed => \array_val($array, $key, $default)', $factorySource);
-        $this->assertStringContainsString("\$container->get('array_adducer')", $creatorSource);
-        $this->assertStringContainsString("\$container->get('array_value_reader')", $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::ARRAY_VALUE_READER)', $creatorSource);
     }
 
     public function testNativeCurlCallsAreLimitedToCurlAdapterBoundary(): void
@@ -802,8 +827,8 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('method_exists($reflectionClassFactory, \'create\')', $factorySource);
         $this->assertStringNotContainsString('static fn(object|string $object): \ReflectionClass => new \ReflectionClass($object)', $factorySource);
         $this->assertStringNotContainsString('new \ReflectionClass($className)', $factorySource);
-        $this->assertStringContainsString("\$container->get('array_adducer')", $creatorSource);
-        $this->assertStringContainsString("\$container->get('reflection_class_factory')", $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::REFLECTION_CLASS_FACTORY)', $creatorSource);
         $this->assertStringNotContainsString('new \ReflectionClass($block)', $source);
         $this->assertDoesNotMatchRegularExpression(
             '/(?<!->)(?<!::)(?<!\\\\)\bis_file\s*\(/',
@@ -845,7 +870,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('method_exists($reflectionClassFactory, \'create\')', $factorySource);
         $this->assertStringNotContainsString('new \ReflectionClass($className)', $factorySource);
         $this->assertStringNotContainsString('static fn(object|string $object): \ReflectionClass => new \ReflectionClass($object)', $factorySource);
-        $this->assertStringContainsString("\$container->get('reflection_class_factory')", $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::REFLECTION_CLASS_FACTORY)', $creatorSource);
     }
 
     public function testModelEntityUsesInjectedReflectionClassFactory(): void
@@ -891,8 +916,8 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('$this->reflectionClassFactory !== null', $source);
         $this->assertStringNotContainsString('new \ReflectionClass($block)', $source);
         $this->assertStringContainsString('new block_context(', $registrarSource);
-        $this->assertStringContainsString("'reflection_class_factory'", $registrarSource);
-        $this->assertStringContainsString("\$container->get('reflection_class_factory')", $registrarSource);
+        $this->assertStringContainsString('service_id::REFLECTION_CLASS_FACTORY', $registrarSource);
+        $this->assertStringContainsString('$container->get(service_id::REFLECTION_CLASS_FACTORY)', $registrarSource);
         $this->assertStringContainsString('final class reflection_class_factory', $factorySource);
         $this->assertStringContainsString('return new \ReflectionClass($object);', $factorySource);
     }
@@ -1048,7 +1073,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('private mixed $recursiveMerger = null;', $source);
         $this->assertStringNotContainsString('$recursiveMerger === null ? null : \Closure::fromCallable($recursiveMerger)', $source);
         $this->assertStringContainsString('static fn(mixed ...$values): mixed => \array_merge_recursive_alt(...$values)', $factorySource);
-        $this->assertStringContainsString("\$container->get('recursive_merger')", $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::RECURSIVE_MERGER)', $creatorSource);
         $this->assertStringNotContainsString('new fatalException', $source);
         $this->assertStringNotContainsString('use fan\project\exception\service\fatal as fatalException;', $source);
     }
@@ -1283,7 +1308,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('$this->arrayAdducer !== null', $source);
         $this->assertStringNotContainsString('adduceToArray(', $source);
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
-        $this->assertStringContainsString("\$container->get('array_adducer')", $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $creatorSource);
         $this->assertStringNotContainsString('new user_state()', $source);
         $this->assertStringNotContainsString('new fatalException', $source);
         $this->assertStringNotContainsString('use fan\project\exception\service\fatal as fatalException;', $source);
@@ -1589,7 +1614,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('$this->arrayAdducer()($availableLng)', $source);
         $this->assertStringNotContainsString('adduceToArray(', $source);
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
-        $this->assertStringContainsString("\$container->get('array_adducer')", $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $creatorSource);
     }
 
     public function testRestServiceFactoryDoesNotOwnConfiguredServiceDefault(): void
@@ -1681,7 +1706,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('$this->arrayAdducer !== null', $source);
         $this->assertStringNotContainsString('adduceToArray(', $source);
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
-        $this->assertStringContainsString("\$container->get('array_adducer')", $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $creatorSource);
     }
 
     public function testBlockExceptionFactoryDoesNotOwnConfiguredServiceDefault(): void
@@ -1886,8 +1911,8 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('$this->reflectionClassFactory->create($className)', $source);
         $this->assertStringNotContainsString('method_exists($this->reflectionClassFactory, \'create\')', $source);
         $this->assertStringContainsString('static fn(object|string $object): string => \get_class_name($object)', $source);
-        $this->assertStringContainsString("\$container->get('short_class_name_resolver')", $creatorSource);
-        $this->assertStringContainsString("'short_class_name_resolver'", $supportRegistrarSource);
+        $this->assertStringContainsString('$container->get(service_id::SHORT_CLASS_NAME_RESOLVER)', $creatorSource);
+        $this->assertStringContainsString('service_id::SHORT_CLASS_NAME_RESOLVER', $supportRegistrarSource);
         $this->assertStringNotContainsString('defaultConfiguredServiceFactory', $source);
         $this->assertStringNotContainsString('new \ReflectionClass($className)', $source);
         $this->assertStringNotContainsString('configured_service_factory.php', $source);
@@ -2040,9 +2065,9 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('static fn(array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed => \array_val($array, $key, $default)', $tabFactorySource);
         $this->assertStringContainsString('static fn(mixed $value): bool => \is_array_alt($value)', $tabFactorySource);
         $this->assertStringContainsString('static fn(object|string $object): string => \get_class_name($object) ?? (is_object($object) ? get_class($object) : $object)', $tabFactorySource);
-        $this->assertStringContainsString("'array_adducer'", $supportRegistrarSource);
-        $this->assertStringContainsString("'recursive_merger'", $supportRegistrarSource);
-        $this->assertStringContainsString("'array_value_reader'", $supportRegistrarSource);
+        $this->assertStringContainsString('service_id::ARRAY_ADDUCER', $supportRegistrarSource);
+        $this->assertStringContainsString('service_id::RECURSIVE_MERGER', $supportRegistrarSource);
+        $this->assertStringContainsString('service_id::ARRAY_VALUE_READER', $supportRegistrarSource);
     }
 
     public function testTabServiceArrayOperationsAreInjected(): void
@@ -2059,7 +2084,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('array_val(', $source);
         $this->assertStringNotContainsString('is_array_alt(', $source);
         $this->assertStringContainsString('static fn(array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed => \array_val($array, $key, $default)', $factorySource);
-        $this->assertStringContainsString("'array_value_reader'", $supportRegistrarSource);
+        $this->assertStringContainsString('service_id::ARRAY_VALUE_READER', $supportRegistrarSource);
     }
 
     public function testTabUrlMakerArrayOperationsAreInjected(): void
@@ -2108,7 +2133,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('$this->arrayAdducer = $arrayAdducer === null ? null : \Closure::fromCallable($arrayAdducer);', $source);
         $this->assertStringContainsString('private \Closure $arrayAdducer;', $factorySource);
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
-        $this->assertStringContainsString("new view_router_factory(\$container->get('view_keeper_factory'), \$container->get('array_adducer'))", $supportRegistrarSource);
+        $this->assertStringContainsString('new view_router_factory($container->get(service_id::VIEW_KEEPER_FACTORY), $container->get(service_id::ARRAY_ADDUCER))', $supportRegistrarSource);
     }
 
     public function testTemplateServiceLayerIsRemoved(): void
@@ -2150,7 +2175,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertFileDoesNotExist(dirname(__DIR__, 2) . '/core/di/form_service_factory.php');
         $this->assertStringNotContainsString('createFormService', $creatorSource);
         $this->assertStringNotContainsString("'form'", $creatorSource);
-        $this->assertStringContainsString("'class_name_resolver'", $supportRegistrarSource);
+        $this->assertStringContainsString('service_id::CLASS_NAME_RESOLVER', $supportRegistrarSource);
     }
 
     public function testFormValidatorLayerIsRemovedWithFormService(): void
@@ -2348,9 +2373,9 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('static fn(mixed ...$values): mixed => \array_merge_recursive_alt(...$values)', $factorySource);
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
         $this->assertStringContainsString('static fn(object $object): string => \get_class_alt($object) ?? get_class($object)', $factorySource);
-        $this->assertStringContainsString("\$container->get('recursive_merger')", $registrarSource);
-        $this->assertStringContainsString("\$container->get('array_adducer')", $registrarSource);
-        $this->assertStringContainsString("\$container->get('class_name_resolver')", $registrarSource);
+        $this->assertStringContainsString('$container->get(service_id::RECURSIVE_MERGER)', $registrarSource);
+        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $registrarSource);
+        $this->assertStringContainsString('$container->get(service_id::CLASS_NAME_RESOLVER)', $registrarSource);
         $this->assertDoesNotMatchRegularExpression(
             '/(?<!->)(?<!::)(?<!\\\\)\bfile_exists\s*\(/',
             $source
@@ -2455,7 +2480,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('$this->arrayValueReader()', $drawSource);
         $this->assertStringNotContainsString('array_val(', $drawSource);
         $this->assertStringContainsString('static fn(array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed => \array_val($array, $key, $default)', $factorySource);
-        $this->assertStringContainsString("\$container->get('array_value_reader')", $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::ARRAY_VALUE_READER)', $creatorSource);
     }
 
     public function testSpecFileImageRowFilesystemOperationsAreInjected(): void
@@ -2801,7 +2826,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('$arrayValueReader = $this->arrayValueReader();', $source);
         $this->assertStringNotContainsString('array_val(', $source);
         $this->assertStringContainsString('static fn(array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed => \array_val($array, $key, $default)', $factorySource);
-        $this->assertStringContainsString("\$container->get('array_value_reader')", $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::ARRAY_VALUE_READER)', $creatorSource);
     }
 
     public function testSoapServiceFactoryDoesNotOwnConfiguredServiceDefault(): void
@@ -2839,7 +2864,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('protected function arrayValueReader(): callable', $source);
         $this->assertStringNotContainsString('array_val(', $source);
         $this->assertStringContainsString('static fn(array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed => \array_val($array, $key, $default)', $factorySource);
-        $this->assertStringContainsString("\$container->get('array_value_reader')", $creatorSource);
+        $this->assertStringContainsString('$container->get(service_id::ARRAY_VALUE_READER)', $creatorSource);
     }
 
     public function testSoapRuntimeObjectsAreInjected(): void

@@ -16,10 +16,10 @@ final class application_session_service_registrar
 
         return $container
             ->factory(
-                'session',
+                service_id::SESSION,
                 static fn(container_interface $container, mixed $nameSpace = null, mixed $group = 'custom'): mixed => $sessionServiceCreator->createSessionService(
                     $container,
-                    $container->get('session_state'),
+                    $container->get(service_id::SESSION_STATE),
                     $sessionServiceFactory,
                     $sessionEngineFactory,
                     $nameSpace,

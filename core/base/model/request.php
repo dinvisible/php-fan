@@ -37,11 +37,16 @@ class request
 
     private ?object $fileStorage = null;
 
-    public function __construct(entity $entity, ?object $reflector = null, ?object $fileStorage = null)
+    private \Closure $sqlDirectoryResolver;
+
+    public function __construct(entity $entity, ?object $reflector = null, ?object $fileStorage = null, ?callable $sqlDirectoryResolver = null)
     {
         $this->entity = $entity;
         $this->reflector = $reflector;
         $this->fileStorage = $fileStorage;
+        $this->sqlDirectoryResolver = \Closure::fromCallable(
+            $sqlDirectoryResolver ?? static fn(entity $entity): string => $entity->getSqlDirectory()
+        );
     }
 
     // ======== The magic methods ======== \\
@@ -120,7 +125,7 @@ class request
     protected function _checkSQLfile(string $key): ?string
     {
         $entity = $this->getEntity();
-        $dirName = $entity->getService()->getSqlDir();
+        $dirName = $this->sqlDirectory($entity);
         foreach ($this->reflector()->getParentPaths($entity) as $v) {
             $fileName  = pathinfo($v, PATHINFO_DIRNAME) . '/';
             $fileName .= $dirName . '/' . $key . '.sql';
@@ -139,6 +144,16 @@ class request
     private function fileStorage(): object
     {
         return $this->fileStorage ?? throw new \RuntimeException('Model request file storage is not configured.');
+    }
+
+    private function sqlDirectory(entity $entity): string
+    {
+        $directory = ($this->sqlDirectoryResolver)($entity);
+        if (!is_string($directory)) {
+            throw new \UnexpectedValueException('Model request SQL directory resolver must return a string.');
+        }
+
+        return $directory;
     }
 
     private function createRequestFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable

@@ -16,22 +16,22 @@ final class application_user_service_registrar
 
         return $container
             ->factory(
-                'user',
+                service_id::USER,
                 static fn(container_interface $container, mixed $identifyer, ?string $reqSpace = null): mixed => $userServiceCreator->createUserService(
                     $container,
-                    $container->get('user_state'),
+                    $container->get(service_id::USER_STATE),
                     $userServiceFactory,
                     $userEngineFactory,
                     $identifyer,
                     $reqSpace,
-                    $container->get('bootstrap_runtime'),
-                    $container->get('config'),
-                    static fn(string $type): mixed => $container->get('cache', $type)
+                    $container->get(service_id::BOOTSTRAP_RUNTIME),
+                    $container->get(service_id::CONFIG),
+                    static fn(string $type): mixed => $container->get(service_id::CACHE, $type)
                 ),
                 false
             )
-            ->factory('current_user', static fn(container_interface $container, ?string $reqSpace = null): mixed => $userServiceCreator->getCurrentUserService($container, $container->get('user_state'), $reqSpace), false)
-            ->factory('current_user_checked', static fn(container_interface $container, ?string $reqSpace = null): mixed => $userServiceCreator->getCurrentUserServiceChecked($container, $container->get('user_state'), $reqSpace), false)
-            ->factory('current_user_space', static fn(container_interface $container): string => $userServiceCreator->getCurrentUserSpace($container, $container->get('user_state')));
+            ->factory(service_id::CURRENT_USER, static fn(container_interface $container, ?string $reqSpace = null): mixed => $userServiceCreator->getCurrentUserService($container, $container->get(service_id::USER_STATE), $reqSpace), false)
+            ->factory(service_id::CURRENT_USER_CHECKED, static fn(container_interface $container, ?string $reqSpace = null): mixed => $userServiceCreator->getCurrentUserServiceChecked($container, $container->get(service_id::USER_STATE), $reqSpace), false)
+            ->factory(service_id::CURRENT_USER_SPACE, static fn(container_interface $container): string => $userServiceCreator->getCurrentUserSpace($container, $container->get(service_id::USER_STATE)));
     }
 }

@@ -25,12 +25,12 @@ final class application_client_service_creator
                 $url,
                 $index,
                 $state,
-                $container->get('bootstrap_runtime'),
-                $container->get('config'),
-                static fn(string $type): mixed => $container->get('cache', $type),
-                $container->get('curl_adapter'),
-                $container->get('array_adducer'),
-                $container->get('array_value_reader')
+                $container->get(service_id::BOOTSTRAP_RUNTIME),
+                $container->get(service_id::CONFIG),
+                static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+                $container->get(service_id::CURL_ADAPTER),
+                $container->get(service_id::ARRAY_ADDUCER),
+                $container->get(service_id::ARRAY_VALUE_READER)
             );
             $state->setInstance($index, $url, $instance);
         }
@@ -44,7 +44,7 @@ final class application_client_service_creator
         callable $restServiceFactory,
         ?string $connectionName = null
     ): mixed {
-        $config = $container->get('config')->get('rest');
+        $config = $container->get(service_id::CONFIG)->get('rest');
         $connectionName = $state->resolveConnectionName($connectionName, (string)($config['DEFAULT_CONNECTION'] ?? ''));
         $instance = $state->getInstance($connectionName);
         if ($instance === null) {
@@ -56,12 +56,12 @@ final class application_client_service_creator
             $instance = $restServiceFactory(
                 $className,
                 $connectionName,
-                static fn(): mixed => $container->get('json'),
-                static fn(string $url): mixed => $container->get('curl', $url),
-                static fn(): mixed => $container->get('error'),
-                $container->get('bootstrap_runtime'),
-                $container->get('config'),
-                static fn(string $type): mixed => $container->get('cache', $type)
+                static fn(): mixed => $container->get(service_id::JSON),
+                static fn(string $url): mixed => $container->get(service_id::CURL, $url),
+                static fn(): mixed => $container->get(service_id::ERROR),
+                $container->get(service_id::BOOTSTRAP_RUNTIME),
+                $container->get(service_id::CONFIG),
+                static fn(string $type): mixed => $container->get(service_id::CACHE, $type)
             );
             $state->setInstance($connectionName, $instance);
         }
@@ -77,7 +77,7 @@ final class application_client_service_creator
         mixed $domain = null,
         bool $secure = false
     ): mixed {
-        $config = $container->get('config')->get('cookie');
+        $config = $container->get(service_id::CONFIG)->get('cookie');
         if ($path === null) {
             $path = $config->get('DEFAULT_PATH', '/');
         }
@@ -91,23 +91,23 @@ final class application_client_service_creator
             if (!class_exists($className)) {
                 throw new \InvalidArgumentException('Service "cookie" does not expose a project class.');
             }
-            $serializerOperations = $container->get('serializer_operations');
+            $serializerOperations = $container->get(service_id::SERIALIZER_OPERATIONS);
 
             $instance = $cookieServiceFactory(
                 $className,
                 $path,
                 $domain,
                 !empty($secure),
-                $container->get('request_input'),
-                static fn(): mixed => $container->get('error'),
+                $container->get(service_id::REQUEST_INPUT),
+                static fn(): mixed => $container->get(service_id::ERROR),
                 $serializerOperations->jsonPayloadEncoder(),
                 $serializerOperations->externalPayloadDecoder(),
                 $serializerOperations->externalPayloadChecker(),
-                $container->get('cookie_writer'),
+                $container->get(service_id::COOKIE_WRITER),
                 $state,
-                $container->get('bootstrap_runtime'),
-                $container->get('config'),
-                static fn(string $type): mixed => $container->get('cache', $type)
+                $container->get(service_id::BOOTSTRAP_RUNTIME),
+                $container->get(service_id::CONFIG),
+                static fn(string $type): mixed => $container->get(service_id::CACHE, $type)
             );
             $state->setInstance($path, $domain, $instance);
         }

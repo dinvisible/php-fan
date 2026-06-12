@@ -36,6 +36,23 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertSame(['id' => 24], $entity->getParamById('encrypted-24', true));
     }
 
+    public function testDecodeEntityIdUsesInjectedDecoderWhenConfigured(): void
+    {
+        $entity = new BaseModelEntityProbe('users', 'users_table', primaryKey: 'id');
+        $calls = [];
+        $entity->setEntityDependencies(
+            entityIdDecoder: static function (string $rowId) use (&$calls): int {
+                $calls[] = $rowId;
+
+                return 77;
+            }
+        );
+
+        $this->assertSame(77, $entity->decodeEntityId('encrypted-77'));
+        $this->assertSame(['id' => 77], $entity->getParamById('encrypted-77', true));
+        $this->assertSame(['encrypted-77', 'encrypted-77'], $calls);
+    }
+
     public function testGetCheckKeyHashesTableStatusAndCanReduceOutput(): void
     {
         $connection = new BaseModelEntityConnectionDouble([
@@ -229,8 +246,13 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertStringContainsString('private mixed $modelEntityExceptionFactory = null;', $code);
         $this->assertStringContainsString('private \Closure $namespaceResolver;', $code);
         $this->assertStringContainsString('private ?object $reflectionClassFactory = null;', $code);
+        $this->assertStringContainsString('private mixed $entityIdDecoder = null;', $code);
         $this->assertStringContainsString('?callable $namespaceResolver = null', $code);
         $this->assertStringContainsString('?object $reflectionClassFactory = null', $code);
+        $this->assertStringContainsString('?callable $entityIdDecoder = null', $code);
+        $this->assertStringContainsString('public function decodeEntityId(string $rowId): mixed', $code);
+        $this->assertStringContainsString('return ($this->entityIdDecoder)($rowId);', $code);
+        $this->assertStringContainsString('$this->decodeEntityId((string)$rowId)', $code);
         $this->assertStringContainsString('$this->namespaceResolver = $this->defaultNamespaceResolver();', $code);
         $this->assertStringContainsString('$ns     = $this->namespaceName($this, 2);', $code);
         $this->assertStringContainsString('private function namespaceName(object|string $object, int $depth = 1): string', $code);

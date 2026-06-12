@@ -116,6 +116,8 @@ abstract class entity
 
     private ?object $reflectionClassFactory = null;
 
+    private mixed $entityIdDecoder = null;
+
     public function __construct(
         object $service,
         mixed $name,
@@ -128,7 +130,8 @@ abstract class entity
         ?callable $requestLoaderFactory = null,
         ?callable $modelEntityExceptionFactory = null,
         ?callable $namespaceResolver = null,
-        ?object $reflectionClassFactory = null
+        ?object $reflectionClassFactory = null,
+        ?callable $entityIdDecoder = null
     )
     {
         $param = (array)$param;
@@ -144,7 +147,8 @@ abstract class entity
             $requestLoaderFactory,
             $modelEntityExceptionFactory,
             $namespaceResolver,
-            $reflectionClassFactory
+            $reflectionClassFactory,
+            $entityIdDecoder
         );
 
         $this->bakParam = $param;
@@ -169,7 +173,8 @@ abstract class entity
         ?callable $requestLoaderFactory = null,
         ?callable $modelEntityExceptionFactory = null,
         ?callable $namespaceResolver = null,
-        ?object $reflectionClassFactory = null
+        ?object $reflectionClassFactory = null,
+        ?callable $entityIdDecoder = null
     ): static
     {
         if ($configFactory !== null) {
@@ -198,6 +203,9 @@ abstract class entity
         }
         if ($reflectionClassFactory !== null) {
             $this->reflectionClassFactory = $reflectionClassFactory;
+        }
+        if ($entityIdDecoder !== null) {
+            $this->entityIdDecoder = \Closure::fromCallable($entityIdDecoder);
         }
 
         return $this;
@@ -457,7 +465,7 @@ abstract class entity
         $idName = $this->description->getPrimeryKey();
         if (is_scalar($idName)) {
             if (is_scalar($rowId)) {
-                $param[$idName] = $idIsEncrypt ? $this->getService()->getEncapsulant()->decryptId((string)$rowId) : $rowId;
+                $param[$idName] = $idIsEncrypt ? $this->decodeEntityId((string)$rowId) : $rowId;
             } elseif (is_object($rowId) && method_exists($rowId, '__toString')) {
                 $param[$idName] = $rowId->__toString();
             } else {
@@ -477,6 +485,15 @@ abstract class entity
             throw $this->createModelEntityFatalException('Value of ID for select data from "' . $this->getTableName() . '" must be as array.');
         }
         return $param;
+    }
+
+    public function decodeEntityId(string $rowId): mixed
+    {
+        if (is_callable($this->entityIdDecoder)) {
+            return ($this->entityIdDecoder)($rowId);
+        }
+
+        return $this->getService()->getEncapsulant()->decryptId($rowId);
     }
 
     public function &getDataByParam(mixed $param = null, int|float $qtt = -1, int|float $offset = -1, ?string $orderBy = null, bool $onlyOne = false): array
@@ -591,6 +608,12 @@ abstract class entity
     {
         return $this->service;
     }
+
+    public function getSqlDirectory(): string
+    {
+        return $this->getService()->getSqlDir();
+    }
+
     /**
      * @param mixed $default Fallback value returned when no explicit value is available.
      */

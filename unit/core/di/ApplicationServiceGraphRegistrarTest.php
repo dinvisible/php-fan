@@ -89,32 +89,32 @@ final class ApplicationServiceGraphRegistrarTest extends TestCase
         foreach (['service_id::REQUEST,', 'service_id::ROLE,', 'service_id::TIMER,'] as $registration) {
             $this->assertStringContainsString($registration, $coreRegistrarSource);
         }
-        foreach (["'config',", "'cache'", "'json',", "'file_system',"] as $registration) {
+        foreach (['service_id::CONFIG', 'service_id::CACHE', 'service_id::JSON', 'service_id::FILE_SYSTEM'] as $registration) {
             $this->assertStringContainsString($registration, $infrastructureRegistrarSource);
         }
-        foreach (["'translation',", "'block_factory'"] as $registration) {
+        foreach (['service_id::TRANSLATION', 'service_id::BLOCK_FACTORY'] as $registration) {
             $this->assertStringContainsString($registration, $contentRegistrarSource);
         }
         $this->assertStringNotContainsString("'template',", $contentRegistrarSource);
-        $this->assertStringContainsString("'tab',", $navigationRegistrarSource);
-        foreach (["'plain',"] as $registration) {
+        $this->assertStringContainsString('service_id::TAB', $navigationRegistrarSource);
+        foreach (['service_id::PLAIN,'] as $registration) {
             $this->assertStringContainsString($registration, $controllerRegistrarSource);
         }
         $this->assertStringNotContainsString("'cli',", $controllerRegistrarSource);
-        foreach (["'cookie',", "'curl',", "'rest',"] as $registration) {
+        foreach (['service_id::COOKIE', 'service_id::CURL', 'service_id::REST'] as $registration) {
             $this->assertStringContainsString($registration, $clientRegistrarSource);
         }
-        foreach (["'pager',"] as $registration) {
+        foreach (['service_id::PAGER,'] as $registration) {
             $this->assertStringContainsString($registration, $formRegistrarSource);
         }
         $this->assertStringNotContainsString("'form',", $formRegistrarSource);
-        foreach (["'date',", "'obfuscator',", "'image_modify',", "'image_draw',", "'soap',"] as $registration) {
+        foreach (['service_id::DATE', 'service_id::OBFUSCATOR', 'service_id::IMAGE_MODIFY', 'service_id::IMAGE_DRAW', 'service_id::SOAP'] as $registration) {
             $this->assertStringContainsString($registration, $utilityRegistrarSource);
         }
         $this->assertStringNotContainsString("'database'", $source);
         $this->assertStringNotContainsString("'database_by_param'", $source);
-        $this->assertStringContainsString("'session',", $sessionRegistrarSource);
-        foreach (["'user',", "'current_user'", "'current_user_checked'", "'current_user_space'"] as $registration) {
+        $this->assertStringContainsString('service_id::SESSION', $sessionRegistrarSource);
+        foreach (['service_id::USER', 'service_id::CURRENT_USER', 'service_id::CURRENT_USER_CHECKED', 'service_id::CURRENT_USER_SPACE'] as $registration) {
             $this->assertStringContainsString($registration, $userRegistrarSource);
         }
         $this->assertStringNotContainsString('->factory(', $source);

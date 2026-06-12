@@ -15,18 +15,18 @@ final class application_core_service_creator
 
         return $requestServiceFactory(
             $className,
-            $container->get('request_input'),
-            $container->get('bootstrap_runtime'),
-            static fn(bool $useBase64 = false): mixed => $container->get('json', $useBase64),
-            static fn(): mixed => $container->get('cookie'),
-            static fn(): mixed => $container->get('matcher'),
-            $container->get('bootstrap_runtime'),
-            $container->get('config'),
-            static fn(string $type): mixed => $container->get('cache', $type),
-            $container->get('array_adducer'),
-            $container->get('recursive_merger'),
-            $container->get('array_value_reader'),
-            $container->get('class_name_resolver')
+            $container->get(service_id::REQUEST_INPUT),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            static fn(bool $useBase64 = false): mixed => $container->get(service_id::JSON, $useBase64),
+            static fn(): mixed => $container->get(service_id::COOKIE),
+            static fn(): mixed => $container->get(service_id::MATCHER),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::CONFIG),
+            static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+            $container->get(service_id::ARRAY_ADDUCER),
+            $container->get(service_id::RECURSIVE_MERGER),
+            $container->get(service_id::ARRAY_VALUE_READER),
+            $container->get(service_id::CLASS_NAME_RESOLVER)
         );
     }
 
@@ -39,14 +39,14 @@ final class application_core_service_creator
 
         return $roleServiceFactory(
             $className,
-            static fn(bool $checkLogout): mixed => $container->get($checkLogout ? 'current_user_checked' : 'current_user'),
-            static fn(string $namespace, string $group): mixed => $container->get('session', $namespace, $group),
-            $container->get('error'),
-            static fn(): mixed => $container->get('current_user_space'),
-            static fn(string $date, mixed $format = null): mixed => $container->get('date', $date, $format),
-            $container->get('bootstrap_runtime'),
-            $container->get('config'),
-            static fn(string $type): mixed => $container->get('cache', $type)
+            static fn(bool $checkLogout): mixed => $container->get($checkLogout ? service_id::CURRENT_USER_CHECKED : service_id::CURRENT_USER),
+            static fn(string $namespace, string $group): mixed => $container->get(service_id::SESSION, $namespace, $group),
+            $container->get(service_id::ERROR),
+            static fn(): mixed => $container->get(service_id::CURRENT_USER_SPACE),
+            static fn(string $date, mixed $format = null): mixed => $container->get(service_id::DATE, $date, $format),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::CONFIG),
+            static fn(string $type): mixed => $container->get(service_id::CACHE, $type)
         );
     }
 
@@ -59,10 +59,10 @@ final class application_core_service_creator
 
         return $reflectorServiceFactory(
             $className,
-            $container->get('bootstrap_runtime'),
-            $container->get('config'),
-            static fn(string $type): mixed => $container->get('cache', $type),
-            $container->get('reflection_class_factory')
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::CONFIG),
+            static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+            $container->get(service_id::REFLECTION_CLASS_FACTORY)
         );
     }
 
@@ -76,11 +76,11 @@ final class application_core_service_creator
         return $applicationServiceFactory(
             $className,
             true,
-            $container->get('bootstrap_runtime'),
-            $container->get('bootstrap_runtime'),
-            $container->get('config'),
-            static fn(string $type): mixed => $container->get('cache', $type),
-            $container->get('array_adducer')
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::CONFIG),
+            static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+            $container->get(service_id::ARRAY_ADDUCER)
         );
     }
 
@@ -94,14 +94,14 @@ final class application_core_service_creator
         return $debugServiceFactory(
             $className,
             true,
-            $container->get('tab'),
-            $container->get('request_input'),
-            $container->get('bootstrap_runtime'),
-            $container->get('config'),
-            static fn(string $type): mixed => $container->get('cache', $type),
-            $container->get('meta_file_storage'),
-            $container->get('array_adducer'),
-            $container->get('reflection_class_factory')
+            $container->get(service_id::TAB),
+            $container->get(service_id::REQUEST_INPUT),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::CONFIG),
+            static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+            $container->get(service_id::META_FILE_STORAGE),
+            $container->get(service_id::ARRAY_ADDUCER),
+            $container->get(service_id::REFLECTION_CLASS_FACTORY)
         );
     }
 
@@ -115,12 +115,12 @@ final class application_core_service_creator
         return $headerServiceFactory(
             $className,
             true,
-            $container->get('request_input'),
-            $container->get('header_writer'),
-            $container->get('bootstrap_runtime'),
-            $container->get('config'),
-            static fn(string $type): mixed => $container->get('cache', $type),
-            $container->get('recursive_merger')
+            $container->get(service_id::REQUEST_INPUT),
+            $container->get(service_id::HEADER_WRITER),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::CONFIG),
+            static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+            $container->get(service_id::RECURSIVE_MERGER)
         );
     }
 
@@ -134,16 +134,16 @@ final class application_core_service_creator
         return $errorServiceFactory(
             $className,
             true,
-            $container->get('request_input'),
-            $container->get('bootstrap_runtime'),
+            $container->get(service_id::REQUEST_INPUT),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
             null,
             null,
-            $container->get('bootstrap_runtime'),
-            $container->get('config'),
-            static fn(string $type): mixed => $container->get('cache', $type),
-            $container->get('php_array_file_loader'),
-            $container->get('error_log_writer'),
-            $container->get('error_file_storage')
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::CONFIG),
+            static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+            $container->get(service_id::PHP_ARRAY_FILE_LOADER),
+            $container->get(service_id::ERROR_LOG_WRITER),
+            $container->get(service_id::ERROR_FILE_STORAGE)
         );
     }
 
@@ -162,16 +162,16 @@ final class application_core_service_creator
         return $matcherServiceFactory(
             $className,
             true,
-            $container->get('request_input'),
-            $container->get('bootstrap_runtime'),
-            $container->get('locale'),
-            $container->get('application'),
-            $container->get('matcher_route_file_storage'),
+            $container->get(service_id::REQUEST_INPUT),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::LOCALE),
+            $container->get(service_id::APPLICATION),
+            $container->get(service_id::MATCHER_ROUTE_FILE_STORAGE),
             $matcherItemFactory,
             $matcherItemComponentFactory,
-            $container->get('bootstrap_runtime'),
-            $container->get('config'),
-            static fn(string $type): mixed => $container->get('cache', $type)
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::CONFIG),
+            static fn(string $type): mixed => $container->get(service_id::CACHE, $type)
         );
     }
 
@@ -188,16 +188,16 @@ final class application_core_service_creator
 
         return $timerServiceFactory(
             $className,
-            $container->get('bootstrap_runtime'),
-            static fn(?string $date = null, mixed $format = null): mixed => $container->get('date', $date, $format),
-            static fn(): mixed => $container->get('entity'),
-            static fn(): mixed => $container->get('error'),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            static fn(?string $date = null, mixed $format = null): mixed => $container->get(service_id::DATE, $date, $format),
+            static fn(): mixed => $container->get(service_id::ENTITY),
+            static fn(): mixed => $container->get(service_id::ERROR),
             null,
             null,
             $timerProgramFactory,
-            $container->get('bootstrap_runtime'),
-            $container->get('config'),
-            static fn(string $type): mixed => $container->get('cache', $type)
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::CONFIG),
+            static fn(string $type): mixed => $container->get(service_id::CACHE, $type)
         );
     }
 
@@ -211,17 +211,17 @@ final class application_core_service_creator
         return $localeServiceFactory(
             $className,
             true,
-            static fn(): mixed => $container->get('entity'),
-            static fn(): mixed => $container->get('tab'),
-            static fn(string $namespace, string $group): mixed => $container->get('session', $namespace, $group),
-            static fn(): mixed => $container->get('request'),
-            static fn(mixed $path = null, mixed $domain = null): mixed => $container->get('cookie', $path, $domain),
-            static fn(): mixed => $container->get('matcher'),
-            $container->get('bootstrap_runtime'),
-            $container->get('config'),
-            static fn(string $type): mixed => $container->get('cache', $type),
-            $container->get('array_adducer'),
-            $container->get('class_name_resolver')
+            static fn(): mixed => $container->get(service_id::ENTITY),
+            static fn(): mixed => $container->get(service_id::TAB),
+            static fn(string $namespace, string $group): mixed => $container->get(service_id::SESSION, $namespace, $group),
+            static fn(): mixed => $container->get(service_id::REQUEST),
+            static fn(mixed $path = null, mixed $domain = null): mixed => $container->get(service_id::COOKIE, $path, $domain),
+            static fn(): mixed => $container->get(service_id::MATCHER),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::CONFIG),
+            static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+            $container->get(service_id::ARRAY_ADDUCER),
+            $container->get(service_id::CLASS_NAME_RESOLVER)
         );
     }
 

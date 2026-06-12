@@ -19,7 +19,7 @@ final class ApplicationSessionServiceRegistrarTest extends TestCase
         $this->assertIsString($dependencyProviderSource);
         $this->assertIsString($registrarDefaultsProviderFactorySource);
         $this->assertStringContainsString('final class application_session_service_registrar', $source);
-        $this->assertStringContainsString("'session',", $source);
+        $this->assertStringContainsString('service_id::SESSION', $source);
         $this->assertStringContainsString('$sessionServiceCreator->createSessionService(', $source);
         $this->assertStringNotContainsString('$sessionServiceCreator->createSessionService(', $graphSource);
         $this->assertStringContainsString('private application_session_service_registrar $sessionServiceRegistrar', $graphSource);

@@ -15,7 +15,7 @@ final class application_pager_service_creator
         string|base $block
     ): mixed {
         if (is_string($block)) {
-            $block = $container->get('tab')->getTabBlock($block);
+            $block = $container->get(service_id::TAB)->getTabBlock($block);
         }
         if (!is_object($block) || !($block instanceof base)) {
             throw $this->createError500Exception($container, 'Incorect call service pager. Please point block of data or its name.');
@@ -32,12 +32,12 @@ final class application_pager_service_creator
             $instance = $pagerServiceFactory(
                 $className,
                 $block,
-                static fn(): mixed => $container->get('entity'),
-                static fn(): mixed => $container->get('tab'),
-                static fn(): mixed => $container->get('request'),
-                $container->get('bootstrap_runtime'),
-                $container->get('config'),
-                static fn(string $type): mixed => $container->get('cache', $type)
+                static fn(): mixed => $container->get(service_id::ENTITY),
+                static fn(): mixed => $container->get(service_id::TAB),
+                static fn(): mixed => $container->get(service_id::REQUEST),
+                $container->get(service_id::BOOTSTRAP_RUNTIME),
+                $container->get(service_id::CONFIG),
+                static fn(string $type): mixed => $container->get(service_id::CACHE, $type)
             );
             $state->setInstance($name, $instance);
         }
@@ -56,7 +56,7 @@ final class application_pager_service_creator
         int $code = E_USER_ERROR,
         ?\Throwable $previous = null
     ): \Throwable {
-        $factory = $container->get('error500_exception_factory');
+        $factory = $container->get(service_id::ERROR500_EXCEPTION_FACTORY);
         if (!is_callable($factory)) {
             throw new \RuntimeException('Error500 exception factory must be callable.');
         }

@@ -19,7 +19,7 @@ final class ApplicationContentServiceRegistrarTest extends TestCase
         $this->assertIsString($dependencyProviderSource);
         $this->assertIsString($registrarDefaultsProviderFactorySource);
         $this->assertStringContainsString('final class application_content_service_registrar', $source);
-        foreach (["'block_factory'", "'translation',"] as $registration) {
+        foreach (['service_id::BLOCK_FACTORY', 'service_id::TRANSLATION'] as $registration) {
             $this->assertStringContainsString($registration, $source);
         }
         $this->assertStringNotContainsString("'template',", $source);

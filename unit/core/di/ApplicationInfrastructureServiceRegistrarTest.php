@@ -20,12 +20,12 @@ final class ApplicationInfrastructureServiceRegistrarTest extends TestCase
         $this->assertIsString($registrarDefaultsProviderFactorySource);
         $this->assertStringContainsString('final class application_infrastructure_service_registrar', $source);
         foreach ([
-            "'config',",
-            "'config_cache'",
-            "'cache'",
-            "'json',",
-            "'file_system',",
-            "'eloquent',",
+            'service_id::CONFIG',
+            'service_id::CONFIG_CACHE',
+            'service_id::CACHE',
+            'service_id::JSON',
+            'service_id::FILE_SYSTEM',
+            'service_id::ELOQUENT',
         ] as $registration) {
             $this->assertStringContainsString($registration, $source);
         }

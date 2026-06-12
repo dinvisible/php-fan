@@ -29,28 +29,28 @@ final class application_state_registry
     public function register(container $container): container
     {
         return $container
-            ->factory('config_state', static fn(container_interface $container): object => new config_state())
-            ->factory('cache_state', static fn(container_interface $container): object => new cache_state())
-            ->factory('cache_memcache_state', static fn(container_interface $container): object => new cache_memcache_state())
-            ->factory('cookie_state', static fn(container_interface $container): object => new cookie_state())
-            ->factory('pager_state', static fn(container_interface $container): object => new pager_state())
-            ->factory('session_state', static fn(container_interface $container): object => new session_state($container->get('array_value_reader')))
-            ->factory('tab_state', static fn(container_interface $container): object => new tab_state())
-            ->factory('json_state', static fn(container_interface $container): object => new json_state())
-            ->factory('service_listener_state', static fn(container_interface $container): object => new service_listener_state())
-            ->factory('service_single_state', static fn(container_interface $container): object => new service_single_state())
+            ->factory(service_id::CONFIG_STATE, static fn(container_interface $container): object => new config_state())
+            ->factory(service_id::CACHE_STATE, static fn(container_interface $container): object => new cache_state())
+            ->factory(service_id::CACHE_MEMCACHE_STATE, static fn(container_interface $container): object => new cache_memcache_state())
+            ->factory(service_id::COOKIE_STATE, static fn(container_interface $container): object => new cookie_state())
+            ->factory(service_id::PAGER_STATE, static fn(container_interface $container): object => new pager_state())
+            ->factory(service_id::SESSION_STATE, static fn(container_interface $container): object => new session_state($container->get(service_id::ARRAY_VALUE_READER)))
+            ->factory(service_id::TAB_STATE, static fn(container_interface $container): object => new tab_state())
+            ->factory(service_id::JSON_STATE, static fn(container_interface $container): object => new json_state())
+            ->factory(service_id::SERVICE_LISTENER_STATE, static fn(container_interface $container): object => new service_listener_state())
+            ->factory(service_id::SERVICE_SINGLE_STATE, static fn(container_interface $container): object => new service_single_state())
             ->factory(
-                'view_loader_state',
-                static fn(container_interface $container): object => ($container->get('view_loader_state_factory'))()
+                service_id::VIEW_LOADER_STATE,
+                static fn(container_interface $container): object => ($container->get(service_id::VIEW_LOADER_STATE_FACTORY))()
             )
-            ->factory('meta_maker_state', static fn(container_interface $container): object => new maker_state())
-            ->factory('spec_file_image_row_state', static fn(container_interface $container): object => new row_state())
-            ->factory('date_state', static fn(container_interface $container): object => new date_state())
-            ->factory('curl_state', static fn(container_interface $container): object => new curl_state())
-            ->factory('rest_state', static fn(container_interface $container): object => new rest_state())
-            ->factory('image_modify_state', static fn(container_interface $container): object => new image_modify_state())
-            ->factory('obfuscator_state', static fn(container_interface $container): object => new obfuscator_state())
-            ->factory('file_system_state', static fn(container_interface $container): object => new file_system_state())
-            ->factory('user_state', static fn(container_interface $container): object => new user_state());
+            ->factory(service_id::META_MAKER_STATE, static fn(container_interface $container): object => new maker_state())
+            ->factory(service_id::SPEC_FILE_IMAGE_ROW_STATE, static fn(container_interface $container): object => new row_state())
+            ->factory(service_id::DATE_STATE, static fn(container_interface $container): object => new date_state())
+            ->factory(service_id::CURL_STATE, static fn(container_interface $container): object => new curl_state())
+            ->factory(service_id::REST_STATE, static fn(container_interface $container): object => new rest_state())
+            ->factory(service_id::IMAGE_MODIFY_STATE, static fn(container_interface $container): object => new image_modify_state())
+            ->factory(service_id::OBFUSCATOR_STATE, static fn(container_interface $container): object => new obfuscator_state())
+            ->factory(service_id::FILE_SYSTEM_STATE, static fn(container_interface $container): object => new file_system_state())
+            ->factory(service_id::USER_STATE, static fn(container_interface $container): object => new user_state());
     }
 }

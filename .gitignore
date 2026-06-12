@@ -10,3 +10,4 @@
 /temp_data/file_data/**
 !/.ai/
 !/.ai/*.md
+!/.ai/*.schema.json

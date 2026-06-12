@@ -5,6 +5,8 @@ declare(strict_types=1);
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+require_once dirname(__DIR__, 3) . '/tools/ai_map.php';
+
 
 class MetaFilesTest extends TestCase
 {
@@ -58,4 +60,65 @@ class MetaFilesTest extends TestCase
         $this->assertSame('~/ctrl/main_ctrl.js', $meta['own']['externalJS']['head']['m03']);
     }
 
+    public function testAiMapMetaInventoryIncludesKnownCoreMetaFiles(): void
+    {
+        $root = dirname(__DIR__, 3);
+        $expectedFiles = array_map(static fn(array $row): string => $row[0], self::metaFileProvider());
+        sort($expectedFiles);
+        $actualFiles = php_fan_ai_meta_files($root);
+
+        $this->assertSame($expectedFiles, array_values(array_intersect($actualFiles, $expectedFiles)));
+    }
+
+    public function testMetaFilesMatchAiSchemaContract(): void
+    {
+        $root = dirname(__DIR__, 3);
+        $schemaFile = $root . '/.ai/meta.schema.json';
+        $schema = json_decode((string)file_get_contents($schemaFile), true);
+
+        $this->assertIsArray($schema);
+        $this->assertSame('PHP-FAN block meta file', $schema['title'] ?? null);
+        $this->assertArrayHasKey('$defs', $schema);
+
+        $templateFiles = php_fan_ai_template_files($root);
+        $metadata = php_fan_ai_metadata_map($root, php_fan_ai_meta_files($root), $templateFiles);
+
+        foreach (php_fan_ai_meta_files($root) as $file) {
+            $data = php_fan_ai_meta_file_data($root, $file);
+            $this->assertNotEmpty($data, $file);
+
+            foreach ($data as $sectionName => $section) {
+                $this->assertIsString($sectionName, $file);
+                $this->assertIsArray($section, $file . ':' . $sectionName);
+
+                $this->assertMetaSectionReferencesExistingFiles($root, $file, $sectionName, $section);
+            }
+
+            $pairedTemplate = $metadata['meta']['files'][$file]['paired_template'];
+            if ($pairedTemplate !== null) {
+                $this->assertContains($pairedTemplate, $templateFiles);
+                $this->assertFileExists($root . '/' . $pairedTemplate);
+            }
+        }
+    }
+
+    private function assertMetaSectionReferencesExistingFiles(string $root, string $file, string $sectionName, array $section): void
+    {
+        if (isset($section['default_tpl'])) {
+            $this->assertIsString($section['default_tpl'], $file . ':' . $sectionName . ':default_tpl');
+            $templatePath = str_starts_with($section['default_tpl'], '/')
+                ? $section['default_tpl']
+                : $root . '/' . ltrim($section['default_tpl'], '/');
+            $this->assertFileExists($templatePath, $file . ':' . $sectionName . ':default_tpl');
+        }
+
+        if (isset($section['embeddedBlocks'])) {
+            $this->assertIsArray($section['embeddedBlocks'], $file . ':' . $sectionName . ':embeddedBlocks');
+            foreach ($section['embeddedBlocks'] as $key => $className) {
+                $this->assertIsString($key, $file . ':' . $sectionName . ':embeddedBlocks');
+                $this->assertIsString($className, $file . ':' . $sectionName . ':embeddedBlocks.' . $key);
+                $this->assertNotSame('', $className, $file . ':' . $sectionName . ':embeddedBlocks.' . $key);
+            }
+        }
+    }
 }

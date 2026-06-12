@@ -29,7 +29,7 @@ final class application_image_adapter_defaults_provider
         $this->imageMetadataReaderFactory = \Closure::fromCallable(
             $imageMetadataReaderFactory
                 ?? static fn(container_interface $container): object => new image_metadata_reader(
-                    $container->get('warning_capture')
+                    $container->get(service_id::WARNING_CAPTURE)
                 )
         );
         $this->imageResourceFactoryFactory = \Closure::fromCallable(

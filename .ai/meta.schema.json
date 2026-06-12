@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://php-fan.local/schemas/meta.schema.json",
+  "title": "PHP-FAN block meta file",
+  "type": "object",
+  "description": "Describes the array returned by legacy *.meta.php block metadata files.",
+  "properties": {
+    "own": {
+      "$ref": "#/$defs/metaSection"
+    },
+    "common": {
+      "$ref": "#/$defs/metaSection"
+    }
+  },
+  "additionalProperties": {
+    "$ref": "#/$defs/metaSection"
+  },
+  "$defs": {
+    "metaSection": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "browserClasses": {
+          "type": "object"
+        },
+        "cache": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": [
+                "integer",
+                "boolean",
+                "string"
+              ]
+            }
+          },
+          "additionalProperties": true
+        },
+        "carcass": {
+          "type": "string"
+        },
+        "default_tpl": {
+          "type": "string"
+        },
+        "editableTypes": {
+          "type": "object"
+        },
+        "embeddedBlocks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "externalCss": {
+          "type": "object"
+        },
+        "json": {
+          "type": "object"
+        },
+        "notUseTemplate": {
+          "type": "boolean"
+        },
+        "staticContent": {
+          "type": "object"
+        },
+        "title": {
+          "type": "string"
+        },
+        "tplVars": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

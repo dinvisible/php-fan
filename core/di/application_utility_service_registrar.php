@@ -18,10 +18,10 @@ final class application_utility_service_registrar
 
         return $container
             ->factory(
-                'date',
+                service_id::DATE,
                 static fn(container_interface $container, ?string $date = null, mixed $format = null, mixed $timezone = null, bool $save = true): mixed => $utilityServiceCreator->createDateService(
                     $container,
-                    $container->get('date_state'),
+                    $container->get(service_id::DATE_STATE),
                     $dateServiceFactory,
                     $date,
                     $format,
@@ -31,22 +31,22 @@ final class application_utility_service_registrar
                 false
             )
             ->factory(
-                'obfuscator',
+                service_id::OBFUSCATOR,
                 static fn(container_interface $container, string $type): mixed => $utilityServiceCreator->createObfuscatorService(
                     $container,
-                    $container->get('obfuscator_state'),
+                    $container->get(service_id::OBFUSCATOR_STATE),
                     $obfuscatorServiceFactory,
                     $type
                 ),
                 false
             )
             ->factory(
-                'image_modify',
+                service_id::IMAGE_MODIFY,
                 static fn(container_interface $container, ?string $sourcePath = null, array $createParam = [], bool $saveInstance = true): mixed => $utilityServiceCreator->createImageModifyService(
                     $container,
-                    $container->get('image_modify_state'),
+                    $container->get(service_id::IMAGE_MODIFY_STATE),
                     $imageModifyServiceFactory,
-                    'image_modify',
+                    service_id::IMAGE_MODIFY,
                     $sourcePath,
                     $createParam,
                     $saveInstance
@@ -54,12 +54,12 @@ final class application_utility_service_registrar
                 false
             )
             ->factory(
-                'image_draw',
+                service_id::IMAGE_DRAW,
                 static fn(container_interface $container, ?string $sourcePath = null, array $createParam = [], bool $saveInstance = true): mixed => $utilityServiceCreator->createImageModifyService(
                     $container,
-                    $container->get('image_modify_state'),
+                    $container->get(service_id::IMAGE_MODIFY_STATE),
                     $imageModifyServiceFactory,
-                    'image_draw',
+                    service_id::IMAGE_DRAW,
                     $sourcePath,
                     $createParam,
                     $saveInstance
@@ -67,7 +67,7 @@ final class application_utility_service_registrar
                 false
             )
             ->factory(
-                'soap',
+                service_id::SOAP,
                 static fn(container_interface $container, string $wsdlFile, ?array $param = null, bool $logEnabled = true): mixed => $utilityServiceCreator->createSoapService(
                     $container,
                     $soapServiceFactory,

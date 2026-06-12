@@ -31,11 +31,11 @@ final class application_utility_service_creator
             $instance = $obfuscatorServiceFactory(
                 $className,
                 $type,
-                $container->get('bootstrap_runtime'),
-                $container->get('config'),
-                static fn(string $cacheType): mixed => $container->get('cache', $cacheType),
-                $container->get('php_array_file_loader'),
-                $container->get('obfuscator_file_storage')
+                $container->get(service_id::BOOTSTRAP_RUNTIME),
+                $container->get(service_id::CONFIG),
+                static fn(string $cacheType): mixed => $container->get(service_id::CACHE, $cacheType),
+                $container->get(service_id::PHP_ARRAY_FILE_LOADER),
+                $container->get(service_id::OBFUSCATOR_FILE_STORAGE)
             );
             $state->setInstance($type, $instance);
         }
@@ -64,16 +64,16 @@ final class application_utility_service_creator
                 $sourcePath,
                 $createParam,
                 $state,
-                $container->get('bootstrap_runtime'),
-                $container->get('bootstrap_runtime'),
-                $container->get('config'),
-                static fn(string $type): mixed => $container->get('cache', $type),
-                $container->get('image_metadata_reader'),
-                $container->get('image_resource_factory'),
-                $container->get('image_canvas_operations'),
-                $container->get('image_output_writer'),
-                $container->get('image_source_file_storage'),
-                $container->get('array_value_reader')
+                $container->get(service_id::BOOTSTRAP_RUNTIME),
+                $container->get(service_id::BOOTSTRAP_RUNTIME),
+                $container->get(service_id::CONFIG),
+                static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+                $container->get(service_id::IMAGE_METADATA_READER),
+                $container->get(service_id::IMAGE_RESOURCE_FACTORY),
+                $container->get(service_id::IMAGE_CANVAS_OPERATIONS),
+                $container->get(service_id::IMAGE_OUTPUT_WRITER),
+                $container->get(service_id::IMAGE_SOURCE_FILE_STORAGE),
+                $container->get(service_id::ARRAY_VALUE_READER)
             );
             if (!$saveInstance) {
                 return $instance;
@@ -99,15 +99,15 @@ final class application_utility_service_creator
         $soap = $soapServiceFactory(
             $className,
             (bool)$logEnabled,
-            static fn(): mixed => $container->get('error'),
-            $container->get('bootstrap_runtime'),
-            $container->get('bootstrap_runtime'),
-            $container->get('config'),
-            static fn(string $type): mixed => $container->get('cache', $type),
-            $container->get('php_runtime_settings'),
-            $container->get('soap_wsdl_file_storage'),
-            $container->get('array_value_reader'),
-            $container->get('class_name_resolver')
+            static fn(): mixed => $container->get(service_id::ERROR),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::CONFIG),
+            static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+            $container->get(service_id::PHP_RUNTIME_SETTINGS),
+            $container->get(service_id::SOAP_WSDL_FILE_STORAGE),
+            $container->get(service_id::ARRAY_VALUE_READER),
+            $container->get(service_id::CLASS_NAME_RESOLVER)
         );
         $soap->initializeSoapObject($wsdlFile, $param);
 
@@ -125,7 +125,7 @@ final class application_utility_service_creator
     ): mixed {
         $config = $state->getGlobalConfig();
         if (empty($config)) {
-            $config = $container->get('config')->get('date');
+            $config = $container->get(service_id::CONFIG)->get('date');
             $state->setGlobalConfig($config);
         }
 
@@ -176,11 +176,11 @@ final class application_utility_service_creator
                 $state,
                 static fn(?string $date = null, mixed $format = null, mixed $timezone = null, bool $save = true): mixed =>
                     $creator->createDateService($container, $state, $dateServiceFactory, $date, $format, $timezone, $save),
-                $container->get('bootstrap_runtime'),
-                $container->get('config'),
-                static fn(string $type): mixed => $container->get('cache', $type),
-                $container->get('class_name_resolver'),
-                $container->get('array_value_reader')
+                $container->get(service_id::BOOTSTRAP_RUNTIME),
+                $container->get(service_id::CONFIG),
+                static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+                $container->get(service_id::CLASS_NAME_RESOLVER),
+                $container->get(service_id::ARRAY_VALUE_READER)
             );
         }
 

@@ -19,19 +19,19 @@ final class application_content_service_creator
         return $translationServiceFactory(
             $className,
             true,
-            $container->get('locale'),
-            $container->get('bootstrap_runtime'),
-            static fn(): mixed => $container->get('tab'),
+            $container->get(service_id::LOCALE),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            static fn(): mixed => $container->get(service_id::TAB),
             [],
-            $container->get('error'),
-            $container->get('block_context'),
-            $container->get('matcher'),
-            $container->get('request_input'),
-            $container->get('bootstrap_runtime'),
-            $container->get('config'),
-            static fn(string $type): mixed => $container->get('cache', $type),
-            $container->get('php_array_file_loader'),
-            $container->get('translation_file_storage')
+            $container->get(service_id::ERROR),
+            $container->get(service_id::BLOCK_CONTEXT),
+            $container->get(service_id::MATCHER),
+            $container->get(service_id::REQUEST_INPUT),
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::CONFIG),
+            static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+            $container->get(service_id::PHP_ARRAY_FILE_LOADER),
+            $container->get(service_id::TRANSLATION_FILE_STORAGE)
         );
     }
 

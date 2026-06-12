@@ -1,0 +1,15 @@
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 0
+    paths:
+        - core
+        - project
+        - htdocs
+        - tools
+    excludePaths:
+        analyse:
+            - vendor
+            - unit
+    treatPhpDocTypesAsCertain: false

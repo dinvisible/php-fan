@@ -22,25 +22,25 @@ final class application_controller_service_creator
         return $plainServiceFactory(
             $className,
             true,
-            $container->get('matcher'),
-            static fn(): mixed => $container->get('config', 'plain'),
-            $container->get('header'),
+            $container->get(service_id::MATCHER),
+            static fn(): mixed => $container->get(service_id::CONFIG, 'plain'),
+            $container->get(service_id::HEADER),
             static function (string $controllerClass, int|string $controllerKey, object $handler) use ($container): array {
                 if (is_a($controllerClass, obfuscator::class, true)) {
                     return [
-                        static fn(string $type): mixed => $container->get('obfuscator', $type),
-                        $container->get('request'),
+                        static fn(string $type): mixed => $container->get(service_id::OBFUSCATOR, $type),
+                        $container->get(service_id::REQUEST),
                     ];
                 }
                 if (is_a($controllerClass, db_file::class, true)) {
-                    return [$container->get('plain_file_context')];
+                    return [$container->get(service_id::PLAIN_FILE_CONTEXT)];
                 }
                 return [];
             },
             $plainControllerFactory,
-            $container->get('bootstrap_runtime'),
-            $container->get('config'),
-            static fn(string $type): mixed => $container->get('cache', $type)
+            $container->get(service_id::BOOTSTRAP_RUNTIME),
+            $container->get(service_id::CONFIG),
+            static fn(string $type): mixed => $container->get(service_id::CACHE, $type)
         );
     }
 
