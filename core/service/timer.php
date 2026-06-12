@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace fan\core\service;
 use fan\core\base\service\single;
 use fan\core\base\timer_program;
-use fan\model\timer_program\row as timer_program_row;
 
 /**
  * Cron-timer manager service
@@ -250,7 +249,7 @@ class timer extends single
 
     // =========================================================== \\
 
-    protected function _runProgram(timer_program_row $timerRow): static
+    protected function _runProgram(object $timerRow): static
     {
         $error = $this->timerError();
         /* @var $error \fan\core\service\error */

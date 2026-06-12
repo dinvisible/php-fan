@@ -186,6 +186,7 @@
         "dependencies",
         "factory_origin",
         "factory_arguments",
+        "creator_method_arguments",
         "aliases"
       ],
       "properties": {
@@ -239,7 +240,37 @@
           },
           "additionalProperties": false
         },
+        "creator_method_arguments": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/creatorMethodArgumentDescriptor"
+          }
+        },
         "aliases": {
+          "$ref": "#/$defs/stringList"
+        }
+      },
+      "additionalProperties": false
+    },
+    "creatorMethodArgumentDescriptor": {
+      "type": "object",
+      "required": [
+        "parameters",
+        "runtime_arguments",
+        "container_dependencies",
+        "optional_arguments"
+      ],
+      "properties": {
+        "parameters": {
+          "$ref": "#/$defs/stringList"
+        },
+        "runtime_arguments": {
+          "$ref": "#/$defs/stringList"
+        },
+        "container_dependencies": {
+          "$ref": "#/$defs/stringList"
+        },
+        "optional_arguments": {
           "$ref": "#/$defs/stringList"
         }
       },

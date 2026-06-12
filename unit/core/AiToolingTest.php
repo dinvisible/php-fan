@@ -42,6 +42,29 @@ final class AiToolingTest extends TestCase
         $this->assertContains('createRequestService', $map['services']['descriptors'][service_id::REQUEST]['factory_origin']['creator_methods']);
         $this->assertContains(service_id::CONFIG, $map['services']['descriptors'][service_id::REQUEST]['dependencies']);
         $this->assertContains('type', $map['services']['descriptors'][service_id::CACHE]['factory_arguments']['runtime_arguments']);
+        $this->assertSame([
+            'parameters' => [
+                'container',
+                'cacheState',
+                'memcacheState',
+                'cacheEngineFactory',
+                'cacheServiceFactory',
+                'type',
+            ],
+            'runtime_arguments' => ['type'],
+            'container_dependencies' => ['container'],
+            'optional_arguments' => ['type'],
+        ], $map['services']['descriptors'][service_id::CACHE]['creator_method_arguments']['createCacheService']);
+        $this->assertSame([
+            'date',
+            'format',
+            'save',
+            'timezone',
+        ], $map['services']['descriptors'][service_id::DATE]['creator_method_arguments']['createDateService']['runtime_arguments']);
+        $this->assertSame([
+            'group',
+            'nameSpace',
+        ], $map['services']['descriptors'][service_id::SESSION]['creator_method_arguments']['createSessionService']['runtime_arguments']);
         $this->assertFalse($map['services']['descriptors'][service_id::CACHE]['shared']);
         $this->assertIsArray($map['services']['descriptors'][service_id::CACHE]['aliases']);
         $this->assertSame('.ai/meta.schema.json', $map['metadata']['meta_schema']);
@@ -79,6 +102,18 @@ final class AiToolingTest extends TestCase
         $this->assertContains('services', $schema['required']);
         $this->assertContains('metadata', $schema['required']);
         $this->assertSame([], php_fan_ai_validate_map_contract($root, $map));
+    }
+
+    public function testAiMapSchemaValidationRejectsDescriptorShapeDrift(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        unset($map['services']['descriptors'][service_id::CACHE]['creator_method_arguments']);
+
+        $this->assertContains(
+            'AI map JSON schema: $.services.descriptors.cache missing required key: creator_method_arguments',
+            php_fan_ai_validate_map_contract($root, $map)
+        );
     }
 
     public function testAiExplainSummarizesSourceFile(): void

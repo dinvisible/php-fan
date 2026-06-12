@@ -169,6 +169,10 @@ final class BaseModelRequestEntityDouble extends entity
     public function __construct(?BaseModelRequestEntityServiceDouble $service = null)
     {
         $this->service = $service ?? new BaseModelRequestEntityServiceDouble();
+        $entityService = $this->service;
+        $this->setEntityDependencies(
+            sqlDirectoryProvider: static fn(entity $entity): string => $entityService->getSqlDir()
+        );
     }
 
     public function createRequestFatalException(string $message, int $code = E_USER_ERROR, ?Throwable $previous = null): Throwable

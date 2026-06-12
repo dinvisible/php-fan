@@ -47,6 +47,7 @@ final class model_entity_factory
         $descriptionProvider = static fn(object $entity, array $param = []): object => $entityService->getDescription($entity, $param);
         $namespacePrefixResolver = static fn(object $entity): string => $entityService->getNsPrefix();
         $collectionKeyProvider = static fn(object $entity): mixed => $entityService->getCollectionKey();
+        $sqlDirectoryProvider = static fn(object $entity): string => $entityService->getSqlDir();
 
         return ($this->configuredServiceFactory)($entityClass, [
             $entityService,
@@ -66,7 +67,8 @@ final class model_entity_factory
             $designerFactory,
             $descriptionProvider,
             $namespacePrefixResolver,
-            $collectionKeyProvider
+            $collectionKeyProvider,
+            $sqlDirectoryProvider
         ]);
     }
 

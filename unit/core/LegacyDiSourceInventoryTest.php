@@ -160,7 +160,6 @@ final class LegacyDiSourceInventoryTest extends TestCase
     public function testModelServiceLocatorUsageIsPinnedToMigrationAllowlist(): void
     {
         $allowedCounts = [
-            'core/base/model/entity.php' => 7,
             'core/base/model/file_data/row.php' => 1,
             'core/base/model/row.php' => 1,
             'core/base/model/spec_file/image/entity.php' => 1,
@@ -180,6 +179,35 @@ final class LegacyDiSourceInventoryTest extends TestCase
         ksort($actualCounts);
 
         $this->assertSame($allowedCounts, $actualCounts);
+    }
+
+    public function testModelServicePropertyAccessIsPinnedToEntityBoundary(): void
+    {
+        $violations = [];
+        foreach ($this->productionPhpFiles() as $file) {
+            $relativePath = $this->relativePath($file);
+            if (!str_starts_with($relativePath, 'core/base/model/')) {
+                continue;
+            }
+
+            $lines = file($file);
+            $this->assertIsArray($lines);
+            foreach ($lines as $lineNumber => $line) {
+                if (!str_contains($line, '->service')) {
+                    continue;
+                }
+                if ($relativePath === 'core/base/model/entity.php' && preg_match('/\$this->service\s*=\s*\$service\s*;/', $line) === 1) {
+                    continue;
+                }
+                if ($relativePath === 'core/base/model/entity.php' && preg_match('/return\s+\$this->service\s*;/', $line) === 1) {
+                    continue;
+                }
+
+                $violations[] = $relativePath . ':' . ($lineNumber + 1);
+            }
+        }
+
+        $this->assertSame([], $violations, 'Model service property access outside entity constructor found in: ' . implode(', ', $violations));
     }
 
     public function testMigratedBlockArrayHelpersUseInjectedDependencies(): void
@@ -2780,19 +2808,20 @@ final class LegacyDiSourceInventoryTest extends TestCase
     {
         $this->assertPatternOnlyAppearsInAllowedFiles(
             '/\\\\?HTTP_Session::(?:setContainer|useCookies|start|id|get|set|clear|destroy)\s*\(/',
-            [
-                'core/adapter/pear_http_session.php' => true,
-            ],
-            'PEAR HTTP session static calls outside adapter'
+            [],
+            'Raw PEAR HTTP session static calls'
         );
 
         $source = file_get_contents(dirname(__DIR__, 2) . '/core/service/session/pear.php');
+        $adapterSource = file_get_contents(dirname(__DIR__, 2) . '/core/adapter/pear_http_session.php');
 
         $this->assertIsString($source);
+        $this->assertIsString($adapterSource);
         $this->assertStringContainsString('private ?object $httpSession = null;', $source);
         $this->assertStringContainsString('$this->httpSession()', $source);
         $this->assertStringContainsString('HTTP session adapter is not configured for PEAR session engine.', $source);
         $this->assertStringNotContainsString('HTTP_Session::', $source);
+        $this->assertStringContainsString('$className::$method(...$arguments)', $adapterSource);
     }
 
     public function testNativeSessionCallsAreLimitedToAdapter(): void

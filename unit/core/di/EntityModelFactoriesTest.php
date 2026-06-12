@@ -124,7 +124,7 @@ final class EntityModelFactoriesTest extends TestCase
         );
 
         $this->assertSame(EntityModelFactoriesConstructedModelEntityDouble::class, $delegatedClass);
-        for ($i = 12; $i <= 17; $i++) {
+        for ($i = 12; $i <= 18; $i++) {
             $this->assertInstanceOf(Closure::class, $delegatedArguments[$i]);
         }
         $this->assertSame(
@@ -132,7 +132,7 @@ final class EntityModelFactoriesTest extends TestCase
             array_slice($delegatedArguments, 0, 12)
         );
         $this->assertInstanceOf(EntityModelFactoriesConstructedModelEntityDouble::class, $entity);
-        for ($i = 12; $i <= 17; $i++) {
+        for ($i = 12; $i <= 18; $i++) {
             $this->assertInstanceOf(Closure::class, $entity->dependencies[$i]);
         }
         $this->assertSame(
@@ -145,6 +145,7 @@ final class EntityModelFactoriesTest extends TestCase
         $this->assertSame($entityService->description, ($entity->dependencies[15])($entityService->linkedEntity, ['force' => true]));
         $this->assertSame('\Project\\', ($entity->dependencies[16])($entityService->linkedEntity));
         $this->assertSame('default', ($entity->dependencies[17])($entityService->linkedEntity));
+        $this->assertSame('/sql', ($entity->dependencies[18])($entityService->linkedEntity));
         $this->assertSame(
             [
                 ['getEntityByTable', 'roles', 'main'],
@@ -152,6 +153,7 @@ final class EntityModelFactoriesTest extends TestCase
                 ['getDescription', $entityService->linkedEntity, ['force' => true]],
                 ['getNsPrefix'],
                 ['getCollectionKey'],
+                ['getSqlDir'],
             ],
             $entityService->calls
         );
@@ -331,7 +333,8 @@ final class EntityModelFactoriesConstructedModelEntityDouble
         ?callable $designerFactory = null,
         ?callable $descriptionProvider = null,
         ?callable $namespacePrefixResolver = null,
-        ?callable $collectionKeyProvider = null
+        ?callable $collectionKeyProvider = null,
+        ?callable $sqlDirectoryProvider = null
     ) {
         $this->dependencies = [
             $entityService,
@@ -352,6 +355,7 @@ final class EntityModelFactoriesConstructedModelEntityDouble
             $descriptionProvider,
             $namespacePrefixResolver,
             $collectionKeyProvider,
+            $sqlDirectoryProvider,
         ];
     }
 }
@@ -416,6 +420,13 @@ final class EntityModelFactoriesEntityServiceDouble
         $this->calls[] = ['getCollectionKey'];
 
         return 'default';
+    }
+
+    public function getSqlDir(): string
+    {
+        $this->calls[] = ['getSqlDir'];
+
+        return '/sql';
     }
 }
 

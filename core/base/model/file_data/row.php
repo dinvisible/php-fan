@@ -448,7 +448,7 @@ abstract class row extends model_row
     public function setPersonalAccess(string $membType = 'owner', ?string $expireDate = null, int|float $accessQtt = -1, int|float $membId = 0): void
     {
         if (!$membId) {
-            $membId = entity_member::getCurrentMember()->getId();
+            $membId = $this->currentMemberId();
         }
         $pa = $this->getEntityPA($membId);
         $pa->setFields([
@@ -540,6 +540,22 @@ abstract class row extends model_row
             'id_member'    => $membId,
         ]);
         return $pa;
+    }
+
+    private function currentMemberId(): int|float|string
+    {
+        $member = $this->currentUserService();
+        if (!is_object($member) || !method_exists($member, 'getId')) {
+            throw new \RuntimeException('Current user service must expose getId() for file data row personal access.');
+        }
+
+        $id = $member->getId();
+        if (!is_int($id) && !is_float($id) && !is_string($id)) {
+            $actual = is_object($id) ? get_class($id) : gettype($id);
+            throw new \UnexpectedValueException('Current user id must be scalar for file data row personal access, got "' . $actual . '".');
+        }
+
+        return $id;
     }
 
     protected function prepareUpdateFile(string $name, string $mimeType, string $fileType, string $decription): ?string

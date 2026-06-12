@@ -98,18 +98,25 @@ class BaseModelEntityTest extends SourceFileContractTestCase
 
                 return 'injected-collection';
             },
+            sqlDirectoryProvider: static function (entity $modelEntity) use (&$calls, $entity): string {
+                $calls[] = ['sql-dir', $modelEntity];
+
+                return '/tmp/sql';
+            },
             reflectionClassFactory: new BaseModelEntityReflectionClassFactoryDouble(entity::class)
         );
 
         $this->assertSame($designer, $entity->getDesigner('update'));
         $this->assertSame($description, $entity->getDescription(['force' => true]));
         $this->assertSame('injected-collection', $entity->getMainParam()['collection']);
+        $this->assertSame('/tmp/sql', $entity->getSqlDirectory());
         $this->assertSame('\fan\project\base\model\entity', $entity->exposeClassName('entity'));
         $this->assertSame(
             [
                 ['designer', $entity, 'update'],
                 ['description', $entity, ['force' => true, 'seed' => true]],
                 ['collection', $entity],
+                ['sql-dir', $entity],
                 ['prefix', $entity],
             ],
             $calls
@@ -315,6 +322,7 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertStringContainsString('private mixed $descriptionProvider = null;', $code);
         $this->assertStringContainsString('private mixed $namespacePrefixResolver = null;', $code);
         $this->assertStringContainsString('private mixed $collectionKeyProvider = null;', $code);
+        $this->assertStringContainsString('private mixed $sqlDirectoryProvider = null;', $code);
         $this->assertStringContainsString('?callable $namespaceResolver = null', $code);
         $this->assertStringContainsString('?object $reflectionClassFactory = null', $code);
         $this->assertStringContainsString('?callable $entityIdDecoder = null', $code);
@@ -323,6 +331,7 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertStringContainsString('?callable $descriptionProvider = null', $code);
         $this->assertStringContainsString('?callable $namespacePrefixResolver = null', $code);
         $this->assertStringContainsString('?callable $collectionKeyProvider = null', $code);
+        $this->assertStringContainsString('?callable $sqlDirectoryProvider = null', $code);
         $this->assertStringContainsString('public function decodeEntityId(string $rowId): mixed', $code);
         $this->assertStringContainsString('public function findEntityByTable(string $tableName, ?string $connectionName = null): ?object', $code);
         $this->assertStringContainsString('return ($this->entityIdDecoder)($rowId);', $code);
@@ -331,6 +340,8 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertStringContainsString('private function loadDescription(array $param): object', $code);
         $this->assertStringContainsString('private function entityNamespacePrefix(): string', $code);
         $this->assertStringContainsString('private function entityCollectionKey(): mixed', $code);
+        $this->assertStringContainsString('private function entitySqlDirectory(): string', $code);
+        $this->assertStringNotContainsString('->getService()->', $code);
         $this->assertStringNotContainsString('string|designer', $code);
         $this->assertStringNotContainsString('instanceof designer', $code);
         $this->assertStringContainsString('$this->namespaceResolver = $this->defaultNamespaceResolver();', $code);
@@ -369,6 +380,12 @@ final class BaseModelEntityProbe extends entity
         $this->service = new BaseModelEntityServiceDouble();
         $this->description = new BaseModelEntityDescriptionDouble($primaryKey);
         $this->connection = $connection ?? new BaseModelEntityConnectionDouble();
+        $this->setEntityDependencies(
+            entityIdDecoder: static fn(string $rowId): int => (int)str_replace('encrypted-', '', $rowId),
+            collectionKeyProvider: static fn(entity $entity): string => 'default',
+            namespacePrefixResolver: static fn(entity $entity): string => '\Project\\',
+            sqlDirectoryProvider: static fn(entity $entity): string => '/sql'
+        );
     }
 
     public function exposeClassName(string $key): string

@@ -12,6 +12,7 @@ final class service_descriptor
      * @param list<string> $dependencies
      * @param array{registrar_files: list<string>, creator_methods: list<string>} $factoryOrigin
      * @param array{container_dependencies: list<string>, runtime_arguments: list<string>} $factoryArguments
+     * @param array<string, array{parameters: list<string>, runtime_arguments: list<string>, container_dependencies: list<string>, optional_arguments: list<string>}> $creatorMethodArguments
      * @param list<string> $aliases
      */
     public function __construct(
@@ -22,6 +23,7 @@ final class service_descriptor
         public readonly array $dependencies,
         public readonly array $factoryOrigin = [],
         public readonly array $factoryArguments = [],
+        public readonly array $creatorMethodArguments = [],
         public readonly array $aliases = []
     )
     {
@@ -36,6 +38,7 @@ final class service_descriptor
             'dependencies' => $this->dependencies,
             'factory_origin' => $this->factoryOrigin,
             'factory_arguments' => $this->factoryArguments,
+            'creator_method_arguments' => $this->creatorMethodArguments,
             'aliases' => $this->aliases,
         ];
 

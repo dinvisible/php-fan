@@ -13,7 +13,7 @@ final class pear_http_session_loader
 
     public function __construct(?callable $loader = null)
     {
-        $this->loader = $loader ?? static fn(): mixed => pear_http_session::ensureAvailable();
+        $this->loader = $loader ?? static fn(): object => new pear_http_session();
     }
 
     public function load(): mixed

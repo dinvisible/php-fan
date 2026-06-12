@@ -374,7 +374,7 @@ final class ServiceTimerProbe extends timer
         $this->_modifyProgram($row, $param, $period, $overcall);
     }
 
-    public function exposeRunProgram(row $row): void
+    public function exposeRunProgram(object $row): void
     {
         $this->_runProgram($row);
     }

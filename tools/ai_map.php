@@ -357,18 +357,26 @@ function php_fan_ai_service_descriptors(string $root, array $relativePhpFiles, a
         $methods = $registration['creator_methods'];
         $dependencies = $registration['dependencies'];
         $runtimeArguments = $registration['runtime_arguments'];
+        $creatorMethodArguments = [];
 
         foreach ($methods as $method) {
             if (!isset($creatorMethods[$method])) {
                 continue;
             }
             $dependencies = array_merge($dependencies, $creatorMethods[$method]['dependencies']);
+            $creatorMethodArguments[$method] = [
+                'parameters' => $creatorMethods[$method]['parameters'],
+                'runtime_arguments' => $creatorMethods[$method]['runtime_arguments'],
+                'container_dependencies' => $creatorMethods[$method]['container_dependencies'],
+                'optional_arguments' => $creatorMethods[$method]['optional_arguments'],
+            ];
         }
 
         $dependencies = array_values(array_diff(array_unique($dependencies), [$id]));
         sort($dependencies);
         $runtimeArguments = array_values(array_unique($runtimeArguments));
         sort($runtimeArguments);
+        ksort($creatorMethodArguments);
         $aliasIds = php_fan_ai_aliases_for_service($id, $aliases);
 
         $descriptor = new \fan\core\di\service_descriptor(
@@ -385,6 +393,7 @@ function php_fan_ai_service_descriptors(string $root, array $relativePhpFiles, a
                 'container_dependencies' => $dependencies,
                 'runtime_arguments' => $runtimeArguments,
             ],
+            $creatorMethodArguments,
             $aliasIds
         );
         $descriptors[$id] = $descriptor->toArray();
@@ -478,10 +487,15 @@ function php_fan_ai_service_creator_methods(string $root, array $relativePhpFile
             continue;
         }
 
-        foreach (php_fan_ai_extract_public_creator_methods($source) as $methodName => $body) {
+        foreach (php_fan_ai_extract_public_creator_methods($source) as $methodName => $method) {
+            $arguments = php_fan_ai_creator_method_arguments_from_parameters($method['parameters']);
             $methods[$methodName] = [
                 'file' => $relativeFile,
-                'dependencies' => php_fan_ai_container_dependencies_from_source($body, $constants),
+                'dependencies' => php_fan_ai_container_dependencies_from_source($method['body'], $constants),
+                'parameters' => $arguments['parameters'],
+                'runtime_arguments' => $arguments['runtime_arguments'],
+                'container_dependencies' => $arguments['container_dependencies'],
+                'optional_arguments' => $arguments['optional_arguments'],
             ];
         }
     }
@@ -618,7 +632,17 @@ function php_fan_ai_extract_public_creator_methods(string $source): array
     while (preg_match('/public\s+function\s+(create[A-Za-z0-9_]+)\s*\(/', $source, $match, PREG_OFFSET_CAPTURE, $offset) === 1) {
         $methodName = $match[1][0];
         $methodStart = $match[0][1];
-        $openBrace = strpos($source, '{', $methodStart);
+        $openParen = strpos($source, '(', $methodStart);
+        if ($openParen === false) {
+            break;
+        }
+
+        $closeParen = php_fan_ai_find_matching_paren($source, $openParen);
+        if ($closeParen === null) {
+            break;
+        }
+
+        $openBrace = strpos($source, '{', $closeParen);
         if ($openBrace === false) {
             break;
         }
@@ -628,11 +652,190 @@ function php_fan_ai_extract_public_creator_methods(string $source): array
             break;
         }
 
-        $methods[$methodName] = substr($source, $openBrace + 1, $closeBrace - $openBrace - 1);
+        $methods[$methodName] = [
+            'parameters' => substr($source, $openParen + 1, $closeParen - $openParen - 1),
+            'body' => substr($source, $openBrace + 1, $closeBrace - $openBrace - 1),
+        ];
         $offset = $closeBrace + 1;
     }
 
     return $methods;
+}
+
+function php_fan_ai_creator_method_arguments_from_parameters(string $parameters): array
+{
+    $all = [];
+    $runtime = [];
+    $container = [];
+    $optional = [];
+
+    foreach (php_fan_ai_split_parameter_list($parameters) as $parameter) {
+        $descriptor = php_fan_ai_parameter_descriptor($parameter);
+        if ($descriptor === null) {
+            continue;
+        }
+
+        $name = $descriptor['name'];
+        $all[] = $name;
+        if ($descriptor['optional']) {
+            $optional[] = $name;
+        }
+        if (php_fan_ai_parameter_is_container_dependency($name, $descriptor['type'])) {
+            $container[] = $name;
+            continue;
+        }
+        if (php_fan_ai_parameter_is_runtime_argument($descriptor['type'])) {
+            $runtime[] = $name;
+        }
+    }
+
+    $all = array_values(array_unique($all));
+    $runtime = array_values(array_unique($runtime));
+    sort($runtime);
+    $container = array_values(array_unique($container));
+    sort($container);
+    $optional = array_values(array_unique($optional));
+    sort($optional);
+
+    return [
+        'parameters' => $all,
+        'runtime_arguments' => $runtime,
+        'container_dependencies' => $container,
+        'optional_arguments' => $optional,
+    ];
+}
+
+function php_fan_ai_split_parameter_list(string $parameters): array
+{
+    $items = [];
+    $start = 0;
+    $depth = 0;
+    $stringQuote = null;
+    $escaped = false;
+    $length = strlen($parameters);
+
+    for ($i = 0; $i < $length; $i++) {
+        $char = $parameters[$i];
+
+        if ($stringQuote !== null) {
+            if ($escaped) {
+                $escaped = false;
+                continue;
+            }
+            if ($char === '\\') {
+                $escaped = true;
+                continue;
+            }
+            if ($char === $stringQuote) {
+                $stringQuote = null;
+            }
+            continue;
+        }
+
+        if ($char === '\'' || $char === '"') {
+            $stringQuote = $char;
+            continue;
+        }
+
+        if ($char === '(' || $char === '[') {
+            $depth++;
+            continue;
+        }
+
+        if ($char === ')' || $char === ']') {
+            $depth--;
+            continue;
+        }
+
+        if ($char === ',' && $depth === 0) {
+            $items[] = trim(substr($parameters, $start, $i - $start));
+            $start = $i + 1;
+        }
+    }
+
+    $tail = trim(substr($parameters, $start));
+    if ($tail !== '') {
+        $items[] = $tail;
+    }
+
+    return $items;
+}
+
+function php_fan_ai_parameter_descriptor(string $parameter): ?array
+{
+    if (preg_match('/\$([A-Za-z_][A-Za-z0-9_]*)/', $parameter, $match, PREG_OFFSET_CAPTURE) !== 1) {
+        return null;
+    }
+
+    $name = $match[1][0];
+    $type = trim(substr($parameter, 0, $match[0][1]));
+    $type = trim(str_replace(['&', '...'], '', $type));
+    $type = preg_replace('/\s+/', ' ', $type);
+
+    return [
+        'name' => $name,
+        'type' => is_string($type) ? $type : '',
+        'optional' => str_contains(substr($parameter, $match[0][1] + strlen($match[0][0])), '='),
+    ];
+}
+
+function php_fan_ai_parameter_is_container_dependency(string $name, string $type): bool
+{
+    if ($name === 'container') {
+        return true;
+    }
+
+    foreach (php_fan_ai_parameter_type_names($type) as $typeName) {
+        if ($typeName === 'container_interface' || str_ends_with($typeName, '\\container_interface')) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function php_fan_ai_parameter_is_runtime_argument(string $type): bool
+{
+    $runtimeTypes = [
+        'array' => true,
+        'bool' => true,
+        'float' => true,
+        'int' => true,
+        'mixed' => true,
+        'string' => true,
+    ];
+
+    foreach (php_fan_ai_parameter_type_names($type) as $typeName) {
+        if (isset($runtimeTypes[$typeName])) {
+            return true;
+        }
+    }
+
+    return $type === '';
+}
+
+function php_fan_ai_parameter_type_names(string $type): array
+{
+    $type = trim($type);
+    if ($type === '') {
+        return [];
+    }
+
+    $type = str_replace('?', '', $type);
+    $type = preg_replace('/\s+/', '', $type);
+    if (!is_string($type) || $type === '') {
+        return [];
+    }
+
+    $names = [];
+    foreach (preg_split('/[|&]/', $type) ?: [] as $typeName) {
+        $typeName = strtolower(ltrim($typeName, '\\'));
+        if ($typeName !== '') {
+            $names[] = $typeName;
+        }
+    }
+
+    return $names;
 }
 
 function php_fan_ai_find_matching_brace(string $source, int $open): ?int
@@ -856,9 +1059,169 @@ function php_fan_ai_write_map(string $root, array $map): string
     return $target;
 }
 
+function php_fan_ai_validate_json_schema_subset(mixed $value, array $schema, string $path = '$', ?array $rootSchema = null): array
+{
+    $rootSchema ??= $schema;
+
+    if (isset($schema['$ref']) && is_string($schema['$ref'])) {
+        $resolved = php_fan_ai_resolve_json_schema_ref($rootSchema, $schema['$ref']);
+        if ($resolved === null) {
+            return [$path . ' has unresolved schema ref: ' . $schema['$ref']];
+        }
+
+        return php_fan_ai_validate_json_schema_subset($value, $resolved, $path, $rootSchema);
+    }
+
+    $errors = [];
+    if (array_key_exists('const', $schema) && $value !== $schema['const']) {
+        $errors[] = $path . ' must equal ' . php_fan_ai_json_schema_value_label($schema['const']);
+    }
+
+    if (isset($schema['type']) && !php_fan_ai_json_schema_type_matches($value, $schema['type'])) {
+        $errors[] = $path . ' expected type ' . php_fan_ai_json_schema_type_label($schema['type']);
+
+        return $errors;
+    }
+
+    $types = php_fan_ai_json_schema_types($schema['type'] ?? null);
+    if ($types === [] && isset($schema['properties']) || in_array('object', $types, true)) {
+        if (is_array($value)) {
+            $properties = is_array($schema['properties'] ?? null) ? $schema['properties'] : [];
+            foreach (($schema['required'] ?? []) as $requiredKey) {
+                if (is_string($requiredKey) && !array_key_exists($requiredKey, $value)) {
+                    $errors[] = $path . ' missing required key: ' . $requiredKey;
+                }
+            }
+
+            foreach ($properties as $key => $propertySchema) {
+                if (!is_string($key) || !is_array($propertySchema) || !array_key_exists($key, $value)) {
+                    continue;
+                }
+                $errors = array_merge(
+                    $errors,
+                    php_fan_ai_validate_json_schema_subset($value[$key], $propertySchema, $path . '.' . $key, $rootSchema)
+                );
+            }
+
+            if (array_key_exists('additionalProperties', $schema)) {
+                $additional = $schema['additionalProperties'];
+                foreach ($value as $key => $entryValue) {
+                    $keyLabel = (string)$key;
+                    if (array_key_exists($keyLabel, $properties)) {
+                        continue;
+                    }
+                    if ($additional === false) {
+                        $errors[] = $path . ' has unexpected key: ' . $keyLabel;
+                    } elseif (is_array($additional)) {
+                        $errors = array_merge(
+                            $errors,
+                            php_fan_ai_validate_json_schema_subset($entryValue, $additional, $path . '.' . $keyLabel, $rootSchema)
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    if (in_array('array', $types, true) && is_array($value) && isset($schema['items']) && is_array($schema['items'])) {
+        foreach ($value as $index => $item) {
+            $errors = array_merge(
+                $errors,
+                php_fan_ai_validate_json_schema_subset($item, $schema['items'], $path . '[' . $index . ']', $rootSchema)
+            );
+        }
+    }
+
+    if (in_array('string', $types, true) && is_string($value)) {
+        if (isset($schema['minLength']) && is_int($schema['minLength']) && strlen($value) < $schema['minLength']) {
+            $errors[] = $path . ' must be at least ' . $schema['minLength'] . ' character(s).';
+        }
+        if (($schema['format'] ?? null) === 'date-time' && strtotime($value) === false) {
+            $errors[] = $path . ' must be a date-time string.';
+        }
+    }
+
+    if (in_array('integer', $types, true) && is_int($value) && isset($schema['minimum']) && is_int($schema['minimum']) && $value < $schema['minimum']) {
+        $errors[] = $path . ' must be greater than or equal to ' . $schema['minimum'] . '.';
+    }
+
+    return $errors;
+}
+
+function php_fan_ai_resolve_json_schema_ref(array $rootSchema, string $ref): ?array
+{
+    if (!str_starts_with($ref, '#/')) {
+        return null;
+    }
+
+    $target = $rootSchema;
+    foreach (explode('/', substr($ref, 2)) as $segment) {
+        $segment = strtr($segment, ['~1' => '/', '~0' => '~']);
+        if (!is_array($target) || !array_key_exists($segment, $target)) {
+            return null;
+        }
+        $target = $target[$segment];
+    }
+
+    return is_array($target) ? $target : null;
+}
+
+function php_fan_ai_json_schema_type_matches(mixed $value, mixed $type): bool
+{
+    foreach (php_fan_ai_json_schema_types($type) as $candidate) {
+        if ($candidate === 'object' && is_array($value) && (!array_is_list($value) || $value === [])) {
+            return true;
+        }
+        if ($candidate === 'array' && is_array($value) && array_is_list($value)) {
+            return true;
+        }
+        if ($candidate === 'string' && is_string($value)) {
+            return true;
+        }
+        if ($candidate === 'integer' && is_int($value)) {
+            return true;
+        }
+        if ($candidate === 'boolean' && is_bool($value)) {
+            return true;
+        }
+        if ($candidate === 'null' && $value === null) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function php_fan_ai_json_schema_types(mixed $type): array
+{
+    if (is_string($type)) {
+        return [$type];
+    }
+    if (!is_array($type)) {
+        return [];
+    }
+
+    return array_values(array_filter($type, static fn(mixed $entry): bool => is_string($entry)));
+}
+
+function php_fan_ai_json_schema_type_label(mixed $type): string
+{
+    $types = php_fan_ai_json_schema_types($type);
+
+    return $types === [] ? 'unknown' : implode('|', $types);
+}
+
+function php_fan_ai_json_schema_value_label(mixed $value): string
+{
+    $encoded = json_encode($value, JSON_UNESCAPED_SLASHES);
+
+    return is_string($encoded) ? $encoded : gettype($value);
+}
+
 function php_fan_ai_validate_map_contract(string $root, array $map): array
 {
     $errors = [];
+    $schema = null;
 
     if (!is_file($root . '/.ai/map.schema.json')) {
         $errors[] = '.ai/map.schema.json is missing.';
@@ -866,6 +1229,12 @@ function php_fan_ai_validate_map_contract(string $root, array $map): array
         $schema = json_decode((string)file_get_contents($root . '/.ai/map.schema.json'), true);
         if (!is_array($schema)) {
             $errors[] = '.ai/map.schema.json is not valid JSON.';
+        }
+    }
+
+    if (is_array($schema)) {
+        foreach (php_fan_ai_validate_json_schema_subset($map, $schema) as $schemaError) {
+            $errors[] = 'AI map JSON schema: ' . $schemaError;
         }
     }
 
@@ -935,6 +1304,21 @@ function php_fan_ai_validate_map_contract(string $root, array $map): array
             foreach (['container_dependencies', 'runtime_arguments'] as $listKey) {
                 if (!isset($descriptor['factory_arguments'][$listKey]) || !php_fan_ai_is_string_list($descriptor['factory_arguments'][$listKey])) {
                     $errors[] = 'AI map descriptor "' . $id . '" factory_arguments must have string-list key: ' . $listKey;
+                }
+            }
+        }
+        if (!isset($descriptor['creator_method_arguments']) || !is_array($descriptor['creator_method_arguments'])) {
+            $errors[] = 'AI map descriptor "' . $id . '" must have creator_method_arguments.';
+        } else {
+            foreach ($descriptor['creator_method_arguments'] as $methodName => $methodArguments) {
+                if (!is_string($methodName) || !is_array($methodArguments)) {
+                    $errors[] = 'AI map descriptor "' . $id . '" creator_method_arguments entries must be arrays keyed by method name.';
+                    continue;
+                }
+                foreach (['parameters', 'runtime_arguments', 'container_dependencies', 'optional_arguments'] as $listKey) {
+                    if (!isset($methodArguments[$listKey]) || !php_fan_ai_is_string_list($methodArguments[$listKey])) {
+                        $errors[] = 'AI map descriptor "' . $id . '" creator method "' . $methodName . '" must have string-list key: ' . $listKey;
+                    }
                 }
             }
         }

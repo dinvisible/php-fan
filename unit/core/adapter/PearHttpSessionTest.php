@@ -104,7 +104,8 @@ final class AdapterPearHttpSessionTest extends SourceFileContractTestCase
     {
         $source = $this->sourceCode();
 
-        $this->assertStringContainsString('\HTTP_Session::get(', $source);
-        $this->assertStringContainsString('\HTTP_Session::set(', $source);
+        $this->assertStringContainsString('private \Closure $staticCall;', $source);
+        $this->assertStringContainsString('$className::$method(...$arguments)', $source);
+        $this->assertStringNotContainsString('HTTP_Session::', $source);
     }
 }

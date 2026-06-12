@@ -128,6 +128,8 @@ abstract class entity
 
     private mixed $collectionKeyProvider = null;
 
+    private mixed $sqlDirectoryProvider = null;
+
     public function __construct(
         object $service,
         mixed $name,
@@ -146,13 +148,21 @@ abstract class entity
         ?callable $designerFactory = null,
         ?callable $descriptionProvider = null,
         ?callable $namespacePrefixResolver = null,
-        ?callable $collectionKeyProvider = null
+        ?callable $collectionKeyProvider = null,
+        ?callable $sqlDirectoryProvider = null
     )
     {
         $param = (array)$param;
         $this->service  = $service;
         $this->name     = is_null($name) ? null : (string)$name;
         $this->namespaceResolver = $this->defaultNamespaceResolver();
+        $entityIdDecoder ??= static fn(string $rowId): mixed => $service->getEncapsulant()->decryptId($rowId);
+        $entityLookup ??= static fn(string $tableName, ?string $connectionName = null): mixed => $service->getEntityByTable($tableName, $connectionName);
+        $designerFactory ??= static fn(entity $entity, string $type = 'select'): object => $service->getDesigner($entity, $type);
+        $descriptionProvider ??= static fn(entity $entity, array $param = []): object => $service->getDescription($entity, $param);
+        $namespacePrefixResolver ??= static fn(entity $entity): string => $service->getNsPrefix();
+        $collectionKeyProvider ??= static fn(entity $entity): mixed => $service->getCollectionKey();
+        $sqlDirectoryProvider ??= static fn(entity $entity): string => $service->getSqlDir();
         $this->setEntityDependencies(
             $configFactory,
             $databaseFactory,
@@ -168,7 +178,8 @@ abstract class entity
             $designerFactory,
             $descriptionProvider,
             $namespacePrefixResolver,
-            $collectionKeyProvider
+            $collectionKeyProvider,
+            $sqlDirectoryProvider
         );
 
         $this->bakParam = $param;
@@ -199,7 +210,8 @@ abstract class entity
         ?callable $designerFactory = null,
         ?callable $descriptionProvider = null,
         ?callable $namespacePrefixResolver = null,
-        ?callable $collectionKeyProvider = null
+        ?callable $collectionKeyProvider = null,
+        ?callable $sqlDirectoryProvider = null
     ): static
     {
         if ($configFactory !== null) {
@@ -246,6 +258,9 @@ abstract class entity
         }
         if ($collectionKeyProvider !== null) {
             $this->collectionKeyProvider = \Closure::fromCallable($collectionKeyProvider);
+        }
+        if ($sqlDirectoryProvider !== null) {
+            $this->sqlDirectoryProvider = \Closure::fromCallable($sqlDirectoryProvider);
         }
 
         return $this;
@@ -529,18 +544,20 @@ abstract class entity
 
     public function decodeEntityId(string $rowId): mixed
     {
-        if (is_callable($this->entityIdDecoder)) {
-            return ($this->entityIdDecoder)($rowId);
+        if (!is_callable($this->entityIdDecoder)) {
+            throw new \RuntimeException('Entity id decoder is not configured for model entity.');
         }
 
-        return $this->getService()->getEncapsulant()->decryptId($rowId);
+        return ($this->entityIdDecoder)($rowId);
     }
 
     public function findEntityByTable(string $tableName, ?string $connectionName = null): ?object
     {
-        $entity = is_callable($this->entityLookup)
-            ? ($this->entityLookup)($tableName, $connectionName)
-            : $this->getService()->getEntityByTable($tableName, $connectionName);
+        if (!is_callable($this->entityLookup)) {
+            throw new \RuntimeException('Entity lookup is not configured for model entity.');
+        }
+
+        $entity = ($this->entityLookup)($tableName, $connectionName);
 
         return is_object($entity) ? $entity : null;
     }
@@ -660,7 +677,7 @@ abstract class entity
 
     public function getSqlDirectory(): string
     {
-        return $this->getService()->getSqlDir();
+        return $this->entitySqlDirectory();
     }
 
     /**
@@ -849,9 +866,11 @@ abstract class entity
 
     private function createDesigner(string $type): object
     {
-        $designer = is_callable($this->designerFactory)
-            ? ($this->designerFactory)($this, $type)
-            : $this->getService()->getDesigner($this, $type);
+        if (!is_callable($this->designerFactory)) {
+            throw new \RuntimeException('Entity designer factory is not configured for model entity.');
+        }
+
+        $designer = ($this->designerFactory)($this, $type);
         if (!is_object($designer)) {
             $actual = gettype($designer);
             throw new \UnexpectedValueException('Entity designer factory returned "' . $actual . '".');
@@ -862,9 +881,11 @@ abstract class entity
 
     private function loadDescription(array $param): object
     {
-        $description = is_callable($this->descriptionProvider)
-            ? ($this->descriptionProvider)($this, $param)
-            : $this->getService()->getDescription($this, $param);
+        if (!is_callable($this->descriptionProvider)) {
+            throw new \RuntimeException('Entity description provider is not configured for model entity.');
+        }
+
+        $description = ($this->descriptionProvider)($this, $param);
         if (!is_object($description)) {
             $actual = gettype($description);
             throw new \UnexpectedValueException('Entity description provider returned "' . $actual . '".');
@@ -875,9 +896,11 @@ abstract class entity
 
     private function entityNamespacePrefix(): string
     {
-        $prefix = is_callable($this->namespacePrefixResolver)
-            ? ($this->namespacePrefixResolver)($this)
-            : $this->getService()->getNsPrefix();
+        if (!is_callable($this->namespacePrefixResolver)) {
+            throw new \RuntimeException('Entity namespace prefix resolver is not configured for model entity.');
+        }
+
+        $prefix = ($this->namespacePrefixResolver)($this);
         if (!is_string($prefix)) {
             $actual = is_object($prefix) ? get_class($prefix) : gettype($prefix);
             throw new \UnexpectedValueException('Entity namespace prefix resolver returned "' . $actual . '".');
@@ -888,9 +911,26 @@ abstract class entity
 
     private function entityCollectionKey(): mixed
     {
-        return is_callable($this->collectionKeyProvider)
-            ? ($this->collectionKeyProvider)($this)
-            : $this->getService()->getCollectionKey();
+        if (!is_callable($this->collectionKeyProvider)) {
+            throw new \RuntimeException('Entity collection key provider is not configured for model entity.');
+        }
+
+        return ($this->collectionKeyProvider)($this);
+    }
+
+    private function entitySqlDirectory(): string
+    {
+        if (!is_callable($this->sqlDirectoryProvider)) {
+            throw new \RuntimeException('Entity SQL directory provider is not configured for model entity.');
+        }
+
+        $directory = ($this->sqlDirectoryProvider)($this);
+        if (!is_string($directory)) {
+            $actual = is_object($directory) ? get_class($directory) : gettype($directory);
+            throw new \UnexpectedValueException('Entity SQL directory provider returned "' . $actual . '".');
+        }
+
+        return $directory;
     }
 
     private function namespaceResolver(): callable

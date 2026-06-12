@@ -101,8 +101,31 @@ class BaseModelFileDataRowTest extends SourceFileContractTestCase
         $this->assertStringNotContainsString('new fatalException', $source);
         $this->assertStringNotContainsString('use fan\project\exception\model\entity\fatal as fatalException;', $source);
         $this->assertStringNotContainsString('php_array_file::load', $source);
+        $this->assertStringNotContainsString('entity_member::getCurrentMember', $source);
         $this->assertStringNotContainsString('include($path)', $source);
         $this->assertDoesNotMatchRegularExpression('/(?<!->)(?<!::)(?<!\\\\)\b(?:file_exists|is_link|readlink|is_dir|is_writable|is_file|mkdir|filesize|filemtime|move_uploaded_file|file_put_contents|clearstatcache|rename|copy|unlink)\s*\(/', $source);
+    }
+
+    public function testSetPersonalAccessUsesInjectedCurrentUser(): void
+    {
+        $access = new BaseModelFileDataPersonalAccessDouble();
+        $row = new BaseModelFileDataRowProbe(
+            currentUserFactory: static fn(): object => new BaseModelFileDataMemberDouble(77),
+            personalAccess: $access
+        );
+
+        $row->setPersonalAccess('owner', '2026-06-01 00:00:00', 2);
+
+        $this->assertSame([77], $row->entityPACalls);
+        $this->assertSame([
+            [[
+                'id_file_data' => 1,
+                'id_member' => 77,
+                'member_type' => 'owner',
+                'expire_data' => '2026-06-01 00:00:00',
+                'access_qtt' => 2,
+            ], true],
+        ], $access->setFieldsCalls);
     }
 
     public function testCheckCreatedDirUsesInjectedModelRowExceptionFactory(): void
@@ -195,6 +218,7 @@ final class BaseModelFileDataRowProbe extends row
     public BaseModelFileDataRowRuntimeDouble $runtime;
     public BaseModelFileDataRowStorageDouble $storage;
     public ?array $mainProperty = null;
+    public array $entityPACalls = [];
 
     public function __construct(
         private mixed $id = 1,
@@ -207,6 +231,8 @@ final class BaseModelFileDataRowProbe extends row
         ?callable $phpArrayFileLoader = null,
         ?BaseModelFileDataRowStorageDouble $storage = null,
         ?callable $modelRowExceptionFactory = null,
+        ?callable $currentUserFactory = null,
+        private ?object $personalAccess = null,
     ) {
         $this->entity = new BaseModelFileDataRowEntityDouble();
         $this->runtime = new BaseModelFileDataRowRuntimeDouble();
@@ -216,6 +242,7 @@ final class BaseModelFileDataRowProbe extends row
         }
         $this->setFileDataRowDependencies(
             $this->runtime,
+            currentUserFactory: $currentUserFactory,
             phpArrayFileLoader: $phpArrayFileLoader,
             fileDataStorage: $this->storage
         );
@@ -264,6 +291,39 @@ final class BaseModelFileDataRowProbe extends row
     public function get_src_name(mixed $srcName = '', bool $allowException = true): mixed
     {
         return $srcName ?: $this->srcName;
+    }
+
+    protected function getEntityPA(mixed $membId = null): mixed
+    {
+        if ($this->personalAccess !== null) {
+            $this->entityPACalls[] = $membId;
+
+            return $this->personalAccess;
+        }
+
+        return parent::getEntityPA($membId);
+    }
+}
+
+final class BaseModelFileDataMemberDouble
+{
+    public function __construct(private int $id)
+    {
+    }
+
+    public function getId(): int
+    {
+        return $this->id;
+    }
+}
+
+final class BaseModelFileDataPersonalAccessDouble
+{
+    public array $setFieldsCalls = [];
+
+    public function setFields(array $fields, bool $save): void
+    {
+        $this->setFieldsCalls[] = [$fields, $save];
     }
 }
 

@@ -2,7 +2,7 @@
 
 Дата анализа: 2026-06-11
 
-Дата обновления: 2026-06-12, после P1-P13 AI-first implementation batch.
+Дата обновления: 2026-06-12, после P19-P23 AI-first refactor batch.
 
 Ветка: `migrate_to-php8`
 
@@ -12,7 +12,7 @@
 
 Проект уже прошел большую часть тяжелой PHP 8 / DI-модернизации. Это не хаотичный legacy baseline: есть `strict_types`, PSR-4 autoload, явный `container`, dependency registrars/factories, большое покрытие unit-тестами и source-inventory guards.
 
-Первый AI-first слой уже добавлен и расширен до рабочего P1-P13 batch. Framework теперь имеет базовый self-describing contract для агента:
+Первый AI-first слой уже добавлен и расширен до рабочего P1-P23 batch. Framework теперь имеет базовый self-describing contract для агента:
 
 - `.ai/` documentation contract;
 - `tools/ai_map.php --json`;
@@ -23,11 +23,15 @@
 - `fan\core\di\service_id` для начала типизации service ids;
 - `services.descriptors` в AI map;
 - `.ai/meta.schema.json` и metadata/template map;
-- `.ai/map.schema.json` и `php fan ai:map --validate`;
+- `.ai/map.schema.json`, schema subset validation и `php fan ai:map --validate`;
 - реальные `phpstan`/`php-cs-fixer` dev tools с baseline gate;
 - hygiene guard против tracked dependency/runtime noise.
+- model/entity collaborators для lookup/designer/description/ns-prefix/collection-key/sql-dir;
+- raw service-id regression guard для `core/di`;
+- `services.descriptors.factory_origin`, `factory_arguments`, `creator_method_arguments` и `aliases` в AI map;
+- PHPStan baseline сожжен до 0 entries.
 
-Следующий лучший ход не "переписать как Laravel" и не "ввести DDD везде". P14-P18 закрыли следующий AI-friendly слой: `row.php` больше не дергает `getEntityByTable()` напрямую, `core/di` защищен от raw service ids, PHPStan baseline уменьшен, AI map descriptors получили factory metadata, а ключевые `entity.php` service calls заведены за collaborators. Теперь цель - добивать оставшиеся BC fallback-и и static baseline маленькими срезами.
+Следующий лучший ход не "переписать как Laravel" и не "ввести DDD везде". P19-P23 закрыли очередной AI-friendly слой: `entity.php` больше не использует внутренние `getService()` fallback-и, PHPStan baseline стал пустым, AI map валидируется по JSON schema subset и описывает creator method arguments, а прямой доступ к model service state закреплен source guard-ом. Теперь цель - добить оставшиеся 5 `getService()` call sites в соседних model-файлах и обогатить service descriptors concrete class/factory/config edges.
 
 ## Статус миграции
 
@@ -35,29 +39,30 @@
 |---|---|---|
 | Workspace hygiene | Готово | `.gitignore` расширен; `node_modules/`, `.DS_Store`, virtualenv/runtime noise сняты с tracked set. |
 | `.ai/` contract | Готово | `.ai/project.md`, `.ai/architecture.md`, `.ai/commands.md`, `.ai/conventions.md`. |
-| AI map | Готово++ | `php tools/ai_map.php --json` строит JSON-карту проекта, service descriptors и metadata/template map; `.ai/map.schema.json`; `php fan ai:map --validate`. |
-| AI verify | Готово++ | `php tools/ai_verify.php` запускает tracked-noise check, `git diff --check`, PHP lint changed files, `ai_map` contract validation, static baseline и PHPUnit/focused PHPUnit. |
+| AI map | Готово++++ | `php tools/ai_map.php --json` строит JSON-карту проекта, service descriptors, factory metadata, creator method arguments и metadata/template map; `.ai/map.schema.json` проверяется schema subset validator; `php fan ai:map --validate`. |
+| AI verify | Готово+++ | `php tools/ai_verify.php` запускает tracked-noise check, `git diff --check`, PHP lint changed files, `ai_map` contract validation, static baseline и PHPUnit/focused PHPUnit. |
 | Service id constants, DI срез | Готово для текущего среза | `core/di/service_id.php`; DI registrars/creators/adapters/state registry переведены на constants для service ids; raw `factory/get/alias` ids в `core/di` guard-проверены. |
-| Model/entity collaborator extraction | Продолжается | `request.php` больше не вызывает `$entity->getService()->getSqlDir()` напрямую; `EntityIdDecoder` callable прокидывается через `model_entity_factory`; `file_data/row.php` больше не вызывает `getEncapsulant()->decryptId()` напрямую. |
+| Model/entity collaborator extraction | P14-P23 закрыты, осталось 5 соседних call sites | `row.php` больше не дергает `getEntityByTable()` напрямую; `entity.php` имеет collaborators для lookup/designer/description/ns-prefix/collection-key/sql-dir и не использует внутренние `getService()` fallback-и. |
 | Meta/template schema | Готово+ | `.ai/meta.schema.json`; `ai_map.metadata` экспортирует meta keys, paired templates и template placeholders; `MetaFilesTest` валидирует meta contract и template paths. |
-| Static analysis / formatter | Готово+ | `phpstan/phpstan`, `friendsofphp/php-cs-fixer`, `phpstan.neon.dist`, generated `phpstan-baseline.neon`, `.php-cs-fixer.dist.php`, `tools/ai_static_check.php`. |
+| Static analysis / formatter | Готово+++ | `phpstan/phpstan`, `friendsofphp/php-cs-fixer`, `phpstan.neon.dist`, пустой `phpstan-baseline.neon`, `.php-cs-fixer.dist.php`, `tools/ai_static_check.php`. |
 | Framework CLI bridge | Готово+ | `php fan ai:map --validate`, `ai:services`, `ai:explain`, `ai:verify`, `ai:doctor`, `ai:static`. |
 
 ## Текущий срез
 
-Проверено локально:
+Проверено локально после P19-P23:
 
-- `php tools/ai_verify.php`
+- `php tools/ai_verify.php --json`
 - результат: `PASS`;
-- полный PHPUnit внутри verify проходит через `php vendor/bin/phpunit --configuration phpunit.xml`;
+- полный PHPUnit внутри verify: `1828 tests`, `94988 assertions`;
 - `php tools/ai_verify.php --changed` запускает focused PHPUnit;
 - `php fan ai:doctor --no-phpunit` проходит через CLI bridge;
-- `tools/ai_static_check.php` запускает реальные PHPStan/PHP-CS-Fixer, если binaries установлены, и пропускает их только в fallback mode;
+- `tools/ai_static_check.php` запускает реальные PHPStan/PHP-CS-Fixer;
 - production PHP-срез в `ai_map`: 507 файлов;
 - `declare(strict_types=1)` есть во всех 507 production PHP-файлах;
 - namespace есть в 460 production PHP-файлах;
 - `*.meta.php` в `core/project/htdocs`: 17 файлов;
 - `*.tpl` в `core/project/htdocs`: 16 файлов.
+- PHPStan baseline: 0 entries.
 
 ## Что уже хорошо для AI
 
@@ -146,7 +151,7 @@ php fan ai:doctor
 - meta/template files;
 - registered/referenced service ids;
 - `service_id` constants;
-- `services.descriptors` с registrar files, creator methods, shared/non-shared и direct dependencies.
+- `services.descriptors` с registrar files, creator methods, shared/non-shared, direct dependencies, aliases, factory origin, factory arguments и creator method arguments.
 
 Оставшийся долг: service graph пока не всегда описывает concrete class/factory/config-key edges. AI иногда все еще вынужден проходить цепочку:
 
@@ -195,22 +200,23 @@ final class service_descriptor
 
 Текущий grep показывает `getService()` хвост в model/entity слое:
 
-- `core/base/model/entity.php`
 - `core/base/model/row.php`
 - `core/base/model/spec_file/row.php`
 - `core/base/model/spec_file/image/entity.php`
 - `core/base/model/spec_file/image/row.php`
 - `core/base/model/file_data/row.php`
 
-`core/base/model/request.php` уже не вызывает `$entity->getService()->getSqlDir()` напрямую: SQL directory вынесен в collaborator resolver/accessor.
+`core/base/model/entity.php` и `core/base/model/request.php` уже не вызывают service methods через `getService()` напрямую: SQL directory, lookup, designer, description, namespace prefix, collection key и id decode вынесены в collaborators/default closures.
 
-Это уже не старый глобальный service locator, но для AI это скрытая зависимость. Следующий refactor-срез: выделять collaborators из entity service:
+Это уже не старый глобальный service locator, но для AI это скрытая зависимость. Следующий refactor-срез: выделять collaborators из entity service и file/spec-file factories:
 
 - `EntityDescriptionProvider`
 - `EntityDesignerFactory`
 - `EntityLookup`
 - `EntityIdCodec`
 - `EntityFileDataFactory`
+- `FileDataPersonalAccessRepository`
+- `SpecFileRowFactory`
 
 Двигаться по одному use case, с focused tests.
 
@@ -243,21 +249,20 @@ final class service_descriptor
 
 ### 9. Tooling неполный
 
-Статус: config baseline готов, binaries еще не установлены.
+Статус: реальные tools подключены, baseline пустой.
 
 Добавлено:
 
 - `phpstan.neon.dist`;
-- `phpstan-baseline.neon`;
+- пустой `phpstan-baseline.neon`;
 - `.php-cs-fixer.dist.php`;
 - `tools/ai_static_check.php`;
 - Composer scripts `ai:*`.
 
 Следующий шаг:
 
-- добавить `phpstan/phpstan` и `friendsofphp/php-cs-fixer` в `require-dev`;
 - Rector для механических PHP upgrades/refactors;
-- сделать formatter check частью обязательного CI, когда binary появится.
+- сделать formatter check частью обязательного CI.
 
 ## Рекомендуемая архитектура целевого AI-first слоя
 
@@ -822,15 +827,186 @@ php tools/ai_verify.php --changed
 - `getCollectionKey()` закрыт `collectionKeyProvider`;
 - legacy fallback-и внутри `entity.php` оставлены как BC-boundary до следующего среза.
 
-## Рекомендуемые следующие PR-срезы после P14-P18
+### P19. Collapse `entity.php` BC fallback count
+
+Статус: выполнено 2026-06-12.
+
+Цель: оставить `entity::getService()` как BC-accessor, но убрать внутренние `->getService()->...` fallback-и из `core/base/model/entity.php`.
+
+Почему это следующий лучший шаг:
+
+- P14-P18 уже добавили collaborators для всех больших service calls;
+- текущий `LegacyDiSourceInventoryTest` все еще разрешает `core/base/model/entity.php => 7`;
+- эти 7 call sites теперь можно заменить default closures в constructor/factory без изменения внешнего API.
+
+План:
+
+1. Добавить `sqlDirectoryProvider` callable для `getSqlDirectory()`.
+2. В `entity::__construct()` собрать default collaborators из `$service`, если они не переданы явно:
+   - `entityIdDecoder`;
+   - `entityLookup`;
+   - `designerFactory`;
+   - `descriptionProvider`;
+   - `namespacePrefixResolver`;
+   - `collectionKeyProvider`;
+   - `sqlDirectoryProvider`.
+3. В методах `decodeEntityId()`, `findEntityByTable()`, `createDesigner()`, `loadDescription()`, `entityNamespacePrefix()`, `entityCollectionKey()`, `getSqlDirectory()` вызывать только collaborator.
+4. Если collaborator не настроен, бросать явный `RuntimeException` с именем missing dependency.
+5. Обновить `model_entity_factory` и `EntityModelFactoriesTest`.
+6. Уменьшить allowlist:
+   - `core/base/model/entity.php`: с `7` до `0`.
+
+Проверка:
+
+```bash
+php vendor/bin/phpunit --configuration phpunit.xml unit/core/base/model/EntityTest.php unit/core/di/EntityModelFactoriesTest.php unit/core/LegacyDiSourceInventoryTest.php
+php tools/ai_verify.php --changed
+```
+
+Итог:
+
+- `sqlDirectoryProvider` добавлен в `entity.php` и `model_entity_factory`;
+- default collaborators собираются в constructor из entity service;
+- `decodeEntityId()`, `findEntityByTable()`, `createDesigner()`, `loadDescription()`, `entityNamespacePrefix()`, `entityCollectionKey()` и `getSqlDirectory()` больше не делают fallback через `getService()`;
+- `core/base/model/entity.php` снят с `getService()` allowlist.
+
+### P20. PHPStan baseline burn-down #2
+
+Статус: выполнено 2026-06-12.
+
+Цель: уменьшить `phpstan-baseline.neon` с 11 entries, не добавляя новых suppressions.
+
+Рекомендуемый порядок:
+
+1. `core/adapter/pear_http_session.php` + `pear_http_session_loader.php`.
+   - Закрыть 9 entries вокруг неизвестного `HTTP_Session`.
+   - Лучший путь: typed adapter/facade для PEAR session static API + явная availability boundary.
+   - Не лучший путь: расширять baseline или размазывать `class_exists()` по callers.
+2. `core/base/model/file_data/row.php`.
+   - Закрыть `entity_member::getCurrentMember()` через collaborator, похожий на `EntityIdDecoder`.
+   - Это уменьшит coupling file-data row к фантомному runtime entity class.
+3. `core/service/timer.php`.
+   - Заменить `fan\model\timer_program\row` phantom type на object contract или local interface-like assertion.
+
+Проверка:
+
+```bash
+php tools/ai_static_check.php --json
+php vendor/bin/phpunit --configuration phpunit.xml unit/core/base/model/file_data/RowTest.php unit/core/service/TimerTest.php
+```
+
+Итог:
+
+- `pear_http_session` больше не содержит raw `HTTP_Session::` calls; PEAR static API закрыт callable-boundary;
+- `pear_http_session_loader` создает adapter без несуществующего `ensureAvailable()`;
+- `file_data/row.php::setPersonalAccess()` использует injected current user collaborator вместо `entity_member::getCurrentMember()`;
+- `timer::_runProgram()` больше не типизирован phantom class `fan\model\timer_program\row`;
+- `phpstan-baseline.neon` уменьшен с 11 entries до пустого `ignoreErrors: []`.
+
+### P21. AI map JSON Schema validation runner
+
+Статус: выполнено 2026-06-12.
+
+Цель: `php fan ai:map --validate` должен проверять не только hand-written contract, но и `.ai/map.schema.json` как schema contract.
+
+План:
+
+1. Добавить `php_fan_ai_validate_json_schema_subset()` или подключаемый validator boundary.
+2. Валидировать generated map против `.ai/map.schema.json`.
+3. В ошибках возвращать path-like указатели: `services.descriptors.cache.factory_arguments.runtime_arguments`.
+4. Добавить negative fixture test: искусственно удалить `factory_origin` и проверить понятную ошибку.
+5. Обновить `.ai/commands.md`, если появится отдельная команда.
+
+Проверка:
+
+```bash
+php fan ai:map --validate --json
+php vendor/bin/phpunit --configuration phpunit.xml unit/core/AiToolingTest.php
+```
+
+Итог:
+
+- добавлен локальный `php_fan_ai_validate_json_schema_subset()`;
+- `php_fan_ai_validate_map_contract()` теперь прогоняет generated map против `.ai/map.schema.json`;
+- errors получают path-like указатели вроде `$.services.descriptors.cache...`;
+- добавлен negative test на drift service descriptor shape.
+
+### P22. Runtime argument descriptors for creator methods
+
+Статус: выполнено 2026-06-12.
+
+Цель: сейчас `factory_arguments.runtime_arguments` извлекается из registration closures; следующий слой - signatures public creator methods.
+
+План:
+
+1. Расширить `php_fan_ai_service_creator_methods()`:
+   - `parameters`;
+   - `runtime_arguments`;
+   - `container_dependencies`;
+   - `optional_arguments`.
+2. Добавить в descriptor `creator_method_arguments`, keyed by method name.
+3. Для creator methods классифицировать:
+   - `container_interface $container` как container boundary;
+   - scalar/mixed method params как runtime args;
+   - params with default values как optional args.
+4. Добавить assertions на `createCacheService`, `createDateService`, `createSessionService`.
+
+Проверка:
+
+```bash
+php tools/ai_map.php --json
+php vendor/bin/phpunit --configuration phpunit.xml unit/core/AiToolingTest.php
+```
+
+Итог:
+
+- `php_fan_ai_service_creator_methods()` извлекает `parameters`, `runtime_arguments`, `container_dependencies`, `optional_arguments`;
+- service descriptors получили `creator_method_arguments`, keyed by method name;
+- `.ai/map.schema.json` описывает новый shape;
+- тесты закрепляют `createCacheService`, `createDateService`, `createSessionService`.
+
+### P23. Source inventory for direct service property access
+
+Статус: выполнено 2026-06-12.
+
+Цель: после уменьшения `getService()` allowlist закрепить прямые обращения к service state как явные BC-boundaries.
+
+План:
+
+1. Добавить guard в `LegacyDiSourceInventoryTest`.
+2. Начать с узкого scope `core/base/model/**/*.php`.
+3. Запрещать:
+   - `$this->service->...`;
+   - `$entity->service`;
+   - прямое чтение/запись service property вне constructor/BC accessor.
+4. Разрешить только documented boundaries:
+   - `protected ?object $service`;
+   - `public function getService(): object`;
+   - constructor assignment `$this->service = $service`.
+5. После model scope расширить на `core/base/service` отдельным P-срезом.
+
+Проверка:
+
+```bash
+php vendor/bin/phpunit --configuration phpunit.xml unit/core/LegacyDiSourceInventoryTest.php
+php tools/ai_verify.php --changed
+```
+
+Итог:
+
+- `LegacyDiSourceInventoryTest::testModelServicePropertyAccessIsPinnedToEntityBoundary()` запрещает direct service property access в `core/base/model/**`;
+- разрешены только `entity.php` constructor assignment и BC getter boundary;
+- guard закрепляет, что новые model collaborators не обходятся прямым `$this->service`.
+
+## Рекомендуемые следующие PR-срезы после P19-P23
 
 | PR | Название | Почему следующий | Основная проверка |
 |---:|---|---|---|
-| 1 | P19 Collapse `entity.php` BC fallback count | Новые collaborators уже есть; следующий выигрыш - убрать fallback `getService()` там, где factory всегда инъектит dependency. | `unit/core/base/model/EntityTest.php`; `LegacyDiSourceInventoryTest.php`; `php tools/ai_verify.php --changed` |
-| 2 | P20 PHPStan baseline burn-down #2 | Следующие самые изолированные entries: `pear_http_session` adapter/loader или `file_data/entity_member`. | `php tools/ai_static_check.php`; focused adapter tests |
-| 3 | P21 AI map JSON Schema validation runner | Schema уже богаче; можно добавить реальную JSON Schema validation command/test, а не только hand-written contract checks. | `php fan ai:map --validate --json`; `unit/core/AiToolingTest.php` |
-| 4 | P22 Runtime argument descriptors for creator methods | Сейчас runtime args извлекаются из registration closures; следующий слой - public creator method signatures. | `unit/core/AiToolingTest.php`; `php tools/ai_map.php --json` |
-| 5 | P23 Source inventory for direct `$this->service` usage | После `getService()` allowlist стоит закрепить и прямой доступ к service property как explicit BC-boundary. | `unit/core/LegacyDiSourceInventoryTest.php` |
+| 1 | P24 Remove `file_data/row.php` service-locator tail | Остался один `getService()` в file-data row dependency bootstrapping; рядом уже есть explicit collaborators. | `unit/core/base/model/file_data/RowTest.php`; `unit/core/LegacyDiSourceInventoryTest.php`; `php tools/ai_verify.php --changed` |
+| 2 | P25 Extract spec-file model factories | Три оставшихся call sites живут в `spec_file`/`spec_file/image`; их лучше закрыть одним узким factory-collaborator срезом. | `unit/core/base/model/spec_file*`; `unit/core/LegacyDiSourceInventoryTest.php` |
+| 3 | P26 Remove last `core/base/model/row.php` service access | После P24-P25 останется базовый row tail; его можно закрыть relation/entity resolver boundary. | `unit/core/base/model/RowTest.php`; `unit/core/base/model/EntityTest.php` |
+| 4 | P27 Service descriptor concrete edges | Следующий AI-map слой: `class`, `factory`, `config_key`, `lifetime_reason` там, где это извлекается статически. | `unit/core/AiToolingTest.php`; `php fan ai:services --json` |
+| 5 | P28 Extend service-state source inventory to `core/base/service` | После model scope guard логично закрепить прямой service state access в base service layer. | `unit/core/LegacyDiSourceInventoryTest.php`; `php tools/ai_verify.php --changed` |
 
 ## Что не делать сейчас
 
