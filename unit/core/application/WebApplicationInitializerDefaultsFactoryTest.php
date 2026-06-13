@@ -66,6 +66,9 @@ final class WebApplicationInitializerDefaultsFactoryTest extends TestCase
         $this->assertSame(['core/runtime/', 'core/factory/runtime/'], $composerConfig['autoload']['psr-4']['fan\\core\\runtime\\']);
 
         $this->assertStringContainsString('$projectPrefix = \'fan\\\\project\\\\\';', $composerAutoloadSource);
+        $this->assertStringContainsString('function php_fan_composer_autoload_symbol_exists(string $symbol, bool $autoload = false): bool', $composerAutoloadSource);
+        $this->assertStringContainsString('php_fan_composer_autoload_symbol_exists($class, false)', $composerAutoloadSource);
+        $this->assertStringContainsString('php_fan_composer_autoload_symbol_exists($coreClass, true)', $composerAutoloadSource);
         $this->assertStringNotContainsString('$phpFanRoot', $composerAutoloadSource);
         $this->assertStringNotContainsString('$bootstrapApplicationRoots', $composerAutoloadSource);
         $this->assertStringNotContainsString('$factoryRoots', $composerAutoloadSource);

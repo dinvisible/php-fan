@@ -12,6 +12,8 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/../core/di/service_descriptor.php';
+require_once __DIR__ . '/../core/ai/dynamic_boundary.php';
+require_once __DIR__ . '/ai_service_map.php';
 
 function php_fan_ai_build_map(string $root): array
 {
@@ -50,6 +52,10 @@ function php_fan_ai_build_map(string $root): array
             'fan_ai_explain' => 'php fan ai:explain <file> --json',
             'fan_ai_verify' => 'php fan ai:verify',
             'fan_ai_doctor' => 'php fan ai:doctor',
+            'fan_ai_dynamic_boundaries' => 'php fan ai:dynamic-boundaries --json',
+            'fan_ai_dynamic_boundaries_composition_open' => 'php fan ai:dynamic-boundaries --composition-open --json',
+            'fan_ai_dynamic_boundaries_debt' => 'php fan ai:dynamic-boundaries --debt --json',
+            'fan_ai_source_inventory' => 'php fan ai:source-inventory --json',
         ],
         'counts' => [
             'php_files' => count($phpFiles),
@@ -67,20 +73,8 @@ function php_fan_ai_build_map(string $root): array
         ],
         'services' => $serviceMap,
         'metadata' => php_fan_ai_metadata_map($root, $metaFiles, $templateFiles),
-        'dynamic_boundaries' => [
-            'manual_loading_adapters' => [
-                'core/adapter/php_array_file.php',
-                'core/adapter/php_template_file.php',
-                'core/adapter/bootstrap_loader_file_storage.php',
-                'core/adapter/compiled_template_loader.php',
-                'core/adapter/project_tool_loader.php',
-                'core/adapter/error_demonstrator_loader.php',
-                'core/adapter/zend_autoloader.php',
-            ],
-            'legacy_metadata' => '*.meta.php',
-            'legacy_templates' => '*.tpl',
-            'request_globals_adapter' => 'core/adapter/request_input_native_environment.php',
-        ],
+        'dynamic_boundaries' => php_fan_ai_dynamic_boundaries_map($root, $productionPhpFiles),
+        'source_inventory' => php_fan_ai_source_inventory_map($root, $productionPhpFiles),
         'verification' => [
             'phpunit' => 'php vendor/bin/phpunit --configuration phpunit.xml',
             'diff_check' => 'git diff --check',
@@ -144,6 +138,696 @@ function php_fan_ai_metadata_map(string $root, array $metaFiles, array $template
             'placeholder_usage' => $placeholderUsage,
         ],
     ];
+}
+
+function php_fan_ai_dynamic_boundaries_map(?string $root = null, ?array $productionPhpFiles = null): array
+{
+    $map = [
+        'manual_loading_adapters' => [
+            'core/adapter/php_array_file.php',
+            'core/adapter/php_template_file.php',
+            'core/adapter/bootstrap_loader_file_storage.php',
+            'core/adapter/compiled_template_loader.php',
+            'core/adapter/project_tool_loader.php',
+            'core/adapter/error_demonstrator_loader.php',
+            'core/adapter/zend_autoloader.php',
+        ],
+        'legacy_metadata' => '*.meta.php',
+        'legacy_templates' => '*.tpl',
+        'request_globals_adapter' => 'core/adapter/request_input_native_environment.php',
+        'category_reasons' => [
+            'extension_api' => 'Documented extension/loading APIs intentionally use dynamic classes, includes, templates, metadata, or runtime-discovered project code.',
+            'composition_roots' => 'Composition roots wire configured services and project service classes; dynamic checks are allowed behind named boundaries.',
+            'tooling_support' => 'Developer tooling may inspect Composer/runtime metadata dynamically without affecting production service behavior.',
+            'migration_debt' => 'Legacy dynamic runtime behavior is inventoried for later reduction and must not spread silently.',
+        ],
+        'categories' => [
+            'extension_api' => [
+                '*.meta.php',
+                '*.tpl',
+                'core/adapter/bootstrap_loader_file_storage.php',
+                'core/adapter/compiled_template_loader.php',
+                'core/adapter/pear_http_session.php',
+                'core/adapter/project_tool_loader.php',
+                'core/adapter/twig_template_service.php',
+                'core/adapter/zend_autoloader.php',
+                'core/base/model/entity_dependencies.php',
+                'core/base/transfer/int.php',
+                'core/block/base_dependency_defaults.php',
+                'core/service/locale.php',
+                'core/service/plain.php',
+                'core/service/block_context.php',
+                'core/service/tab.php',
+                'core/service/timer.php',
+                'core/service/translation.php',
+            ],
+            'composition_roots' => [
+                'core/di/application_client_service_dependencies.php',
+                'core/di/application_client_service_creator.php',
+                'core/di/application_client_array_adducer_payload_dependencies.php',
+                'core/di/application_client_array_payload_dependencies.php',
+                'core/di/application_client_array_value_reader_payload_dependencies.php',
+                'core/di/application_client_bootstrap_runtime_dependencies.php',
+                'core/di/application_client_cache_runtime_dependencies.php',
+                'core/di/application_client_config_cache_runtime_dependencies.php',
+                'core/di/application_client_config_runtime_dependencies.php',
+                'core/di/application_client_cookie_state_registrar_dependencies.php',
+                'core/di/application_client_curl_adapter_transport_dependencies.php',
+                'core/di/application_client_curl_factory_transport_dependencies.php',
+                'core/di/application_client_curl_state_registrar_dependencies.php',
+                'core/di/application_client_curl_transport_dependencies.php',
+                'core/di/application_client_error_transport_dependencies.php',
+                'core/di/application_client_payload_dependencies.php',
+                'core/di/application_client_request_payload_dependencies.php',
+                'core/di/application_client_rest_state_registrar_dependencies.php',
+                'core/di/application_client_runtime_dependencies.php',
+                'core/di/application_client_cookie_writer_payload_dependencies.php',
+                'core/di/application_client_serialization_payload_dependencies.php',
+                'core/di/application_client_serialization_transport_dependencies.php',
+                'core/di/application_client_serializer_operations_payload_dependencies.php',
+                'core/di/application_client_service_registrar_dependencies.php',
+                'core/di/application_client_transport_dependencies.php',
+                'core/di/application_content_context_dependencies.php',
+                'core/di/application_content_bootstrap_runtime_dependencies.php',
+                'core/di/application_content_block_context_dependencies.php',
+                'core/di/application_content_cache_runtime_dependencies.php',
+                'core/di/application_content_config_cache_runtime_dependencies.php',
+                'core/di/application_content_config_runtime_dependencies.php',
+                'core/di/application_content_error_block_context_dependencies.php',
+                'core/di/application_content_error_context_dependencies.php',
+                'core/di/application_content_locale_context_dependencies.php',
+                'core/di/application_content_localization_context_dependencies.php',
+                'core/di/application_content_matcher_context_dependencies.php',
+                'core/di/application_content_request_input_context_dependencies.php',
+                'core/di/application_content_request_matcher_context_dependencies.php',
+                'core/di/application_content_runtime_dependencies.php',
+                'core/di/application_content_service_dependencies.php',
+                'core/di/application_content_service_creator.php',
+                'core/di/application_content_php_array_file_loader_storage_dependencies.php',
+                'core/di/application_content_storage_dependencies.php',
+                'core/di/application_content_tab_factory_context_dependencies.php',
+                'core/di/application_content_translation_file_storage_dependencies.php',
+                'core/di/application_controller_bootstrap_runtime_dependencies.php',
+                'core/di/application_controller_cache_runtime_dependencies.php',
+                'core/di/application_controller_config_cache_runtime_dependencies.php',
+                'core/di/application_controller_config_runtime_dependencies.php',
+                'core/di/application_controller_handler_dependencies.php',
+                'core/di/application_controller_header_plain_route_dependencies.php',
+                'core/di/application_controller_matcher_plain_route_dependencies.php',
+                'core/di/application_controller_obfuscator_factory_handler_dependencies.php',
+                'core/di/application_controller_obfuscator_handler_dependencies.php',
+                'core/di/application_controller_plain_config_dependencies.php',
+                'core/di/application_controller_plain_dependencies.php',
+                'core/di/application_controller_plain_file_handler_dependencies.php',
+                'core/di/application_controller_plain_route_dependencies.php',
+                'core/di/application_controller_request_handler_dependencies.php',
+                'core/di/application_controller_runtime_dependencies.php',
+                'core/di/application_controller_service_dependencies.php',
+                'core/di/application_controller_service_creator.php',
+                'core/di/application_creator_bootstrap_runtime_dependencies.php',
+                'core/di/application_creator_cache_factory_dependencies.php',
+                'core/di/application_creator_common_dependencies.php',
+                'core/di/application_creator_config_dependencies.php',
+                'core/di/application_creator_config_cache_dependencies.php',
+                'core/di/application_core_project_application_context_dependencies.php',
+                'core/di/application_core_project_error_dependencies.php',
+                'core/di/application_core_project_error_context_dependencies.php',
+                'core/di/application_core_project_error_file_storage_dependencies.php',
+                'core/di/application_core_project_error_factory_service_dependencies.php',
+                'core/di/application_core_project_error_log_writer_storage_dependencies.php',
+                'core/di/application_core_project_error_service_dependencies.php',
+                'core/di/application_core_project_error_storage_dependencies.php',
+                'core/di/application_core_project_dependencies.php',
+                'core/di/application_core_project_header_writer_response_loader_dependencies.php',
+                'core/di/application_core_project_locale_context_dependencies.php',
+                'core/di/application_core_project_meta_file_storage_dependencies.php',
+                'core/di/application_core_project_php_array_file_loader_response_loader_dependencies.php',
+                'core/di/application_core_project_reflection_class_factory_meta_dependencies.php',
+                'core/di/application_core_project_reflection_meta_dependencies.php',
+                'core/di/application_core_project_route_storage_dependencies.php',
+                'core/di/application_core_project_response_loader_dependencies.php',
+                'core/di/application_core_project_storage_dependencies.php',
+                'core/di/application_core_project_tab_context_dependencies.php',
+                'core/di/application_core_project_tab_factory_service_context_dependencies.php',
+                'core/di/application_core_project_tab_instance_service_context_dependencies.php',
+                'core/di/application_core_project_tab_service_context_dependencies.php',
+                'core/di/application_core_project_tab_dependencies.php',
+                'core/di/application_core_request_array_adducer_transform_helper_dependencies.php',
+                'core/di/application_core_request_array_read_class_helper_dependencies.php',
+                'core/di/application_core_request_array_transform_helper_dependencies.php',
+                'core/di/application_core_request_array_value_reader_helper_dependencies.php',
+                'core/di/application_core_request_class_name_resolver_helper_dependencies.php',
+                'core/di/application_core_request_cookie_transport_factory_dependencies.php',
+                'core/di/application_core_request_dependencies.php',
+                'core/di/application_core_request_factory_dependencies.php',
+                'core/di/application_core_request_helper_dependencies.php',
+                'core/di/application_core_request_input_factory_dependencies.php',
+                'core/di/application_core_request_json_transport_factory_dependencies.php',
+                'core/di/application_core_request_matcher_factory_runtime_dependencies.php',
+                'core/di/application_core_request_recursive_merger_transform_helper_dependencies.php',
+                'core/di/application_core_request_request_factory_runtime_dependencies.php',
+                'core/di/application_core_request_runtime_factory_dependencies.php',
+                'core/di/application_core_request_transport_factory_dependencies.php',
+                'core/di/application_core_service_dependencies.php',
+                'core/di/application_core_service_creator.php',
+                'core/di/application_core_user_current_identity_dependencies.php',
+                'core/di/application_core_user_current_user_space_factory_session_space_dependencies.php',
+                'core/di/application_core_user_data_factory_dependencies.php',
+                'core/di/application_core_user_date_data_factory_dependencies.php',
+                'core/di/application_core_user_entity_data_factory_dependencies.php',
+                'core/di/application_core_user_identity_dependencies.php',
+                'core/di/application_core_user_session_factory_session_space_dependencies.php',
+                'core/di/application_core_user_session_space_dependencies.php',
+                'core/di/application_core_user_session_dependencies.php',
+                'core/di/application_infrastructure_config_cache_cache_factory_dependencies.php',
+                'core/di/application_infrastructure_config_cache_bootstrap_runtime_support_dependencies.php',
+                'core/di/application_infrastructure_config_cache_cache_source_file_metadata_storage_dependencies.php',
+                'core/di/application_infrastructure_config_cache_dependencies.php',
+                'core/di/application_infrastructure_config_cache_class_helper_dependencies.php',
+                'core/di/application_infrastructure_config_cache_config_cache_factory_dependencies.php',
+                'core/di/application_infrastructure_config_cache_config_factory_dependencies.php',
+                'core/di/application_infrastructure_config_cache_config_instance_dependencies.php',
+                'core/di/application_infrastructure_config_cache_config_source_file_storage_dependencies.php',
+                'core/di/application_infrastructure_config_cache_core_fatal_exception_factory_dependencies.php',
+                'core/di/application_infrastructure_config_cache_error_factory_runtime_support_dependencies.php',
+                'core/di/application_infrastructure_config_cache_exception_dependencies.php',
+                'core/di/application_infrastructure_config_cache_error500_exception_factory_dependencies.php',
+                'core/di/application_infrastructure_config_cache_exception_factory_dependencies.php',
+                'core/di/application_infrastructure_config_cache_factory_dependencies.php',
+                'core/di/application_infrastructure_config_cache_header_writer_dependencies.php',
+                'core/di/application_infrastructure_config_cache_loader_serializer_dependencies.php',
+                'core/di/application_infrastructure_config_cache_php_array_file_loader_dependencies.php',
+                'core/di/application_infrastructure_config_cache_request_input_dependencies.php',
+                'core/di/application_infrastructure_config_cache_request_header_dependencies.php',
+                'core/di/application_infrastructure_config_cache_runtime_support_dependencies.php',
+                'core/di/application_infrastructure_config_cache_serializer_operations_dependencies.php',
+                'core/di/application_infrastructure_config_cache_storage_dependencies.php',
+                'core/di/application_infrastructure_config_cache_support_dependencies.php',
+                'core/di/application_infrastructure_config_cache_type_cache_factory_dependencies.php',
+                'core/di/application_infrastructure_config_cache_typed_config_factory_dependencies.php',
+                'core/di/application_infrastructure_runtime_bootstrap_runtime_error_dependencies.php',
+                'core/di/application_infrastructure_runtime_cache_factory_dependencies.php',
+                'core/di/application_infrastructure_runtime_config_cache_dependencies.php',
+                'core/di/application_infrastructure_runtime_config_dependencies.php',
+                'core/di/application_infrastructure_runtime_dependencies.php',
+                'core/di/application_infrastructure_runtime_error_dependencies.php',
+                'core/di/application_infrastructure_runtime_error_factory_dependencies.php',
+                'core/di/application_infrastructure_bootstrap_runtime_registrar_dependencies.php',
+                'core/di/application_infrastructure_cache_factory_registrar_dependencies.php',
+                'core/di/application_infrastructure_cache_memcache_state_registrar_dependencies.php',
+                'core/di/application_infrastructure_cache_state_registrar_dependencies.php',
+                'core/di/application_infrastructure_config_registrar_dependencies.php',
+                'core/di/application_infrastructure_config_state_registrar_dependencies.php',
+                'core/di/application_infrastructure_file_system_state_registrar_dependencies.php',
+                'core/di/application_infrastructure_json_state_registrar_dependencies.php',
+                'core/di/application_infrastructure_service_dependencies.php',
+                'core/di/application_infrastructure_service_creator.php',
+                'core/di/application_infrastructure_service_registrar_dependencies.php',
+                'core/di/application_infrastructure_storage_dependencies.php',
+                'core/di/application_navigation_service_creator.php',
+                'core/di/application_navigation_tab_alias_asset_dependencies.php',
+                'core/di/application_navigation_tab_application_factory_application_debug_dependencies.php',
+                'core/di/application_navigation_tab_block_file_storage_dependencies.php',
+                'core/di/application_navigation_tab_block_meta_file_storage_dependencies.php',
+                'core/di/application_navigation_tab_config_factory_config_header_dependencies.php',
+                'core/di/application_navigation_tab_cookie_payload_dependencies.php',
+                'core/di/application_navigation_tab_data_cookie_payload_dependencies.php',
+                'core/di/application_navigation_tab_data_loader_payload_dependencies.php',
+                'core/di/application_navigation_tab_data_model_factory_dependencies.php',
+                'core/di/application_navigation_tab_date_factory_user_time_model_factory_dependencies.php',
+                'core/di/application_navigation_tab_context_dependencies.php',
+                'core/di/application_navigation_tab_core_dependencies.php',
+                'core/di/application_navigation_tab_debug_factory_application_debug_dependencies.php',
+                'core/di/application_navigation_tab_dependencies.php',
+                'core/di/application_navigation_tab_entity_model_factory_dependencies.php',
+                'core/di/application_navigation_tab_error_factory_error_reflector_dependencies.php',
+                'core/di/application_navigation_tab_error_log_writer_asset_dependencies.php',
+                'core/di/application_navigation_tab_file_storage_dependencies.php',
+                'core/di/application_navigation_tab_header_factory_config_header_dependencies.php',
+                'core/di/application_navigation_tab_image_metadata_reader_asset_dependencies.php',
+                'core/di/application_navigation_tab_image_modify_model_factory_dependencies.php',
+                'core/di/application_navigation_tab_input_context_dependencies.php',
+                'core/di/application_navigation_tab_json_payload_dependencies.php',
+                'core/di/application_navigation_tab_locale_context_dependencies.php',
+                'core/di/application_navigation_tab_locale_session_context_dependencies.php',
+                'core/di/application_navigation_tab_matcher_routing_context_dependencies.php',
+                'core/di/application_navigation_tab_media_error_asset_dependencies.php',
+                'core/di/application_navigation_tab_media_model_factory_dependencies.php',
+                'core/di/application_navigation_tab_meta_file_storage_dependencies.php',
+                'core/di/application_navigation_tab_model_factory_dependencies.php',
+                'core/di/application_navigation_tab_obfuscator_model_factory_dependencies.php',
+                'core/di/application_navigation_tab_pager_model_factory_dependencies.php',
+                'core/di/application_navigation_tab_project_tool_storage_dependencies.php',
+                'core/di/application_navigation_tab_reflector_factory_error_reflector_dependencies.php',
+                'core/di/application_navigation_tab_request_routing_context_dependencies.php',
+                'core/di/application_navigation_tab_routing_context_dependencies.php',
+                'core/di/application_navigation_tab_root_html_file_storage_dependencies.php',
+                'core/di/application_navigation_tab_role_factory_role_transfer_dependencies.php',
+                'core/di/application_navigation_tab_session_factory_context_dependencies.php',
+                'core/di/application_navigation_tab_service_factory_application_debug_dependencies.php',
+                'core/di/application_navigation_tab_service_factory_application_dependencies.php',
+                'core/di/application_navigation_tab_service_factory_config_header_dependencies.php',
+                'core/di/application_navigation_tab_service_factory_dependencies.php',
+                'core/di/application_navigation_tab_service_factory_error_reflector_dependencies.php',
+                'core/di/application_navigation_tab_service_factory_payload_dependencies.php',
+                'core/di/application_navigation_tab_service_factory_role_transfer_dependencies.php',
+                'core/di/application_navigation_tab_service_factory_runtime_dependencies.php',
+                'core/di/application_navigation_tab_storage_dependencies.php',
+                'core/di/application_navigation_tab_array_adducer_transform_dependencies.php',
+                'core/di/application_navigation_tab_array_like_checker_read_check_dependencies.php',
+                'core/di/application_navigation_tab_array_value_reader_read_check_dependencies.php',
+                'core/di/application_navigation_tab_block_exception_factory_exception_meta_dependencies.php',
+                'core/di/application_navigation_tab_block_factory_instance_block_factory_dependencies.php',
+                'core/di/application_navigation_tab_meta_row_factory_exception_meta_dependencies.php',
+                'core/di/application_navigation_tab_recursive_merger_transform_dependencies.php',
+                'core/di/application_navigation_tab_support_array_read_check_dependencies.php',
+                'core/di/application_navigation_tab_support_array_helper_dependencies.php',
+                'core/di/application_navigation_tab_support_array_transform_dependencies.php',
+                'core/di/application_navigation_tab_support_asset_dependencies.php',
+                'core/di/application_navigation_tab_support_block_exception_meta_dependencies.php',
+                'core/di/application_navigation_tab_support_block_factory_dependencies.php',
+                'core/di/application_navigation_tab_support_block_dependencies.php',
+                'core/di/application_navigation_tab_class_name_resolver_class_helper_dependencies.php',
+                'core/di/application_navigation_tab_short_class_name_resolver_class_helper_dependencies.php',
+                'core/di/application_navigation_tab_support_class_helper_dependencies.php',
+                'core/di/application_navigation_tab_support_dependencies.php',
+                'core/di/application_navigation_tab_support_helper_dependencies.php',
+                'core/di/application_navigation_tab_support_loader_dependencies.php',
+                'core/di/application_navigation_tab_tab_state_block_factory_dependencies.php',
+                'core/di/application_navigation_tab_transfer_factory_role_transfer_dependencies.php',
+                'core/di/application_navigation_tab_upload_limit_storage_dependencies.php',
+                'core/di/application_navigation_tab_user_factory_user_time_model_factory_dependencies.php',
+                'core/di/application_navigation_tab_user_time_model_factory_dependencies.php',
+                'core/di/application_pager_context_dependencies.php',
+                'core/di/application_pager_bootstrap_runtime_dependencies.php',
+                'core/di/application_pager_cache_factory_config_cache_runtime_dependencies.php',
+                'core/di/application_pager_config_cache_runtime_dependencies.php',
+                'core/di/application_pager_config_config_cache_runtime_dependencies.php',
+                'core/di/application_pager_entity_context_dependencies.php',
+                'core/di/application_pager_exception_dependencies.php',
+                'core/di/application_pager_request_context_dependencies.php',
+                'core/di/application_pager_runtime_dependencies.php',
+                'core/di/application_pager_service_dependencies.php',
+                'core/di/application_pager_service_creator.php',
+                'core/di/application_pager_service_registrar_dependencies.php',
+                'core/di/application_pager_tab_context_dependencies.php',
+                'core/di/application_session_application_instance_application_context_dependencies.php',
+                'core/di/application_session_application_context_dependencies.php',
+                'core/di/application_session_array_runtime_dependencies.php',
+                'core/di/application_session_bootstrap_bootstrap_runtime_dependencies.php',
+                'core/di/application_session_bootstrap_runtime_dependencies.php',
+                'core/di/application_session_cache_factory_dependencies.php',
+                'core/di/application_session_config_application_context_dependencies.php',
+                'core/di/application_session_context_dependencies.php',
+                'core/di/application_session_cookie_factory_state_factory_dependencies.php',
+                'core/di/application_session_date_factory_support_factory_dependencies.php',
+                'core/di/application_session_error_factory_support_factory_dependencies.php',
+                'core/di/application_session_factory_dependencies.php',
+                'core/di/application_session_header_context_dependencies.php',
+                'core/di/application_session_native_session_native_runtime_dependencies.php',
+                'core/di/application_session_native_runtime_dependencies.php',
+                'core/di/application_session_pear_http_session_loader_native_runtime_dependencies.php',
+                'core/di/application_session_php_runtime_settings_bootstrap_runtime_dependencies.php',
+                'core/di/application_session_request_input_request_context_dependencies.php',
+                'core/di/application_session_request_instance_request_context_dependencies.php',
+                'core/di/application_session_request_context_dependencies.php',
+                'core/di/application_session_runtime_dependencies.php',
+                'core/di/application_session_service_dependencies.php',
+                'core/di/application_session_service_creator.php',
+                'core/di/application_session_service_registrar_dependencies.php',
+                'core/di/application_session_session_factory_state_factory_dependencies.php',
+                'core/di/application_session_state_factory_dependencies.php',
+                'core/di/application_session_support_factory_dependencies.php',
+                'core/di/application_user_application_instance_application_request_context_dependencies.php',
+                'core/di/application_user_application_factory_application_request_input_factory_dependencies.php',
+                'core/di/application_user_application_request_input_factory_dependencies.php',
+                'core/di/application_user_application_factory_dependencies.php',
+                'core/di/application_user_application_request_context_dependencies.php',
+                'core/di/application_user_array_runtime_dependencies.php',
+                'core/di/application_user_bootstrap_runtime_bootstrap_cache_runtime_dependencies.php',
+                'core/di/application_user_bootstrap_cache_runtime_dependencies.php',
+                'core/di/application_user_bootstrap_runtime_registrar_dependencies.php',
+                'core/di/application_user_cache_factory_registrar_dependencies.php',
+                'core/di/application_user_cache_factory_bootstrap_cache_runtime_dependencies.php',
+                'core/di/application_user_config_registrar_dependencies.php',
+                'core/di/application_user_config_serialization_config_context_dependencies.php',
+                'core/di/application_user_config_factory_dependencies.php',
+                'core/di/application_user_context_dependencies.php',
+                'core/di/application_user_current_user_factory_identity_factory_dependencies.php',
+                'core/di/application_user_error500_exception_factory_exception_session_context_dependencies.php',
+                'core/di/application_user_exception_session_context_dependencies.php',
+                'core/di/application_user_factory_dependencies.php',
+                'core/di/application_user_identity_factory_dependencies.php',
+                'core/di/application_user_request_input_factory_application_request_input_factory_dependencies.php',
+                'core/di/application_user_request_application_request_context_dependencies.php',
+                'core/di/application_user_runtime_dependencies.php',
+                'core/di/application_user_serializer_operations_serialization_config_context_dependencies.php',
+                'core/di/application_user_serialization_config_context_dependencies.php',
+                'core/di/application_user_service_dependencies.php',
+                'core/di/application_user_service_creator.php',
+                'core/di/application_user_service_registrar_dependencies.php',
+                'core/di/application_user_session_exception_session_context_dependencies.php',
+                'core/di/application_user_session_factory_identity_factory_dependencies.php',
+                'core/di/application_user_state_registrar_dependencies.php',
+                'core/di/application_user_support_factory_dependencies.php',
+                'core/di/application_user_error_factory_support_factory_dependencies.php',
+                'core/di/application_user_entity_factory_support_factory_dependencies.php',
+                'core/di/application_utility_cache_factory_config_cache_core_dependencies.php',
+                'core/di/application_utility_config_cache_core_dependencies.php',
+                'core/di/application_utility_config_config_cache_core_dependencies.php',
+                'core/di/application_utility_core_dependencies.php',
+                'core/di/application_utility_class_storage_dependencies.php',
+                'core/di/application_utility_file_storage_dependencies.php',
+                'core/di/application_utility_php_array_file_loader_file_storage_dependencies.php',
+                'core/di/application_utility_soap_wsdl_file_storage_file_storage_dependencies.php',
+                'core/di/application_utility_date_state_registrar_dependencies.php',
+                'core/di/application_utility_helper_error_core_dependencies.php',
+                'core/di/application_utility_array_value_reader_helper_error_core_dependencies.php',
+                'core/di/application_utility_error_factory_helper_error_core_dependencies.php',
+                'core/di/application_utility_image_canvas_output_dependencies.php',
+                'core/di/application_utility_image_canvas_operations_canvas_output_dependencies.php',
+                'core/di/application_utility_image_output_writer_canvas_output_dependencies.php',
+                'core/di/application_utility_image_dependencies.php',
+                'core/di/application_utility_image_modify_state_registrar_dependencies.php',
+                'core/di/application_utility_image_metadata_resource_dependencies.php',
+                'core/di/application_utility_image_metadata_reader_metadata_resource_dependencies.php',
+                'core/di/application_utility_image_resource_factory_metadata_resource_dependencies.php',
+                'core/di/application_utility_image_storage_dependencies.php',
+                'core/di/application_utility_image_source_file_storage_image_storage_dependencies.php',
+                'core/di/application_utility_obfuscator_file_storage_image_storage_dependencies.php',
+                'core/di/application_utility_obfuscator_state_registrar_dependencies.php',
+                'core/di/application_utility_bootstrap_runtime_runtime_core_dependencies.php',
+                'core/di/application_utility_runtime_core_dependencies.php',
+                'core/di/application_utility_php_runtime_settings_runtime_core_dependencies.php',
+                'core/di/application_utility_service_dependencies.php',
+                'core/di/application_utility_storage_dependencies.php',
+                'core/di/application_utility_service_registrar_dependencies.php',
+                'core/di/application_utility_service_creator.php',
+                'core/di/application_support_application_registrar_dependencies.php',
+                'core/di/application_support_array_adducer_registrar_dependencies.php',
+                'core/di/application_support_array_value_reader_registrar_dependencies.php',
+                'core/di/application_support_bootstrap_context_registrar_dependencies.php',
+                'core/di/application_support_bootstrap_runtime_registrar_dependencies.php',
+                'core/di/application_support_cache_factory_registrar_dependencies.php',
+                'core/di/application_support_class_name_resolver_registrar_dependencies.php',
+                'core/di/application_support_config_registrar_dependencies.php',
+                'core/di/application_support_delayed_meta_factory_registrar_dependencies.php',
+                'core/di/application_support_entity_registrar_dependencies.php',
+                'core/di/application_support_error_demonstrator_file_storage_registrar_dependencies.php',
+                'core/di/application_support_error_demonstrator_loader_registrar_dependencies.php',
+                'core/di/application_support_error_demonstrator_registrar_dependencies.php',
+                'core/di/application_support_error_log_writer_registrar_dependencies.php',
+                'core/di/application_support_error_registrar_dependencies.php',
+                'core/di/application_support_exception_factory_registrar_dependencies.php',
+                'core/di/application_support_header_writer_registrar_dependencies.php',
+                'core/di/application_support_image_metadata_reader_registrar_dependencies.php',
+                'core/di/application_support_image_modify_factory_registrar_dependencies.php',
+                'core/di/application_support_meta_maker_state_registrar_dependencies.php',
+                'core/di/application_support_meta_view_registrar_dependencies.php',
+                'core/di/application_support_php_runtime_settings_registrar_dependencies.php',
+                'core/di/application_support_plain_exception_factory_registrar_dependencies.php',
+                'core/di/application_support_plain_file_storage_registrar_dependencies.php',
+                'core/di/application_support_recursive_merger_registrar_dependencies.php',
+                'core/di/application_support_reflection_class_factory_registrar_dependencies.php',
+                'core/di/application_support_request_registrar_dependencies.php',
+                'core/di/application_support_service_listener_state_registrar_dependencies.php',
+                'core/di/application_support_service_dependencies_registrar_dependencies.php',
+                'core/di/application_support_service_registrar_dependencies.php',
+                'core/di/application_support_service_single_state_registrar_dependencies.php',
+                'core/di/application_support_spec_file_image_row_state_registrar_dependencies.php',
+                'core/di/application_support_tab_resolver_registrar_dependencies.php',
+                'core/di/application_support_transfer_exception_factory_registrar_dependencies.php',
+                'core/di/application_support_translation_registrar_dependencies.php',
+                'core/di/application_support_view_keeper_factory_registrar_dependencies.php',
+                'core/di/application_support_view_loader_json_keeper_factory_registrar_dependencies.php',
+                'core/di/application_support_view_loader_state_registrar_dependencies.php',
+                'core/di/application_support_view_loader_text_keeper_factory_registrar_dependencies.php',
+                'core/di/configured_class_instantiator.php',
+                'core/block/base_dependency_application_service_runtime_factory_group.php',
+                'core/block/base_dependency_application_data_factory_group.php',
+                'core/block/base_dependency_application_factory_group.php',
+                'core/block/base_dependency_application_runtime_factory_group.php',
+                'core/block/base_dependency_application_support_factory_group.php',
+                'core/block/base_dependency_array_adducer_helper_group.php',
+                'core/block/base_dependency_array_helper_group.php',
+                'core/block/base_dependency_array_like_checker_helper_group.php',
+                'core/block/base_dependency_array_read_helper_group.php',
+                'core/block/base_dependency_array_transform_helper_group.php',
+                'core/block/base_dependency_array_value_reader_helper_group.php',
+                'core/block/base_dependency_block_exception_factory_group.php',
+                'core/block/base_dependency_block_factory_group.php',
+                'core/block/base_dependency_block_file_storage_block_group.php',
+                'core/block/base_dependency_block_file_storage_group.php',
+                'core/block/base_dependency_block_file_storage_meta_group.php',
+                'core/block/base_dependency_block_factory_context_group.php',
+                'core/block/base_dependency_class_helper_group.php',
+                'core/block/base_dependency_config_application_runtime_factory_group.php',
+                'core/block/base_dependency_context_group.php',
+                'core/block/base_dependency_data_core_factory_group.php',
+                'core/block/base_dependency_data_factory_group.php',
+                'core/block/base_dependency_data_loader_service_factory_group.php',
+                'core/block/base_dependency_data_loader_factory_group.php',
+                'core/block/base_dependency_date_application_support_factory_group.php',
+                'core/block/base_dependency_database_application_data_factory_group.php',
+                'core/block/base_dependency_entity_data_core_factory_group.php',
+                'core/block/base_dependency_error_log_media_error_helper_group.php',
+                'core/block/base_dependency_error_application_support_factory_group.php',
+                'core/block/base_dependency_factory_group.php',
+                'core/block/base_dependency_helper_group.php',
+                'core/block/base_dependency_image_metadata_media_error_helper_group.php',
+                'core/block/base_dependency_image_modify_media_core_factory_group.php',
+                'core/block/base_dependency_json_data_core_factory_group.php',
+                'core/block/base_dependency_locale_factory_context_group.php',
+                'core/block/base_dependency_matcher_factory_context_group.php',
+                'core/block/base_dependency_media_core_factory_group.php',
+                'core/block/base_dependency_media_error_helper_group.php',
+                'core/block/base_dependency_media_transfer_factory_group.php',
+                'core/block/base_dependency_meta_maker_factory_group.php',
+                'core/block/base_dependency_meta_maker_group.php',
+                'core/block/base_dependency_meta_maker_state_group.php',
+                'core/block/base_dependency_meta_loader_group.php',
+                'core/block/base_dependency_meta_row_factory_group.php',
+                'core/block/base_dependency_meta_row_loader_group.php',
+                'core/block/base_dependency_media_factory_group.php',
+                'core/block/base_dependency_navigation_context_group.php',
+                'core/block/base_dependency_obfuscator_media_core_factory_group.php',
+                'core/block/base_dependency_pager_data_loader_factory_group.php',
+                'core/block/base_dependency_php_array_file_loader_group.php',
+                'core/block/base_dependency_project_file_storage_group.php',
+                'core/block/base_dependency_project_tool_file_storage_group.php',
+                'core/block/base_dependency_reflector_context_group.php',
+                'core/block/base_dependency_request_factory_context_group.php',
+                'core/block/base_dependency_request_input_context_group.php',
+                'core/block/base_dependency_request_context_group.php',
+                'core/block/base_dependency_request_role_context_group.php',
+                'core/block/base_dependency_recursive_merger_helper_group.php',
+                'core/block/base_dependency_role_factory_context_group.php',
+                'core/block/base_dependency_route_locale_context_group.php',
+                'core/block/base_dependency_root_html_file_storage_group.php',
+                'core/block/base_dependency_resolver.php',
+                'core/block/base_dependency_runtime_context_group.php',
+                'core/block/base_dependency_session_context_group.php',
+                'core/block/base_dependency_bootstrap_runtime_context_group.php',
+                'core/block/base_dependency_tab_service_runtime_context_group.php',
+                'core/block/base_dependency_storage_group.php',
+                'core/block/base_dependency_tab_runtime_context_group.php',
+                'core/block/base_dependency_upload_limit_storage_group.php',
+                'core/block/base_dependency_user_application_data_factory_group.php',
+                'core/block/base_dependency_view_factory_loader_group.php',
+                'core/block/base_dependency_view_loader_group.php',
+                'core/block/base_dependency_view_parser_exception_factory_loader_group.php',
+                'core/block/base_dependency_view_router_factory_loader_group.php',
+                'core/block/base_dependency_view_state_loader_group.php',
+                'core/block/base_dependency_view_meta_group.php',
+                'core/factory/application_runtime_class_instantiator_provider.php',
+                'core/factory/application_runtime_configured_service_provider.php',
+                'core/factory/application_runtime_factory_defaults_provider_factory.php',
+                'core/factory/bootstrap_object_class_instantiator_provider.php',
+                'core/factory/bootstrap_object_configured_service_provider.php',
+                'core/factory/bootstrap_object_defaults_provider_factory.php',
+                'core/factory/cache_engine_factory.php',
+                'core/factory/configured_service_factory.php',
+                'core/factory/adapter/reflection_class_factory.php',
+            ],
+            'tooling_support' => [
+                'tools/composer_autoload.php',
+            ],
+            'migration_debt' => [],
+        ],
+    ];
+
+    $map['locations'] = $root !== null && $productionPhpFiles !== null
+        ? php_fan_ai_dynamic_boundary_locations($root, $productionPhpFiles)
+        : [];
+    $compositionQueues = php_fan_ai_dynamic_boundary_composition_queues($map);
+    $namedDebtQueues = php_fan_ai_dynamic_boundary_named_migration_debt_queues($map);
+    $map['composition_leaf_policy'] = [
+        'terminal_count' => 1,
+        'actionable_min_count' => 2,
+        'terminal_kind' => \fan\core\ai\dynamic_boundary::TERMINAL_COMPOSITION_LEAF,
+        'actionable_kind' => \fan\core\ai\dynamic_boundary::ACTIONABLE_COMPOSITION_ROOT,
+        'description' => 'Composition roots with one dynamic boundary are terminal leaves; actionable split candidates start at count 2.',
+    ];
+    $map['terminal_composition_leaves'] = $compositionQueues['terminal_composition_leaves'];
+    $map['actionable_composition_roots'] = $compositionQueues['actionable_composition_roots'];
+    $map['named_migration_debt_policy'] = [
+        'boundary_kind' => \fan\core\ai\dynamic_boundary::NAMED_DEFAULT_CLOSURE,
+        'category' => 'migration_debt',
+        'actionable_kind' => \fan\core\ai\dynamic_boundary::ACTIONABLE_NAMED_MIGRATION_DEBT,
+        'intentional_kind' => \fan\core\ai\dynamic_boundary::INTENTIONAL_NAMED_COMPATIBILITY,
+        'description' => 'Named/default compatibility boundaries are split into actionable migration debt and intentional compatibility leaves.',
+    ];
+    $map['actionable_named_migration_debt'] = $namedDebtQueues['actionable_named_migration_debt'];
+    $map['intentional_named_compatibility_boundaries'] = $namedDebtQueues['intentional_named_compatibility_boundaries'];
+
+    return $map;
+}
+
+function php_fan_ai_dynamic_boundary_category_for_file(string $relativeFile): ?string
+{
+    return php_fan_ai_dynamic_boundary_category_details_for_file($relativeFile)['category'] ?? null;
+}
+
+function php_fan_ai_dynamic_boundary_category_details_for_file(string $relativeFile): ?array
+{
+    if (str_ends_with($relativeFile, '.meta.php') || str_ends_with($relativeFile, '.tpl')) {
+        $map = php_fan_ai_dynamic_boundaries_map();
+
+        return [
+            'category' => 'extension_api',
+            'matched_entry' => str_ends_with($relativeFile, '.meta.php') ? '*.meta.php' : '*.tpl',
+            'reason' => $map['category_reasons']['extension_api'],
+        ];
+    }
+
+    $map = php_fan_ai_dynamic_boundaries_map();
+    foreach ($map['categories'] as $category => $files) {
+        if (in_array($relativeFile, $files, true)) {
+            return [
+                'category' => $category,
+                'matched_entry' => $relativeFile,
+                'reason' => $map['category_reasons'][$category] ?? '',
+            ];
+        }
+    }
+
+    return null;
+}
+
+function php_fan_ai_dynamic_boundary_kind_for_file(string $relativeFile): string
+{
+    return \fan\core\ai\dynamic_boundary::kindForFile($relativeFile);
+}
+
+function php_fan_ai_dynamic_boundary_kind_for_location(string $relativeFile, string $pattern, string $lineText): string
+{
+    return \fan\core\ai\dynamic_boundary::kindForLocation($relativeFile, $pattern, $lineText);
+}
+
+function php_fan_ai_dynamic_boundary_kind_for_locations(string $relativeFile, array $locations): string
+{
+    return \fan\core\ai\dynamic_boundary::kindForLocations($relativeFile, $locations);
+}
+
+function php_fan_ai_dynamic_boundary_locations(string $root, array $relativeFiles): array
+{
+    $locations = [];
+    foreach ($relativeFiles as $relativeFile) {
+        if (php_fan_ai_dynamic_boundary_category_details_for_file($relativeFile) === null) {
+            continue;
+        }
+
+        $absoluteFile = rtrim($root, DIRECTORY_SEPARATOR) . '/' . $relativeFile;
+        if (!is_file($absoluteFile)) {
+            continue;
+        }
+
+        $source = (string)file_get_contents($absoluteFile);
+        $fileLocations = php_fan_ai_dynamic_boundary_locations_from_source($relativeFile, $source);
+        if ($fileLocations !== []) {
+            $locations[$relativeFile] = $fileLocations;
+        }
+    }
+
+    ksort($locations);
+
+    return $locations;
+}
+
+function php_fan_ai_dynamic_boundary_locations_from_source(string $relativeFile, string $source): array
+{
+    $code = php_fan_ai_code_without_comments_and_strings($source);
+    $locations = [];
+
+    foreach (php_fan_ai_dynamic_boundary_location_patterns() as $patternName => $pattern) {
+        if (preg_match_all($pattern, $code, $matches, PREG_OFFSET_CAPTURE) === 0) {
+            continue;
+        }
+
+        foreach ($matches[0] as [$value, $offset]) {
+            $line = substr_count($source, "\n", 0, $offset) + 1;
+            $lineText = php_fan_ai_source_line($source, $line);
+            $locations[] = [
+                'file' => $relativeFile,
+                'line' => $line,
+                'pattern' => $patternName,
+                'value' => trim((string)$value),
+                'boundary_kind' => php_fan_ai_dynamic_boundary_kind_for_location($relativeFile, $patternName, $lineText),
+            ];
+        }
+    }
+
+    usort(
+        $locations,
+        static fn(array $left, array $right): int => [
+            (int)$left['line'],
+            (string)$left['pattern'],
+            (string)$left['value'],
+        ] <=> [
+            (int)$right['line'],
+            (string)$right['pattern'],
+            (string)$right['value'],
+        ]
+    );
+
+    return $locations;
+}
+
+function php_fan_ai_source_line(string $source, int $line): string
+{
+    $lines = explode("\n", $source);
+
+    return $lines[$line - 1] ?? '';
+}
+
+function php_fan_ai_dynamic_boundary_location_patterns(): array
+{
+    return [
+        'class_exists' => '/\bclass_exists\s*\(/',
+        'ReflectionClass' => '/\bnew\s+\\\\?ReflectionClass\s*\(/',
+        'configured_service_factory' => '/\bconfigured_service_factory\b/',
+        'configured_class_instantiator' => '/\bconfigured_class_instantiator\b/',
+        'container_get' => '/(?:\$container|\$this->container|\$this->container\(\)|\$this->context\(\)->container\(\))\s*->\s*get\s*\(/',
+        'dynamic_new' => '/new\s+\$[A-Za-z_][A-Za-z0-9_]*\s*\(/',
+        'file_include' => '/\b(?:include|include_once|require|require_once)\b/',
+        'callback_dispatch' => '/\bcall_user_func(?:_array)?\s*\(/',
+        'eval' => '/\beval\s*\(/',
+    ];
+}
+
+function php_fan_ai_code_without_comments_and_strings(string $source): string
+{
+    $code = '';
+    foreach (PhpToken::tokenize($source) as $token) {
+        if (in_array($token->id, [T_COMMENT, T_DOC_COMMENT, T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)) {
+            $code .= str_repeat(' ', strlen($token->text));
+            continue;
+        }
+
+        $code .= $token->text;
+    }
+
+    return $code;
 }
 
 function php_fan_ai_meta_file_data(string $root, string $relativeFile): array
@@ -258,687 +942,590 @@ function php_fan_ai_composer_autoload(string $root): array
 
 function php_fan_ai_service_map(string $root, array $relativePhpFiles): array
 {
-    $registered = [];
-    $aliases = [];
-    $referenced = [];
-    $constants = php_fan_ai_service_id_constants($root);
+    return (new php_fan_ai_service_map_builder($root, $relativePhpFiles))->build();
+}
 
-    foreach ($relativePhpFiles as $relativeFile) {
-        $source = file_get_contents($root . '/' . $relativeFile);
-        if (!is_string($source)) {
+function php_fan_ai_service_descriptor(string $root, string $serviceId): ?array
+{
+    $map = php_fan_ai_build_map($root);
+
+    return $map['services']['descriptors'][$serviceId] ?? null;
+}
+
+function php_fan_ai_source_inventory_map(string $root, array $productionPhpFiles): array
+{
+    $queues = [];
+    foreach (php_fan_ai_source_inventory_queue_definitions() as $queueId => $definition) {
+        $locations = php_fan_ai_source_inventory_queue_locations($root, $productionPhpFiles, $definition);
+        $queues[$queueId] = php_fan_ai_source_inventory_queue_summary($queueId, $definition, $locations);
+    }
+
+    $next = array_values(array_filter(
+        $queues,
+        static fn(array $queue): bool => ($queue['classification'] ?? null) === 'actionable'
+            && (int)($queue['count'] ?? 0) > 0
+    ));
+    usort(
+        $next,
+        static fn(array $left, array $right): int => [
+            (int)$left['priority'],
+            -(int)$left['count'],
+            (string)$left['id'],
+        ] <=> [
+            (int)$right['priority'],
+            -(int)$right['count'],
+            (string)$right['id'],
+        ]
+    );
+
+    return [
+        'policy' => [
+            'description' => 'Compact source-guard queues for post-dynamic refactoring. The next queue contains only actionable non-zero guard queues.',
+            'classification_kinds' => [
+                'actionable',
+                'clean',
+                'bootstrap_boundary',
+                'composition_boundary',
+                'intentional_compatibility',
+                'tooling_support',
+                'entrypoint_boundary',
+            ],
+            'next_queue' => 'source_inventory.next',
+        ],
+        'queues' => $queues,
+        'next' => $next,
+    ];
+}
+
+function php_fan_ai_source_inventory_queue_definitions(): array
+{
+    return [
+        'service_locator_calls' => [
+            'guard_kind' => 'service_locator_call',
+            'classification' => 'actionable',
+            'priority' => 10,
+            'reason' => 'Production service-locator getService() calls should stay removed from runtime code.',
+            'patterns' => [
+                'service_locator_call' => '/->\s*getService\s*\(/',
+            ],
+        ],
+        'unmanaged_container_lookups' => [
+            'guard_kind' => 'container_lookup',
+            'classification' => 'actionable',
+            'priority' => 20,
+            'reason' => 'Container lookups outside DI composition roots should be migrated behind explicit collaborators.',
+            'patterns' => [
+                'container_get' => '/(?:\$container|\$this->container|\$this->container\(\)|\$this->context\(\)->container\(\))\s*->\s*get\s*\(/',
+            ],
+            'container_classification' => 'actionable',
+        ],
+        'bootstrap_container_lookups' => [
+            'guard_kind' => 'container_lookup',
+            'classification' => 'bootstrap_boundary',
+            'priority' => 80,
+            'reason' => 'Application bootstrap/default-provider container lookups that intentionally bridge runtime registries and configured defaults.',
+            'patterns' => [
+                'container_get' => '/(?:\$container|\$this->container|\$this->container\(\)|\$this->context\(\)->container\(\))\s*->\s*get\s*\(/',
+            ],
+            'container_classification' => 'bootstrap_boundary',
+        ],
+        'composition_container_lookups' => [
+            'guard_kind' => 'container_lookup',
+            'classification' => 'composition_boundary',
+            'priority' => 90,
+            'reason' => 'Container lookups that remain inside explicit DI composition-root leaves.',
+            'patterns' => [
+                'container_get' => '/(?:\$container|\$this->container|\$this->container\(\)|\$this->context\(\)->container\(\))\s*->\s*get\s*\(/',
+            ],
+            'container_classification' => 'composition_boundary',
+        ],
+        'unmanaged_loading_statements' => [
+            'guard_kind' => 'loading_statement',
+            'classification' => 'actionable',
+            'priority' => 30,
+            'reason' => 'Loading statements outside entrypoints, extension APIs, and tooling should move behind explicit loader adapters.',
+            'patterns' => [
+                'loading_statement' => '/\b(?:include|include_once|require|require_once)\b/',
+            ],
+            'loading_classification' => 'actionable',
+        ],
+        'intentional_loading_boundaries' => [
+            'guard_kind' => 'loading_statement',
+            'classification' => 'intentional_compatibility',
+            'priority' => 100,
+            'reason' => 'Loading statements that remain inside documented extension/loading adapter boundaries.',
+            'patterns' => [
+                'loading_statement' => '/\b(?:include|include_once|require|require_once)\b/',
+            ],
+            'loading_classification' => 'intentional_compatibility',
+        ],
+        'tooling_loading_statements' => [
+            'guard_kind' => 'loading_statement',
+            'classification' => 'tooling_support',
+            'priority' => 110,
+            'reason' => 'Loading statements used by AI/developer tooling rather than production runtime paths.',
+            'patterns' => [
+                'loading_statement' => '/\b(?:include|include_once|require|require_once)\b/',
+            ],
+            'loading_classification' => 'tooling_support',
+        ],
+        'entrypoint_loading_statements' => [
+            'guard_kind' => 'loading_statement',
+            'classification' => 'entrypoint_boundary',
+            'priority' => 120,
+            'reason' => 'Front-controller/bootstrap entrypoints intentionally load the Composer or framework bootstrap layer.',
+            'patterns' => [
+                'loading_statement' => '/\b(?:include|include_once|require|require_once)\b/',
+            ],
+            'loading_classification' => 'entrypoint_boundary',
+        ],
+        'explicit_native_construction_boundaries' => [
+            'guard_kind' => 'native_concrete_construction',
+            'classification' => 'intentional_compatibility',
+            'priority' => 130,
+            'reason' => 'Native framework/project concrete constructions that are pinned to explicit factories or adapter boundaries.',
+            'patterns' => [
+                'request_input_construction' => '/new\s+\\\\?fan\\\\core\\\\service\\\\request_input\s*\(/',
+                'exception_construction' => '/new\s+\\\\?fan\\\\(?:core|project)\\\\exception\\\\[A-Za-z0-9_\\\\]+\s*\(/',
+                'config_row_construction' => '/new\s+\\\\?fan\\\\(?:core|project)\\\\service\\\\config\\\\row\s*\(/',
+                'phpmailer_construction' => '/new\s+\\\\?PHPMailer\\\\PHPMailer\\\\PHPMailer\s*\(/',
+            ],
+        ],
+    ];
+}
+
+function php_fan_ai_source_inventory_queue_locations(string $root, array $productionPhpFiles, array $definition): array
+{
+    $locations = [];
+    foreach ($productionPhpFiles as $relativeFile) {
+        if (!is_string($relativeFile)) {
+            continue;
+        }
+        if (!php_fan_ai_source_inventory_file_matches_definition($relativeFile, $definition)) {
             continue;
         }
 
-        if (
-            str_starts_with($relativeFile, 'core/di/')
-            && preg_match_all('/->\s*factory\s*\(\s*[\'"]([^\'"]+)[\'"]/', $source, $matches) > 0
-        ) {
-            foreach ($matches[1] as $id) {
-                $registered[$id][] = $relativeFile;
-            }
+        $absoluteFile = rtrim($root, DIRECTORY_SEPARATOR) . '/' . $relativeFile;
+        if (!is_file($absoluteFile)) {
+            continue;
         }
 
-        if (
-            str_starts_with($relativeFile, 'core/di/')
-            && preg_match_all('/->\s*factory\s*\(\s*service_id::([A-Z0-9_]+)/', $source, $matches) > 0
-        ) {
-            foreach ($matches[1] as $constant) {
-                if (isset($constants[$constant])) {
-                    $registered[$constants[$constant]][] = $relativeFile;
-                }
+        $source = (string)file_get_contents($absoluteFile);
+        $code = php_fan_ai_code_without_comments_and_strings($source);
+        foreach (($definition['patterns'] ?? []) as $patternName => $pattern) {
+            if (!is_string($patternName) || !is_string($pattern)) {
+                continue;
             }
-        }
-
-        if (preg_match_all('/\$container\s*->\s*set\s*\(\s*[\'"]([^\'"]+)[\'"]/', $source, $matches) > 0) {
-            foreach ($matches[1] as $id) {
-                $registered[$id][] = $relativeFile;
+            if (preg_match_all($pattern, $code, $matches, PREG_OFFSET_CAPTURE) === 0) {
+                continue;
             }
-        }
-
-        if (preg_match_all('/\$container\s*->\s*set\s*\(\s*service_id::([A-Z0-9_]+)/', $source, $matches) > 0) {
-            foreach ($matches[1] as $constant) {
-                if (isset($constants[$constant])) {
-                    $registered[$constants[$constant]][] = $relativeFile;
-                }
-            }
-        }
-
-        if (
-            str_starts_with($relativeFile, 'core/di/')
-            && preg_match_all('/->\s*alias\s*\(\s*[\'"]([^\'"]+)[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]/', $source, $matches, PREG_SET_ORDER) > 0
-        ) {
-            foreach ($matches as $match) {
-                $aliases[$match[1]] = [
-                    'target' => $match[2],
+            foreach ($matches[0] as [$value, $offset]) {
+                $line = substr_count($source, "\n", 0, $offset) + 1;
+                $locations[] = [
                     'file' => $relativeFile,
+                    'line' => $line,
+                    'pattern' => $patternName,
+                    'value' => trim((string)$value),
                 ];
             }
         }
-
-        if (preg_match_all('/(?:\$container|\$this->container\(\)|\$this->context\(\)->container\(\))\s*->\s*get\s*\(\s*[\'"]([^\'"]+)[\'"]/', $source, $matches) > 0) {
-            foreach ($matches[1] as $id) {
-                $referenced[$id][] = $relativeFile;
-            }
-        }
-
-        if (preg_match_all('/(?:\$container|\$this->container\(\)|\$this->context\(\)->container\(\))\s*->\s*get\s*\(\s*service_id::([A-Z0-9_]+)/', $source, $matches) > 0) {
-            foreach ($matches[1] as $constant) {
-                if (isset($constants[$constant])) {
-                    $referenced[$constants[$constant]][] = $relativeFile;
-                }
-            }
-        }
     }
 
-    $registered = php_fan_ai_sorted_occurrences($registered);
+    usort(
+        $locations,
+        static fn(array $left, array $right): int => [
+            (string)$left['file'],
+            (int)$left['line'],
+            (string)$left['pattern'],
+            (string)$left['value'],
+        ] <=> [
+            (string)$right['file'],
+            (int)$right['line'],
+            (string)$right['pattern'],
+            (string)$right['value'],
+        ]
+    );
 
+    return $locations;
+}
+
+function php_fan_ai_source_inventory_file_matches_definition(string $relativeFile, array $definition): bool
+{
+    if (isset($definition['container_classification']) && is_string($definition['container_classification'])) {
+        return php_fan_ai_source_inventory_container_classification($relativeFile) === $definition['container_classification'];
+    }
+
+    if (array_key_exists('file_category', $definition)) {
+        $category = php_fan_ai_dynamic_boundary_category_for_file($relativeFile);
+
+        return $category === $definition['file_category'];
+    }
+
+    if (isset($definition['loading_classification']) && is_string($definition['loading_classification'])) {
+        return php_fan_ai_source_inventory_loading_classification($relativeFile) === $definition['loading_classification'];
+    }
+
+    return true;
+}
+
+function php_fan_ai_source_inventory_container_classification(string $relativeFile): string
+{
+    if (php_fan_ai_dynamic_boundary_category_for_file($relativeFile) === 'composition_roots') {
+        return 'composition_boundary';
+    }
+
+    if (in_array($relativeFile, php_fan_ai_source_inventory_bootstrap_container_boundary_files(), true)) {
+        return 'bootstrap_boundary';
+    }
+
+    return 'actionable';
+}
+
+function php_fan_ai_source_inventory_bootstrap_container_boundary_files(): array
+{
     return [
-        'registered' => $registered,
-        'aliases' => $aliases,
-        'referenced' => php_fan_ai_sorted_occurrences($referenced),
-        'constants' => $constants,
-        'descriptors' => php_fan_ai_service_descriptors($root, $relativePhpFiles, $registered, $aliases, $constants),
+        'core/application/application.php',
+        'core/application/context.php',
+        'core/di/application_compiled_template_adapter_defaults_provider.php',
+        'core/di/application_image_adapter_defaults_provider.php',
+        'core/di/application_state_registry.php',
+        'core/di/application_storage_adapter_defaults_provider.php',
+        'core/factory/application_registry_defaults_provider_factory.php',
     ];
 }
 
-function php_fan_ai_service_descriptors(string $root, array $relativePhpFiles, array $registered, array $aliases, array $constants): array
+function php_fan_ai_source_inventory_loading_classification(string $relativeFile): string
 {
-    $registrations = php_fan_ai_service_registrations($root, $relativePhpFiles, $constants);
-    $creatorMethods = php_fan_ai_service_creator_methods($root, $relativePhpFiles, $constants);
-    $descriptors = [];
+    if ($relativeFile === 'htdocs/index.php') {
+        return 'entrypoint_boundary';
+    }
 
-    foreach ($registered as $id => $registrarFiles) {
-        $registration = $registrations[$id] ?? [
-            'creator_methods' => [],
-            'dependencies' => [],
-            'runtime_arguments' => [],
-            'shared' => null,
-        ];
-        $methods = $registration['creator_methods'];
-        $dependencies = $registration['dependencies'];
-        $runtimeArguments = $registration['runtime_arguments'];
-        $creatorMethodArguments = [];
+    if (str_starts_with($relativeFile, 'tools/')) {
+        return 'tooling_support';
+    }
 
-        foreach ($methods as $method) {
-            if (!isset($creatorMethods[$method])) {
-                continue;
-            }
-            $dependencies = array_merge($dependencies, $creatorMethods[$method]['dependencies']);
-            $creatorMethodArguments[$method] = [
-                'parameters' => $creatorMethods[$method]['parameters'],
-                'runtime_arguments' => $creatorMethods[$method]['runtime_arguments'],
-                'container_dependencies' => $creatorMethods[$method]['container_dependencies'],
-                'optional_arguments' => $creatorMethods[$method]['optional_arguments'],
-            ];
+    $dynamicBoundaryMap = php_fan_ai_dynamic_boundaries_map();
+    if (in_array($relativeFile, $dynamicBoundaryMap['manual_loading_adapters'] ?? [], true)) {
+        return 'intentional_compatibility';
+    }
+
+    return match (php_fan_ai_dynamic_boundary_category_for_file($relativeFile)) {
+        'extension_api' => 'intentional_compatibility',
+        'tooling_support' => 'tooling_support',
+        'composition_roots' => 'composition_boundary',
+        default => 'actionable',
+    };
+}
+
+function php_fan_ai_source_inventory_queue_summary(string $queueId, array $definition, array $locations): array
+{
+    $files = array_values(array_unique(array_column($locations, 'file')));
+    sort($files);
+    $classification = (string)($definition['classification'] ?? 'actionable');
+    if ($classification === 'actionable' && $locations === []) {
+        $classification = 'clean';
+    }
+
+    return [
+        'id' => $queueId,
+        'guard_kind' => (string)($definition['guard_kind'] ?? 'unknown'),
+        'classification' => $classification,
+        'priority' => (int)($definition['priority'] ?? 100),
+        'reason' => (string)($definition['reason'] ?? ''),
+        'count' => count($locations),
+        'files' => $files,
+        'locations' => $locations,
+    ];
+}
+
+function php_fan_ai_source_inventory_queue(array $map, string $queueId): ?array
+{
+    $queue = $map['source_inventory']['queues'][$queueId] ?? null;
+
+    return is_array($queue) ? $queue : null;
+}
+
+function php_fan_ai_dynamic_boundary_summary(
+    array $map,
+    ?string $boundaryKind = null,
+    array $excludeCategories = [],
+    array $includeCategories = [],
+    bool $rankByCount = false,
+    int $minimumCount = 0
+): array
+{
+    $summary = [];
+    $locationsByFile = $map['dynamic_boundaries']['locations'] ?? [];
+    if (!is_array($locationsByFile)) {
+        return [];
+    }
+
+    foreach ($locationsByFile as $file => $locations) {
+        if (!is_string($file) || !is_array($locations)) {
+            continue;
         }
+        $locations = php_fan_ai_dynamic_boundary_filter_locations($locations, $boundaryKind);
+        if ($boundaryKind !== null && $locations === []) {
+            continue;
+        }
+        $categoryDetails = php_fan_ai_dynamic_boundary_category_details_for_file($file) ?? [];
+        $category = $categoryDetails['category'] ?? null;
+        if ($includeCategories !== [] && (!is_string($category) || !in_array($category, $includeCategories, true))) {
+            continue;
+        }
+        if (is_string($category) && in_array($category, $excludeCategories, true)) {
+            continue;
+        }
+        $count = count($locations);
+        if ($count < $minimumCount) {
+            continue;
+        }
+        $patterns = [];
+        foreach ($locations as $location) {
+            if (is_array($location) && is_string($location['pattern'] ?? null)) {
+                $patterns[] = $location['pattern'];
+            }
+        }
+        $patterns = array_values(array_unique($patterns));
+        sort($patterns);
 
-        $dependencies = array_values(array_diff(array_unique($dependencies), [$id]));
-        sort($dependencies);
-        $runtimeArguments = array_values(array_unique($runtimeArguments));
-        sort($runtimeArguments);
-        ksort($creatorMethodArguments);
-        $aliasIds = php_fan_ai_aliases_for_service($id, $aliases);
+        $summary[] = [
+            'file' => $file,
+            'category' => $category,
+            'boundary_kind' => php_fan_ai_dynamic_boundary_kind_for_locations($file, $locations),
+            'composition_leaf_kind' => \fan\core\ai\dynamic_boundary::compositionLeafKind(is_string($category) ? $category : null, $count),
+            'reason' => $categoryDetails['reason'] ?? '',
+            'count' => $count,
+            'patterns' => $patterns,
+        ];
+    }
 
-        $descriptor = new \fan\core\di\service_descriptor(
-            $id,
-            $registrarFiles,
-            array_values(array_unique($methods)),
-            $registration['shared'],
-            $dependencies,
-            [
-                'registrar_files' => $registrarFiles,
-                'creator_methods' => array_values(array_unique($methods)),
-            ],
-            [
-                'container_dependencies' => $dependencies,
-                'runtime_arguments' => $runtimeArguments,
-            ],
-            $creatorMethodArguments,
-            $aliasIds
+    usort(
+        $summary,
+        $rankByCount
+            ? static fn(array $left, array $right): int => [
+                -(int)$left['count'],
+                (string)$left['file'],
+            ] <=> [
+                -(int)$right['count'],
+                (string)$right['file'],
+            ]
+            : static fn(array $left, array $right): int => [
+                (string)($left['category'] ?? ''),
+                (string)$left['file'],
+            ] <=> [
+                (string)($right['category'] ?? ''),
+                (string)$right['file'],
+            ]
+    );
+
+    return $summary;
+}
+
+function php_fan_ai_dynamic_boundary_composition_queues(array $map): array
+{
+    $terminalLeaves = [];
+    $actionableRoots = [];
+    $locationsByFile = $map['locations'] ?? [];
+    if (!is_array($locationsByFile)) {
+        $locationsByFile = $map['dynamic_boundaries']['locations'] ?? [];
+    }
+    if (!is_array($locationsByFile)) {
+        return [
+            'terminal_composition_leaves' => [],
+            'actionable_composition_roots' => [],
+        ];
+    }
+
+    foreach ($locationsByFile as $file => $locations) {
+        if (!is_string($file) || !is_array($locations)) {
+            continue;
+        }
+        $categoryDetails = php_fan_ai_dynamic_boundary_category_details_for_file($file) ?? [];
+        $kind = \fan\core\ai\dynamic_boundary::compositionLeafKind(
+            is_string($categoryDetails['category'] ?? null) ? $categoryDetails['category'] : null,
+            count($locations)
         );
-        $descriptors[$id] = $descriptor->toArray();
+        if ($kind === \fan\core\ai\dynamic_boundary::TERMINAL_COMPOSITION_LEAF) {
+            $terminalLeaves[] = $file;
+        }
+        if ($kind === \fan\core\ai\dynamic_boundary::ACTIONABLE_COMPOSITION_ROOT) {
+            $actionableRoots[] = $file;
+        }
     }
 
-    ksort($descriptors);
+    sort($terminalLeaves);
+    sort($actionableRoots);
 
-    return $descriptors;
+    return [
+        'terminal_composition_leaves' => $terminalLeaves,
+        'actionable_composition_roots' => $actionableRoots,
+    ];
 }
 
-function php_fan_ai_service_registrations(string $root, array $relativePhpFiles, array $constants): array
+function php_fan_ai_dynamic_boundary_named_migration_debt_queues(array $map): array
 {
-    $registrations = [];
-
-    foreach ($relativePhpFiles as $relativeFile) {
-        if (!str_starts_with($relativeFile, 'core/di/')) {
-            continue;
-        }
-
-        $source = file_get_contents($root . '/' . $relativeFile);
-        if (!is_string($source)) {
-            continue;
-        }
-
-        foreach (php_fan_ai_extract_fluent_calls($source, 'factory') as $call) {
-            $id = php_fan_ai_service_id_from_registration_call($call, $constants);
-            if ($id === null) {
-                continue;
-            }
-
-            $registrations[$id]['creator_methods'] ??= [];
-            $registrations[$id]['dependencies'] ??= [];
-            $registrations[$id]['runtime_arguments'] ??= [];
-            $registrations[$id]['shared'] ??= true;
-            $registrations[$id]['creator_methods'] = array_merge(
-                $registrations[$id]['creator_methods'],
-                php_fan_ai_creator_methods_from_source($call)
-            );
-            $registrations[$id]['dependencies'] = array_merge(
-                $registrations[$id]['dependencies'],
-                php_fan_ai_container_dependencies_from_source($call, $constants)
-            );
-            $registrations[$id]['runtime_arguments'] = array_merge(
-                $registrations[$id]['runtime_arguments'],
-                php_fan_ai_runtime_arguments_from_source($call)
-            );
-            if (preg_match('/,\s*false\s*\)\s*$/s', $call) === 1) {
-                $registrations[$id]['shared'] = false;
-            }
-        }
+    $actionableLocationsByFile = [];
+    $intentionalLocationsByFile = [];
+    $locationsByFile = $map['locations'] ?? [];
+    if (!is_array($locationsByFile)) {
+        $locationsByFile = $map['dynamic_boundaries']['locations'] ?? [];
     }
-
-    foreach ($registrations as $id => $registration) {
-        $registration['creator_methods'] = array_values(array_unique($registration['creator_methods']));
-        sort($registration['creator_methods']);
-        $registration['dependencies'] = array_values(array_unique($registration['dependencies']));
-        sort($registration['dependencies']);
-        $registration['runtime_arguments'] = array_values(array_unique($registration['runtime_arguments']));
-        sort($registration['runtime_arguments']);
-        $registrations[$id] = $registration;
-    }
-
-    return $registrations;
-}
-
-function php_fan_ai_aliases_for_service(string $id, array $aliases): array
-{
-    $result = [];
-    foreach ($aliases as $alias => $entry) {
-        if (($entry['target'] ?? null) === $id) {
-            $result[] = $alias;
-        }
-    }
-
-    sort($result);
-
-    return $result;
-}
-
-function php_fan_ai_service_creator_methods(string $root, array $relativePhpFiles, array $constants): array
-{
-    $methods = [];
-
-    foreach ($relativePhpFiles as $relativeFile) {
-        if (!str_starts_with($relativeFile, 'core/di/') || !str_ends_with($relativeFile, '_service_creator.php')) {
-            continue;
-        }
-
-        $source = file_get_contents($root . '/' . $relativeFile);
-        if (!is_string($source)) {
-            continue;
-        }
-
-        foreach (php_fan_ai_extract_public_creator_methods($source) as $methodName => $method) {
-            $arguments = php_fan_ai_creator_method_arguments_from_parameters($method['parameters']);
-            $methods[$methodName] = [
-                'file' => $relativeFile,
-                'dependencies' => php_fan_ai_container_dependencies_from_source($method['body'], $constants),
-                'parameters' => $arguments['parameters'],
-                'runtime_arguments' => $arguments['runtime_arguments'],
-                'container_dependencies' => $arguments['container_dependencies'],
-                'optional_arguments' => $arguments['optional_arguments'],
-            ];
-        }
-    }
-
-    ksort($methods);
-
-    return $methods;
-}
-
-function php_fan_ai_extract_fluent_calls(string $source, string $method): array
-{
-    $calls = [];
-    $offset = 0;
-    $needle = '->' . $method . '(';
-
-    while (($start = strpos($source, $needle, $offset)) !== false) {
-        $open = strpos($source, '(', $start);
-        if ($open === false) {
-            break;
-        }
-
-        $close = php_fan_ai_find_matching_paren($source, $open);
-        if ($close === null) {
-            break;
-        }
-
-        $calls[] = substr($source, $start, $close - $start + 1);
-        $offset = $close + 1;
-    }
-
-    return $calls;
-}
-
-function php_fan_ai_find_matching_paren(string $source, int $open): ?int
-{
-    $length = strlen($source);
-    $depth = 0;
-    $stringQuote = null;
-    $escaped = false;
-
-    for ($i = $open; $i < $length; $i++) {
-        $char = $source[$i];
-
-        if ($stringQuote !== null) {
-            if ($escaped) {
-                $escaped = false;
-                continue;
-            }
-            if ($char === '\\') {
-                $escaped = true;
-                continue;
-            }
-            if ($char === $stringQuote) {
-                $stringQuote = null;
-            }
-            continue;
-        }
-
-        if ($char === '\'' || $char === '"') {
-            $stringQuote = $char;
-            continue;
-        }
-
-        if ($char === '(') {
-            $depth++;
-            continue;
-        }
-
-        if ($char === ')') {
-            $depth--;
-            if ($depth === 0) {
-                return $i;
-            }
-        }
-    }
-
-    return null;
-}
-
-function php_fan_ai_service_id_from_registration_call(string $call, array $constants): ?string
-{
-    if (preg_match('/^->factory\s*\(\s*[\'"]([^\'"]+)[\'"]/', $call, $match) === 1) {
-        return $match[1];
-    }
-
-    if (preg_match('/^->factory\s*\(\s*service_id::([A-Z0-9_]+)/', $call, $match) === 1) {
-        return $constants[$match[1]] ?? null;
-    }
-
-    return null;
-}
-
-function php_fan_ai_creator_methods_from_source(string $source): array
-{
-    if (preg_match_all('/->\s*(create[A-Za-z0-9_]+)\s*\(/', $source, $matches) === 0) {
-        return [];
-    }
-
-    $methods = array_values(array_unique($matches[1]));
-    sort($methods);
-
-    return $methods;
-}
-
-function php_fan_ai_runtime_arguments_from_source(string $source): array
-{
-    if (preg_match('/(?:static\s+)?(?:function|fn)\s*\(([^)]*)\)/s', $source, $match) !== 1) {
-        return [];
-    }
-
-    $arguments = [];
-    foreach (explode(',', $match[1]) as $parameter) {
-        if (preg_match('/\$([A-Za-z_][A-Za-z0-9_]*)/', $parameter, $parameterMatch) !== 1) {
-            continue;
-        }
-        $name = $parameterMatch[1];
-        if ($name === 'container') {
-            continue;
-        }
-        $arguments[] = $name;
-    }
-
-    $arguments = array_values(array_unique($arguments));
-    sort($arguments);
-
-    return $arguments;
-}
-
-function php_fan_ai_extract_public_creator_methods(string $source): array
-{
-    $methods = [];
-    $offset = 0;
-
-    while (preg_match('/public\s+function\s+(create[A-Za-z0-9_]+)\s*\(/', $source, $match, PREG_OFFSET_CAPTURE, $offset) === 1) {
-        $methodName = $match[1][0];
-        $methodStart = $match[0][1];
-        $openParen = strpos($source, '(', $methodStart);
-        if ($openParen === false) {
-            break;
-        }
-
-        $closeParen = php_fan_ai_find_matching_paren($source, $openParen);
-        if ($closeParen === null) {
-            break;
-        }
-
-        $openBrace = strpos($source, '{', $closeParen);
-        if ($openBrace === false) {
-            break;
-        }
-
-        $closeBrace = php_fan_ai_find_matching_brace($source, $openBrace);
-        if ($closeBrace === null) {
-            break;
-        }
-
-        $methods[$methodName] = [
-            'parameters' => substr($source, $openParen + 1, $closeParen - $openParen - 1),
-            'body' => substr($source, $openBrace + 1, $closeBrace - $openBrace - 1),
+    if (!is_array($locationsByFile)) {
+        return [
+            'actionable_named_migration_debt' => [],
+            'intentional_named_compatibility_boundaries' => [],
         ];
-        $offset = $closeBrace + 1;
     }
 
-    return $methods;
-}
-
-function php_fan_ai_creator_method_arguments_from_parameters(string $parameters): array
-{
-    $all = [];
-    $runtime = [];
-    $container = [];
-    $optional = [];
-
-    foreach (php_fan_ai_split_parameter_list($parameters) as $parameter) {
-        $descriptor = php_fan_ai_parameter_descriptor($parameter);
-        if ($descriptor === null) {
+    foreach ($locationsByFile as $file => $locations) {
+        if (!is_string($file) || !is_array($locations)) {
             continue;
         }
-
-        $name = $descriptor['name'];
-        $all[] = $name;
-        if ($descriptor['optional']) {
-            $optional[] = $name;
-        }
-        if (php_fan_ai_parameter_is_container_dependency($name, $descriptor['type'])) {
-            $container[] = $name;
-            continue;
-        }
-        if (php_fan_ai_parameter_is_runtime_argument($descriptor['type'])) {
-            $runtime[] = $name;
+        $categoryDetails = php_fan_ai_dynamic_boundary_category_details_for_file($file) ?? [];
+        $category = $categoryDetails['category'] ?? null;
+        foreach ($locations as $location) {
+            if (!is_array($location) || ($location['boundary_kind'] ?? null) !== \fan\core\ai\dynamic_boundary::NAMED_DEFAULT_CLOSURE) {
+                continue;
+            }
+            $line = (int)($location['line'] ?? 0);
+            $debtKind = \fan\core\ai\dynamic_boundary::namedMigrationDebtKindForLocation($file, $line);
+            if ($debtKind === null) {
+                continue;
+            }
+            $location['named_debt_kind'] = $debtKind;
+            if ($debtKind === \fan\core\ai\dynamic_boundary::INTENTIONAL_NAMED_COMPATIBILITY) {
+                $intentionalLocationsByFile[$file][] = $location;
+                continue;
+            }
+            if ($category === 'migration_debt') {
+                $actionableLocationsByFile[$file][] = $location;
+            }
         }
     }
-
-    $all = array_values(array_unique($all));
-    $runtime = array_values(array_unique($runtime));
-    sort($runtime);
-    $container = array_values(array_unique($container));
-    sort($container);
-    $optional = array_values(array_unique($optional));
-    sort($optional);
 
     return [
-        'parameters' => $all,
-        'runtime_arguments' => $runtime,
-        'container_dependencies' => $container,
-        'optional_arguments' => $optional,
+        'actionable_named_migration_debt' => php_fan_ai_dynamic_boundary_named_debt_summary_from_locations(
+            $actionableLocationsByFile,
+            \fan\core\ai\dynamic_boundary::ACTIONABLE_NAMED_MIGRATION_DEBT
+        ),
+        'intentional_named_compatibility_boundaries' => php_fan_ai_dynamic_boundary_named_debt_summary_from_locations(
+            $intentionalLocationsByFile,
+            \fan\core\ai\dynamic_boundary::INTENTIONAL_NAMED_COMPATIBILITY
+        ),
     ];
 }
 
-function php_fan_ai_split_parameter_list(string $parameters): array
+function php_fan_ai_dynamic_boundary_named_debt_summary_from_locations(array $locationsByFile, string $namedDebtKind): array
 {
-    $items = [];
-    $start = 0;
-    $depth = 0;
-    $stringQuote = null;
-    $escaped = false;
-    $length = strlen($parameters);
-
-    for ($i = 0; $i < $length; $i++) {
-        $char = $parameters[$i];
-
-        if ($stringQuote !== null) {
-            if ($escaped) {
-                $escaped = false;
-                continue;
+    $summary = [];
+    foreach ($locationsByFile as $file => $locations) {
+        if (!is_string($file) || !is_array($locations) || $locations === []) {
+            continue;
+        }
+        $categoryDetails = php_fan_ai_dynamic_boundary_category_details_for_file($file) ?? [];
+        $patterns = [];
+        foreach ($locations as $location) {
+            if (is_array($location) && is_string($location['pattern'] ?? null)) {
+                $patterns[] = $location['pattern'];
             }
-            if ($char === '\\') {
-                $escaped = true;
-                continue;
-            }
-            if ($char === $stringQuote) {
-                $stringQuote = null;
-            }
-            continue;
         }
+        $patterns = array_values(array_unique($patterns));
+        sort($patterns);
 
-        if ($char === '\'' || $char === '"') {
-            $stringQuote = $char;
-            continue;
-        }
-
-        if ($char === '(' || $char === '[') {
-            $depth++;
-            continue;
-        }
-
-        if ($char === ')' || $char === ']') {
-            $depth--;
-            continue;
-        }
-
-        if ($char === ',' && $depth === 0) {
-            $items[] = trim(substr($parameters, $start, $i - $start));
-            $start = $i + 1;
-        }
+        $summary[] = [
+            'file' => $file,
+            'category' => $categoryDetails['category'] ?? null,
+            'boundary_kind' => \fan\core\ai\dynamic_boundary::NAMED_DEFAULT_CLOSURE,
+            'named_debt_kind' => $namedDebtKind,
+            'reason' => $categoryDetails['reason'] ?? '',
+            'count' => count($locations),
+            'patterns' => $patterns,
+            'locations' => array_values($locations),
+        ];
     }
 
-    $tail = trim(substr($parameters, $start));
-    if ($tail !== '') {
-        $items[] = $tail;
-    }
+    usort(
+        $summary,
+        static fn(array $left, array $right): int => [
+            -(int)$left['count'],
+            (string)$left['file'],
+        ] <=> [
+            -(int)$right['count'],
+            (string)$right['file'],
+        ]
+    );
 
-    return $items;
+    return $summary;
 }
 
-function php_fan_ai_parameter_descriptor(string $parameter): ?array
+function php_fan_ai_dynamic_boundary_named_migration_debt_summary(array $map): array
 {
-    if (preg_match('/\$([A-Za-z_][A-Za-z0-9_]*)/', $parameter, $match, PREG_OFFSET_CAPTURE) !== 1) {
-        return null;
+    $summary = $map['dynamic_boundaries']['actionable_named_migration_debt'] ?? null;
+    if (is_array($summary)) {
+        return array_values($summary);
     }
 
-    $name = $match[1][0];
-    $type = trim(substr($parameter, 0, $match[0][1]));
-    $type = trim(str_replace(['&', '...'], '', $type));
-    $type = preg_replace('/\s+/', ' ', $type);
+    return php_fan_ai_dynamic_boundary_named_migration_debt_queues($map)['actionable_named_migration_debt'];
+}
+
+function php_fan_ai_dynamic_boundary_named_migration_debt_summary_for_file(array $map, string $file): array
+{
+    foreach (php_fan_ai_dynamic_boundary_named_migration_debt_summary($map) as $entry) {
+        if (($entry['file'] ?? null) === $file) {
+            return $entry;
+        }
+    }
+
+    $categoryDetails = php_fan_ai_dynamic_boundary_category_details_for_file($file) ?? [];
 
     return [
-        'name' => $name,
-        'type' => is_string($type) ? $type : '',
-        'optional' => str_contains(substr($parameter, $match[0][1] + strlen($match[0][0])), '='),
+        'file' => $file,
+        'category' => $categoryDetails['category'] ?? null,
+        'boundary_kind' => \fan\core\ai\dynamic_boundary::NAMED_DEFAULT_CLOSURE,
+        'named_debt_kind' => \fan\core\ai\dynamic_boundary::ACTIONABLE_NAMED_MIGRATION_DEBT,
+        'reason' => $categoryDetails['reason'] ?? '',
+        'count' => 0,
+        'patterns' => [],
+        'locations' => [],
     ];
 }
 
-function php_fan_ai_parameter_is_container_dependency(string $name, string $type): bool
+function php_fan_ai_dynamic_boundary_summary_for_file(array $map, string $file, ?string $boundaryKind = null): array
 {
-    if ($name === 'container') {
-        return true;
-    }
-
-    foreach (php_fan_ai_parameter_type_names($type) as $typeName) {
-        if ($typeName === 'container_interface' || str_ends_with($typeName, '\\container_interface')) {
-            return true;
+    $locationsByFile = $map['dynamic_boundaries']['locations'] ?? [];
+    $locations = is_array($locationsByFile) && is_array($locationsByFile[$file] ?? null)
+        ? $locationsByFile[$file]
+        : [];
+    $locations = php_fan_ai_dynamic_boundary_filter_locations($locations, $boundaryKind);
+    $categoryDetails = php_fan_ai_dynamic_boundary_category_details_for_file($file) ?? [];
+    $patterns = [];
+    foreach ($locations as $location) {
+        if (is_array($location) && is_string($location['pattern'] ?? null)) {
+            $patterns[] = $location['pattern'];
         }
     }
+    $patterns = array_values(array_unique($patterns));
+    sort($patterns);
 
-    return false;
-}
-
-function php_fan_ai_parameter_is_runtime_argument(string $type): bool
-{
-    $runtimeTypes = [
-        'array' => true,
-        'bool' => true,
-        'float' => true,
-        'int' => true,
-        'mixed' => true,
-        'string' => true,
+    return [
+        'file' => $file,
+        'category' => $categoryDetails['category'] ?? null,
+        'boundary_kind' => php_fan_ai_dynamic_boundary_kind_for_locations($file, $locations),
+        'composition_leaf_kind' => \fan\core\ai\dynamic_boundary::compositionLeafKind(
+            is_string($categoryDetails['category'] ?? null) ? $categoryDetails['category'] : null,
+            count($locations)
+        ),
+        'reason' => $categoryDetails['reason'] ?? '',
+        'count' => count($locations),
+        'patterns' => $patterns,
+        'locations' => $locations,
     ];
-
-    foreach (php_fan_ai_parameter_type_names($type) as $typeName) {
-        if (isset($runtimeTypes[$typeName])) {
-            return true;
-        }
-    }
-
-    return $type === '';
 }
 
-function php_fan_ai_parameter_type_names(string $type): array
+function php_fan_ai_dynamic_boundary_filter_locations(array $locations, ?string $boundaryKind): array
 {
-    $type = trim($type);
-    if ($type === '') {
-        return [];
-    }
-
-    $type = str_replace('?', '', $type);
-    $type = preg_replace('/\s+/', '', $type);
-    if (!is_string($type) || $type === '') {
-        return [];
-    }
-
-    $names = [];
-    foreach (preg_split('/[|&]/', $type) ?: [] as $typeName) {
-        $typeName = strtolower(ltrim($typeName, '\\'));
-        if ($typeName !== '') {
-            $names[] = $typeName;
-        }
-    }
-
-    return $names;
-}
-
-function php_fan_ai_find_matching_brace(string $source, int $open): ?int
-{
-    $length = strlen($source);
-    $depth = 0;
-    $stringQuote = null;
-    $escaped = false;
-
-    for ($i = $open; $i < $length; $i++) {
-        $char = $source[$i];
-
-        if ($stringQuote !== null) {
-            if ($escaped) {
-                $escaped = false;
-                continue;
-            }
-            if ($char === '\\') {
-                $escaped = true;
-                continue;
-            }
-            if ($char === $stringQuote) {
-                $stringQuote = null;
-            }
-            continue;
-        }
-
-        if ($char === '\'' || $char === '"') {
-            $stringQuote = $char;
-            continue;
-        }
-
-        if ($char === '{') {
-            $depth++;
-            continue;
-        }
-
-        if ($char === '}') {
-            $depth--;
-            if ($depth === 0) {
-                return $i;
-            }
-        }
-    }
-
-    return null;
-}
-
-function php_fan_ai_container_dependencies_from_source(string $source, array $constants): array
-{
-    $dependencies = [];
-
-    if (preg_match_all('/(?:\$container|\$this->container\(\)|\$this->context\(\)->container\(\))\s*->\s*get\s*\(\s*[\'"]([^\'"]+)[\'"]/', $source, $matches) > 0) {
-        foreach ($matches[1] as $id) {
-            $dependencies[] = $id;
-        }
-    }
-
-    if (preg_match_all('/(?:\$container|\$this->container\(\)|\$this->context\(\)->container\(\))\s*->\s*get\s*\(\s*service_id::([A-Z0-9_]+)/', $source, $matches) > 0) {
-        foreach ($matches[1] as $constant) {
-            if (isset($constants[$constant])) {
-                $dependencies[] = $constants[$constant];
-            }
-        }
-    }
-
-    $dependencies = array_values(array_unique($dependencies));
-    sort($dependencies);
-
-    return $dependencies;
-}
-
-function php_fan_ai_service_id_constants(string $root): array
-{
-    $file = $root . '/core/di/service_id.php';
-    if (!is_file($file)) {
-        return [];
-    }
-
-    $source = (string)file_get_contents($file);
-    if (preg_match_all('/public\s+const\s+([A-Z0-9_]+)\s*=\s*[\'"]([^\'"]+)[\'"]/', $source, $matches, PREG_SET_ORDER) === 0) {
-        return [];
-    }
-
-    $constants = [];
-    foreach ($matches as $match) {
-        $constants[$match[1]] = $match[2];
-    }
-    ksort($constants);
-
-    return $constants;
-}
-
-function php_fan_ai_sorted_occurrences(array $occurrences): array
-{
-    ksort($occurrences);
-    foreach ($occurrences as $id => $files) {
-        $files = array_values(array_unique($files));
-        sort($files);
-        $occurrences[$id] = $files;
-    }
-
-    return $occurrences;
+    return \fan\core\ai\dynamic_boundary::filterLocations($locations, $boundaryKind);
 }
 
 function php_fan_ai_count_strict_files(string $root, array $relativePhpFiles): int
@@ -1238,7 +1825,7 @@ function php_fan_ai_validate_map_contract(string $root, array $map): array
         }
     }
 
-    foreach (['schema_version', 'generated_at', 'entrypoints', 'source_roots', 'test_roots', 'autoload', 'ai_docs', 'commands', 'counts', 'files', 'services', 'metadata', 'dynamic_boundaries', 'verification'] as $key) {
+    foreach (['schema_version', 'generated_at', 'entrypoints', 'source_roots', 'test_roots', 'autoload', 'ai_docs', 'commands', 'counts', 'files', 'services', 'metadata', 'dynamic_boundaries', 'source_inventory', 'verification'] as $key) {
         if (!array_key_exists($key, $map)) {
             $errors[] = 'AI map is missing required key: ' . $key;
         }
@@ -1251,7 +1838,7 @@ function php_fan_ai_validate_map_contract(string $root, array $map): array
         $errors[] = 'AI map generated_at must be an ISO-like date string.';
     }
 
-    foreach (['entrypoints', 'autoload', 'commands', 'counts', 'files', 'services', 'metadata', 'dynamic_boundaries', 'verification'] as $key) {
+    foreach (['entrypoints', 'autoload', 'commands', 'counts', 'files', 'services', 'metadata', 'dynamic_boundaries', 'source_inventory', 'verification'] as $key) {
         if (isset($map[$key]) && !is_array($map[$key])) {
             $errors[] = 'AI map key must be an array: ' . $key;
         }
@@ -1268,9 +1855,15 @@ function php_fan_ai_validate_map_contract(string $root, array $map): array
         }
     }
 
-    foreach (['registered', 'aliases', 'referenced', 'constants', 'descriptors'] as $key) {
+    foreach (['registered', 'aliases', 'referenced', 'referenced_locations', 'constants', 'descriptors'] as $key) {
         if (!isset($map['services'][$key]) || !is_array($map['services'][$key])) {
             $errors[] = 'AI map services section is missing array key: ' . $key;
+        }
+    }
+    foreach (($map['services']['referenced_locations'] ?? []) as $id => $locations) {
+        if (!is_string($id) || !php_fan_ai_is_source_location_list($locations)) {
+            $errors[] = 'AI map referenced_locations entries must be source-location lists keyed by service id.';
+            break;
         }
     }
     foreach (($map['services']['descriptors'] ?? []) as $id => $descriptor) {
@@ -1288,6 +1881,42 @@ function php_fan_ai_validate_map_contract(string $root, array $map): array
         }
         if (array_key_exists('shared', $descriptor) && !is_bool($descriptor['shared']) && $descriptor['shared'] !== null) {
             $errors[] = 'AI map descriptor "' . $id . '" shared must be boolean or null.';
+        }
+        foreach (['class', 'factory', 'config_key'] as $nullableStringKey) {
+            if (!array_key_exists($nullableStringKey, $descriptor) || (!is_string($descriptor[$nullableStringKey]) && $descriptor[$nullableStringKey] !== null)) {
+                $errors[] = 'AI map descriptor "' . $id . '" must have nullable string key: ' . $nullableStringKey;
+            }
+        }
+        if (!isset($descriptor['lifetime_reason']) || !is_string($descriptor['lifetime_reason']) || $descriptor['lifetime_reason'] === '') {
+            $errors[] = 'AI map descriptor "' . $id . '" must have non-empty lifetime_reason.';
+        }
+        if (!isset($descriptor['source_edges']) || !is_array($descriptor['source_edges'])) {
+            $errors[] = 'AI map descriptor "' . $id . '" must have source_edges.';
+        } else {
+            foreach (['aliases', 'classes', 'dependencies', 'factories', 'config_keys', 'runtime_arguments', 'registrar_files', 'creator_methods'] as $listKey) {
+                if (!isset($descriptor['source_edges'][$listKey]) || !php_fan_ai_is_string_list($descriptor['source_edges'][$listKey])) {
+                    $errors[] = 'AI map descriptor "' . $id . '" source_edges must have string-list key: ' . $listKey;
+                }
+            }
+        }
+        if (!isset($descriptor['referenced_by']) || !is_array($descriptor['referenced_by'])) {
+            $errors[] = 'AI map descriptor "' . $id . '" must have referenced_by.';
+        } else {
+            if (!isset($descriptor['referenced_by']['files']) || !php_fan_ai_is_string_list($descriptor['referenced_by']['files'])) {
+                $errors[] = 'AI map descriptor "' . $id . '" referenced_by must have string-list key: files';
+            }
+            if (!isset($descriptor['referenced_by']['locations']) || !php_fan_ai_is_source_location_list($descriptor['referenced_by']['locations'])) {
+                $errors[] = 'AI map descriptor "' . $id . '" referenced_by must have source-location-list key: locations';
+            }
+        }
+        if (!isset($descriptor['source_locations']) || !is_array($descriptor['source_locations'])) {
+            $errors[] = 'AI map descriptor "' . $id . '" must have source_locations.';
+        } else {
+            foreach (['registrations', 'creator_methods', 'classes', 'dependencies', 'factories', 'config_keys', 'runtime_arguments', 'aliases'] as $listKey) {
+                if (!isset($descriptor['source_locations'][$listKey]) || !php_fan_ai_is_source_location_list($descriptor['source_locations'][$listKey])) {
+                    $errors[] = 'AI map descriptor "' . $id . '" source_locations must have source-location-list key: ' . $listKey;
+                }
+            }
         }
         if (!isset($descriptor['factory_origin']) || !is_array($descriptor['factory_origin'])) {
             $errors[] = 'AI map descriptor "' . $id . '" must have factory_origin.';
@@ -1326,6 +1955,98 @@ function php_fan_ai_validate_map_contract(string $root, array $map): array
 
     if (($map['metadata']['meta_schema'] ?? null) !== '.ai/meta.schema.json') {
         $errors[] = 'AI map metadata.meta_schema must point to .ai/meta.schema.json.';
+    }
+    foreach (['extension_api', 'composition_roots', 'tooling_support', 'migration_debt'] as $category) {
+        if (!isset($map['dynamic_boundaries']['category_reasons'][$category]) || !is_string($map['dynamic_boundaries']['category_reasons'][$category]) || $map['dynamic_boundaries']['category_reasons'][$category] === '') {
+            $errors[] = 'AI map dynamic_boundaries.category_reasons must have non-empty reason for: ' . $category;
+        }
+    }
+    if (!isset($map['dynamic_boundaries']['locations']) || !is_array($map['dynamic_boundaries']['locations'])) {
+        $errors[] = 'AI map dynamic_boundaries.locations must be an array.';
+    } else {
+        foreach ($map['dynamic_boundaries']['locations'] as $file => $locations) {
+            if (!is_string($file) || !php_fan_ai_is_dynamic_boundary_location_list($locations)) {
+                $errors[] = 'AI map dynamic_boundaries.locations must be keyed by file and contain dynamic boundary locations.';
+                break;
+            }
+        }
+    }
+    foreach (['terminal_composition_leaves', 'actionable_composition_roots'] as $key) {
+        if (!isset($map['dynamic_boundaries'][$key]) || !php_fan_ai_is_string_list($map['dynamic_boundaries'][$key])) {
+            $errors[] = 'AI map dynamic_boundaries.' . $key . ' must be a list of strings.';
+        }
+    }
+    foreach (['actionable_named_migration_debt', 'intentional_named_compatibility_boundaries'] as $key) {
+        if (!isset($map['dynamic_boundaries'][$key]) || !php_fan_ai_is_dynamic_boundary_named_debt_summary_list($map['dynamic_boundaries'][$key])) {
+            $errors[] = 'AI map dynamic_boundaries.' . $key . ' must be a named-debt summary list.';
+        }
+    }
+    if (!isset($map['source_inventory']['queues']) || !is_array($map['source_inventory']['queues'])) {
+        $errors[] = 'AI map source_inventory.queues must be an array.';
+    } else {
+        foreach ($map['source_inventory']['queues'] as $queueId => $queue) {
+            if (!is_string($queueId) || !php_fan_ai_is_source_inventory_queue($queue)) {
+                $errors[] = 'AI map source_inventory.queues must contain source-inventory queues keyed by id.';
+                break;
+            }
+            if (($queue['id'] ?? null) !== $queueId) {
+                $errors[] = 'AI map source_inventory queue id mismatch for: ' . $queueId;
+            }
+        }
+    }
+    if (!isset($map['source_inventory']['next']) || !is_array($map['source_inventory']['next']) || !array_is_list($map['source_inventory']['next'])) {
+        $errors[] = 'AI map source_inventory.next must be a list.';
+    } else {
+        foreach ($map['source_inventory']['next'] as $queue) {
+            if (!php_fan_ai_is_source_inventory_queue($queue)) {
+                $errors[] = 'AI map source_inventory.next must contain source-inventory queue summaries.';
+                break;
+            }
+            if (($queue['classification'] ?? null) !== 'actionable' || (int)($queue['count'] ?? 0) <= 0) {
+                $errors[] = 'AI map source_inventory.next must contain only actionable non-empty queues.';
+                break;
+            }
+        }
+    }
+    $compositionLeafPolicy = $map['dynamic_boundaries']['composition_leaf_policy'] ?? null;
+    if (!is_array($compositionLeafPolicy)) {
+        $errors[] = 'AI map dynamic_boundaries.composition_leaf_policy must be an object.';
+    } else {
+        if (($compositionLeafPolicy['terminal_count'] ?? null) !== 1) {
+            $errors[] = 'AI map dynamic_boundaries.composition_leaf_policy.terminal_count must be 1.';
+        }
+        if (($compositionLeafPolicy['actionable_min_count'] ?? null) !== 2) {
+            $errors[] = 'AI map dynamic_boundaries.composition_leaf_policy.actionable_min_count must be 2.';
+        }
+        if (($compositionLeafPolicy['terminal_kind'] ?? null) !== \fan\core\ai\dynamic_boundary::TERMINAL_COMPOSITION_LEAF) {
+            $errors[] = 'AI map dynamic_boundaries.composition_leaf_policy.terminal_kind must be terminal_composition_leaf.';
+        }
+        if (($compositionLeafPolicy['actionable_kind'] ?? null) !== \fan\core\ai\dynamic_boundary::ACTIONABLE_COMPOSITION_ROOT) {
+            $errors[] = 'AI map dynamic_boundaries.composition_leaf_policy.actionable_kind must be actionable_composition_root.';
+        }
+        if (!is_string($compositionLeafPolicy['description'] ?? null) || $compositionLeafPolicy['description'] === '') {
+            $errors[] = 'AI map dynamic_boundaries.composition_leaf_policy.description must be non-empty.';
+        }
+    }
+    $namedMigrationDebtPolicy = $map['dynamic_boundaries']['named_migration_debt_policy'] ?? null;
+    if (!is_array($namedMigrationDebtPolicy)) {
+        $errors[] = 'AI map dynamic_boundaries.named_migration_debt_policy must be an object.';
+    } else {
+        if (($namedMigrationDebtPolicy['boundary_kind'] ?? null) !== \fan\core\ai\dynamic_boundary::NAMED_DEFAULT_CLOSURE) {
+            $errors[] = 'AI map dynamic_boundaries.named_migration_debt_policy.boundary_kind must be named_default_closure_boundary.';
+        }
+        if (($namedMigrationDebtPolicy['category'] ?? null) !== 'migration_debt') {
+            $errors[] = 'AI map dynamic_boundaries.named_migration_debt_policy.category must be migration_debt.';
+        }
+        if (($namedMigrationDebtPolicy['actionable_kind'] ?? null) !== \fan\core\ai\dynamic_boundary::ACTIONABLE_NAMED_MIGRATION_DEBT) {
+            $errors[] = 'AI map dynamic_boundaries.named_migration_debt_policy.actionable_kind must be actionable_named_migration_debt.';
+        }
+        if (($namedMigrationDebtPolicy['intentional_kind'] ?? null) !== \fan\core\ai\dynamic_boundary::INTENTIONAL_NAMED_COMPATIBILITY) {
+            $errors[] = 'AI map dynamic_boundaries.named_migration_debt_policy.intentional_kind must be intentional_named_compatibility_boundary.';
+        }
+        if (!is_string($namedMigrationDebtPolicy['description'] ?? null) || $namedMigrationDebtPolicy['description'] === '') {
+            $errors[] = 'AI map dynamic_boundaries.named_migration_debt_policy.description must be non-empty.';
+        }
     }
     foreach (['meta', 'templates'] as $key) {
         if (!isset($map['metadata'][$key]['files']) || !is_array($map['metadata'][$key]['files'])) {
@@ -1387,6 +2108,178 @@ function php_fan_ai_is_string_list(mixed $value): bool
 
     foreach ($value as $item) {
         if (!is_string($item)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function php_fan_ai_is_source_location_list(mixed $value): bool
+{
+    if (!is_array($value) || !array_is_list($value)) {
+        return false;
+    }
+
+    foreach ($value as $location) {
+        if (!is_array($location)) {
+            return false;
+        }
+        if (!is_string($location['file'] ?? null) || $location['file'] === '') {
+            return false;
+        }
+        if (!is_int($location['line'] ?? null) || $location['line'] < 1) {
+            return false;
+        }
+        if (array_key_exists('method', $location) && (!is_string($location['method']) || $location['method'] === '')) {
+            return false;
+        }
+        if (array_key_exists('value', $location) && !is_string($location['value'])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function php_fan_ai_is_dynamic_boundary_location_list(mixed $value): bool
+{
+    if (!is_array($value) || !array_is_list($value)) {
+        return false;
+    }
+
+    foreach ($value as $location) {
+        if (!is_array($location)) {
+            return false;
+        }
+        if (!is_string($location['file'] ?? null) || $location['file'] === '') {
+            return false;
+        }
+        if (!is_int($location['line'] ?? null) || $location['line'] < 1) {
+            return false;
+        }
+        if (!is_string($location['pattern'] ?? null) || $location['pattern'] === '') {
+            return false;
+        }
+        if (!is_string($location['value'] ?? null)) {
+            return false;
+        }
+        if (!in_array($location['boundary_kind'] ?? null, ['method_body_or_runtime_boundary', 'named_default_closure_boundary'], true)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function php_fan_ai_is_dynamic_boundary_named_debt_summary_list(mixed $value): bool
+{
+    if (!is_array($value) || !array_is_list($value)) {
+        return false;
+    }
+
+    foreach ($value as $entry) {
+        if (!is_array($entry)) {
+            return false;
+        }
+        if (!is_string($entry['file'] ?? null) || $entry['file'] === '') {
+            return false;
+        }
+        if (!in_array($entry['category'] ?? null, ['extension_api', 'migration_debt'], true)) {
+            return false;
+        }
+        if (($entry['boundary_kind'] ?? null) !== \fan\core\ai\dynamic_boundary::NAMED_DEFAULT_CLOSURE) {
+            return false;
+        }
+        if (!in_array($entry['named_debt_kind'] ?? null, [
+            \fan\core\ai\dynamic_boundary::ACTIONABLE_NAMED_MIGRATION_DEBT,
+            \fan\core\ai\dynamic_boundary::INTENTIONAL_NAMED_COMPATIBILITY,
+        ], true)) {
+            return false;
+        }
+        if (!is_int($entry['count'] ?? null) || $entry['count'] < 1) {
+            return false;
+        }
+        if (!php_fan_ai_is_string_list($entry['patterns'] ?? null)) {
+            return false;
+        }
+        if (!is_array($entry['locations'] ?? null) || !array_is_list($entry['locations'])) {
+            return false;
+        }
+        foreach ($entry['locations'] as $location) {
+            if (!is_array($location)) {
+                return false;
+            }
+            if (!php_fan_ai_is_dynamic_boundary_location_list([$location])) {
+                return false;
+            }
+            if (($location['named_debt_kind'] ?? null) !== $entry['named_debt_kind']) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+function php_fan_ai_is_source_inventory_queue(mixed $value): bool
+{
+    if (!is_array($value)) {
+        return false;
+    }
+
+    foreach (['id', 'guard_kind', 'classification', 'reason'] as $key) {
+        if (!is_string($value[$key] ?? null) || $value[$key] === '') {
+            return false;
+        }
+    }
+    if (!in_array($value['classification'], [
+        'actionable',
+        'clean',
+        'bootstrap_boundary',
+        'composition_boundary',
+        'intentional_compatibility',
+        'tooling_support',
+        'entrypoint_boundary',
+    ], true)) {
+        return false;
+    }
+    if (!is_int($value['priority'] ?? null) || $value['priority'] < 0) {
+        return false;
+    }
+    if (!is_int($value['count'] ?? null) || $value['count'] < 0) {
+        return false;
+    }
+    if (!php_fan_ai_is_string_list($value['files'] ?? null)) {
+        return false;
+    }
+    if (!php_fan_ai_is_source_inventory_location_list($value['locations'] ?? null)) {
+        return false;
+    }
+
+    return true;
+}
+
+function php_fan_ai_is_source_inventory_location_list(mixed $value): bool
+{
+    if (!is_array($value) || !array_is_list($value)) {
+        return false;
+    }
+
+    foreach ($value as $location) {
+        if (!is_array($location)) {
+            return false;
+        }
+        if (!is_string($location['file'] ?? null) || $location['file'] === '') {
+            return false;
+        }
+        if (!is_int($location['line'] ?? null) || $location['line'] < 1) {
+            return false;
+        }
+        if (!is_string($location['pattern'] ?? null) || $location['pattern'] === '') {
+            return false;
+        }
+        if (!is_string($location['value'] ?? null)) {
             return false;
         }
     }

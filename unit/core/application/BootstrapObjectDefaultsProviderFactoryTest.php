@@ -93,8 +93,12 @@ final class BootstrapObjectDefaultsProviderFactoryTest extends TestCase
     public function testSourceOwnsBootstrapObjectDefaultAssembly(): void
     {
         $source = file_get_contents(dirname(__DIR__, 3) . '/core/factory/bootstrap_object_defaults_provider_factory.php');
+        $configuredServiceProviderSource = file_get_contents(dirname(__DIR__, 3) . '/core/factory/bootstrap_object_configured_service_provider.php');
+        $classInstantiatorProviderSource = file_get_contents(dirname(__DIR__, 3) . '/core/factory/bootstrap_object_class_instantiator_provider.php');
 
         $this->assertIsString($source);
+        $this->assertIsString($configuredServiceProviderSource);
+        $this->assertIsString($classInstantiatorProviderSource);
         $this->assertStringContainsString('final class bootstrap_object_defaults_provider_factory', $source);
         $this->assertStringContainsString('private \Closure $objectFactoryFactory;', $source);
         $this->assertStringContainsString('private \Closure $configuredServiceFactoryFactory;', $source);
@@ -128,9 +132,15 @@ final class BootstrapObjectDefaultsProviderFactoryTest extends TestCase
         $this->assertStringContainsString('?? fn(callable $classInstantiator): callable => ($this->configuredServiceFactoryProvider)($classInstantiator)', $source);
         $this->assertStringContainsString('?? fn(): callable => ($this->classInstantiatorProvider)()', $source);
         $this->assertStringContainsString('?? static fn(callable $configuredServiceFactory): callable => new bootstrap_object_factory($configuredServiceFactory)', $source);
-        $this->assertStringContainsString('?? static fn(callable $classInstantiator): callable => new configured_service_factory($classInstantiator)', $source);
-        $this->assertStringContainsString('?? static fn(): callable => new configured_class_instantiator(', $source);
-        $this->assertStringContainsString('new reflection_class_factory()', $source);
+        $this->assertStringContainsString('?? new bootstrap_object_configured_service_provider()', $source);
+        $this->assertStringContainsString('?? new bootstrap_object_class_instantiator_provider()', $source);
+        $this->assertStringNotContainsString('new configured_service_factory(', $source);
+        $this->assertStringNotContainsString('new configured_class_instantiator(', $source);
+        $this->assertStringNotContainsString('new reflection_class_factory()', $source);
+        $this->assertStringContainsString('final class bootstrap_object_configured_service_provider', $configuredServiceProviderSource);
+        $this->assertStringContainsString('return new configured_service_factory($classInstantiator);', $configuredServiceProviderSource);
+        $this->assertStringContainsString('final class bootstrap_object_class_instantiator_provider', $classInstantiatorProviderSource);
+        $this->assertStringContainsString('return new configured_class_instantiator(new reflection_class_factory());', $classInstantiatorProviderSource);
         $this->assertStringNotContainsString('private ?\Closure $objectFactoryFactory', $source);
         $this->assertStringNotContainsString('private ?\Closure $configuredServiceFactoryFactory', $source);
         $this->assertStringNotContainsString('private ?\Closure $classInstantiatorFactory', $source);

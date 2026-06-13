@@ -29,6 +29,14 @@ class BaseModelSpecFileImageEntityTest extends SourceFileContractTestCase
         $this->assertSame('<img class="hero">', $entity->getImgTagById(12, 'hero', ['loading' => 'lazy']));
         $this->assertSame([['hero', ['loading' => 'lazy']]], $row->imgTagCalls);
     }
+
+    public function testSourceUsesRelatedRowFactoryBoundary(): void
+    {
+        $source = $this->sourceCode();
+
+        $this->assertStringContainsString('$this->createRelatedEntityRow($linkTbl[0])->loadByParam(', $source);
+        $this->assertStringNotContainsString('->getService()', $source);
+    }
 }
 
 final class BaseModelSpecFileImageEntityProbe extends entity

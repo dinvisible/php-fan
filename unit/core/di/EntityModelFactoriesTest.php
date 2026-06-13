@@ -12,6 +12,7 @@ use fan\core\di\model_row_exception_factory;
 use fan\core\di\model_rowset_factory;
 use PHPUnit\Framework\TestCase;
 use fan\core\base\model\entity;
+use fan\core\base\model\entity_dependencies;
 use fan\core\base\model\rowset;
 
 
@@ -124,28 +125,32 @@ final class EntityModelFactoriesTest extends TestCase
         );
 
         $this->assertSame(EntityModelFactoriesConstructedModelEntityDouble::class, $delegatedClass);
-        for ($i = 12; $i <= 18; $i++) {
-            $this->assertInstanceOf(Closure::class, $delegatedArguments[$i]);
-        }
         $this->assertSame(
-            [$entityService, 'users', ['flag' => true], $entityConfigFactory, $databaseFactory, $reflectorFactory, $rowFactory, $rowsetFactory, $requestLoaderFactory, $modelEntityExceptionFactory, $namespaceResolver, $reflectionClassFactory],
-            array_slice($delegatedArguments, 0, 12)
+            [$entityService, 'users', ['flag' => true], $entityConfigFactory, $databaseFactory, $reflectorFactory, $rowFactory, $rowsetFactory, $requestLoaderFactory, $modelEntityExceptionFactory],
+            array_slice($delegatedArguments, 0, 10)
         );
+        $this->assertInstanceOf(entity_dependencies::class, $delegatedArguments[10]);
         $this->assertInstanceOf(EntityModelFactoriesConstructedModelEntityDouble::class, $entity);
-        for ($i = 12; $i <= 18; $i++) {
-            $this->assertInstanceOf(Closure::class, $entity->dependencies[$i]);
-        }
         $this->assertSame(
-            [$entityService, 'users', ['flag' => true], $entityConfigFactory, $databaseFactory, $reflectorFactory, $rowFactory, $rowsetFactory, $requestLoaderFactory, $modelEntityExceptionFactory, $namespaceResolver, $reflectionClassFactory],
-            array_slice($entity->dependencies, 0, 12)
+            [$entityService, 'users', ['flag' => true], $entityConfigFactory, $databaseFactory, $reflectorFactory, $rowFactory, $rowsetFactory, $requestLoaderFactory, $modelEntityExceptionFactory],
+            array_slice($entity->dependencies, 0, 10)
         );
-        $this->assertSame(15, ($entity->dependencies[12])('encrypted-15'));
-        $this->assertSame($entityService->linkedEntity, ($entity->dependencies[13])('roles', 'main'));
-        $this->assertSame($entityService->designer, ($entity->dependencies[14])($entityService->linkedEntity, 'update'));
-        $this->assertSame($entityService->description, ($entity->dependencies[15])($entityService->linkedEntity, ['force' => true]));
-        $this->assertSame('\Project\\', ($entity->dependencies[16])($entityService->linkedEntity));
-        $this->assertSame('default', ($entity->dependencies[17])($entityService->linkedEntity));
-        $this->assertSame('/sql', ($entity->dependencies[18])($entityService->linkedEntity));
+        $this->assertSame($delegatedArguments[10], $entity->dependencies[10]);
+        $dependencies = $entity->dependencies[10];
+        $this->assertInstanceOf(entity_dependencies::class, $dependencies);
+        $this->assertSame($reflectionClassFactory, $dependencies->reflectionClassFactory);
+        $this->assertSame('entity-namespace-2', ($dependencies->namespaceResolver)($entityService->linkedEntity, 2));
+        $this->assertSame(15, ($dependencies->entityIdDecoder)('encrypted-15'));
+        $this->assertSame($entityService->linkedEntity, ($dependencies->entityLookup)('roles', 'main'));
+        $this->assertSame($entityService->designer, ($dependencies->designerFactory)($entityService->linkedEntity, 'update'));
+        $this->assertSame($entityService->description, ($dependencies->descriptionProvider)($entityService->linkedEntity, ['force' => true]));
+        $this->assertSame('\Project\\', ($dependencies->namespacePrefixResolver)($entityService->linkedEntity));
+        $this->assertSame('default', ($dependencies->collectionKeyProvider)($entityService->linkedEntity));
+        $this->assertSame('/sql', ($dependencies->sqlDirectoryProvider)($entityService->linkedEntity));
+        $this->assertSame(['row-dependency'], ($dependencies->rowDependenciesProvider)($entityService->linkedEntity));
+        $this->assertSame(['file-data-row-dependency'], ($dependencies->fileDataRowDependenciesProvider)($entityService->linkedEntity));
+        $this->assertSame(['spec-file-image-row-dependency'], ($dependencies->specFileImageRowDependenciesProvider)($entityService->linkedEntity));
+        $this->assertSame($entityService->relatedRow, ($dependencies->relatedEntityRowFactory)($entityService->linkedEntity, 'photos'));
         $this->assertSame(
             [
                 ['getEntityByTable', 'roles', 'main'],
@@ -154,6 +159,11 @@ final class EntityModelFactoriesTest extends TestCase
                 ['getNsPrefix'],
                 ['getCollectionKey'],
                 ['getSqlDir'],
+                ['getRowDependencies'],
+                ['getFileDataRowDependencies'],
+                ['getSpecFileImageRowDependencies'],
+                ['get', 'photos'],
+                ['getNewRow', 'photos'],
             ],
             $entityService->calls
         );
@@ -326,15 +336,7 @@ final class EntityModelFactoriesConstructedModelEntityDouble
         ?callable $rowsetFactory,
         ?callable $requestLoaderFactory,
         ?callable $modelEntityExceptionFactory,
-        ?callable $namespaceResolver = null,
-        ?object $reflectionClassFactory = null,
-        ?callable $entityIdDecoder = null,
-        ?callable $entityLookup = null,
-        ?callable $designerFactory = null,
-        ?callable $descriptionProvider = null,
-        ?callable $namespacePrefixResolver = null,
-        ?callable $collectionKeyProvider = null,
-        ?callable $sqlDirectoryProvider = null
+        callable|entity_dependencies|null $entityDependencies = null
     ) {
         $this->dependencies = [
             $entityService,
@@ -347,15 +349,7 @@ final class EntityModelFactoriesConstructedModelEntityDouble
             $rowsetFactory,
             $requestLoaderFactory,
             $modelEntityExceptionFactory,
-            $namespaceResolver,
-            $reflectionClassFactory,
-            $entityIdDecoder,
-            $entityLookup,
-            $designerFactory,
-            $descriptionProvider,
-            $namespacePrefixResolver,
-            $collectionKeyProvider,
-            $sqlDirectoryProvider,
+            $entityDependencies,
         ];
     }
 }
@@ -368,6 +362,10 @@ final class EntityModelFactoriesEntityServiceDouble
 
     public object $description;
 
+    public object $relatedRow;
+
+    private ?string $requestedEntityName = null;
+
     public array $calls = [];
 
     public function __construct()
@@ -375,6 +373,7 @@ final class EntityModelFactoriesEntityServiceDouble
         $this->linkedEntity = new stdClass();
         $this->designer = new stdClass();
         $this->description = new stdClass();
+        $this->relatedRow = new stdClass();
     }
 
     public function getEncapsulant(): object
@@ -427,6 +426,42 @@ final class EntityModelFactoriesEntityServiceDouble
         $this->calls[] = ['getSqlDir'];
 
         return '/sql';
+    }
+
+    public function getRowDependencies(): array
+    {
+        $this->calls[] = ['getRowDependencies'];
+
+        return ['row-dependency'];
+    }
+
+    public function getFileDataRowDependencies(): array
+    {
+        $this->calls[] = ['getFileDataRowDependencies'];
+
+        return ['file-data-row-dependency'];
+    }
+
+    public function getSpecFileImageRowDependencies(): array
+    {
+        $this->calls[] = ['getSpecFileImageRowDependencies'];
+
+        return ['spec-file-image-row-dependency'];
+    }
+
+    public function get(string $entityName): static
+    {
+        $this->calls[] = ['get', $entityName];
+        $this->requestedEntityName = $entityName;
+
+        return $this;
+    }
+
+    public function getNewRow(): object
+    {
+        $this->calls[] = ['getNewRow', $this->requestedEntityName];
+
+        return $this->relatedRow;
     }
 }
 

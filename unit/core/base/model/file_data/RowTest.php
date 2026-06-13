@@ -94,6 +94,7 @@ class BaseModelFileDataRowTest extends SourceFileContractTestCase
         $this->assertStringContainsString('private ?object $fileDataStorage = null;', $source);
         $this->assertStringContainsString('$this->loadPhpArrayFile($path, [])', $source);
         $this->assertStringContainsString('parent::setDependenciesFromEntityService($entity);', $source);
+        $this->assertStringContainsString('$dependencies = $entity->fileDataRowDependencies();', $source);
         $this->assertStringContainsString('$this->createModelRowFatalException(', $source);
         $this->assertStringContainsString('$this->getEntity()->decodeEntityId((string)$idVal)', $source);
         $this->assertStringNotContainsString('getEncapsulant()->decryptId', $source);
@@ -102,6 +103,7 @@ class BaseModelFileDataRowTest extends SourceFileContractTestCase
         $this->assertStringNotContainsString('use fan\project\exception\model\entity\fatal as fatalException;', $source);
         $this->assertStringNotContainsString('php_array_file::load', $source);
         $this->assertStringNotContainsString('entity_member::getCurrentMember', $source);
+        $this->assertStringNotContainsString('->getService()', $source);
         $this->assertStringNotContainsString('include($path)', $source);
         $this->assertDoesNotMatchRegularExpression('/(?<!->)(?<!::)(?<!\\\\)\b(?:file_exists|is_link|readlink|is_dir|is_writable|is_file|mkdir|filesize|filemtime|move_uploaded_file|file_put_contents|clearstatcache|rename|copy|unlink)\s*\(/', $source);
     }

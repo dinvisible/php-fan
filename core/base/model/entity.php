@@ -130,6 +130,16 @@ abstract class entity
 
     private mixed $sqlDirectoryProvider = null;
 
+    private mixed $rowDependenciesProvider = null;
+
+    private mixed $fileDataRowDependenciesProvider = null;
+
+    private mixed $specFileImageRowDependenciesProvider = null;
+
+    private mixed $relatedEntityRowFactory = null;
+
+    private \Closure $modelClassExists;
+
     public function __construct(
         object $service,
         mixed $name,
@@ -141,7 +151,7 @@ abstract class entity
         ?callable $rowsetFactory = null,
         ?callable $requestLoaderFactory = null,
         ?callable $modelEntityExceptionFactory = null,
-        ?callable $namespaceResolver = null,
+        callable|entity_dependencies|null $namespaceResolver = null,
         ?object $reflectionClassFactory = null,
         ?callable $entityIdDecoder = null,
         ?callable $entityLookup = null,
@@ -149,13 +159,35 @@ abstract class entity
         ?callable $descriptionProvider = null,
         ?callable $namespacePrefixResolver = null,
         ?callable $collectionKeyProvider = null,
-        ?callable $sqlDirectoryProvider = null
+        ?callable $sqlDirectoryProvider = null,
+        ?callable $rowDependenciesProvider = null,
+        ?callable $fileDataRowDependenciesProvider = null,
+        ?callable $specFileImageRowDependenciesProvider = null,
+        ?callable $relatedEntityRowFactory = null,
+        ?callable $modelClassExists = null
     )
     {
         $param = (array)$param;
         $this->service  = $service;
         $this->name     = is_null($name) ? null : (string)$name;
         $this->namespaceResolver = $this->defaultNamespaceResolver();
+        if ($namespaceResolver instanceof entity_dependencies) {
+            $entityDependencies = $namespaceResolver;
+            $namespaceResolver = $entityDependencies->namespaceResolver;
+            $reflectionClassFactory ??= $entityDependencies->reflectionClassFactory;
+            $entityIdDecoder ??= $entityDependencies->entityIdDecoder;
+            $entityLookup ??= $entityDependencies->entityLookup;
+            $designerFactory ??= $entityDependencies->designerFactory;
+            $descriptionProvider ??= $entityDependencies->descriptionProvider;
+            $namespacePrefixResolver ??= $entityDependencies->namespacePrefixResolver;
+            $collectionKeyProvider ??= $entityDependencies->collectionKeyProvider;
+            $sqlDirectoryProvider ??= $entityDependencies->sqlDirectoryProvider;
+            $rowDependenciesProvider ??= $entityDependencies->rowDependenciesProvider;
+            $fileDataRowDependenciesProvider ??= $entityDependencies->fileDataRowDependenciesProvider;
+            $specFileImageRowDependenciesProvider ??= $entityDependencies->specFileImageRowDependenciesProvider;
+            $relatedEntityRowFactory ??= $entityDependencies->relatedEntityRowFactory;
+            $modelClassExists ??= $entityDependencies->modelClassExists;
+        }
         $entityIdDecoder ??= static fn(string $rowId): mixed => $service->getEncapsulant()->decryptId($rowId);
         $entityLookup ??= static fn(string $tableName, ?string $connectionName = null): mixed => $service->getEntityByTable($tableName, $connectionName);
         $designerFactory ??= static fn(entity $entity, string $type = 'select'): object => $service->getDesigner($entity, $type);
@@ -163,6 +195,10 @@ abstract class entity
         $namespacePrefixResolver ??= static fn(entity $entity): string => $service->getNsPrefix();
         $collectionKeyProvider ??= static fn(entity $entity): mixed => $service->getCollectionKey();
         $sqlDirectoryProvider ??= static fn(entity $entity): string => $service->getSqlDir();
+        $rowDependenciesProvider ??= static fn(entity $entity): array => method_exists($service, 'getRowDependencies') ? $service->getRowDependencies() : [];
+        $fileDataRowDependenciesProvider ??= static fn(entity $entity): array => method_exists($service, 'getFileDataRowDependencies') ? $service->getFileDataRowDependencies() : [];
+        $specFileImageRowDependenciesProvider ??= static fn(entity $entity): array => method_exists($service, 'getSpecFileImageRowDependencies') ? $service->getSpecFileImageRowDependencies() : [];
+        $relatedEntityRowFactory ??= static fn(entity $entity, string $entityName): object => $service->get($entityName)->getNewRow();
         $this->setEntityDependencies(
             $configFactory,
             $databaseFactory,
@@ -171,15 +207,22 @@ abstract class entity
             $rowsetFactory,
             $requestLoaderFactory,
             $modelEntityExceptionFactory,
-            $namespaceResolver,
-            $reflectionClassFactory,
-            $entityIdDecoder,
-            $entityLookup,
-            $designerFactory,
-            $descriptionProvider,
-            $namespacePrefixResolver,
-            $collectionKeyProvider,
-            $sqlDirectoryProvider
+            entityDependencies: new entity_dependencies(
+                $namespaceResolver,
+                $reflectionClassFactory,
+                $entityIdDecoder,
+                $entityLookup,
+                $designerFactory,
+                $descriptionProvider,
+                $namespacePrefixResolver,
+                $collectionKeyProvider,
+                $sqlDirectoryProvider,
+                $rowDependenciesProvider,
+                $fileDataRowDependenciesProvider,
+                $specFileImageRowDependenciesProvider,
+                $relatedEntityRowFactory,
+                $modelClassExists
+            )
         );
 
         $this->bakParam = $param;
@@ -203,7 +246,7 @@ abstract class entity
         ?callable $rowsetFactory = null,
         ?callable $requestLoaderFactory = null,
         ?callable $modelEntityExceptionFactory = null,
-        ?callable $namespaceResolver = null,
+        callable|entity_dependencies|null $namespaceResolver = null,
         ?object $reflectionClassFactory = null,
         ?callable $entityIdDecoder = null,
         ?callable $entityLookup = null,
@@ -211,9 +254,22 @@ abstract class entity
         ?callable $descriptionProvider = null,
         ?callable $namespacePrefixResolver = null,
         ?callable $collectionKeyProvider = null,
-        ?callable $sqlDirectoryProvider = null
+        ?callable $sqlDirectoryProvider = null,
+        ?callable $rowDependenciesProvider = null,
+        ?callable $fileDataRowDependenciesProvider = null,
+        ?callable $specFileImageRowDependenciesProvider = null,
+        ?callable $relatedEntityRowFactory = null,
+        ?callable $modelClassExists = null,
+        ?entity_dependencies $entityDependencies = null
     ): static
     {
+        if ($namespaceResolver instanceof entity_dependencies) {
+            $entityDependencies = $namespaceResolver;
+            $namespaceResolver = null;
+        }
+        if ($entityDependencies !== null) {
+            $this->applyEntityDependencies($entityDependencies);
+        }
         if ($configFactory !== null) {
             $this->configFactory = $configFactory;
         }
@@ -262,8 +318,72 @@ abstract class entity
         if ($sqlDirectoryProvider !== null) {
             $this->sqlDirectoryProvider = \Closure::fromCallable($sqlDirectoryProvider);
         }
+        if ($rowDependenciesProvider !== null) {
+            $this->rowDependenciesProvider = \Closure::fromCallable($rowDependenciesProvider);
+        }
+        if ($fileDataRowDependenciesProvider !== null) {
+            $this->fileDataRowDependenciesProvider = \Closure::fromCallable($fileDataRowDependenciesProvider);
+        }
+        if ($specFileImageRowDependenciesProvider !== null) {
+            $this->specFileImageRowDependenciesProvider = \Closure::fromCallable($specFileImageRowDependenciesProvider);
+        }
+        if ($relatedEntityRowFactory !== null) {
+            $this->relatedEntityRowFactory = \Closure::fromCallable($relatedEntityRowFactory);
+        }
+        if ($modelClassExists !== null) {
+            $this->modelClassExists = \Closure::fromCallable($modelClassExists);
+        }
+        if (!isset($this->modelClassExists)) {
+            $this->modelClassExists = (new entity_dependencies())->modelClassExists;
+        }
 
         return $this;
+    }
+
+    private function applyEntityDependencies(entity_dependencies $dependencies): void
+    {
+        if ($dependencies->namespaceResolver !== null) {
+            $this->namespaceResolver = $dependencies->namespaceResolver;
+        }
+        if ($dependencies->reflectionClassFactory !== null) {
+            $this->reflectionClassFactory = $dependencies->reflectionClassFactory;
+        }
+        if ($dependencies->entityIdDecoder !== null) {
+            $this->entityIdDecoder = $dependencies->entityIdDecoder;
+        }
+        if ($dependencies->entityLookup !== null) {
+            $this->entityLookup = $dependencies->entityLookup;
+        }
+        if ($dependencies->designerFactory !== null) {
+            $this->designerFactory = $dependencies->designerFactory;
+        }
+        if ($dependencies->descriptionProvider !== null) {
+            $this->descriptionProvider = $dependencies->descriptionProvider;
+        }
+        if ($dependencies->namespacePrefixResolver !== null) {
+            $this->namespacePrefixResolver = $dependencies->namespacePrefixResolver;
+        }
+        if ($dependencies->collectionKeyProvider !== null) {
+            $this->collectionKeyProvider = $dependencies->collectionKeyProvider;
+        }
+        if ($dependencies->sqlDirectoryProvider !== null) {
+            $this->sqlDirectoryProvider = $dependencies->sqlDirectoryProvider;
+        }
+        if ($dependencies->rowDependenciesProvider !== null) {
+            $this->rowDependenciesProvider = $dependencies->rowDependenciesProvider;
+        }
+        if ($dependencies->fileDataRowDependenciesProvider !== null) {
+            $this->fileDataRowDependenciesProvider = $dependencies->fileDataRowDependenciesProvider;
+        }
+        if ($dependencies->specFileImageRowDependenciesProvider !== null) {
+            $this->specFileImageRowDependenciesProvider = $dependencies->specFileImageRowDependenciesProvider;
+        }
+        if ($dependencies->relatedEntityRowFactory !== null) {
+            $this->relatedEntityRowFactory = $dependencies->relatedEntityRowFactory;
+        }
+        if ($dependencies->modelClassExists !== null) {
+            $this->modelClassExists = $dependencies->modelClassExists;
+        }
     }
 
     private function createModelEntityFatalException(string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null): \Throwable
@@ -680,6 +800,36 @@ abstract class entity
         return $this->entitySqlDirectory();
     }
 
+    public function rowDependencies(): array
+    {
+        return $this->entityDependencyList($this->rowDependenciesProvider, 'Entity row dependencies provider');
+    }
+
+    public function fileDataRowDependencies(): array
+    {
+        return $this->entityDependencyList($this->fileDataRowDependenciesProvider, 'Entity file-data row dependencies provider');
+    }
+
+    public function specFileImageRowDependencies(): array
+    {
+        return $this->entityDependencyList($this->specFileImageRowDependenciesProvider, 'Entity spec-file image row dependencies provider');
+    }
+
+    public function createRelatedEntityRow(string $entityName): object
+    {
+        if (!is_callable($this->relatedEntityRowFactory)) {
+            throw new \RuntimeException('Related entity row factory is not configured for model entity.');
+        }
+
+        $row = ($this->relatedEntityRowFactory)($this, $entityName);
+        if (!is_object($row)) {
+            $actual = gettype($row);
+            throw new \UnexpectedValueException('Related entity row factory returned "' . $actual . '".');
+        }
+
+        return $row;
+    }
+
     /**
      * @param mixed $default Fallback value returned when no explicit value is available.
      */
@@ -933,6 +1083,21 @@ abstract class entity
         return $directory;
     }
 
+    private function entityDependencyList(mixed $provider, string $label): array
+    {
+        if (!is_callable($provider)) {
+            return [];
+        }
+
+        $dependencies = $provider($this);
+        if (!is_array($dependencies)) {
+            $actual = is_object($dependencies) ? get_class($dependencies) : gettype($dependencies);
+            throw new \UnexpectedValueException($label . ' returned "' . $actual . '".');
+        }
+
+        return $dependencies;
+    }
+
     private function namespaceResolver(): callable
     {
         if (!isset($this->namespaceResolver)) {
@@ -940,6 +1105,15 @@ abstract class entity
         }
 
         return $this->namespaceResolver;
+    }
+
+    private function modelClassExists(string $className): bool
+    {
+        if (!isset($this->modelClassExists)) {
+            throw new \RuntimeException('Model class availability checker is not configured for model entity.');
+        }
+
+        return ($this->modelClassExists)($className);
     }
 
     private function defaultNamespaceResolver(): \Closure
@@ -965,7 +1139,7 @@ abstract class entity
 
             $className = $prefix . $name . '\\' . $key;
         }
-        if (empty($className) || !class_exists($className)) {
+        if (empty($className) || !$this->modelClassExists($className)) {
             $className = '\fan\project\base\model\\' . $key;
         }
 

@@ -6,6 +6,10 @@ namespace fan\core\di;
 
 final class application_utility_service_registrar
 {
+    public function __construct(private ?\Closure $dependenciesFactory = null)
+    {
+    }
+
     public function register(
         container $container,
         application_service_graph_registration_context $context
@@ -15,13 +19,14 @@ final class application_utility_service_registrar
         $obfuscatorServiceFactory = $context->obfuscatorServiceFactory;
         $imageModifyServiceFactory = $context->imageModifyServiceFactory;
         $soapServiceFactory = $context->soapServiceFactory;
+        $dependenciesFactory = $this->dependenciesFactory();
 
         return $container
             ->factory(
                 service_id::DATE,
                 static fn(container_interface $container, ?string $date = null, mixed $format = null, mixed $timezone = null, bool $save = true): mixed => $utilityServiceCreator->createDateService(
                     $container,
-                    $container->get(service_id::DATE_STATE),
+                    $dependenciesFactory($container)->dateState(),
                     $dateServiceFactory,
                     $date,
                     $format,
@@ -34,7 +39,7 @@ final class application_utility_service_registrar
                 service_id::OBFUSCATOR,
                 static fn(container_interface $container, string $type): mixed => $utilityServiceCreator->createObfuscatorService(
                     $container,
-                    $container->get(service_id::OBFUSCATOR_STATE),
+                    $dependenciesFactory($container)->obfuscatorState(),
                     $obfuscatorServiceFactory,
                     $type
                 ),
@@ -44,7 +49,7 @@ final class application_utility_service_registrar
                 service_id::IMAGE_MODIFY,
                 static fn(container_interface $container, ?string $sourcePath = null, array $createParam = [], bool $saveInstance = true): mixed => $utilityServiceCreator->createImageModifyService(
                     $container,
-                    $container->get(service_id::IMAGE_MODIFY_STATE),
+                    $dependenciesFactory($container)->imageModifyState(),
                     $imageModifyServiceFactory,
                     service_id::IMAGE_MODIFY,
                     $sourcePath,
@@ -57,7 +62,7 @@ final class application_utility_service_registrar
                 service_id::IMAGE_DRAW,
                 static fn(container_interface $container, ?string $sourcePath = null, array $createParam = [], bool $saveInstance = true): mixed => $utilityServiceCreator->createImageModifyService(
                     $container,
-                    $container->get(service_id::IMAGE_MODIFY_STATE),
+                    $dependenciesFactory($container)->imageModifyState(),
                     $imageModifyServiceFactory,
                     service_id::IMAGE_DRAW,
                     $sourcePath,
@@ -77,5 +82,11 @@ final class application_utility_service_registrar
                 ),
                 false
             );
+    }
+
+    private function dependenciesFactory(): \Closure
+    {
+        return $this->dependenciesFactory
+            ?? static fn(container_interface $container): application_utility_service_registrar_dependencies => new application_utility_service_registrar_dependencies($container);
     }
 }

@@ -113,9 +113,9 @@ abstract class row extends model_row
     {
         parent::setDependenciesFromEntityService($entity);
 
-        $service = $entity->getService();
-        if (method_exists($service, 'getFileDataRowDependencies')) {
-            $this->setFileDataRowDependencies(...$service->getFileDataRowDependencies());
+        $dependencies = $entity->fileDataRowDependencies();
+        if ($dependencies !== []) {
+            $this->setFileDataRowDependencies(...$dependencies);
         }
     }
 

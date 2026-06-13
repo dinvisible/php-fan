@@ -100,7 +100,17 @@ class BlockLoaderLoaderFormValidationTest extends SourceFileContractTestCase
         ) use (&$calls): \Throwable {
             $calls[] = [$exceptionClass, $block, $message, $code, $previous];
 
-            return new $exceptionClass($block, $message, $code, $previous);
+            return new $exceptionClass(
+                $block,
+                $message,
+                $code,
+                $previous,
+                null,
+                null,
+                new BlockLoaderFormValidationExceptionRequestDouble(),
+                new BlockLoaderFormValidationExceptionErrorDouble(),
+                new BlockLoaderFormValidationExceptionHeaderWriterDouble()
+            );
         };
     }
 }
@@ -147,4 +157,42 @@ final class BlockLoaderFormValidationViewDouble
     public array $json = [];
 
     public string $text = '';
+}
+
+final class BlockLoaderFormValidationExceptionRequestDouble
+{
+    public function getInfoString(): string
+    {
+        return 'GET /loader-form-validation-test';
+    }
+
+    public function getAll(string $source, array $default = []): array
+    {
+        return $default;
+    }
+}
+
+final class BlockLoaderFormValidationExceptionErrorDouble
+{
+    public array $exceptionMessages = [];
+
+    public function logExceptionMessage(string $message, string $header, string $note): void
+    {
+        $this->exceptionMessages[] = [$message, $header, $note];
+    }
+}
+
+final class BlockLoaderFormValidationExceptionHeaderWriterDouble
+{
+    public array $headers = [];
+
+    public function sent(?string &$file = null, ?int &$line = null): bool
+    {
+        return false;
+    }
+
+    public function send(string $header): void
+    {
+        $this->headers[] = $header;
+    }
 }

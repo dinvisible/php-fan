@@ -4,26 +4,36 @@ declare(strict_types=1);
 
 namespace fan\core\service;
 
-use fan\core\di\container_interface;
-
 class block_context
 {
+    private \Closure $tabFactory;
+    private \Closure $bootstrapRuntimeFactory;
+    private \Closure $projectTabClassExists;
+
     public function __construct(
-        private container_interface $container,
-        private object $reflectionClassFactory
+        callable $tabFactory,
+        callable $bootstrapRuntimeFactory,
+        private object $reflectionClassFactory,
+        ?callable $projectTabClassExists = null
     )
     {
+        $this->tabFactory = \Closure::fromCallable($tabFactory);
+        $this->bootstrapRuntimeFactory = \Closure::fromCallable($bootstrapRuntimeFactory);
+        $this->projectTabClassExists = \Closure::fromCallable(
+            $projectTabClassExists
+                ?? static fn(string $className): bool => class_exists($className, false)
+        );
     }
 
     public function getCurrentBlockInfo(): array
     {
-        if (!class_exists('\fan\project\service\tab', false)) {
+        if (!$this->projectTabClassExists('\fan\project\service\tab')) {
             return [null, null];
         }
-        $tab   = $this->container->get('tab');
+        $tab   = $this->tab();
         $block = $tab->getCurrentBlock();
         if ($block) {
-            $loader     = $this->container->get('bootstrap_runtime')->getLoader();
+            $loader     = $this->bootstrapRuntime()->getLoader();
             $reflection = $this->reflectionClass($block);
             $path       = $reflection->getFileName();
             $realPath   = $loader->getRealPath($path);
@@ -35,6 +45,26 @@ class block_context
         }
 
         return [$tab->getTabStage(), $path];
+    }
+
+    private function tab(): object
+    {
+        $tab = ($this->tabFactory)();
+        if (!is_object($tab)) {
+            throw new \UnexpectedValueException('Tab factory must return an object.');
+        }
+
+        return $tab;
+    }
+
+    private function bootstrapRuntime(): object
+    {
+        $runtime = ($this->bootstrapRuntimeFactory)();
+        if (!is_object($runtime)) {
+            throw new \UnexpectedValueException('Bootstrap runtime factory must return an object.');
+        }
+
+        return $runtime;
     }
 
     private function reflectionClass(object|string $object): \ReflectionClass
@@ -49,5 +79,10 @@ class block_context
         }
 
         return $reflection;
+    }
+
+    private function projectTabClassExists(string $className): bool
+    {
+        return ($this->projectTabClassExists)($className);
     }
 }

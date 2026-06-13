@@ -24,6 +24,8 @@ function php_fan_ai_explain_file(string $root, string $path): array
 
     $source = (string)file_get_contents($absoluteFile);
     $constants = php_fan_ai_service_id_constants($root);
+    $map = php_fan_ai_build_map($root);
+    $relatedServiceIds = php_fan_ai_explain_related_service_ids_from_map($map, $relativeFile);
 
     return [
         'file' => $relativeFile,
@@ -33,6 +35,9 @@ function php_fan_ai_explain_file(string $root, string $path): array
         'classes' => php_fan_ai_explain_classes($source),
         'functions' => php_fan_ai_explain_functions($source),
         'service_dependencies' => php_fan_ai_container_dependencies_from_source($source, $constants),
+        'service_reference_locations' => php_fan_ai_explain_service_reference_locations($map, $relativeFile),
+        'related_service_ids' => $relatedServiceIds,
+        'related_service_descriptors' => php_fan_ai_explain_related_service_descriptors($map, $relatedServiceIds),
         'related_tests' => php_fan_ai_explain_related_tests($root, $relativeFile),
         'metadata' => str_ends_with($relativeFile, '.meta.php')
             ? php_fan_ai_explain_meta($root, $relativeFile)
@@ -41,6 +46,8 @@ function php_fan_ai_explain_file(string $root, string $path): array
             ? ['placeholders' => php_fan_ai_template_placeholders($root, $relativeFile)]
             : null,
         'dynamic_boundaries' => php_fan_ai_explain_dynamic_boundaries($source),
+        'dynamic_boundary_category' => php_fan_ai_dynamic_boundary_category_for_file($relativeFile),
+        'dynamic_boundary_details' => php_fan_ai_explain_dynamic_boundary_details($map, $relativeFile, $source),
     ];
 }
 
@@ -149,6 +156,89 @@ function php_fan_ai_explain_related_tests(string $root, string $relativeFile): a
     return $tests;
 }
 
+function php_fan_ai_explain_related_service_ids(string $root, string $relativeFile): array
+{
+    return php_fan_ai_explain_related_service_ids_from_map(php_fan_ai_build_map($root), $relativeFile);
+}
+
+function php_fan_ai_explain_related_service_ids_from_map(array $map, string $relativeFile): array
+{
+    $ids = [];
+
+    foreach ($map['services']['descriptors'] as $id => $descriptor) {
+        if (in_array($relativeFile, $descriptor['registrar_files'] ?? [], true)) {
+            $ids[] = $id;
+            continue;
+        }
+        foreach (($descriptor['source_locations']['creator_methods'] ?? []) as $location) {
+            if (($location['file'] ?? null) === $relativeFile) {
+                $ids[] = $id;
+                break;
+            }
+        }
+    }
+
+    $ids = array_values(array_unique(array_map('strval', $ids)));
+    sort($ids);
+
+    return $ids;
+}
+
+function php_fan_ai_explain_related_service_descriptors(array $map, array $ids): array
+{
+    $summaries = [];
+    foreach ($ids as $id) {
+        $descriptor = $map['services']['descriptors'][$id] ?? null;
+        if (!is_array($descriptor)) {
+            continue;
+        }
+        $summaries[$id] = [
+            'id' => $id,
+            'class' => $descriptor['class'] ?? null,
+            'factory' => $descriptor['factory'] ?? null,
+            'config_key' => $descriptor['config_key'] ?? null,
+            'dependencies' => $descriptor['dependencies'] ?? [],
+        ];
+    }
+
+    ksort($summaries);
+
+    return $summaries;
+}
+
+function php_fan_ai_explain_service_reference_locations(array $map, string $relativeFile): array
+{
+    $references = [];
+    foreach (($map['services']['referenced_locations'] ?? []) as $id => $locations) {
+        if (!is_array($locations)) {
+            continue;
+        }
+        foreach ($locations as $location) {
+            if (($location['file'] ?? null) !== $relativeFile) {
+                continue;
+            }
+            $references[(string)$id][] = $location;
+        }
+    }
+
+    foreach ($references as $id => $locations) {
+        usort(
+            $locations,
+            static fn(array $left, array $right): int => [
+                (int)($left['line'] ?? 0),
+                (string)($left['value'] ?? ''),
+            ] <=> [
+                (int)($right['line'] ?? 0),
+                (string)($right['value'] ?? ''),
+            ]
+        );
+        $references[$id] = $locations;
+    }
+    ksort($references);
+
+    return $references;
+}
+
 function php_fan_ai_explain_meta(string $root, string $relativeFile): array
 {
     $data = php_fan_ai_meta_file_data($root, $relativeFile);
@@ -171,8 +261,57 @@ function php_fan_ai_explain_dynamic_boundaries(string $source): array
     ];
 }
 
+function php_fan_ai_explain_dynamic_boundary_details(array $map, string $relativeFile, string $source): array
+{
+    $categoryDetails = php_fan_ai_dynamic_boundary_category_details_for_file($relativeFile);
+    $locations = $map['dynamic_boundaries']['locations'][$relativeFile]
+        ?? php_fan_ai_dynamic_boundary_locations_from_source($relativeFile, $source);
+    $patterns = array_values(array_unique(array_map(
+        static fn(array $location): string => (string)($location['pattern'] ?? ''),
+        $locations
+    )));
+    $patterns = array_values(array_filter($patterns, static fn(string $pattern): bool => $pattern !== ''));
+    sort($patterns);
+
+    if ($categoryDetails === null && $patterns === []) {
+        return [];
+    }
+
+    return [
+        'category' => $categoryDetails['category'] ?? null,
+        'matched_entry' => $categoryDetails['matched_entry'] ?? null,
+        'boundary_kind' => php_fan_ai_dynamic_boundary_kind_for_locations($relativeFile, $locations),
+        'reason' => $categoryDetails['reason'] ?? null,
+        'patterns' => $patterns,
+        'locations' => $locations,
+    ];
+}
+
+function php_fan_ai_explain_dynamic_boundary_patterns(string $source): array
+{
+    $patterns = array_values(array_unique(array_map(
+        static fn(array $location): string => (string)$location['pattern'],
+        php_fan_ai_dynamic_boundary_locations_from_source('(inline)', $source)
+    )));
+
+    sort($patterns);
+
+    return $patterns;
+}
+
 function php_fan_ai_explain_render_markdown(array $explanation): string
 {
+    $dynamicDetails = $explanation['dynamic_boundary_details'] ?? [];
+    $dynamicPatterns = is_array($dynamicDetails) && isset($dynamicDetails['patterns']) && is_array($dynamicDetails['patterns'])
+        ? $dynamicDetails['patterns']
+        : [];
+    $dynamicLocations = is_array($dynamicDetails) && isset($dynamicDetails['locations']) && is_array($dynamicDetails['locations'])
+        ? $dynamicDetails['locations']
+        : [];
+    $serviceReferenceCount = 0;
+    foreach (($explanation['service_reference_locations'] ?? []) as $locations) {
+        $serviceReferenceCount += is_array($locations) ? count($locations) : 0;
+    }
     $lines = [
         '# AI Explain: ' . $explanation['file'],
         '',
@@ -180,7 +319,13 @@ function php_fan_ai_explain_render_markdown(array $explanation): string
         '- Namespace: ' . ($explanation['namespace'] ?? '(none)'),
         '- Strict types: ' . ($explanation['strict_types'] ? 'yes' : 'no'),
         '- Service dependencies: ' . (empty($explanation['service_dependencies']) ? '(none)' : implode(', ', $explanation['service_dependencies'])),
+        '- Service reference locations: ' . ($serviceReferenceCount === 0 ? '(none)' : (string)$serviceReferenceCount),
+        '- Related service ids: ' . (empty($explanation['related_service_ids']) ? '(none)' : implode(', ', $explanation['related_service_ids'])),
+        '- Related service summaries: ' . (empty($explanation['related_service_descriptors']) ? '(none)' : count($explanation['related_service_descriptors'])),
         '- Related tests: ' . (empty($explanation['related_tests']) ? '(none)' : implode(', ', $explanation['related_tests'])),
+        '- Dynamic boundary category: ' . ($explanation['dynamic_boundary_category'] ?? '(none)'),
+        '- Dynamic boundary patterns: ' . ($dynamicPatterns === [] ? '(none)' : implode(', ', $dynamicPatterns)),
+        '- Dynamic boundary locations: ' . ($dynamicLocations === [] ? '(none)' : (string)count($dynamicLocations)),
         '',
         '## Classes',
         '',

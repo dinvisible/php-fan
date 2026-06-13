@@ -7,14 +7,18 @@ namespace fan\core\di;
 final class application_session_service_creator
 {
     private \Closure $fatalExceptionFactory;
+    private \Closure $projectServiceClassExists;
 
-    public function __construct(?callable $fatalExceptionFactory = null)
+    public function __construct(?callable $fatalExceptionFactory = null, ?callable $projectServiceClassExists = null)
     {
         $this->fatalExceptionFactory = \Closure::fromCallable(
             $fatalExceptionFactory
                 ?? static function (mixed ...$arguments): \Throwable {
                     throw new \RuntimeException('Fatal exception factory is not configured for session service creator.');
                 }
+        );
+        $this->projectServiceClassExists = \Closure::fromCallable(
+            $projectServiceClassExists ?? static fn(string $className): bool => class_exists($className)
         );
     }
 
@@ -26,14 +30,16 @@ final class application_session_service_creator
         mixed $nameSpace = null,
         mixed $group = 'custom'
     ): mixed {
+        $sessionDependencies = $this->sessionDependencies($container);
+        $config = $sessionDependencies->config();
         if ($group === null) {
-            throw $this->createFatalException($container, 'Unset group name for \fan\core\service\session.');
+            throw $this->createFatalException($sessionDependencies, 'Unset group name for \fan\core\service\session.');
         }
         if ($nameSpace === null) {
-            $config = $container->get(service_id::CONFIG)->get('session');
+            $sessionConfig = $config->get('session');
             $group = 'app';
-            $nameSpace = $container->get(service_id::APPLICATION)->getAppName();
-            $replacementName = $config->get(['REPLACE_APP', $nameSpace]);
+            $nameSpace = $sessionDependencies->application()->getAppName();
+            $replacementName = $sessionConfig->get(['REPLACE_APP', $nameSpace]);
             if ($replacementName) {
                 $nameSpace = (string)$replacementName;
             }
@@ -44,7 +50,7 @@ final class application_session_service_creator
         $instance = $sessionState->getInstance($group, $nameSpace);
         if ($instance === null) {
             $className = self::getProjectServiceClassName('session');
-            if (!class_exists($className)) {
+            if (!$this->projectServiceClassExists($className)) {
                 throw new \InvalidArgumentException('Service "session" does not expose a project class.');
             }
 
@@ -52,35 +58,35 @@ final class application_session_service_creator
                 $className,
                 $nameSpace,
                 $group,
-                $container->get(service_id::CONFIG)->get('database'),
-                $container->get(service_id::REQUEST_INPUT),
-                static fn(): mixed => $container->get(service_id::ERROR),
-                $container->get(service_id::REQUEST),
+                $config->get('database'),
+                $sessionDependencies->requestInput(),
+                $sessionDependencies->errorFactory(),
+                $sessionDependencies->request(),
                 null,
-                static fn(string $namespace, string $group): mixed => $container->get(service_id::SESSION, $namespace, $group),
-                static fn(string $date): mixed => $container->get(service_id::DATE, $date),
-                static fn(mixed $path, mixed $domain): mixed => $container->get(service_id::COOKIE, $path, $domain),
-                $container->get(service_id::PEAR_HTTP_SESSION_LOADER),
+                $sessionDependencies->sessionFactory(),
+                $sessionDependencies->dateFactory(),
+                $sessionDependencies->cookieFactory(),
+                $sessionDependencies->pearHttpSessionLoader(),
                 $sessionEngineFactory,
                 $sessionState,
-                $container->get(service_id::BOOTSTRAP_RUNTIME),
-                $container->get(service_id::CONFIG),
-                static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
-                $container->get(service_id::PHP_RUNTIME_SETTINGS),
-                $container->get(service_id::NATIVE_SESSION),
-                $container->get(service_id::ARRAY_VALUE_READER)
+                $sessionDependencies->bootstrapRuntime(),
+                $config,
+                $sessionDependencies->cacheFactory(),
+                $sessionDependencies->phpRuntimeSettings(),
+                $sessionDependencies->nativeSession(),
+                $sessionDependencies->arrayValueReader()
             );
         }
 
         return $instance;
     }
 
-    private function createFatalException(container_interface $container, string $message): \Throwable
+    private function createFatalException(application_session_service_dependencies $sessionDependencies, string $message): \Throwable
     {
         $exception = ($this->fatalExceptionFactory)(
             $message,
-            requestInput: $container->get(service_id::REQUEST_INPUT),
-            exceptionHeaderWriter: $container->get(service_id::HEADER_WRITER)
+            requestInput: $sessionDependencies->requestInput(),
+            exceptionHeaderWriter: $sessionDependencies->headerWriter()
         );
         if (!$exception instanceof \Throwable) {
             throw new \UnexpectedValueException('Fatal exception factory must return a throwable object.');
@@ -89,8 +95,18 @@ final class application_session_service_creator
         return $exception;
     }
 
+    private function sessionDependencies(container_interface $container): application_session_service_dependencies
+    {
+        return new application_session_service_dependencies($container);
+    }
+
     private static function getProjectServiceClassName(string $serviceName): string
     {
         return '\fan\project\service\\' . trim($serviceName, " \t\n\r\0\x0B\\");
+    }
+
+    private function projectServiceClassExists(string $className): bool
+    {
+        return ($this->projectServiceClassExists)($className);
     }
 }

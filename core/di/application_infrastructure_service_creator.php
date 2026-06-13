@@ -7,8 +7,9 @@ namespace fan\core\di;
 final class application_infrastructure_service_creator
 {
     private \Closure $configRowFactoryFactory;
+    private \Closure $projectServiceClassExists;
 
-    public function __construct(?callable $configRowFactoryFactory = null)
+    public function __construct(?callable $configRowFactoryFactory = null, ?callable $projectServiceClassExists = null)
     {
         $this->configRowFactoryFactory = \Closure::fromCallable(
             $configRowFactoryFactory
@@ -19,6 +20,9 @@ final class application_infrastructure_service_creator
                 ): callable {
                     throw new \RuntimeException('Config row factory factory is not configured for infrastructure service creator.');
                 }
+        );
+        $this->projectServiceClassExists = \Closure::fromCallable(
+            $projectServiceClassExists ?? static fn(string $className): bool => class_exists($className)
         );
     }
 
@@ -33,9 +37,10 @@ final class application_infrastructure_service_creator
     ): mixed {
         $config = $configState->getInstance($configType);
         if ($config === null) {
-            $runtime = $serviceBootstrapRuntime ?? $container->get(service_id::BOOTSTRAP_RUNTIME);
+            $infrastructureDependencies = self::configCacheDependencies($container);
+            $runtime = $serviceBootstrapRuntime ?? $infrastructureDependencies->bootstrapRuntime();
             $className = self::getProjectServiceClassName('config');
-            if (!class_exists($className)) {
+            if (!$this->projectServiceClassExists($className)) {
                 throw new \InvalidArgumentException('Service "config" does not expose a project class.');
             }
 
@@ -43,18 +48,22 @@ final class application_infrastructure_service_creator
                 $className,
                 $configType,
                 $sourceType,
-                static fn(string $configType = 'service', string $sourceType = 'arr'): mixed => $container->get(service_id::CONFIG, $configType, $sourceType),
-                static fn(): mixed => $container->get(service_id::CONFIG_CACHE),
+                $infrastructureDependencies->configFactory(),
+                $infrastructureDependencies->configCacheFactory(),
                 $configState,
                 $runtime,
                 $runtime,
                 null,
-                $serviceCacheFactory ?? static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
-                $container->get(service_id::PHP_ARRAY_FILE_LOADER),
-                $this->configRowFactory($container->get(service_id::SERIALIZER_OPERATIONS), $runtime->serviceExceptionFactory(), $container->get(service_id::SHORT_CLASS_NAME_RESOLVER)),
-                $container->get(service_id::CACHE_SOURCE_FILE_METADATA),
-                $container->get(service_id::CONFIG_SOURCE_FILE_STORAGE),
-                $container->get(service_id::SHORT_CLASS_NAME_RESOLVER)
+                $serviceCacheFactory ?? $infrastructureDependencies->cacheFactory(),
+                $infrastructureDependencies->phpArrayFileLoader(),
+                $this->configRowFactory(
+                    $infrastructureDependencies->serializerOperations(),
+                    $runtime->serviceExceptionFactory(),
+                    $infrastructureDependencies->shortClassNameResolver()
+                ),
+                $infrastructureDependencies->cacheSourceFileMetadata(),
+                $infrastructureDependencies->configSourceFileStorage(),
+                $infrastructureDependencies->shortClassNameResolver()
             );
         }
 
@@ -68,6 +77,7 @@ final class application_infrastructure_service_creator
         callable $cacheEngineFactory,
         callable $cacheServiceFactory
     ): mixed {
+        $infrastructureDependencies = self::configCacheDependencies($container);
         try {
             $className = self::getProjectServiceClassName('cache');
             if ($cacheState->hasInstances()) {
@@ -77,27 +87,27 @@ final class application_infrastructure_service_creator
                     E_USER_ERROR
                 );
             }
-            if (!class_exists($className)) {
+            if (!$this->projectServiceClassExists($className)) {
                 throw new \InvalidArgumentException('Service "cache" does not expose a project class.');
             }
 
             $cache = $cacheServiceFactory(
                 $className,
                 $className::CONFIG_TYPE,
-                $container->get(service_id::BOOTSTRAP_RUNTIME),
-                static fn(): mixed => $container->get(service_id::ERROR),
+                $infrastructureDependencies->bootstrapRuntime(),
+                $infrastructureDependencies->errorFactory(),
                 $cacheState,
                 $memcacheState,
                 $cacheEngineFactory,
                 null,
                 null,
                 null,
-                $container->get(service_id::CACHE_SOURCE_FILE_METADATA),
-                $this->configCacheFatalExceptionFactory($container)
+                $infrastructureDependencies->cacheSourceFileMetadata(),
+                $this->configCacheFatalExceptionFactory($container, $infrastructureDependencies)
             );
             $cache->get('service');
         } catch (\Exception $exception) {
-            $container->get(service_id::BOOTSTRAP_RUNTIME)->logError($exception->getMessage());
+            $infrastructureDependencies->bootstrapRuntime()->logError($exception->getMessage());
             return null;
         }
 
@@ -112,9 +122,10 @@ final class application_infrastructure_service_creator
         callable $cacheServiceFactory,
         mixed $type = null
     ): mixed {
+        $infrastructureDependencies = self::configCacheDependencies($container);
         $className = self::getProjectServiceClassName('cache');
         if ($type === null) {
-            $config = $container->get(service_id::CONFIG);
+            $config = $infrastructureDependencies->config();
             $type = $config->get('cache')->get('DEFAULT_TYPE');
             if (empty($type)) {
                 throw $this->createServiceFatalException($container, $config, 'Default CACHE-type doesn\'t set in config-file.');
@@ -127,33 +138,37 @@ final class application_infrastructure_service_creator
 
         $instance = $cacheState->getInstance($type);
         if ($instance === null) {
-            if (!class_exists($className)) {
+            if (!$this->projectServiceClassExists($className)) {
                 throw new \InvalidArgumentException('Service "cache" does not expose a project class.');
             }
 
             $instance = $cacheServiceFactory(
                 $className,
                 $type,
-                $container->get(service_id::BOOTSTRAP_RUNTIME),
-                static fn(): mixed => $container->get(service_id::ERROR),
+                $infrastructureDependencies->bootstrapRuntime(),
+                $infrastructureDependencies->errorFactory(),
                 $cacheState,
                 $memcacheState,
                 $cacheEngineFactory,
-                $container->get(service_id::BOOTSTRAP_RUNTIME),
-                $container->get(service_id::CONFIG),
-                static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
-                $container->get(service_id::CACHE_SOURCE_FILE_METADATA),
-                $this->configCacheFatalExceptionFactory($container)
+                $infrastructureDependencies->bootstrapRuntime(),
+                $infrastructureDependencies->config(),
+                $infrastructureDependencies->cacheFactory(),
+                $infrastructureDependencies->cacheSourceFileMetadata(),
+                $this->configCacheFatalExceptionFactory($container, $infrastructureDependencies)
             );
         }
 
         return $instance;
     }
 
-    private function configCacheFatalExceptionFactory(container_interface $container): callable
+    private function configCacheFatalExceptionFactory(
+        container_interface $container,
+        ?application_infrastructure_config_cache_dependencies $infrastructureDependencies = null
+    ): callable
     {
-        return static function (string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null) use ($container): \Throwable {
-            $factory = $container->get(service_id::CORE_FATAL_EXCEPTION_FACTORY);
+        $infrastructureDependencies ??= self::configCacheDependencies($container);
+        return static function (string $message, int $code = E_USER_ERROR, ?\Throwable $previous = null) use ($infrastructureDependencies): \Throwable {
+            $factory = $infrastructureDependencies->coreFatalExceptionFactory();
             if (!is_callable($factory)) {
                 throw new \RuntimeException('Core fatal exception factory must be callable.');
             }
@@ -162,9 +177,9 @@ final class application_infrastructure_service_creator
                 $message,
                 code: $code,
                 previous: $previous,
-                requestInput: $container->get(service_id::REQUEST_INPUT),
-                exceptionRuntimeLogger: $container->get(service_id::BOOTSTRAP_RUNTIME),
-                exceptionHeaderWriter: $container->get(service_id::HEADER_WRITER)
+                requestInput: $infrastructureDependencies->requestInput(),
+                exceptionRuntimeLogger: $infrastructureDependencies->bootstrapRuntime(),
+                exceptionHeaderWriter: $infrastructureDependencies->headerWriter()
             );
         };
     }
@@ -175,7 +190,7 @@ final class application_infrastructure_service_creator
         int $code = E_USER_ERROR,
         ?\Throwable $previous = null
     ): \Throwable {
-        $factory = $container->get(service_id::ERROR500_EXCEPTION_FACTORY);
+        $factory = self::configCacheDependencies($container)->error500ExceptionFactory();
         if (!is_callable($factory)) {
             throw new \RuntimeException('Error500 exception factory must be callable.');
         }
@@ -197,18 +212,19 @@ final class application_infrastructure_service_creator
         $useBase64 = !empty($useBase64);
         $instance = $state->getInstance($useBase64);
         if ($instance === null) {
+            $infrastructureDependencies = self::serviceDependencies($container);
             $className = self::getProjectServiceClassName('json');
-            if (!class_exists($className)) {
+            if (!$this->projectServiceClassExists($className)) {
                 throw new \InvalidArgumentException('Service "json" does not expose a project class.');
             }
 
             $instance = $jsonServiceFactory(
                 $className,
                 $useBase64,
-                static fn(): mixed => $container->get(service_id::ERROR),
-                $container->get(service_id::BOOTSTRAP_RUNTIME),
-                $container->get(service_id::CONFIG),
-                static fn(string $type): mixed => $container->get(service_id::CACHE, $type)
+                $infrastructureDependencies->errorFactory(),
+                $infrastructureDependencies->bootstrapRuntime(),
+                $infrastructureDependencies->config(),
+                $infrastructureDependencies->cacheFactory()
             );
             $state->setInstance($useBase64, $instance);
         }
@@ -228,21 +244,22 @@ final class application_infrastructure_service_creator
         if (!$srcPath) {
             return null;
         }
-        $serviceBootstrapRuntime ??= $container->get(service_id::BOOTSTRAP_RUNTIME);
-        $serviceConfigurator ??= $container->get(service_id::CONFIG);
-        $serviceCacheFactory ??= static fn(string $type): mixed => $container->get(service_id::CACHE, $type);
+        $infrastructureDependencies = self::serviceDependencies($container);
+        $serviceBootstrapRuntime ??= $infrastructureDependencies->bootstrapRuntime();
+        $serviceConfigurator ??= $infrastructureDependencies->config();
+        $serviceCacheFactory ??= $infrastructureDependencies->cacheFactory();
         $fullPath = $serviceBootstrapRuntime->parsePath($srcPath);
         $instance = $state->getInstance($fullPath);
         if ($instance === null) {
             $className = self::getProjectServiceClassName('file_system');
-            if (!class_exists($className)) {
+            if (!$this->projectServiceClassExists($className)) {
                 throw new \InvalidArgumentException('Service "file_system" does not expose a project class.');
             }
 
             $instance = $fileSystemServiceFactory(
                 $className,
                 $fullPath,
-                $container->get(service_id::FILE_SYSTEM_STORAGE),
+                $infrastructureDependencies->fileSystemStorage(),
                 $serviceBootstrapRuntime,
                 $serviceConfigurator,
                 $serviceCacheFactory
@@ -258,6 +275,11 @@ final class application_infrastructure_service_creator
         return '\fan\project\service\\' . trim($serviceName, " \t\n\r\0\x0B\\");
     }
 
+    private function projectServiceClassExists(string $className): bool
+    {
+        return (bool)($this->projectServiceClassExists)($className);
+    }
+
     private function createServiceFatalException(
         container_interface $container,
         object $service,
@@ -266,7 +288,7 @@ final class application_infrastructure_service_creator
         ?\Throwable $previous = null
     ): \Throwable
     {
-        $runtime = $container->get(service_id::BOOTSTRAP_RUNTIME);
+        $runtime = self::configCacheDependencies($container)->bootstrapRuntime();
         if (!method_exists($runtime, 'serviceExceptionFactory')) {
             throw new \RuntimeException('Service exception factory is not configured for infrastructure service creator.');
         }
@@ -294,5 +316,15 @@ final class application_infrastructure_service_creator
         }
 
         return $factory;
+    }
+
+    private static function serviceDependencies(container_interface $container): application_infrastructure_service_dependencies
+    {
+        return new application_infrastructure_service_dependencies($container);
+    }
+
+    private static function configCacheDependencies(container_interface $container): application_infrastructure_config_cache_dependencies
+    {
+        return new application_infrastructure_config_cache_dependencies($container);
     }
 }

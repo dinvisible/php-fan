@@ -87,6 +87,8 @@ class tab extends single
 
     protected mixed $shortClassNameResolver = null;
 
+    protected mixed $viewClassExists = null;
+
     protected mixed $templateFactory = null;
 
     protected mixed $errorFactory = null;
@@ -443,7 +445,8 @@ class tab extends single
         ?object $blockFileStorage = null,
         ?object $metaFileStorage = null,
         ?object $projectToolFileStorage = null,
-        ?object $rootHtmlFileStorage = null
+        ?object $rootHtmlFileStorage = null,
+        ?callable $viewClassExists = null
     ): static
     {
         $this->applyTabDependencies(tab_dependencies::fromLegacy(
@@ -494,6 +497,9 @@ class tab extends single
             $projectToolFileStorage,
             $rootHtmlFileStorage
         ));
+        if ($viewClassExists !== null) {
+            $this->viewClassExists = \Closure::fromCallable($viewClassExists);
+        }
 
         return $this;
     }
@@ -1269,11 +1275,18 @@ class tab extends single
             throw $this->createServiceFatalException('Type of view can\'t be empty.');
         }
         $class = '\fan\project\view\parser\\' . $viewClass;
-        if (!class_exists($class, true)) {
+        if (!$this->viewClassExists($class)) {
             throw $this->createServiceFatalException('Class "' . $class . '" isn\'t found. Please check your "View definer"');
         }
         $this->viewClass = $class;
         return $this;
+    }
+
+    protected function viewClassExists(string $className): bool
+    {
+        $this->viewClassExists ??= static fn(string $viewClassName): bool => class_exists($viewClassName, true);
+
+        return ($this->viewClassExists)($className);
     }
 
     protected function _createRootBlock(): bool

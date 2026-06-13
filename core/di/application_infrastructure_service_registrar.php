@@ -6,30 +6,53 @@ namespace fan\core\di;
 
 final class application_infrastructure_service_registrar
 {
+    public function __construct(private ?\Closure $dependenciesFactory = null)
+    {
+    }
+
     public function register(container $container, application_service_graph_registration_context $context): container
     {
         $infrastructureServiceCreator = $context->infrastructureServiceCreator;
+        $dependenciesFactory = $this->dependenciesFactory();
 
         return $container
             ->factory(
                 service_id::CONFIG,
-                static fn(container_interface $container, string $configType = 'service', string $sourceType = 'arr'): mixed => $infrastructureServiceCreator->createConfigService(
-                    $container,
-                    $container->get(service_id::CONFIG_STATE),
-                    $context->configServiceFactory,
-                    $configType,
-                    $sourceType,
-                    $container->get(service_id::BOOTSTRAP_RUNTIME),
-                    static fn(string $type): mixed => $container->get(service_id::CACHE, $type)
-                )
+                static function (container_interface $container, string $configType = 'service', string $sourceType = 'arr') use ($context, $dependenciesFactory, $infrastructureServiceCreator): mixed {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return $infrastructureServiceCreator->createConfigService(
+                        $container,
+                        $dependencies->configState(),
+                        $context->configServiceFactory,
+                        $configType,
+                        $sourceType,
+                        $dependencies->bootstrapRuntime(),
+                        $dependencies->cacheFactory()
+                    );
+                }
             )
-            ->factory(service_id::CONFIG_CACHE, static fn(container_interface $container): mixed => $infrastructureServiceCreator->createConfigCache($container, $container->get(service_id::CACHE_STATE), $container->get(service_id::CACHE_MEMCACHE_STATE), $context->cacheEngineFactory, $context->cacheServiceFactory))
-            ->factory(service_id::CACHE, static fn(container_interface $container, mixed $type = null): mixed => $infrastructureServiceCreator->createCacheService($container, $container->get(service_id::CACHE_STATE), $container->get(service_id::CACHE_MEMCACHE_STATE), $context->cacheEngineFactory, $context->cacheServiceFactory, $type), false)
+            ->factory(
+                service_id::CONFIG_CACHE,
+                static function (container_interface $container) use ($context, $dependenciesFactory, $infrastructureServiceCreator): mixed {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return $infrastructureServiceCreator->createConfigCache($container, $dependencies->cacheState(), $dependencies->cacheMemcacheState(), $context->cacheEngineFactory, $context->cacheServiceFactory);
+                }
+            )
+            ->factory(service_id::CACHE,
+                static function (container_interface $container, mixed $type = null) use ($context, $dependenciesFactory, $infrastructureServiceCreator): mixed {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return $infrastructureServiceCreator->createCacheService($container, $dependencies->cacheState(), $dependencies->cacheMemcacheState(), $context->cacheEngineFactory, $context->cacheServiceFactory, $type);
+                },
+                false
+            )
             ->factory(
                 service_id::JSON,
                 static fn(container_interface $container, bool $useBase64 = false): mixed => $infrastructureServiceCreator->createJsonService(
                     $container,
-                    $container->get(service_id::JSON_STATE),
+                    $dependenciesFactory($container)->jsonState(),
                     $context->jsonServiceFactory,
                     $useBase64
                 ),
@@ -37,22 +60,32 @@ final class application_infrastructure_service_registrar
             )
             ->factory(
                 service_id::FILE_SYSTEM,
-                static fn(container_interface $container, ?string $srcPath = null): mixed => $infrastructureServiceCreator->createFileSystemService(
-                    $container,
-                    $container->get(service_id::FILE_SYSTEM_STATE),
-                    $context->fileSystemServiceFactory,
-                    $srcPath,
-                    $container->get(service_id::BOOTSTRAP_RUNTIME),
-                    $container->get(service_id::CONFIG),
-                    static fn(string $type): mixed => $container->get(service_id::CACHE, $type)
-                ),
+                static function (container_interface $container, ?string $srcPath = null) use ($context, $dependenciesFactory, $infrastructureServiceCreator): mixed {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return $infrastructureServiceCreator->createFileSystemService(
+                        $container,
+                        $dependencies->fileSystemState(),
+                        $context->fileSystemServiceFactory,
+                        $srcPath,
+                        $dependencies->bootstrapRuntime(),
+                        $dependencies->config(),
+                        $dependencies->cacheFactory()
+                    );
+                },
                 false
             )
             ->factory(
                 service_id::ELOQUENT,
                 static fn(container_interface $container): object => (new eloquent_manager_factory())(
-                    $container->get(service_id::CONFIG)->get('eloquent', [])
+                    $dependenciesFactory($container)->config()->get('eloquent', [])
                 )
             );
+    }
+
+    private function dependenciesFactory(): \Closure
+    {
+        return $this->dependenciesFactory
+            ?? static fn(container_interface $container): application_infrastructure_service_registrar_dependencies => new application_infrastructure_service_registrar_dependencies($container);
     }
 }

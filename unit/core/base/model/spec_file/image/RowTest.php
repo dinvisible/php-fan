@@ -175,10 +175,12 @@ class BaseModelSpecFileImageRowTest extends SourceFileContractTestCase
         $this->assertStringNotContainsString('image_metadata_reader.php', $source);
         $this->assertStringNotContainsString('new \fan\core\adapter\image_metadata_reader()', $source);
         $this->assertStringContainsString('private ?object $imageSourceFileStorage = null;', $source);
+        $this->assertStringContainsString('$dependencies = $entity->specFileImageRowDependencies();', $source);
         $this->assertStringContainsString('$this->imageSourceFileStorage()->isFile($path)', $source);
         $this->assertStringContainsString('$this->imageSourceFileStorage()->isReadable($path)', $source);
         $this->assertStringContainsString("throw new \RuntimeException('Image metadata reader is not configured for spec-file image row.');", $source);
         $this->assertStringContainsString("throw new \RuntimeException('Image source file storage is not configured for spec-file image row.');", $source);
+        $this->assertStringNotContainsString('->getService()', $source);
         $this->assertDoesNotMatchRegularExpression(
             '/(?<!->)(?<!::)(?<!\\\\)\b(?:is_file|is_readable)\s*\(/',
             $source

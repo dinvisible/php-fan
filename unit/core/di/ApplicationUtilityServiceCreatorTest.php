@@ -180,6 +180,156 @@ final class ApplicationUtilityServiceCreatorTest extends TestCase
         $this->assertSame(['Requested format "missing" isn\'t found.'], $createdMessages);
     }
 
+    public function testProjectServiceClassAvailabilityCheckIsInjected(): void
+    {
+        $checkedClasses = [];
+        $creator = new application_utility_service_creator(
+            static fn(string $message): Throwable => new RuntimeException($message),
+            static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return false;
+            }
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Service "obfuscator" does not expose a project class.');
+
+        try {
+            $creator->createObfuscatorService(
+                $this->containerWithUtilityDependencies(),
+                new ApplicationUtilityNamedStateDouble(),
+                static fn(): object => new stdClass(),
+                'js'
+            );
+        } finally {
+            $this->assertSame(['\fan\project\service\obfuscator'], $checkedClasses);
+        }
+    }
+
+    public function testUtilityCreatorUsesDependencyBundle(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_service_creator.php');
+        $bundleSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_service_dependencies.php');
+        $coreSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_core_dependencies.php');
+        $runtimeCoreSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_runtime_core_dependencies.php');
+        $bootstrapRuntimeRuntimeCoreSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_bootstrap_runtime_runtime_core_dependencies.php');
+        $phpRuntimeSettingsRuntimeCoreSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_php_runtime_settings_runtime_core_dependencies.php');
+        $configCacheCoreSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_config_cache_core_dependencies.php');
+        $configConfigCacheCoreSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_config_config_cache_core_dependencies.php');
+        $cacheFactoryConfigCacheCoreSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_cache_factory_config_cache_core_dependencies.php');
+        $helperErrorCoreSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_helper_error_core_dependencies.php');
+        $arrayValueReaderHelperErrorCoreSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_array_value_reader_helper_error_core_dependencies.php');
+        $errorFactoryHelperErrorCoreSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_error_factory_helper_error_core_dependencies.php');
+        $imageSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_image_dependencies.php');
+        $imageStorageSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_image_storage_dependencies.php');
+        $obfuscatorFileStorageImageStorageSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_obfuscator_file_storage_image_storage_dependencies.php');
+        $imageSourceFileStorageImageStorageSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_image_source_file_storage_image_storage_dependencies.php');
+        $imageMetadataResourceSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_image_metadata_resource_dependencies.php');
+        $imageMetadataReaderMetadataResourceSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_image_metadata_reader_metadata_resource_dependencies.php');
+        $imageResourceFactoryMetadataResourceSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_image_resource_factory_metadata_resource_dependencies.php');
+        $imageCanvasOutputSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_image_canvas_output_dependencies.php');
+        $imageCanvasOperationsCanvasOutputSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_image_canvas_operations_canvas_output_dependencies.php');
+        $imageOutputWriterCanvasOutputSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_image_output_writer_canvas_output_dependencies.php');
+        $storageSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_storage_dependencies.php');
+        $fileStorageSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_file_storage_dependencies.php');
+        $phpArrayFileLoaderFileStorageSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_php_array_file_loader_file_storage_dependencies.php');
+        $soapWsdlFileStorageFileStorageSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_soap_wsdl_file_storage_file_storage_dependencies.php');
+        $classStorageSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_utility_class_storage_dependencies.php');
+
+        $this->assertIsString($source);
+        $this->assertIsString($bundleSource);
+        $this->assertIsString($coreSource);
+        $this->assertIsString($runtimeCoreSource);
+        $this->assertIsString($bootstrapRuntimeRuntimeCoreSource);
+        $this->assertIsString($phpRuntimeSettingsRuntimeCoreSource);
+        $this->assertIsString($configCacheCoreSource);
+        $this->assertIsString($configConfigCacheCoreSource);
+        $this->assertIsString($cacheFactoryConfigCacheCoreSource);
+        $this->assertIsString($helperErrorCoreSource);
+        $this->assertIsString($arrayValueReaderHelperErrorCoreSource);
+        $this->assertIsString($errorFactoryHelperErrorCoreSource);
+        $this->assertIsString($imageSource);
+        $this->assertIsString($imageStorageSource);
+        $this->assertIsString($obfuscatorFileStorageImageStorageSource);
+        $this->assertIsString($imageSourceFileStorageImageStorageSource);
+        $this->assertIsString($imageMetadataResourceSource);
+        $this->assertIsString($imageMetadataReaderMetadataResourceSource);
+        $this->assertIsString($imageResourceFactoryMetadataResourceSource);
+        $this->assertIsString($imageCanvasOutputSource);
+        $this->assertIsString($imageCanvasOperationsCanvasOutputSource);
+        $this->assertIsString($imageOutputWriterCanvasOutputSource);
+        $this->assertIsString($storageSource);
+        $this->assertIsString($fileStorageSource);
+        $this->assertIsString($phpArrayFileLoaderFileStorageSource);
+        $this->assertIsString($soapWsdlFileStorageFileStorageSource);
+        $this->assertIsString($classStorageSource);
+        $this->assertStringContainsString('private function utilityDependencies(container_interface $container): application_utility_service_dependencies', $source);
+        $this->assertStringContainsString('return new application_utility_service_dependencies($container);', $source);
+        $this->assertStringContainsString('$utilityDependencies = $this->utilityDependencies($container);', $source);
+        $this->assertStringContainsString('$utilityDependencies->bootstrapRuntime()', $source);
+        $this->assertStringContainsString('$utilityDependencies->config()', $source);
+        $this->assertStringContainsString('$utilityDependencies->cacheFactory()', $source);
+        $this->assertStringContainsString('$utilityDependencies->arrayValueReader()', $source);
+        $this->assertStringContainsString('final class application_utility_service_dependencies', $bundleSource);
+        $this->assertStringContainsString('$this->core = new application_utility_core_dependencies($container);', $bundleSource);
+        $this->assertStringContainsString('$this->image = new application_utility_image_dependencies($container);', $bundleSource);
+        $this->assertStringContainsString('$this->storage = new application_utility_storage_dependencies($container);', $bundleSource);
+        $this->assertStringContainsString('new application_utility_runtime_core_dependencies($container)', $coreSource);
+        $this->assertStringContainsString('new application_utility_config_cache_core_dependencies($container)', $coreSource);
+        $this->assertStringContainsString('new application_utility_helper_error_core_dependencies($container)', $coreSource);
+        $this->assertStringContainsString('new application_utility_bootstrap_runtime_runtime_core_dependencies($container)', $runtimeCoreSource);
+        $this->assertStringContainsString('new application_utility_php_runtime_settings_runtime_core_dependencies($container)', $runtimeCoreSource);
+        $this->assertStringContainsString('return $this->bootstrapRuntime->bootstrapRuntime();', $runtimeCoreSource);
+        $this->assertStringContainsString('return $this->phpRuntimeSettings->phpRuntimeSettings();', $runtimeCoreSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::BOOTSTRAP_RUNTIME);', $bootstrapRuntimeRuntimeCoreSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::PHP_RUNTIME_SETTINGS);', $phpRuntimeSettingsRuntimeCoreSource);
+        $this->assertStringContainsString('new application_utility_config_config_cache_core_dependencies($container)', $configCacheCoreSource);
+        $this->assertStringContainsString('new application_utility_cache_factory_config_cache_core_dependencies($container)', $configCacheCoreSource);
+        $this->assertStringContainsString('return $this->config->config();', $configCacheCoreSource);
+        $this->assertStringContainsString('return $this->cacheFactory->cacheFactory();', $configCacheCoreSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::CONFIG);', $configConfigCacheCoreSource);
+        $this->assertStringContainsString('return fn(string $type): mixed => $this->container->get(service_id::CACHE, $type);', $cacheFactoryConfigCacheCoreSource);
+        $this->assertStringContainsString('new application_utility_array_value_reader_helper_error_core_dependencies($container)', $helperErrorCoreSource);
+        $this->assertStringContainsString('new application_utility_error_factory_helper_error_core_dependencies($container)', $helperErrorCoreSource);
+        $this->assertStringContainsString('return $this->arrayValueReader->arrayValueReader();', $helperErrorCoreSource);
+        $this->assertStringContainsString('return $this->errorFactory->errorFactory();', $helperErrorCoreSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::ARRAY_VALUE_READER);', $arrayValueReaderHelperErrorCoreSource);
+        $this->assertStringContainsString('return fn(): mixed => $this->container->get(service_id::ERROR);', $errorFactoryHelperErrorCoreSource);
+        $this->assertStringContainsString('new application_utility_image_storage_dependencies($container)', $imageSource);
+        $this->assertStringContainsString('new application_utility_image_metadata_resource_dependencies($container)', $imageSource);
+        $this->assertStringContainsString('new application_utility_image_canvas_output_dependencies($container)', $imageSource);
+        $this->assertStringContainsString('new application_utility_obfuscator_file_storage_image_storage_dependencies($container)', $imageStorageSource);
+        $this->assertStringContainsString('new application_utility_image_source_file_storage_image_storage_dependencies($container)', $imageStorageSource);
+        $this->assertStringContainsString('return $this->obfuscatorFileStorage->obfuscatorFileStorage();', $imageStorageSource);
+        $this->assertStringContainsString('return $this->imageSourceFileStorage->imageSourceFileStorage();', $imageStorageSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::OBFUSCATOR_FILE_STORAGE);', $obfuscatorFileStorageImageStorageSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::IMAGE_SOURCE_FILE_STORAGE);', $imageSourceFileStorageImageStorageSource);
+        $this->assertStringContainsString('new application_utility_image_metadata_reader_metadata_resource_dependencies($container)', $imageMetadataResourceSource);
+        $this->assertStringContainsString('new application_utility_image_resource_factory_metadata_resource_dependencies($container)', $imageMetadataResourceSource);
+        $this->assertStringContainsString('return $this->imageMetadataReader->imageMetadataReader();', $imageMetadataResourceSource);
+        $this->assertStringContainsString('return $this->imageResourceFactory->imageResourceFactory();', $imageMetadataResourceSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::IMAGE_METADATA_READER);', $imageMetadataReaderMetadataResourceSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::IMAGE_RESOURCE_FACTORY);', $imageResourceFactoryMetadataResourceSource);
+        $this->assertStringContainsString('new application_utility_image_canvas_operations_canvas_output_dependencies($container)', $imageCanvasOutputSource);
+        $this->assertStringContainsString('new application_utility_image_output_writer_canvas_output_dependencies($container)', $imageCanvasOutputSource);
+        $this->assertStringContainsString('return $this->imageCanvasOperations->imageCanvasOperations();', $imageCanvasOutputSource);
+        $this->assertStringContainsString('return $this->imageOutputWriter->imageOutputWriter();', $imageCanvasOutputSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::IMAGE_CANVAS_OPERATIONS);', $imageCanvasOperationsCanvasOutputSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::IMAGE_OUTPUT_WRITER);', $imageOutputWriterCanvasOutputSource);
+        $this->assertStringContainsString('new application_utility_file_storage_dependencies($container)', $storageSource);
+        $this->assertStringContainsString('new application_utility_class_storage_dependencies($container)', $storageSource);
+        $this->assertStringContainsString('return $this->fileStorage->phpArrayFileLoader();', $storageSource);
+        $this->assertStringContainsString('return $this->classStorage->classNameResolver();', $storageSource);
+        $this->assertStringContainsString('new application_utility_php_array_file_loader_file_storage_dependencies($container)', $fileStorageSource);
+        $this->assertStringContainsString('new application_utility_soap_wsdl_file_storage_file_storage_dependencies($container)', $fileStorageSource);
+        $this->assertStringContainsString('return $this->phpArrayFileLoader->phpArrayFileLoader();', $fileStorageSource);
+        $this->assertStringContainsString('return $this->soapWsdlFileStorage->soapWsdlFileStorage();', $fileStorageSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::PHP_ARRAY_FILE_LOADER);', $phpArrayFileLoaderFileStorageSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::SOAP_WSDL_FILE_STORAGE);', $soapWsdlFileStorageFileStorageSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::CLASS_NAME_RESOLVER);', $classStorageSource);
+    }
+
     private function creator(): application_utility_service_creator
     {
         return new application_utility_service_creator(

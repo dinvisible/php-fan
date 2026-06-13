@@ -17,6 +17,7 @@
     "services",
     "metadata",
     "dynamic_boundaries",
+    "source_inventory",
     "verification"
   ],
   "properties": {
@@ -87,6 +88,7 @@
         "registered",
         "aliases",
         "referenced",
+        "referenced_locations",
         "constants",
         "descriptors"
       ],
@@ -100,7 +102,8 @@
             "type": "object",
             "required": [
               "target",
-              "file"
+              "file",
+              "line"
             ],
             "properties": {
               "target": {
@@ -108,6 +111,10 @@
               },
               "file": {
                 "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
               }
             },
             "additionalProperties": false
@@ -115,6 +122,9 @@
         },
         "referenced": {
           "$ref": "#/$defs/occurrenceMap"
+        },
+        "referenced_locations": {
+          "$ref": "#/$defs/sourceLocationOccurrenceMap"
         },
         "constants": {
           "type": "object",
@@ -153,7 +163,50 @@
     },
     "dynamic_boundaries": {
       "type": "object",
+      "required": [
+        "categories",
+        "category_reasons",
+        "locations",
+        "composition_leaf_policy",
+        "terminal_composition_leaves",
+        "actionable_composition_roots",
+        "named_migration_debt_policy",
+        "actionable_named_migration_debt",
+        "intentional_named_compatibility_boundaries"
+      ],
+      "properties": {
+        "categories": {
+          "$ref": "#/$defs/dynamicBoundaryCategories"
+        },
+        "category_reasons": {
+          "$ref": "#/$defs/dynamicBoundaryCategoryReasons"
+        },
+        "locations": {
+          "$ref": "#/$defs/dynamicBoundaryLocations"
+        },
+        "composition_leaf_policy": {
+          "$ref": "#/$defs/dynamicBoundaryCompositionLeafPolicy"
+        },
+        "terminal_composition_leaves": {
+          "$ref": "#/$defs/stringList"
+        },
+        "actionable_composition_roots": {
+          "$ref": "#/$defs/stringList"
+        },
+        "named_migration_debt_policy": {
+          "$ref": "#/$defs/dynamicBoundaryNamedMigrationDebtPolicy"
+        },
+        "actionable_named_migration_debt": {
+          "$ref": "#/$defs/dynamicBoundaryNamedDebtSummaryList"
+        },
+        "intentional_named_compatibility_boundaries": {
+          "$ref": "#/$defs/dynamicBoundaryNamedDebtSummaryList"
+        }
+      },
       "additionalProperties": true
+    },
+    "source_inventory": {
+      "$ref": "#/$defs/sourceInventory"
     },
     "verification": {
       "type": "object",
@@ -176,6 +229,386 @@
         "$ref": "#/$defs/stringList"
       }
     },
+    "sourceLocationOccurrenceMap": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/sourceLocationList"
+      }
+    },
+    "dynamicBoundaryCategories": {
+      "type": "object",
+      "required": [
+        "extension_api",
+        "composition_roots",
+        "tooling_support",
+        "migration_debt"
+      ],
+      "properties": {
+        "extension_api": {
+          "$ref": "#/$defs/stringList"
+        },
+        "composition_roots": {
+          "$ref": "#/$defs/stringList"
+        },
+        "tooling_support": {
+          "$ref": "#/$defs/stringList"
+        },
+        "migration_debt": {
+          "$ref": "#/$defs/stringList"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dynamicBoundaryCategoryReasons": {
+      "type": "object",
+      "required": [
+        "extension_api",
+        "composition_roots",
+        "tooling_support",
+        "migration_debt"
+      ],
+      "properties": {
+        "extension_api": {
+          "type": "string",
+          "minLength": 1
+        },
+        "composition_roots": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tooling_support": {
+          "type": "string",
+          "minLength": 1
+        },
+        "migration_debt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "dynamicBoundaryLocations": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/dynamicBoundaryLocationList"
+      }
+    },
+    "dynamicBoundaryCompositionLeafPolicy": {
+      "type": "object",
+      "required": [
+        "terminal_count",
+        "actionable_min_count",
+        "terminal_kind",
+        "actionable_kind",
+        "description"
+      ],
+      "properties": {
+        "terminal_count": {
+          "const": 1
+        },
+        "actionable_min_count": {
+          "const": 2
+        },
+        "terminal_kind": {
+          "const": "terminal_composition_leaf"
+        },
+        "actionable_kind": {
+          "const": "actionable_composition_root"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "dynamicBoundaryNamedMigrationDebtPolicy": {
+      "type": "object",
+      "required": [
+        "boundary_kind",
+        "category",
+        "actionable_kind",
+        "intentional_kind",
+        "description"
+      ],
+      "properties": {
+        "boundary_kind": {
+          "const": "named_default_closure_boundary"
+        },
+        "category": {
+          "const": "migration_debt"
+        },
+        "actionable_kind": {
+          "const": "actionable_named_migration_debt"
+        },
+        "intentional_kind": {
+          "const": "intentional_named_compatibility_boundary"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "dynamicBoundaryNamedDebtSummaryList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dynamicBoundaryNamedDebtSummary"
+      }
+    },
+    "dynamicBoundaryNamedDebtSummary": {
+      "type": "object",
+      "required": [
+        "file",
+        "category",
+        "boundary_kind",
+        "named_debt_kind",
+        "reason",
+        "count",
+        "patterns",
+        "locations"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "enum": [
+            "extension_api",
+            "migration_debt"
+          ]
+        },
+        "boundary_kind": {
+          "const": "named_default_closure_boundary"
+        },
+        "named_debt_kind": {
+          "enum": [
+            "actionable_named_migration_debt",
+            "intentional_named_compatibility_boundary"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "patterns": {
+          "$ref": "#/$defs/stringList"
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dynamicBoundaryNamedDebtLocation"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "dynamicBoundaryNamedDebtLocation": {
+      "type": "object",
+      "required": [
+        "file",
+        "line",
+        "pattern",
+        "value",
+        "boundary_kind",
+        "named_debt_kind"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string"
+        },
+        "boundary_kind": {
+          "const": "named_default_closure_boundary"
+        },
+        "named_debt_kind": {
+          "enum": [
+            "actionable_named_migration_debt",
+            "intentional_named_compatibility_boundary"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "sourceInventory": {
+      "type": "object",
+      "required": [
+        "policy",
+        "queues",
+        "next"
+      ],
+      "properties": {
+        "policy": {
+          "$ref": "#/$defs/sourceInventoryPolicy"
+        },
+        "queues": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/sourceInventoryQueue"
+          }
+        },
+        "next": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceInventoryQueue"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "sourceInventoryPolicy": {
+      "type": "object",
+      "required": [
+        "description",
+        "classification_kinds",
+        "next_queue"
+      ],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "classification_kinds": {
+          "$ref": "#/$defs/stringList"
+        },
+        "next_queue": {
+          "const": "source_inventory.next"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sourceInventoryQueue": {
+      "type": "object",
+      "required": [
+        "id",
+        "guard_kind",
+        "classification",
+        "priority",
+        "reason",
+        "count",
+        "files",
+        "locations"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "guard_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "classification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "files": {
+          "$ref": "#/$defs/stringList"
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceInventoryLocation"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "sourceInventoryLocation": {
+      "type": "object",
+      "required": [
+        "file",
+        "line",
+        "pattern",
+        "value"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dynamicBoundaryLocationList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dynamicBoundaryLocation"
+      }
+    },
+    "dynamicBoundaryLocation": {
+      "type": "object",
+      "required": [
+        "file",
+        "line",
+        "pattern",
+        "value",
+        "boundary_kind"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string"
+        },
+        "boundary_kind": {
+          "enum": [
+            "method_body_or_runtime_boundary",
+            "named_default_closure_boundary"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "serviceDescriptor": {
       "type": "object",
       "required": [
@@ -187,7 +620,14 @@
         "factory_origin",
         "factory_arguments",
         "creator_method_arguments",
-        "aliases"
+        "aliases",
+        "referenced_by",
+        "class",
+        "factory",
+        "config_key",
+        "lifetime_reason",
+        "source_edges",
+        "source_locations"
       ],
       "properties": {
         "id": {
@@ -248,6 +688,164 @@
         },
         "aliases": {
           "$ref": "#/$defs/stringList"
+        },
+        "referenced_by": {
+          "$ref": "#/$defs/serviceReferenceSummary"
+        },
+        "class": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "factory": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "config_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lifetime_reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_edges": {
+          "$ref": "#/$defs/sourceEdges"
+        },
+        "source_locations": {
+          "$ref": "#/$defs/sourceLocations"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sourceEdges": {
+      "type": "object",
+      "required": [
+        "aliases",
+        "classes",
+        "dependencies",
+        "factories",
+        "config_keys",
+        "runtime_arguments",
+        "registrar_files",
+        "creator_methods"
+      ],
+      "properties": {
+        "aliases": {
+          "$ref": "#/$defs/stringList"
+        },
+        "classes": {
+          "$ref": "#/$defs/stringList"
+        },
+        "dependencies": {
+          "$ref": "#/$defs/stringList"
+        },
+        "factories": {
+          "$ref": "#/$defs/stringList"
+        },
+        "config_keys": {
+          "$ref": "#/$defs/stringList"
+        },
+        "runtime_arguments": {
+          "$ref": "#/$defs/stringList"
+        },
+        "registrar_files": {
+          "$ref": "#/$defs/stringList"
+        },
+        "creator_methods": {
+          "$ref": "#/$defs/stringList"
+        }
+      },
+      "additionalProperties": false
+    },
+    "serviceReferenceSummary": {
+      "type": "object",
+      "required": [
+        "files",
+        "locations"
+      ],
+      "properties": {
+        "files": {
+          "$ref": "#/$defs/stringList"
+        },
+        "locations": {
+          "$ref": "#/$defs/sourceLocationList"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sourceLocations": {
+      "type": "object",
+      "required": [
+        "registrations",
+        "creator_methods",
+        "classes",
+        "factories",
+        "config_keys",
+        "dependencies",
+        "runtime_arguments",
+        "aliases"
+      ],
+      "properties": {
+        "registrations": {
+          "$ref": "#/$defs/sourceLocationList"
+        },
+        "creator_methods": {
+          "$ref": "#/$defs/sourceLocationList"
+        },
+        "classes": {
+          "$ref": "#/$defs/sourceLocationList"
+        },
+        "dependencies": {
+          "$ref": "#/$defs/sourceLocationList"
+        },
+        "factories": {
+          "$ref": "#/$defs/sourceLocationList"
+        },
+        "config_keys": {
+          "$ref": "#/$defs/sourceLocationList"
+        },
+        "runtime_arguments": {
+          "$ref": "#/$defs/sourceLocationList"
+        },
+        "aliases": {
+          "$ref": "#/$defs/sourceLocationList"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sourceLocationList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceLocation"
+      }
+    },
+    "sourceLocation": {
+      "type": "object",
+      "required": [
+        "file",
+        "line"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string"
         }
       },
       "additionalProperties": false

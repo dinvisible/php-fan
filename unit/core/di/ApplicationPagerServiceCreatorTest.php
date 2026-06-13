@@ -88,6 +88,91 @@ final class ApplicationPagerServiceCreatorTest extends TestCase
         $this->assertSame($pager, $state->getInstance('pager-block'));
     }
 
+    public function testProjectServiceClassAvailabilityCheckIsInjected(): void
+    {
+        $checkedClasses = [];
+        $creator = new application_pager_service_creator(
+            static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return false;
+            }
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Service "pager" does not expose a project class.');
+
+        try {
+            $creator->createPagerService(
+                $this->containerWithPagerDependencies(),
+                new ApplicationPagerStateDouble(),
+                static fn(): object => new stdClass(),
+                new ApplicationPagerBlockDouble()
+            );
+        } finally {
+            $this->assertSame(['\fan\project\service\pager'], $checkedClasses);
+        }
+    }
+
+    public function testPagerCreatorUsesDependencyBundle(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_service_creator.php');
+        $bundleSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_service_dependencies.php');
+        $contextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_context_dependencies.php');
+        $entityContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_entity_context_dependencies.php');
+        $tabContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_tab_context_dependencies.php');
+        $requestContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_request_context_dependencies.php');
+        $runtimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_runtime_dependencies.php');
+        $bootstrapRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_bootstrap_runtime_dependencies.php');
+        $configCacheRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_config_cache_runtime_dependencies.php');
+        $configConfigCacheRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_config_config_cache_runtime_dependencies.php');
+        $cacheFactoryConfigCacheRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_cache_factory_config_cache_runtime_dependencies.php');
+        $exceptionSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_exception_dependencies.php');
+
+        $this->assertIsString($source);
+        $this->assertIsString($bundleSource);
+        $this->assertIsString($contextSource);
+        $this->assertIsString($entityContextSource);
+        $this->assertIsString($tabContextSource);
+        $this->assertIsString($requestContextSource);
+        $this->assertIsString($runtimeSource);
+        $this->assertIsString($bootstrapRuntimeSource);
+        $this->assertIsString($configCacheRuntimeSource);
+        $this->assertIsString($configConfigCacheRuntimeSource);
+        $this->assertIsString($cacheFactoryConfigCacheRuntimeSource);
+        $this->assertIsString($exceptionSource);
+        $this->assertStringContainsString('private function pagerDependencies(container_interface $container): application_pager_service_dependencies', $source);
+        $this->assertStringContainsString('return new application_pager_service_dependencies($container);', $source);
+        $this->assertStringContainsString('$pagerDependencies = $this->pagerDependencies($container);', $source);
+        $this->assertStringContainsString('$pagerDependencies->tab()', $source);
+        $this->assertStringContainsString('$pagerDependencies->entityFactory()', $source);
+        $this->assertStringContainsString('final class application_pager_service_dependencies', $bundleSource);
+        $this->assertStringContainsString('new application_pager_context_dependencies($container)', $bundleSource);
+        $this->assertStringContainsString('new application_pager_runtime_dependencies($container)', $bundleSource);
+        $this->assertStringContainsString('new application_pager_exception_dependencies($container)', $bundleSource);
+        $this->assertStringContainsString('new application_pager_entity_context_dependencies($container)', $contextSource);
+        $this->assertStringContainsString('new application_pager_tab_context_dependencies($container)', $contextSource);
+        $this->assertStringContainsString('new application_pager_request_context_dependencies($container)', $contextSource);
+        $this->assertStringContainsString('return $this->entity->entityFactory();', $contextSource);
+        $this->assertStringContainsString('return $this->tabContext->tabFactory();', $contextSource);
+        $this->assertStringContainsString('return $this->request->requestFactory();', $contextSource);
+        $this->assertStringContainsString('return fn(): mixed => $this->container->get(service_id::ENTITY);', $entityContextSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::TAB);', $tabContextSource);
+        $this->assertStringContainsString('return fn(): mixed => $this->container->get(service_id::REQUEST);', $requestContextSource);
+        $this->assertStringContainsString('new application_pager_bootstrap_runtime_dependencies($container)', $runtimeSource);
+        $this->assertStringContainsString('new application_pager_config_cache_runtime_dependencies($container)', $runtimeSource);
+        $this->assertStringContainsString('return $this->bootstrap->bootstrapRuntime();', $runtimeSource);
+        $this->assertStringContainsString('return $this->configCache->cacheFactory();', $runtimeSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::BOOTSTRAP_RUNTIME);', $bootstrapRuntimeSource);
+        $this->assertStringContainsString('new application_pager_config_config_cache_runtime_dependencies($container)', $configCacheRuntimeSource);
+        $this->assertStringContainsString('new application_pager_cache_factory_config_cache_runtime_dependencies($container)', $configCacheRuntimeSource);
+        $this->assertStringContainsString('return $this->config->config();', $configCacheRuntimeSource);
+        $this->assertStringContainsString('return $this->cacheFactory->cacheFactory();', $configCacheRuntimeSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::CONFIG);', $configConfigCacheRuntimeSource);
+        $this->assertStringContainsString('return fn(string $type): mixed => $this->container->get(service_id::CACHE, $type);', $cacheFactoryConfigCacheRuntimeSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::ERROR500_EXCEPTION_FACTORY);', $exceptionSource);
+    }
+
     private function containerWithPagerDependencies(): container
     {
         $container = new container();

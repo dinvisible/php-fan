@@ -192,6 +192,18 @@ class BaseTest extends TestCase
         $this->assertSame([], $tab->currentBlockCalls);
     }
 
+    public function testConstructorResolvesBlockDependenciesThroughServiceContainerResolver(): void
+    {
+        $request = new FakeRequest();
+        FakeServiceRegistry::set('request', $request);
+
+        $block = new TestableBaseBlock('content', null, null, [], false, new FakeServiceContainer());
+
+        $this->assertInstanceOf(FakeTab::class, $block->getTab());
+        $this->assertSame($request, $block->getRequest());
+        $this->assertSame($block, $block->getTab()->currentBlock);
+    }
+
     public function testFinishConstructCompletesHappyPathAndUsesContainerMeta(): void
     {
         $template = $this->fixturePath('ExplicitTemplate.tpl');
@@ -297,6 +309,32 @@ class BaseTest extends TestCase
 
         $block->setDynamicMeta();
         $this->assertSame(1, $block->dynamicMetaCalls);
+    }
+
+    public function testDelayedMetaAvailabilityCheckIsInjected(): void
+    {
+        $checkedClasses = [];
+        $block = new TestableBaseBlock('dyn', new FakeTab(), null, [], false);
+        $block->setBlockDependencies([
+            'delayedMetaClassExists' => static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return false;
+            },
+        ]);
+        $resolver = new class {
+            public function value(): mixed
+            {
+                throw new RuntimeException('Delayed meta should not be resolved.');
+            }
+        };
+        $delayed = new delayed($resolver, 'value', null);
+        $meta = $this->makeMetaRow($block, ['first' => $delayed]);
+        $block->setMetaRowForTest($meta);
+
+        $this->assertSame($block, $block->setDynamicMeta());
+        $this->assertSame(['\fan\core\base\meta\delayed'], $checkedClasses);
+        $this->assertSame($delayed, $block->getMeta('first'));
     }
 
     public function testForcedDynamicMetaCanBeEnabledByMetaFlag(): void
@@ -436,6 +474,23 @@ class BaseTest extends TestCase
         $this->assertSame($block, $block->exposeSetTemplateInternal(''));
         $this->assertSame('FanTest\core\block\TestableBaseBlock', $seenClass);
         $this->assertSame($this->fixturePath('TestableBaseBlock.tpl'), $block->getTemplate());
+    }
+
+    public function testTemplateServiceUsesInjectedTemplateFactory(): void
+    {
+        $calls = [];
+        $template = new stdClass();
+        $block = new TestableBaseBlock('tpl', new FakeTab(), null, [], false);
+        $block->setBlockDependencies([
+            'templateFactory' => static function (mixed ...$arguments) use (&$calls, $template): object {
+                $calls[] = $arguments;
+
+                return $template;
+            },
+        ]);
+
+        $this->assertSame($template, $block->exposeTemplateService('/template.tpl', $block));
+        $this->assertSame([['/template.tpl', $block]], $calls);
     }
 
     public function testRootParametersAndTemplateVariablesAreCopiedFromMeta(): void
@@ -610,6 +665,29 @@ class BaseTest extends TestCase
         }
     }
 
+    public function testBlockExceptionClassAvailabilityCheckIsInjected(): void
+    {
+        $checkedClasses = [];
+        $block = new TestableBaseBlock('content', new FakeTab(), null, [], false);
+        $block->setBlockDependencies([
+            'blockExceptionClassExists' => static function (string $class) use (&$checkedClasses): bool {
+                $checkedClasses[] = $class;
+
+                return false;
+            },
+        ]);
+
+        try {
+            $block->exposeMakeBlockException('fallback failed', 'local');
+            $this->fail('Expected fatal fallback exception.');
+        } catch (fatal $exception) {
+            $this->assertSame('fallback failed', $exception->getMessage());
+            $this->assertSame('rollback', $block->getExceptionDbOper());
+        }
+
+        $this->assertSame(['\fan\project\exception\block\local'], $checkedClasses);
+    }
+
     public function testMagicGetAndDelegatedCalls(): void
     {
         $tab = new FakeTab();
@@ -639,6 +717,83 @@ class BaseTest extends TestCase
     public function testSourceNoLongerUsesContainerAwareTrait(): void
     {
         $source = file_get_contents(dirname(__DIR__, 3) . '/core/block/base.php');
+        $resolverSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_resolver.php');
+        $defaultsSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_defaults.php');
+        $contextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_context_group.php');
+        $factoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_factory_group.php');
+        $applicationDataFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_application_data_factory_group.php');
+        $databaseApplicationDataFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_database_application_data_factory_group.php');
+        $userApplicationDataFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_user_application_data_factory_group.php');
+        $applicationFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_application_factory_group.php');
+        $applicationRuntimeFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_application_runtime_factory_group.php');
+        $applicationServiceRuntimeFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_application_service_runtime_factory_group.php');
+        $configApplicationRuntimeFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_config_application_runtime_factory_group.php');
+        $applicationSupportFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_application_support_factory_group.php');
+        $errorApplicationSupportFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_error_application_support_factory_group.php');
+        $dateApplicationSupportFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_date_application_support_factory_group.php');
+        $arrayHelperGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_array_helper_group.php');
+        $arrayTransformHelperGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_array_transform_helper_group.php');
+        $arrayAdducerHelperGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_array_adducer_helper_group.php');
+        $recursiveMergerHelperGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_recursive_merger_helper_group.php');
+        $arrayReadHelperGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_array_read_helper_group.php');
+        $arrayValueReaderHelperGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_array_value_reader_helper_group.php');
+        $arrayLikeCheckerHelperGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_array_like_checker_helper_group.php');
+        $classHelperGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_class_helper_group.php');
+        $dataCoreFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_data_core_factory_group.php');
+        $dataFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_data_factory_group.php');
+        $dataLoaderFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_data_loader_factory_group.php');
+        $helperGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_helper_group.php');
+        $mediaCoreFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_media_core_factory_group.php');
+        $mediaErrorHelperGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_media_error_helper_group.php');
+        $mediaFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_media_factory_group.php');
+        $mediaTransferFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_media_transfer_factory_group.php');
+        $metaMakerGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_meta_maker_group.php');
+        $metaMakerStateGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_meta_maker_state_group.php');
+        $metaMakerFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_meta_maker_factory_group.php');
+        $metaLoaderGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_meta_loader_group.php');
+        $metaRowLoaderGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_meta_row_loader_group.php');
+        $phpArrayFileLoaderGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_php_array_file_loader_group.php');
+        $metaRowFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_meta_row_factory_group.php');
+        $navigationContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_navigation_context_group.php');
+        $runtimeContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_runtime_context_group.php');
+        $reflectorContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_reflector_context_group.php');
+        $routeLocaleContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_route_locale_context_group.php');
+        $localeFactoryContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_locale_factory_context_group.php');
+        $matcherFactoryContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_matcher_factory_context_group.php');
+        $blockFileStorageGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_block_file_storage_group.php');
+        $blockFileStorageBlockGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_block_file_storage_block_group.php');
+        $blockFileStorageMetaGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_block_file_storage_meta_group.php');
+        $projectFileStorageGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_project_file_storage_group.php');
+        $projectToolFileStorageGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_project_tool_file_storage_group.php');
+        $rootHtmlFileStorageGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_root_html_file_storage_group.php');
+        $requestContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_request_context_group.php');
+        $requestInputContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_request_input_context_group.php');
+        $requestRoleContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_request_role_context_group.php');
+        $requestFactoryContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_request_factory_context_group.php');
+        $roleFactoryContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_role_factory_context_group.php');
+        $storageGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_storage_group.php');
+        $sessionContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_session_context_group.php');
+        $tabRuntimeContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_tab_runtime_context_group.php');
+        $tabServiceRuntimeContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_tab_service_runtime_context_group.php');
+        $bootstrapRuntimeContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_bootstrap_runtime_context_group.php');
+        $uploadLimitStorageGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_upload_limit_storage_group.php');
+        $viewFactoryLoaderGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_view_factory_loader_group.php');
+        $viewParserExceptionFactoryLoaderGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_view_parser_exception_factory_loader_group.php');
+        $viewRouterFactoryLoaderGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_view_router_factory_loader_group.php');
+        $viewLoaderGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_view_loader_group.php');
+        $viewStateLoaderGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_view_state_loader_group.php');
+        $viewMetaGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_view_meta_group.php');
+        $blockFactoryContextGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_block_factory_context_group.php');
+        $blockFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_block_factory_group.php');
+        $blockExceptionFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_block_exception_factory_group.php');
+        $entityDataCoreFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_entity_data_core_factory_group.php');
+        $jsonDataCoreFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_json_data_core_factory_group.php');
+        $dataLoaderServiceFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_data_loader_service_factory_group.php');
+        $pagerDataLoaderFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_pager_data_loader_factory_group.php');
+        $obfuscatorMediaCoreFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_obfuscator_media_core_factory_group.php');
+        $imageModifyMediaCoreFactoryGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_image_modify_media_core_factory_group.php');
+        $imageMetadataMediaErrorHelperGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_image_metadata_media_error_helper_group.php');
+        $errorLogMediaErrorHelperGroupSource = file_get_contents(dirname(__DIR__, 3) . '/core/block/base_dependency_error_log_media_error_helper_group.php');
 
         $this->assertStringNotContainsString('container_aware_trait', $source);
         $this->assertStringNotContainsString('function containerService(', $source);
@@ -649,17 +804,139 @@ class BaseTest extends TestCase
         $this->assertStringContainsString('private mixed $blockFactory = null;', $source);
         $this->assertStringContainsString('private mixed $metaMakerFactory = null;', $source);
         $this->assertStringContainsString('private mixed $viewRouterFactory = null;', $source);
+        $this->assertStringContainsString('private mixed $templateFactory = null;', $source);
         $this->assertStringContainsString('private ?object $imageMetadataReader = null;', $source);
         $this->assertStringContainsString('private ?object $fileStorage = null;', $source);
         $this->assertStringContainsString('private ?object $projectToolFileStorage = null;', $source);
         $this->assertStringContainsString('private mixed $uploadSizeLimitProviderDependency = null;', $source);
-        $this->assertStringContainsString("'imageMetadataReader' => \$container->get('image_metadata_reader')", $source);
-        $this->assertStringContainsString("'metaMakerFactory' => \$container->get('meta_maker_factory')", $source);
-        $this->assertStringContainsString("'viewRouterFactory' => \$container->get('view_router_factory')", $source);
-        $this->assertStringContainsString("'blockFileStorage' => \$container->has('block_file_storage') ? \$container->get('block_file_storage') : null", $source);
-        $this->assertStringContainsString("'projectToolFileStorage' => \$container->has('project_tool_file_storage') ? \$container->get('project_tool_file_storage') : null", $source);
-        $this->assertStringContainsString("'rootHtmlFileStorage' => \$container->has('root_html_file_storage') ? \$container->get('root_html_file_storage') : null", $source);
-        $this->assertStringContainsString("'uploadSizeLimitProvider' => \$container->has('upload_size_limit_provider') ? \$container->get('upload_size_limit_provider') : null", $source);
+        $this->assertStringContainsString('private \Closure $delayedMetaClassExists;', $source);
+        $this->assertStringContainsString('private \Closure $blockExceptionClassExists;', $source);
+        $this->assertStringContainsString('$dependencies = array_merge((new base_dependency_defaults())->dependencies(), $dependencies);', $source);
+        $this->assertStringContainsString('(new base_dependency_defaults())->dependencies()', (string)$resolverSource);
+        $this->assertStringContainsString("'delayedMetaClassExists' => static fn(string \$className): bool => class_exists(\$className, false)", (string)$defaultsSource);
+        $this->assertStringContainsString("'blockExceptionClassExists' => static fn(string \$class): bool => class_exists(\$class)", (string)$defaultsSource);
+        $this->assertStringContainsString('return (new base_dependency_resolver())->resolve($tab, $container);', $source);
+        $this->assertStringContainsString('new base_dependency_context_group($container)', (string)$resolverSource);
+        $this->assertStringContainsString('new base_dependency_factory_group($container)', (string)$resolverSource);
+        $this->assertStringContainsString('new base_dependency_helper_group($container)', (string)$resolverSource);
+        $this->assertStringContainsString('new base_dependency_storage_group($container)', (string)$resolverSource);
+        $this->assertStringContainsString('new base_dependency_view_meta_group($container)', (string)$resolverSource);
+        $this->assertStringContainsString('new base_dependency_block_file_storage_group($container)', (string)$storageGroupSource);
+        $this->assertStringContainsString('new base_dependency_block_file_storage_block_group($container)', (string)$blockFileStorageGroupSource);
+        $this->assertStringContainsString('new base_dependency_block_file_storage_meta_group($container)', (string)$blockFileStorageGroupSource);
+        $this->assertStringContainsString('new base_dependency_project_file_storage_group($container)', (string)$storageGroupSource);
+        $this->assertStringContainsString('new base_dependency_project_tool_file_storage_group($container)', (string)$projectFileStorageGroupSource);
+        $this->assertStringContainsString('new base_dependency_root_html_file_storage_group($container)', (string)$projectFileStorageGroupSource);
+        $this->assertStringContainsString('new base_dependency_upload_limit_storage_group($container)', (string)$storageGroupSource);
+        $this->assertStringContainsString('new base_dependency_runtime_context_group($container)', (string)$contextGroupSource);
+        $this->assertStringContainsString('new base_dependency_request_context_group($container)', (string)$contextGroupSource);
+        $this->assertStringContainsString('new base_dependency_navigation_context_group($container)', (string)$contextGroupSource);
+        $this->assertStringContainsString('new base_dependency_request_role_context_group($container)', (string)$requestContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_request_factory_context_group($container)', (string)$requestRoleContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_role_factory_context_group($container)', (string)$requestRoleContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_session_context_group($container)', (string)$requestContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_tab_runtime_context_group($container)', (string)$runtimeContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_tab_service_runtime_context_group($container)', (string)$tabRuntimeContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_bootstrap_runtime_context_group($container)', (string)$tabRuntimeContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_request_input_context_group($container)', (string)$runtimeContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_application_factory_group($container)', (string)$factoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_data_factory_group($container)', (string)$factoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_media_factory_group($container)', (string)$factoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_reflector_context_group($container)', (string)$navigationContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_route_locale_context_group($container)', (string)$navigationContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_locale_factory_context_group($container)', (string)$routeLocaleContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_matcher_factory_context_group($container)', (string)$routeLocaleContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_media_core_factory_group($container)', (string)$mediaFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_media_transfer_factory_group($container)', (string)$mediaFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_application_runtime_factory_group($container)', (string)$applicationFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_application_data_factory_group($container)', (string)$applicationFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_application_support_factory_group($container)', (string)$applicationFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_application_service_runtime_factory_group($container)', (string)$applicationRuntimeFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_config_application_runtime_factory_group($container)', (string)$applicationRuntimeFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_error_application_support_factory_group($container)', (string)$applicationSupportFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_date_application_support_factory_group($container)', (string)$applicationSupportFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_database_application_data_factory_group($container)', (string)$applicationDataFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_user_application_data_factory_group($container)', (string)$applicationDataFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_view_loader_group($container)', (string)$viewMetaGroupSource);
+        $this->assertStringContainsString('new base_dependency_meta_loader_group($container)', (string)$viewMetaGroupSource);
+        $this->assertStringContainsString('new base_dependency_block_factory_context_group($container)', (string)$viewMetaGroupSource);
+        $this->assertStringContainsString('new base_dependency_block_factory_group($container)', (string)$blockFactoryContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_block_exception_factory_group($container)', (string)$blockFactoryContextGroupSource);
+        $this->assertStringContainsString('new base_dependency_view_factory_loader_group($container)', (string)$viewLoaderGroupSource);
+        $this->assertStringContainsString('new base_dependency_view_parser_exception_factory_loader_group($container)', (string)$viewFactoryLoaderGroupSource);
+        $this->assertStringContainsString('new base_dependency_view_router_factory_loader_group($container)', (string)$viewFactoryLoaderGroupSource);
+        $this->assertStringContainsString('new base_dependency_view_state_loader_group($container)', (string)$viewLoaderGroupSource);
+        $this->assertStringContainsString('new base_dependency_data_core_factory_group($container)', (string)$dataFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_entity_data_core_factory_group($container)', (string)$dataCoreFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_json_data_core_factory_group($container)', (string)$dataCoreFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_data_loader_factory_group($container)', (string)$dataFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_data_loader_service_factory_group($container)', (string)$dataLoaderFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_pager_data_loader_factory_group($container)', (string)$dataLoaderFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_meta_maker_group($container)', (string)$metaLoaderGroupSource);
+        $this->assertStringContainsString('new base_dependency_meta_maker_state_group($container)', (string)$metaMakerGroupSource);
+        $this->assertStringContainsString('new base_dependency_meta_maker_factory_group($container)', (string)$metaMakerGroupSource);
+        $this->assertStringContainsString('new base_dependency_meta_row_loader_group($container)', (string)$metaLoaderGroupSource);
+        $this->assertStringContainsString('new base_dependency_php_array_file_loader_group($container)', (string)$metaRowLoaderGroupSource);
+        $this->assertStringContainsString('new base_dependency_meta_row_factory_group($container)', (string)$metaRowLoaderGroupSource);
+        $this->assertStringContainsString('new base_dependency_array_helper_group($container)', (string)$helperGroupSource);
+        $this->assertStringContainsString('new base_dependency_class_helper_group($container)', (string)$helperGroupSource);
+        $this->assertStringContainsString('new base_dependency_media_error_helper_group($container)', (string)$helperGroupSource);
+        $this->assertStringContainsString('new base_dependency_obfuscator_media_core_factory_group($container)', (string)$mediaCoreFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_image_modify_media_core_factory_group($container)', (string)$mediaCoreFactoryGroupSource);
+        $this->assertStringContainsString('new base_dependency_image_metadata_media_error_helper_group($container)', (string)$mediaErrorHelperGroupSource);
+        $this->assertStringContainsString('new base_dependency_error_log_media_error_helper_group($container)', (string)$mediaErrorHelperGroupSource);
+        $this->assertStringContainsString('new base_dependency_array_transform_helper_group($container)', (string)$arrayHelperGroupSource);
+        $this->assertStringContainsString('new base_dependency_array_read_helper_group($container)', (string)$arrayHelperGroupSource);
+        $this->assertStringContainsString('new base_dependency_array_adducer_helper_group($container)', (string)$arrayTransformHelperGroupSource);
+        $this->assertStringContainsString('new base_dependency_recursive_merger_helper_group($container)', (string)$arrayTransformHelperGroupSource);
+        $this->assertStringContainsString('new base_dependency_array_value_reader_helper_group($container)', (string)$arrayReadHelperGroupSource);
+        $this->assertStringContainsString('new base_dependency_array_like_checker_helper_group($container)', (string)$arrayReadHelperGroupSource);
+        $this->assertStringNotContainsString("'imageMetadataReader' => \$container->get('image_metadata_reader')", $source);
+        $this->assertStringNotContainsString("'metaMakerFactory' => \$container->get('meta_maker_factory')", $source);
+        $this->assertStringNotContainsString("'viewRouterFactory' => \$container->get('view_router_factory')", $source);
+        $this->assertStringContainsString("'applicationFactory' => fn(): mixed => \$this->container->get('application')", (string)$applicationServiceRuntimeFactoryGroupSource);
+        $this->assertStringContainsString("'configFactory' => fn(mixed ...\$arguments): mixed => \$this->container->get('config', ...\$arguments)", (string)$configApplicationRuntimeFactoryGroupSource);
+        $this->assertStringContainsString("'databaseFactory' => fn(mixed ...\$arguments): mixed => \$this->container->get('database', ...\$arguments)", (string)$databaseApplicationDataFactoryGroupSource);
+        $this->assertStringContainsString("'userFactory' => fn(mixed ...\$arguments): mixed => \$this->container->get('user', ...\$arguments)", (string)$userApplicationDataFactoryGroupSource);
+        $this->assertStringContainsString("'errorFactory' => fn(): mixed => \$this->container->get('error')", (string)$errorApplicationSupportFactoryGroupSource);
+        $this->assertStringContainsString("'dateFactory' => fn(mixed ...\$arguments): mixed => \$this->container->get('date', ...\$arguments)", (string)$dateApplicationSupportFactoryGroupSource);
+        $this->assertStringContainsString("'entityFactory' => fn(mixed ...\$arguments): mixed => \$this->container->get('entity', ...\$arguments)", (string)$entityDataCoreFactoryGroupSource);
+        $this->assertStringContainsString("'jsonFactory' => fn(mixed ...\$arguments): mixed => \$this->container->get('json', ...\$arguments)", (string)$jsonDataCoreFactoryGroupSource);
+        $this->assertStringContainsString("'dataLoaderFactory' => fn(): mixed => \$this->container->get('data_loader')", (string)$dataLoaderServiceFactoryGroupSource);
+        $this->assertStringContainsString("'pagerFactory' => fn(mixed ...\$arguments): mixed => \$this->container->get('pager', ...\$arguments)", (string)$pagerDataLoaderFactoryGroupSource);
+        $this->assertStringContainsString("'obfuscatorFactory' => fn(mixed ...\$arguments): mixed => \$this->container->get('obfuscator', ...\$arguments)", (string)$obfuscatorMediaCoreFactoryGroupSource);
+        $this->assertStringContainsString("'imageModifyFactory' => fn(mixed ...\$arguments): mixed => \$this->container->get('image_modify', ...\$arguments)", (string)$imageModifyMediaCoreFactoryGroupSource);
+        $this->assertStringContainsString("'transferFactory' => fn(mixed ...\$arguments): mixed => \$this->container->get('transfer', ...\$arguments)", (string)$mediaTransferFactoryGroupSource);
+        $this->assertStringContainsString("'reflectorFactory' => fn(): mixed => \$this->container->get('reflector')", (string)$reflectorContextGroupSource);
+        $this->assertStringContainsString("'localeFactory' => fn(): mixed => \$this->container->get('locale')", (string)$localeFactoryContextGroupSource);
+        $this->assertStringContainsString("'matcherFactory' => fn(): mixed => \$this->container->get('matcher')", (string)$matcherFactoryContextGroupSource);
+        $this->assertStringContainsString("'requestFactory' => fn(): mixed => \$this->container->get('request')", (string)$requestFactoryContextGroupSource);
+        $this->assertStringContainsString("'roleFactory' => fn(): mixed => \$this->container->get('role')", (string)$roleFactoryContextGroupSource);
+        $this->assertStringContainsString("'sessionFactory' => fn(string \$nameSpace, string \$group = 'block'): mixed => \$this->container->get('session', \$nameSpace, \$group)", (string)$sessionContextGroupSource);
+        $this->assertStringContainsString("'tab' => \$this->container->get('tab')", (string)$tabServiceRuntimeContextGroupSource);
+        $this->assertStringContainsString("'runtime' => \$this->container->get('bootstrap_runtime')", (string)$bootstrapRuntimeContextGroupSource);
+        $this->assertStringContainsString("'requestInputFactory' => fn(): mixed => \$this->container->get('request_input')", (string)$requestInputContextGroupSource);
+        $this->assertStringContainsString("'arrayAdducer' => \$this->container->get('array_adducer')", (string)$arrayAdducerHelperGroupSource);
+        $this->assertStringContainsString("'recursiveMerger' => \$this->container->get('recursive_merger')", (string)$recursiveMergerHelperGroupSource);
+        $this->assertStringContainsString("'arrayValueReader' => \$this->container->get('array_value_reader')", (string)$arrayValueReaderHelperGroupSource);
+        $this->assertStringContainsString("'arrayLikeChecker' => \$this->container->get('array_like_checker')", (string)$arrayLikeCheckerHelperGroupSource);
+        $this->assertStringContainsString("'blockFactory' => \$this->container->get('block_factory')", (string)$blockFactoryGroupSource);
+        $this->assertStringContainsString("'blockExceptionFactory' => \$this->container->get('block_exception_factory')", (string)$blockExceptionFactoryGroupSource);
+        $this->assertStringContainsString("'shortClassNameResolver' => \$this->container->get('short_class_name_resolver')", (string)$classHelperGroupSource);
+        $this->assertStringContainsString("'imageMetadataReader' => \$this->container->get('image_metadata_reader')", (string)$imageMetadataMediaErrorHelperGroupSource);
+        $this->assertStringContainsString("'errorLogWriter' => \$this->container->get('error_log_writer')", (string)$errorLogMediaErrorHelperGroupSource);
+        $this->assertStringContainsString("'metaMakerState' => \$this->container->get('meta_maker_state')", (string)$metaMakerStateGroupSource);
+        $this->assertStringContainsString("'metaMakerFactory' => \$this->container->get('meta_maker_factory')", (string)$metaMakerFactoryGroupSource);
+        $this->assertStringContainsString("'phpArrayFileLoader' => \$this->container->get('php_array_file_loader')", (string)$phpArrayFileLoaderGroupSource);
+        $this->assertStringContainsString("'metaRowFactory' => \$this->container->get('meta_row_factory')", (string)$metaRowFactoryGroupSource);
+        $this->assertStringContainsString("'viewParserExceptionFactory' => \$this->container->get('error500_exception_factory')", (string)$viewParserExceptionFactoryLoaderGroupSource);
+        $this->assertStringContainsString("'viewRouterFactory' => \$this->container->get('view_router_factory')", (string)$viewRouterFactoryLoaderGroupSource);
+        $this->assertStringContainsString("'viewLoaderState' => \$this->container->get('view_loader_state')", (string)$viewStateLoaderGroupSource);
+        $this->assertStringContainsString("'blockFileStorage' => \$this->container->has('block_file_storage') ? \$this->container->get('block_file_storage') : null", (string)$blockFileStorageBlockGroupSource);
+        $this->assertStringContainsString("'metaFileStorage' => \$this->container->has('meta_file_storage') ? \$this->container->get('meta_file_storage') : null", (string)$blockFileStorageMetaGroupSource);
+        $this->assertStringContainsString("'projectToolFileStorage' => \$this->container->has('project_tool_file_storage') ? \$this->container->get('project_tool_file_storage') : null", (string)$projectToolFileStorageGroupSource);
+        $this->assertStringContainsString("'rootHtmlFileStorage' => \$this->container->has('root_html_file_storage') ? \$this->container->get('root_html_file_storage') : null", (string)$rootHtmlFileStorageGroupSource);
+        $this->assertStringContainsString("'uploadSizeLimitProvider' => \$this->container->has('upload_size_limit_provider') ? \$this->container->get('upload_size_limit_provider') : null", (string)$uploadLimitStorageGroupSource);
         $this->assertStringContainsString('$this->fileStorage()->isFile($templatePath)', $source);
         $this->assertStringContainsString('$this->fileStorage()->exists($currentPath . \'meta.php\')', $source);
         $this->assertStringContainsString("\$this->setUploadSizeLimitProvider(\$this->uploadSizeLimitProviderDependency);", $source);
@@ -671,9 +948,17 @@ class BaseTest extends TestCase
         $this->assertStringContainsString('View router factory must return an object.', $source);
         $this->assertStringContainsString('($this->blockFactory)(', $source);
         $this->assertStringContainsString('($this->blockExceptionFactory)($class, $this, $logErrMsg, $code, $previous);', $source);
+        $this->assertStringContainsString('private function delayedMetaClassExists(string $className): bool', $source);
+        $this->assertStringContainsString('if ($this->delayedMetaClassExists(\'\fan\core\base\meta\delayed\'))', $source);
+        $this->assertStringContainsString('private function blockExceptionClassExists(string $class): bool', $source);
+        $this->assertStringContainsString('if (!$this->blockExceptionClassExists($class))', $source);
         $this->assertStringContainsString('private function createBlockFatalException(', $source);
         $this->assertStringContainsString('return $this->createBlockException(\'\fan\project\exception\block\fatal\', $logErrMsg, $code, $previous);', $source);
         $this->assertStringContainsString('$this->_makeBlockException(\'Call to unknown Embedded Block "\' . $key . \'"\', \'local\', null, E_USER_WARNING);', $source);
+        $this->assertStringNotContainsString('if (class_exists(\'\fan\core\base\meta\delayed\', false))', $source);
+        $this->assertStringNotContainsString('=> class_exists($className, false)', $source);
+        $this->assertStringNotContainsString('=> class_exists($class)', $source);
+        $this->assertStringNotContainsString('if (!class_exists($class))', $source);
         $this->assertStringNotContainsString('new \fan\project\base\meta\maker(', $source);
         $this->assertStringNotContainsString('new \fan\project\exception\block\local(', $source);
         $this->assertStringNotContainsString('new fatalException', $source);

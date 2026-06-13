@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace fan\core\di;
+
+final class application_infrastructure_config_cache_config_cache_factory_dependencies
+{
+    public function __construct(private container_interface $container)
+    {
+    }
+
+    public function configCacheFactory(): callable
+    {
+        return fn(): mixed => $this->container->get(service_id::CONFIG_CACHE);
+    }
+}

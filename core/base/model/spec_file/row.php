@@ -48,7 +48,12 @@ abstract class row extends model_row
     {
         if (!$this->entityFile) {
             $ns = $this->namespaceName($this, 2);
-            $this->entityFile = $this->getEntity()->getService()->get('\\' . $ns . '\file_data')->getNewRow();
+            $entityFile = $this->getEntity()->createRelatedEntityRow('\\' . $ns . '\file_data');
+            if (!$entityFile instanceof file_data_row) {
+                $actual = get_class($entityFile);
+                throw new \UnexpectedValueException('Spec-file row factory returned "' . $actual . '".');
+            }
+            $this->entityFile = $entityFile;
             $this->entityFile->getEntity()->setConnection($this->getEntity()->getConnection()->getConnectionName());
             $this->entityFile->setAllowLoadInfo(false);
             $this->entityFile->loadById($this->getId(false));

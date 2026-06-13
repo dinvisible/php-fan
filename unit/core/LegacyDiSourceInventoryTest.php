@@ -5,6 +5,8 @@ declare(strict_types=1);
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
 final class LegacyDiSourceInventoryTest extends TestCase
 {
     #[DataProvider('forbiddenPatternProvider')]
@@ -157,15 +159,1000 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertSame([], $matches, 'Dynamic construction outside explicit factory boundaries found in: ' . implode(', ', $matches));
     }
 
+    public function testDynamicReflectionAndConfiguredServiceBoundariesAreInventoried(): void
+    {
+        $allowedFiles = array_fill_keys($this->dynamicReflectionBoundaryInventoryFiles(), true);
+        $matches = [];
+
+        foreach ($this->productionPhpFiles() as $file) {
+            $relativePath = $this->relativePath($file);
+            if (isset($allowedFiles[$relativePath])) {
+                continue;
+            }
+
+            $source = file_get_contents($file);
+            $this->assertIsString($source);
+            $locations = array_filter(
+                php_fan_ai_dynamic_boundary_locations_from_source($relativePath, $source),
+                static fn(array $location): bool => in_array(
+                    $location['pattern'] ?? null,
+                    ['class_exists', 'ReflectionClass', 'configured_service_factory', 'configured_class_instantiator'],
+                    true
+                )
+            );
+            if ($locations !== []) {
+                $matches[] = $relativePath;
+            }
+        }
+
+        $this->assertSame([], $matches, 'Dynamic reflection/configured-service boundary outside inventory found in: ' . implode(', ', $matches));
+    }
+
+    public function testDynamicReflectionBoundaryInventoryHasAiMapCategories(): void
+    {
+        $categorized = [];
+        foreach (php_fan_ai_dynamic_boundaries_map()['categories'] as $files) {
+            foreach ($files as $file) {
+                if (!str_contains($file, '*')) {
+                    $categorized[$file] = true;
+                }
+            }
+        }
+
+        $missing = [];
+        foreach ($this->dynamicReflectionBoundaryInventoryFiles() as $file) {
+            if (!isset($categorized[$file])) {
+                $missing[] = $file;
+            }
+        }
+
+        $this->assertSame([], $missing, 'Dynamic boundary inventory files missing AI map category: ' . implode(', ', $missing));
+    }
+
+    public function testDiServiceCreatorsDoNotUseDirectMethodBodyProjectClassExistsChecks(): void
+    {
+        $matches = [];
+        $files = glob(dirname(__DIR__, 2) . '/core/di/*_service_creator.php') ?: [];
+        sort($files);
+
+        foreach ($files as $file) {
+            $source = file_get_contents($file);
+            $this->assertIsString($source);
+            if (str_contains($this->codeWithoutCommentsAndStrings($source), 'if (!class_exists($className))')) {
+                $matches[] = $this->relativePath($file);
+            }
+        }
+
+        $this->assertSame([], $matches, 'Direct method-body project class availability checks found in: ' . implode(', ', $matches));
+    }
+
+    public function testCoreCreatorUsesNamedProjectServiceAvailabilityBoundary(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_core_service_creator.php');
+
+        $this->assertIsString($source);
+        $this->assertSame(1, substr_count($source, 'class_exists($className)'));
+        $this->assertStringNotContainsString('if (!class_exists($className))', $source);
+        $this->assertStringContainsString('private \Closure $projectServiceClassExists;', $source);
+        $this->assertStringContainsString('?callable $projectServiceClassExists = null', $source);
+        $this->assertStringContainsString('private function projectServiceClassExists(string $className): bool', $source);
+        $this->assertSame(10, substr_count($source, '$this->projectServiceClassExists($className)'));
+    }
+
+    public function testApplicationCreatorCommonDependenciesAreCompositionRootOnly(): void
+    {
+        require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        $source = file_get_contents($root . '/core/di/application_creator_common_dependencies.php');
+        $bootstrapSource = file_get_contents($root . '/core/di/application_creator_bootstrap_runtime_dependencies.php');
+        $configCacheSource = file_get_contents($root . '/core/di/application_creator_config_cache_dependencies.php');
+        $configSource = file_get_contents($root . '/core/di/application_creator_config_dependencies.php');
+        $cacheFactorySource = file_get_contents($root . '/core/di/application_creator_cache_factory_dependencies.php');
+        $coreCreatorSource = file_get_contents($root . '/core/di/application_core_service_creator.php');
+        $navigationCreatorSource = file_get_contents($root . '/core/di/application_navigation_service_creator.php');
+
+        $this->assertIsString($source);
+        $this->assertIsString($bootstrapSource);
+        $this->assertIsString($configCacheSource);
+        $this->assertIsString($configSource);
+        $this->assertIsString($cacheFactorySource);
+        $this->assertIsString($coreCreatorSource);
+        $this->assertIsString($navigationCreatorSource);
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_creator_common_dependencies.php'));
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_creator_bootstrap_runtime_dependencies.php'));
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_creator_config_cache_dependencies.php'));
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_creator_config_dependencies.php'));
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_creator_cache_factory_dependencies.php'));
+        $this->assertArrayHasKey('core/di/application_creator_bootstrap_runtime_dependencies.php', $map['dynamic_boundaries']['locations']);
+        $this->assertArrayHasKey('core/di/application_creator_config_dependencies.php', $map['dynamic_boundaries']['locations']);
+        $this->assertArrayHasKey('core/di/application_creator_cache_factory_dependencies.php', $map['dynamic_boundaries']['locations']);
+        $this->assertStringContainsString('final class application_creator_common_dependencies', $source);
+        $this->assertSame(0, substr_count($source, '$this->container->get('));
+        $this->assertSame(1, substr_count($bootstrapSource, '$this->container->get('));
+        $this->assertSame(0, substr_count($configCacheSource, '$this->container->get('));
+        $this->assertSame(1, substr_count($configSource, '$this->container->get('));
+        $this->assertSame(1, substr_count($cacheFactorySource, '$this->container->get('));
+        $this->assertStringContainsString('commonDependencies(container_interface $container): application_creator_common_dependencies', $coreCreatorSource);
+        $this->assertStringContainsString('commonDependencies(container_interface $container): application_creator_common_dependencies', $navigationCreatorSource);
+    }
+
+    public function testCoreServiceDependenciesAreCompositionRootOnly(): void
+    {
+        require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        $source = file_get_contents($root . '/core/di/application_core_service_dependencies.php');
+        $creatorSource = file_get_contents($root . '/core/di/application_core_service_creator.php');
+        $groupCounts = [
+            'core/di/application_core_project_application_context_dependencies.php' => 1,
+            'core/di/application_core_project_dependencies.php' => 0,
+            'core/di/application_core_project_error_dependencies.php' => 0,
+            'core/di/application_core_project_error_context_dependencies.php' => 1,
+            'core/di/application_core_project_error_file_storage_dependencies.php' => 1,
+            'core/di/application_core_project_error_factory_service_dependencies.php' => 1,
+            'core/di/application_core_project_error_log_writer_storage_dependencies.php' => 1,
+            'core/di/application_core_project_error_service_dependencies.php' => 0,
+            'core/di/application_core_project_error_storage_dependencies.php' => 0,
+            'core/di/application_core_project_route_storage_dependencies.php' => 1,
+            'core/di/application_core_project_reflection_class_factory_meta_dependencies.php' => 1,
+            'core/di/application_core_project_reflection_meta_dependencies.php' => 0,
+            'core/di/application_core_project_meta_file_storage_dependencies.php' => 1,
+            'core/di/application_core_project_header_writer_response_loader_dependencies.php' => 1,
+            'core/di/application_core_project_php_array_file_loader_response_loader_dependencies.php' => 1,
+            'core/di/application_core_project_response_loader_dependencies.php' => 0,
+            'core/di/application_core_project_storage_dependencies.php' => 0,
+            'core/di/application_core_project_locale_context_dependencies.php' => 1,
+            'core/di/application_core_project_tab_context_dependencies.php' => 0,
+            'core/di/application_core_project_tab_dependencies.php' => 0,
+            'core/di/application_core_project_tab_factory_service_context_dependencies.php' => 1,
+            'core/di/application_core_project_tab_instance_service_context_dependencies.php' => 1,
+            'core/di/application_core_project_tab_service_context_dependencies.php' => 0,
+            'core/di/application_core_request_array_adducer_transform_helper_dependencies.php' => 1,
+            'core/di/application_core_request_array_read_class_helper_dependencies.php' => 0,
+            'core/di/application_core_request_array_transform_helper_dependencies.php' => 0,
+            'core/di/application_core_request_array_value_reader_helper_dependencies.php' => 1,
+            'core/di/application_core_request_class_name_resolver_helper_dependencies.php' => 1,
+            'core/di/application_core_request_cookie_transport_factory_dependencies.php' => 1,
+            'core/di/application_core_request_dependencies.php' => 0,
+            'core/di/application_core_request_factory_dependencies.php' => 0,
+            'core/di/application_core_request_helper_dependencies.php' => 0,
+            'core/di/application_core_request_input_factory_dependencies.php' => 1,
+            'core/di/application_core_request_json_transport_factory_dependencies.php' => 1,
+            'core/di/application_core_request_matcher_factory_runtime_dependencies.php' => 1,
+            'core/di/application_core_request_recursive_merger_transform_helper_dependencies.php' => 1,
+            'core/di/application_core_request_request_factory_runtime_dependencies.php' => 1,
+            'core/di/application_core_request_runtime_factory_dependencies.php' => 0,
+            'core/di/application_core_request_transport_factory_dependencies.php' => 0,
+            'core/di/application_core_user_current_identity_dependencies.php' => 1,
+            'core/di/application_core_user_current_user_space_factory_session_space_dependencies.php' => 1,
+            'core/di/application_core_user_data_factory_dependencies.php' => 0,
+            'core/di/application_core_user_date_data_factory_dependencies.php' => 1,
+            'core/di/application_core_user_entity_data_factory_dependencies.php' => 1,
+            'core/di/application_core_user_identity_dependencies.php' => 0,
+            'core/di/application_core_user_session_factory_session_space_dependencies.php' => 1,
+            'core/di/application_core_user_session_space_dependencies.php' => 0,
+            'core/di/application_core_user_session_dependencies.php' => 0,
+        ];
+
+        $this->assertIsString($source);
+        $this->assertIsString($creatorSource);
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_core_service_dependencies.php'));
+        $this->assertStringContainsString('final class application_core_service_dependencies', $source);
+        $this->assertSame(0, substr_count($source, '$this->container->get('));
+        $this->assertStringContainsString('new application_core_request_dependencies($container)', $source);
+        $this->assertStringContainsString('new application_core_user_session_dependencies($container)', $source);
+        $this->assertStringContainsString('new application_core_project_dependencies($container)', $source);
+        foreach ($groupCounts as $file => $count) {
+            $groupSource = file_get_contents($root . '/' . $file);
+            $this->assertIsString($groupSource);
+            $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file($file));
+            if ($count !== 0) {
+                $this->assertArrayHasKey($file, $map['dynamic_boundaries']['locations']);
+            }
+            $this->assertSame($count, substr_count($groupSource, '$this->container->get('));
+        }
+        $this->assertStringContainsString('coreDependencies(container_interface $container): application_core_service_dependencies', $creatorSource);
+        $this->assertStringContainsString('$coreDependencies = $this->coreDependencies($container);', $creatorSource);
+        $this->assertStringNotContainsString('$container->get(service_id::REQUEST_INPUT)', $creatorSource);
+        $this->assertStringNotContainsString('$container->get(service_id::ARRAY_ADDUCER)', $creatorSource);
+        $this->assertStringNotContainsString('$container->get(service_id::REFLECTION_CLASS_FACTORY)', $creatorSource);
+    }
+
+    public function testUtilityServiceDependenciesAreCompositionRootOnly(): void
+    {
+        require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        $source = file_get_contents($root . '/core/di/application_utility_service_dependencies.php');
+        $creatorSource = file_get_contents($root . '/core/di/application_utility_service_creator.php');
+        $groupFiles = [
+            'core/di/application_utility_array_value_reader_helper_error_core_dependencies.php' => 1,
+            'core/di/application_utility_cache_factory_config_cache_core_dependencies.php' => 1,
+            'core/di/application_utility_config_cache_core_dependencies.php' => 0,
+            'core/di/application_utility_config_config_cache_core_dependencies.php' => 1,
+            'core/di/application_utility_core_dependencies.php' => 0,
+            'core/di/application_utility_class_storage_dependencies.php' => 1,
+            'core/di/application_utility_error_factory_helper_error_core_dependencies.php' => 1,
+            'core/di/application_utility_file_storage_dependencies.php' => 0,
+            'core/di/application_utility_helper_error_core_dependencies.php' => 0,
+            'core/di/application_utility_image_canvas_operations_canvas_output_dependencies.php' => 1,
+            'core/di/application_utility_image_canvas_output_dependencies.php' => 0,
+            'core/di/application_utility_image_dependencies.php' => 0,
+            'core/di/application_utility_image_metadata_reader_metadata_resource_dependencies.php' => 1,
+            'core/di/application_utility_image_metadata_resource_dependencies.php' => 0,
+            'core/di/application_utility_image_resource_factory_metadata_resource_dependencies.php' => 1,
+            'core/di/application_utility_image_output_writer_canvas_output_dependencies.php' => 1,
+            'core/di/application_utility_image_source_file_storage_image_storage_dependencies.php' => 1,
+            'core/di/application_utility_image_storage_dependencies.php' => 0,
+            'core/di/application_utility_obfuscator_file_storage_image_storage_dependencies.php' => 1,
+            'core/di/application_utility_php_array_file_loader_file_storage_dependencies.php' => 1,
+            'core/di/application_utility_bootstrap_runtime_runtime_core_dependencies.php' => 1,
+            'core/di/application_utility_runtime_core_dependencies.php' => 0,
+            'core/di/application_utility_php_runtime_settings_runtime_core_dependencies.php' => 1,
+            'core/di/application_utility_soap_wsdl_file_storage_file_storage_dependencies.php' => 1,
+            'core/di/application_utility_storage_dependencies.php' => 0,
+        ];
+
+        $this->assertIsString($source);
+        $this->assertIsString($creatorSource);
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_utility_service_dependencies.php'));
+        $this->assertStringContainsString('final class application_utility_service_dependencies', $source);
+        $this->assertSame(0, substr_count($source, '$this->container->get('));
+        foreach ($groupFiles as $file => $expectedLookups) {
+            $groupSource = file_get_contents($root . '/' . $file);
+            $this->assertIsString($groupSource);
+            $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file($file));
+            if ($expectedLookups !== 0) {
+                $this->assertArrayHasKey($file, $map['dynamic_boundaries']['locations']);
+            }
+            $this->assertSame($expectedLookups, substr_count($groupSource, '$this->container->get('));
+        }
+        $this->assertStringContainsString('utilityDependencies(container_interface $container): application_utility_service_dependencies', $creatorSource);
+        $this->assertStringContainsString('$utilityDependencies = $this->utilityDependencies($container);', $creatorSource);
+        $this->assertStringNotContainsString('$container->get(service_id::BOOTSTRAP_RUNTIME)', $creatorSource);
+        $this->assertStringNotContainsString('$container->get(service_id::CONFIG)', $creatorSource);
+        $this->assertStringNotContainsString('$container->get(service_id::ARRAY_VALUE_READER)', $creatorSource);
+    }
+
+    public function testClientServiceDependenciesAreCompositionRootOnly(): void
+    {
+        require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        $source = file_get_contents($root . '/core/di/application_client_service_dependencies.php');
+        $creatorSource = file_get_contents($root . '/core/di/application_client_service_creator.php');
+        $groupFiles = [
+            'core/di/application_client_array_adducer_payload_dependencies.php' => 1,
+            'core/di/application_client_array_payload_dependencies.php' => 0,
+            'core/di/application_client_array_value_reader_payload_dependencies.php' => 1,
+            'core/di/application_client_bootstrap_runtime_dependencies.php' => 1,
+            'core/di/application_client_cache_runtime_dependencies.php' => 1,
+            'core/di/application_client_config_cache_runtime_dependencies.php' => 0,
+            'core/di/application_client_config_runtime_dependencies.php' => 1,
+            'core/di/application_client_curl_adapter_transport_dependencies.php' => 1,
+            'core/di/application_client_curl_factory_transport_dependencies.php' => 1,
+            'core/di/application_client_curl_transport_dependencies.php' => 0,
+            'core/di/application_client_error_transport_dependencies.php' => 1,
+            'core/di/application_client_payload_dependencies.php' => 0,
+            'core/di/application_client_request_payload_dependencies.php' => 1,
+            'core/di/application_client_runtime_dependencies.php' => 0,
+            'core/di/application_client_cookie_writer_payload_dependencies.php' => 1,
+            'core/di/application_client_serialization_payload_dependencies.php' => 0,
+            'core/di/application_client_serialization_transport_dependencies.php' => 1,
+            'core/di/application_client_serializer_operations_payload_dependencies.php' => 1,
+            'core/di/application_client_transport_dependencies.php' => 0,
+        ];
+
+        $this->assertIsString($source);
+        $this->assertIsString($creatorSource);
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_client_service_dependencies.php'));
+        $this->assertStringContainsString('final class application_client_service_dependencies', $source);
+        $this->assertSame(0, substr_count($source, '$this->container->get('));
+        foreach ($groupFiles as $file => $expectedLookups) {
+            $groupSource = file_get_contents($root . '/' . $file);
+            $this->assertIsString($groupSource);
+            $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file($file));
+            if ($expectedLookups !== 0) {
+                $this->assertArrayHasKey($file, $map['dynamic_boundaries']['locations']);
+            }
+            $this->assertSame($expectedLookups, substr_count($groupSource, '$this->container->get('));
+        }
+        $this->assertStringContainsString('clientDependencies(container_interface $container): application_client_service_dependencies', $creatorSource);
+        $this->assertStringContainsString('$clientDependencies = $this->clientDependencies($container);', $creatorSource);
+        $this->assertStringNotContainsString('$container->get(service_id::BOOTSTRAP_RUNTIME)', $creatorSource);
+        $this->assertStringNotContainsString('$container->get(service_id::SERIALIZER_OPERATIONS)', $creatorSource);
+        $this->assertStringNotContainsString('$container->get(service_id::COOKIE_WRITER)', $creatorSource);
+    }
+
+    public function testBlockDependencyGroupsAreCompositionRootOnly(): void
+    {
+        require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        $groupFiles = [
+            'core/block/base_dependency_application_data_factory_group.php' => 0,
+            'core/block/base_dependency_application_factory_group.php' => 0,
+            'core/block/base_dependency_application_runtime_factory_group.php' => 0,
+            'core/block/base_dependency_application_service_runtime_factory_group.php' => 1,
+            'core/block/base_dependency_application_support_factory_group.php' => 0,
+            'core/block/base_dependency_array_adducer_helper_group.php' => 1,
+            'core/block/base_dependency_array_helper_group.php' => 0,
+            'core/block/base_dependency_array_like_checker_helper_group.php' => 1,
+            'core/block/base_dependency_array_read_helper_group.php' => 0,
+            'core/block/base_dependency_array_transform_helper_group.php' => 0,
+            'core/block/base_dependency_array_value_reader_helper_group.php' => 1,
+            'core/block/base_dependency_block_exception_factory_group.php' => 1,
+            'core/block/base_dependency_block_factory_group.php' => 1,
+            'core/block/base_dependency_block_file_storage_block_group.php' => 1,
+            'core/block/base_dependency_block_file_storage_group.php' => 0,
+            'core/block/base_dependency_block_file_storage_meta_group.php' => 1,
+            'core/block/base_dependency_block_factory_context_group.php' => 0,
+            'core/block/base_dependency_class_helper_group.php' => 1,
+            'core/block/base_dependency_config_application_runtime_factory_group.php' => 1,
+            'core/block/base_dependency_context_group.php' => 0,
+            'core/block/base_dependency_data_core_factory_group.php' => 0,
+            'core/block/base_dependency_data_factory_group.php' => 0,
+            'core/block/base_dependency_data_loader_factory_group.php' => 0,
+            'core/block/base_dependency_data_loader_service_factory_group.php' => 1,
+            'core/block/base_dependency_date_application_support_factory_group.php' => 1,
+            'core/block/base_dependency_database_application_data_factory_group.php' => 1,
+            'core/block/base_dependency_entity_data_core_factory_group.php' => 1,
+            'core/block/base_dependency_error_log_media_error_helper_group.php' => 1,
+            'core/block/base_dependency_error_application_support_factory_group.php' => 1,
+            'core/block/base_dependency_factory_group.php' => 0,
+            'core/block/base_dependency_helper_group.php' => 0,
+            'core/block/base_dependency_image_metadata_media_error_helper_group.php' => 1,
+            'core/block/base_dependency_image_modify_media_core_factory_group.php' => 1,
+            'core/block/base_dependency_json_data_core_factory_group.php' => 1,
+            'core/block/base_dependency_locale_factory_context_group.php' => 1,
+            'core/block/base_dependency_matcher_factory_context_group.php' => 1,
+            'core/block/base_dependency_media_core_factory_group.php' => 0,
+            'core/block/base_dependency_media_error_helper_group.php' => 0,
+            'core/block/base_dependency_media_transfer_factory_group.php' => 1,
+            'core/block/base_dependency_meta_loader_group.php' => 0,
+            'core/block/base_dependency_meta_maker_factory_group.php' => 1,
+            'core/block/base_dependency_meta_maker_group.php' => 0,
+            'core/block/base_dependency_meta_maker_state_group.php' => 1,
+            'core/block/base_dependency_meta_row_factory_group.php' => 1,
+            'core/block/base_dependency_meta_row_loader_group.php' => 0,
+            'core/block/base_dependency_media_factory_group.php' => 0,
+            'core/block/base_dependency_navigation_context_group.php' => 0,
+            'core/block/base_dependency_obfuscator_media_core_factory_group.php' => 1,
+            'core/block/base_dependency_pager_data_loader_factory_group.php' => 1,
+            'core/block/base_dependency_php_array_file_loader_group.php' => 1,
+            'core/block/base_dependency_project_file_storage_group.php' => 0,
+            'core/block/base_dependency_project_tool_file_storage_group.php' => 1,
+            'core/block/base_dependency_reflector_context_group.php' => 1,
+            'core/block/base_dependency_request_factory_context_group.php' => 1,
+            'core/block/base_dependency_request_context_group.php' => 0,
+            'core/block/base_dependency_request_input_context_group.php' => 1,
+            'core/block/base_dependency_request_role_context_group.php' => 0,
+            'core/block/base_dependency_role_factory_context_group.php' => 1,
+            'core/block/base_dependency_route_locale_context_group.php' => 0,
+            'core/block/base_dependency_root_html_file_storage_group.php' => 1,
+            'core/block/base_dependency_recursive_merger_helper_group.php' => 1,
+            'core/block/base_dependency_runtime_context_group.php' => 0,
+            'core/block/base_dependency_session_context_group.php' => 1,
+            'core/block/base_dependency_bootstrap_runtime_context_group.php' => 1,
+            'core/block/base_dependency_storage_group.php' => 0,
+            'core/block/base_dependency_tab_runtime_context_group.php' => 0,
+            'core/block/base_dependency_tab_service_runtime_context_group.php' => 1,
+            'core/block/base_dependency_upload_limit_storage_group.php' => 1,
+            'core/block/base_dependency_user_application_data_factory_group.php' => 1,
+            'core/block/base_dependency_view_factory_loader_group.php' => 0,
+            'core/block/base_dependency_view_loader_group.php' => 0,
+            'core/block/base_dependency_view_parser_exception_factory_loader_group.php' => 1,
+            'core/block/base_dependency_view_router_factory_loader_group.php' => 1,
+            'core/block/base_dependency_view_state_loader_group.php' => 1,
+            'core/block/base_dependency_view_meta_group.php' => 0,
+        ];
+        $resolverSource = file_get_contents($root . '/core/block/base_dependency_resolver.php');
+
+        $this->assertIsString($resolverSource);
+        $this->assertSame(0, substr_count($resolverSource, '->get('));
+        foreach ($groupFiles as $file => $expectedLookups) {
+            if (is_int($file)) {
+                $file = $expectedLookups;
+                $expectedLookups = null;
+            }
+            $source = file_get_contents($root . '/' . $file);
+            $this->assertIsString($source);
+            $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file($file));
+            if ($expectedLookups !== 0) {
+                $this->assertArrayHasKey($file, $map['dynamic_boundaries']['locations']);
+            }
+            $this->assertStringContainsString('final class ' . basename($file, '.php'), $source);
+            if ($expectedLookups === null) {
+                $this->assertStringContainsString('$this->container->get(', $source);
+            } else {
+                $this->assertSame($expectedLookups, substr_count($source, '$this->container->get('));
+            }
+        }
+    }
+
+    public function testNavigationTabDependenciesAreCompositionRootOnly(): void
+    {
+        require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        $source = file_get_contents($root . '/core/di/application_navigation_tab_dependencies.php');
+        $navigationCreatorSource = file_get_contents($root . '/core/di/application_navigation_service_creator.php');
+        $coreSource = file_get_contents($root . '/core/di/application_navigation_tab_core_dependencies.php');
+        $groupFiles = [
+            'core/di/application_navigation_tab_alias_asset_dependencies.php' => 1,
+            'core/di/application_navigation_tab_application_factory_application_debug_dependencies.php' => 1,
+            'core/di/application_navigation_tab_block_file_storage_dependencies.php' => 1,
+            'core/di/application_navigation_tab_block_meta_file_storage_dependencies.php' => 0,
+            'core/di/application_navigation_tab_config_factory_config_header_dependencies.php' => 1,
+            'core/di/application_navigation_tab_context_dependencies.php' => 0,
+            'core/di/application_navigation_tab_cookie_payload_dependencies.php' => 1,
+            'core/di/application_navigation_tab_core_dependencies.php' => 0,
+            'core/di/application_navigation_tab_data_cookie_payload_dependencies.php' => 0,
+            'core/di/application_navigation_tab_data_loader_payload_dependencies.php' => 1,
+            'core/di/application_navigation_tab_data_model_factory_dependencies.php' => 0,
+            'core/di/application_navigation_tab_date_factory_user_time_model_factory_dependencies.php' => 1,
+            'core/di/application_navigation_tab_debug_factory_application_debug_dependencies.php' => 1,
+            'core/di/application_navigation_tab_entity_model_factory_dependencies.php' => 1,
+            'core/di/application_navigation_tab_error_factory_error_reflector_dependencies.php' => 1,
+            'core/di/application_navigation_tab_error_log_writer_asset_dependencies.php' => 1,
+            'core/di/application_navigation_tab_file_storage_dependencies.php' => 0,
+            'core/di/application_navigation_tab_header_factory_config_header_dependencies.php' => 1,
+            'core/di/application_navigation_tab_image_metadata_reader_asset_dependencies.php' => 1,
+            'core/di/application_navigation_tab_image_modify_model_factory_dependencies.php' => 1,
+            'core/di/application_navigation_tab_input_context_dependencies.php' => 1,
+            'core/di/application_navigation_tab_json_payload_dependencies.php' => 1,
+            'core/di/application_navigation_tab_locale_context_dependencies.php' => 1,
+            'core/di/application_navigation_tab_locale_session_context_dependencies.php' => 0,
+            'core/di/application_navigation_tab_matcher_routing_context_dependencies.php' => 1,
+            'core/di/application_navigation_tab_media_error_asset_dependencies.php' => 0,
+            'core/di/application_navigation_tab_media_model_factory_dependencies.php' => 0,
+            'core/di/application_navigation_tab_meta_file_storage_dependencies.php' => 1,
+            'core/di/application_navigation_tab_model_factory_dependencies.php' => 0,
+            'core/di/application_navigation_tab_obfuscator_model_factory_dependencies.php' => 1,
+            'core/di/application_navigation_tab_pager_model_factory_dependencies.php' => 1,
+            'core/di/application_navigation_tab_project_tool_storage_dependencies.php' => 1,
+            'core/di/application_navigation_tab_reflector_factory_error_reflector_dependencies.php' => 1,
+            'core/di/application_navigation_tab_request_routing_context_dependencies.php' => 1,
+            'core/di/application_navigation_tab_routing_context_dependencies.php' => 0,
+            'core/di/application_navigation_tab_root_html_file_storage_dependencies.php' => 1,
+            'core/di/application_navigation_tab_role_factory_role_transfer_dependencies.php' => 1,
+            'core/di/application_navigation_tab_session_factory_context_dependencies.php' => 1,
+            'core/di/application_navigation_tab_service_factory_application_debug_dependencies.php' => 0,
+            'core/di/application_navigation_tab_service_factory_application_dependencies.php' => 0,
+            'core/di/application_navigation_tab_service_factory_config_header_dependencies.php' => 0,
+            'core/di/application_navigation_tab_service_factory_dependencies.php' => 0,
+            'core/di/application_navigation_tab_service_factory_error_reflector_dependencies.php' => 0,
+            'core/di/application_navigation_tab_service_factory_payload_dependencies.php' => 0,
+            'core/di/application_navigation_tab_service_factory_role_transfer_dependencies.php' => 0,
+            'core/di/application_navigation_tab_service_factory_runtime_dependencies.php' => 0,
+            'core/di/application_navigation_tab_storage_dependencies.php' => 0,
+            'core/di/application_navigation_tab_array_adducer_transform_dependencies.php' => 1,
+            'core/di/application_navigation_tab_array_like_checker_read_check_dependencies.php' => 1,
+            'core/di/application_navigation_tab_array_value_reader_read_check_dependencies.php' => 1,
+            'core/di/application_navigation_tab_block_exception_factory_exception_meta_dependencies.php' => 1,
+            'core/di/application_navigation_tab_block_factory_instance_block_factory_dependencies.php' => 1,
+            'core/di/application_navigation_tab_meta_row_factory_exception_meta_dependencies.php' => 1,
+            'core/di/application_navigation_tab_recursive_merger_transform_dependencies.php' => 1,
+            'core/di/application_navigation_tab_support_array_helper_dependencies.php' => 0,
+            'core/di/application_navigation_tab_support_array_read_check_dependencies.php' => 0,
+            'core/di/application_navigation_tab_support_array_transform_dependencies.php' => 0,
+            'core/di/application_navigation_tab_support_asset_dependencies.php' => 0,
+            'core/di/application_navigation_tab_support_block_dependencies.php' => 0,
+            'core/di/application_navigation_tab_support_block_exception_meta_dependencies.php' => 0,
+            'core/di/application_navigation_tab_support_block_factory_dependencies.php' => 0,
+            'core/di/application_navigation_tab_class_name_resolver_class_helper_dependencies.php' => 1,
+            'core/di/application_navigation_tab_short_class_name_resolver_class_helper_dependencies.php' => 1,
+            'core/di/application_navigation_tab_support_class_helper_dependencies.php' => 0,
+            'core/di/application_navigation_tab_support_dependencies.php' => 0,
+            'core/di/application_navigation_tab_support_helper_dependencies.php' => 0,
+            'core/di/application_navigation_tab_support_loader_dependencies.php' => 1,
+            'core/di/application_navigation_tab_tab_state_block_factory_dependencies.php' => 1,
+            'core/di/application_navigation_tab_transfer_factory_role_transfer_dependencies.php' => 1,
+            'core/di/application_navigation_tab_upload_limit_storage_dependencies.php' => 1,
+            'core/di/application_navigation_tab_user_factory_user_time_model_factory_dependencies.php' => 1,
+            'core/di/application_navigation_tab_user_time_model_factory_dependencies.php' => 0,
+        ];
+
+        $this->assertIsString($source);
+        $this->assertIsString($navigationCreatorSource);
+        $this->assertIsString($coreSource);
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_navigation_tab_dependencies.php'));
+        $this->assertStringContainsString('final class application_navigation_tab_dependencies', $source);
+        $this->assertSame(0, substr_count($source, '$this->container->get('));
+        $this->assertSame(0, substr_count($coreSource, '$this->container->get('));
+        foreach ($groupFiles as $file => $expectedLookups) {
+            if (is_int($file)) {
+                $file = $expectedLookups;
+                $expectedLookups = null;
+            }
+            $groupSource = file_get_contents($root . '/' . $file);
+            $this->assertIsString($groupSource);
+            $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file($file));
+            if ($expectedLookups !== 0) {
+                $this->assertArrayHasKey($file, $map['dynamic_boundaries']['locations']);
+            }
+            if ($expectedLookups === null) {
+                $this->assertStringContainsString('$this->container->get(', $groupSource);
+            } else {
+                $this->assertSame($expectedLookups, substr_count($groupSource, '$this->container->get('));
+            }
+        }
+        $this->assertStringContainsString('tabDependencies(container_interface $container): application_navigation_tab_dependencies', $navigationCreatorSource);
+        $this->assertStringContainsString('$tabDependencies->matcher()', $navigationCreatorSource);
+        $this->assertStringContainsString('$tabDependencies->uploadSizeLimitProvider()', $navigationCreatorSource);
+    }
+
+    public function testSessionServiceDependenciesAreCompositionRootOnly(): void
+    {
+        require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        $source = file_get_contents($root . '/core/di/application_session_service_dependencies.php');
+        $creatorSource = file_get_contents($root . '/core/di/application_session_service_creator.php');
+        $groupFiles = [
+            'core/di/application_session_application_context_dependencies.php' => 0,
+            'core/di/application_session_application_instance_application_context_dependencies.php' => 1,
+            'core/di/application_session_array_runtime_dependencies.php' => 1,
+            'core/di/application_session_bootstrap_bootstrap_runtime_dependencies.php' => 1,
+            'core/di/application_session_bootstrap_runtime_dependencies.php' => 0,
+            'core/di/application_session_cache_factory_dependencies.php' => 1,
+            'core/di/application_session_config_application_context_dependencies.php' => 1,
+            'core/di/application_session_context_dependencies.php' => 0,
+            'core/di/application_session_cookie_factory_state_factory_dependencies.php' => 1,
+            'core/di/application_session_date_factory_support_factory_dependencies.php' => 1,
+            'core/di/application_session_error_factory_support_factory_dependencies.php' => 1,
+            'core/di/application_session_factory_dependencies.php' => 0,
+            'core/di/application_session_header_context_dependencies.php' => 1,
+            'core/di/application_session_native_runtime_dependencies.php' => 0,
+            'core/di/application_session_native_session_native_runtime_dependencies.php' => 1,
+            'core/di/application_session_pear_http_session_loader_native_runtime_dependencies.php' => 1,
+            'core/di/application_session_php_runtime_settings_bootstrap_runtime_dependencies.php' => 1,
+            'core/di/application_session_request_context_dependencies.php' => 0,
+            'core/di/application_session_request_input_request_context_dependencies.php' => 1,
+            'core/di/application_session_request_instance_request_context_dependencies.php' => 1,
+            'core/di/application_session_runtime_dependencies.php' => 0,
+            'core/di/application_session_session_factory_state_factory_dependencies.php' => 1,
+            'core/di/application_session_state_factory_dependencies.php' => 0,
+            'core/di/application_session_support_factory_dependencies.php' => 0,
+        ];
+
+        $this->assertIsString($source);
+        $this->assertIsString($creatorSource);
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_session_service_dependencies.php'));
+        $this->assertStringContainsString('final class application_session_service_dependencies', $source);
+        $this->assertSame(0, substr_count($source, '$this->container->get('));
+        foreach ($groupFiles as $file => $expectedLookups) {
+            $groupSource = file_get_contents($root . '/' . $file);
+            $this->assertIsString($groupSource);
+            $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file($file));
+            if ($expectedLookups !== 0) {
+                $this->assertArrayHasKey($file, $map['dynamic_boundaries']['locations']);
+            }
+            $this->assertSame($expectedLookups, substr_count($groupSource, '$this->container->get('));
+        }
+        $this->assertSame(0, substr_count($creatorSource, '$container->get('));
+        $this->assertStringContainsString('sessionDependencies(container_interface $container): application_session_service_dependencies', $creatorSource);
+        $this->assertStringContainsString('$sessionDependencies = $this->sessionDependencies($container);', $creatorSource);
+        $this->assertStringContainsString('$config = $sessionDependencies->config();', $creatorSource);
+        $this->assertStringContainsString('$sessionDependencies->arrayValueReader()', $creatorSource);
+    }
+
+    public function testUserServiceDependenciesAreCompositionRootOnly(): void
+    {
+        require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        $source = file_get_contents($root . '/core/di/application_user_service_dependencies.php');
+        $userCreatorSource = file_get_contents($root . '/core/di/application_user_service_creator.php');
+        $groupFiles = [
+            'core/di/application_user_application_factory_dependencies.php' => 0,
+            'core/di/application_user_application_factory_application_request_input_factory_dependencies.php' => 1,
+            'core/di/application_user_application_request_input_factory_dependencies.php' => 0,
+            'core/di/application_user_application_instance_application_request_context_dependencies.php' => 1,
+            'core/di/application_user_application_request_context_dependencies.php' => 0,
+            'core/di/application_user_array_runtime_dependencies.php' => 1,
+            'core/di/application_user_bootstrap_cache_runtime_dependencies.php' => 0,
+            'core/di/application_user_bootstrap_runtime_bootstrap_cache_runtime_dependencies.php' => 1,
+            'core/di/application_user_cache_factory_bootstrap_cache_runtime_dependencies.php' => 1,
+            'core/di/application_user_config_factory_dependencies.php' => 1,
+            'core/di/application_user_config_serialization_config_context_dependencies.php' => 1,
+            'core/di/application_user_context_dependencies.php' => 0,
+            'core/di/application_user_current_user_factory_identity_factory_dependencies.php' => 1,
+            'core/di/application_user_error500_exception_factory_exception_session_context_dependencies.php' => 1,
+            'core/di/application_user_exception_session_context_dependencies.php' => 0,
+            'core/di/application_user_factory_dependencies.php' => 0,
+            'core/di/application_user_identity_factory_dependencies.php' => 0,
+            'core/di/application_user_request_input_factory_application_request_input_factory_dependencies.php' => 1,
+            'core/di/application_user_request_application_request_context_dependencies.php' => 1,
+            'core/di/application_user_runtime_dependencies.php' => 0,
+            'core/di/application_user_serializer_operations_serialization_config_context_dependencies.php' => 1,
+            'core/di/application_user_serialization_config_context_dependencies.php' => 0,
+            'core/di/application_user_support_factory_dependencies.php' => 0,
+            'core/di/application_user_error_factory_support_factory_dependencies.php' => 1,
+            'core/di/application_user_entity_factory_support_factory_dependencies.php' => 1,
+            'core/di/application_user_session_exception_session_context_dependencies.php' => 1,
+            'core/di/application_user_session_factory_identity_factory_dependencies.php' => 1,
+        ];
+
+        $this->assertIsString($source);
+        $this->assertIsString($userCreatorSource);
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_user_service_dependencies.php'));
+        $this->assertStringContainsString('final class application_user_service_dependencies', $source);
+        $this->assertSame(0, substr_count($source, '$this->container->get('));
+        foreach ($groupFiles as $file => $expectedLookups) {
+            $groupSource = file_get_contents($root . '/' . $file);
+            $this->assertIsString($groupSource);
+            $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file($file));
+            if ($expectedLookups !== 0) {
+                $this->assertArrayHasKey($file, $map['dynamic_boundaries']['locations']);
+            }
+            $this->assertSame($expectedLookups, substr_count($groupSource, '$this->container->get('));
+        }
+        $this->assertStringContainsString('userDependencies(container_interface $container): application_user_service_dependencies', $userCreatorSource);
+        $this->assertStringContainsString('$userDependencies->serializerOperations()', $userCreatorSource);
+        $this->assertStringContainsString('$userDependencies->arrayAdducer()', $userCreatorSource);
+    }
+
+    public function testInfrastructureConfigCacheDependenciesAreCompositionRootOnly(): void
+    {
+        require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        $source = file_get_contents($root . '/core/di/application_infrastructure_config_cache_dependencies.php');
+        $creatorSource = file_get_contents($root . '/core/di/application_infrastructure_service_creator.php');
+        $groupFiles = [
+            'core/di/application_infrastructure_config_cache_cache_factory_dependencies.php' => 0,
+            'core/di/application_infrastructure_config_cache_bootstrap_runtime_support_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_cache_source_file_metadata_storage_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_class_helper_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_config_cache_factory_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_config_factory_dependencies.php' => 0,
+            'core/di/application_infrastructure_config_cache_config_instance_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_config_source_file_storage_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_core_fatal_exception_factory_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_error_factory_runtime_support_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_exception_dependencies.php' => 0,
+            'core/di/application_infrastructure_config_cache_error500_exception_factory_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_exception_factory_dependencies.php' => 0,
+            'core/di/application_infrastructure_config_cache_factory_dependencies.php' => 0,
+            'core/di/application_infrastructure_config_cache_header_writer_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_loader_serializer_dependencies.php' => 0,
+            'core/di/application_infrastructure_config_cache_php_array_file_loader_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_request_header_dependencies.php' => 0,
+            'core/di/application_infrastructure_config_cache_request_input_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_runtime_support_dependencies.php' => 0,
+            'core/di/application_infrastructure_config_cache_serializer_operations_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_storage_dependencies.php' => 0,
+            'core/di/application_infrastructure_config_cache_support_dependencies.php' => 0,
+            'core/di/application_infrastructure_config_cache_type_cache_factory_dependencies.php' => 1,
+            'core/di/application_infrastructure_config_cache_typed_config_factory_dependencies.php' => 1,
+            'core/di/application_infrastructure_runtime_bootstrap_runtime_error_dependencies.php' => 1,
+            'core/di/application_infrastructure_runtime_cache_factory_dependencies.php' => 1,
+            'core/di/application_infrastructure_runtime_config_cache_dependencies.php' => 0,
+            'core/di/application_infrastructure_runtime_config_dependencies.php' => 1,
+            'core/di/application_infrastructure_runtime_dependencies.php' => 0,
+            'core/di/application_infrastructure_runtime_error_dependencies.php' => 0,
+            'core/di/application_infrastructure_runtime_error_factory_dependencies.php' => 1,
+            'core/di/application_infrastructure_service_dependencies.php' => 0,
+            'core/di/application_infrastructure_storage_dependencies.php' => 1,
+        ];
+
+        $this->assertIsString($source);
+        $this->assertIsString($creatorSource);
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_infrastructure_config_cache_dependencies.php'));
+        $this->assertStringContainsString('final class application_infrastructure_config_cache_dependencies', $source);
+        $this->assertSame(0, substr_count($source, '$this->container->get('));
+        foreach ($groupFiles as $file => $expectedLookups) {
+            $groupSource = file_get_contents($root . '/' . $file);
+            $this->assertIsString($groupSource);
+            $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file($file));
+            if ($expectedLookups !== 0) {
+                $this->assertArrayHasKey($file, $map['dynamic_boundaries']['locations']);
+            }
+            $this->assertSame($expectedLookups, substr_count($groupSource, '$this->container->get('));
+        }
+        $this->assertStringContainsString('configCacheDependencies(container_interface $container): application_infrastructure_config_cache_dependencies', $creatorSource);
+        $this->assertStringContainsString('serviceDependencies(container_interface $container): application_infrastructure_service_dependencies', $creatorSource);
+        $this->assertStringContainsString('$infrastructureDependencies->fileSystemStorage()', $creatorSource);
+        $this->assertStringContainsString('$infrastructureDependencies->config()', $creatorSource);
+        $this->assertStringContainsString('$infrastructureDependencies->cacheFactory()', $creatorSource);
+    }
+
+    public function testTerminalCompositionLeavesArePinnedAsAtomicInventory(): void
+    {
+        require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        $terminalLeaves = $map['dynamic_boundaries']['terminal_composition_leaves'];
+        $examples = [
+            'core/block/base_dependency_application_service_runtime_factory_group.php',
+            'core/block/base_dependency_array_adducer_helper_group.php',
+            'core/block/base_dependency_array_like_checker_helper_group.php',
+            'core/block/base_dependency_array_value_reader_helper_group.php',
+            'core/block/base_dependency_block_exception_factory_group.php',
+        ];
+
+        $this->assertSame([], $map['dynamic_boundaries']['actionable_composition_roots']);
+
+        foreach ($examples as $file) {
+            $this->assertContains($file, $terminalLeaves);
+            $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file($file));
+            $this->assertSame(1, count($map['dynamic_boundaries']['locations'][$file] ?? []));
+            $this->assertSame(
+                'terminal_composition_leaf',
+                php_fan_ai_dynamic_boundary_summary_for_file($map, $file)['composition_leaf_kind']
+            );
+        }
+    }
+
+    public function testInfrastructureCreatorUsesNamedProjectServiceAvailabilityBoundary(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_infrastructure_service_creator.php');
+
+        $this->assertIsString($source);
+        $this->assertSame(1, substr_count($source, 'class_exists($className)'));
+        $this->assertStringNotContainsString('if (!class_exists($className))', $source);
+        $this->assertStringContainsString('private \Closure $projectServiceClassExists;', $source);
+        $this->assertStringContainsString('?callable $projectServiceClassExists = null', $source);
+        $this->assertStringContainsString('private function projectServiceClassExists(string $className): bool', $source);
+        $this->assertGreaterThanOrEqual(5, substr_count($source, '$this->projectServiceClassExists($className)'));
+    }
+
+    public function testContentServiceDependenciesAreCompositionRootOnly(): void
+    {
+        require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        $source = file_get_contents($root . '/core/di/application_content_service_dependencies.php');
+        $creatorSource = file_get_contents($root . '/core/di/application_content_service_creator.php');
+        $groupFiles = [
+            'core/di/application_content_bootstrap_runtime_dependencies.php' => 1,
+            'core/di/application_content_block_context_dependencies.php' => 1,
+            'core/di/application_content_cache_runtime_dependencies.php' => 1,
+            'core/di/application_content_config_cache_runtime_dependencies.php' => 0,
+            'core/di/application_content_config_runtime_dependencies.php' => 1,
+            'core/di/application_content_context_dependencies.php' => 0,
+            'core/di/application_content_error_block_context_dependencies.php' => 0,
+            'core/di/application_content_error_context_dependencies.php' => 1,
+            'core/di/application_content_locale_context_dependencies.php' => 1,
+            'core/di/application_content_localization_context_dependencies.php' => 0,
+            'core/di/application_content_matcher_context_dependencies.php' => 1,
+            'core/di/application_content_request_input_context_dependencies.php' => 1,
+            'core/di/application_content_request_matcher_context_dependencies.php' => 0,
+            'core/di/application_content_runtime_dependencies.php' => 0,
+            'core/di/application_content_php_array_file_loader_storage_dependencies.php' => 1,
+            'core/di/application_content_storage_dependencies.php' => 0,
+            'core/di/application_content_tab_factory_context_dependencies.php' => 1,
+            'core/di/application_content_translation_file_storage_dependencies.php' => 1,
+        ];
+
+        $this->assertIsString($source);
+        $this->assertIsString($creatorSource);
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_content_service_dependencies.php'));
+        $this->assertStringContainsString('final class application_content_service_dependencies', $source);
+        $this->assertSame(0, substr_count($source, '$this->container->get('));
+        foreach ($groupFiles as $file => $expectedLookups) {
+            $groupSource = file_get_contents($root . '/' . $file);
+            $this->assertIsString($groupSource);
+            $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file($file));
+            if ($expectedLookups !== 0) {
+                $this->assertArrayHasKey($file, $map['dynamic_boundaries']['locations']);
+            }
+            $this->assertSame($expectedLookups, substr_count($groupSource, '$this->container->get('));
+        }
+        $this->assertSame(0, substr_count($creatorSource, '$container->get('));
+        $this->assertStringContainsString('contentDependencies(container_interface $container): application_content_service_dependencies', $creatorSource);
+        $this->assertStringContainsString('$contentDependencies = $this->contentDependencies($container);', $creatorSource);
+        $this->assertStringContainsString('$contentDependencies->translationFileStorage()', $creatorSource);
+    }
+
+    public function testContentCreatorUsesNamedProjectServiceAvailabilityBoundary(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_content_service_creator.php');
+
+        $this->assertIsString($source);
+        $this->assertSame(1, substr_count($source, 'class_exists($className)'));
+        $this->assertStringNotContainsString('if (!class_exists($className))', $source);
+        $this->assertStringContainsString('private \Closure $projectServiceClassExists;', $source);
+        $this->assertStringContainsString('?callable $projectServiceClassExists = null', $source);
+        $this->assertStringContainsString('private function projectServiceClassExists(string $className): bool', $source);
+        $this->assertStringContainsString('$this->projectServiceClassExists($className)', $source);
+    }
+
+    public function testControllerServiceDependenciesAreCompositionRootOnly(): void
+    {
+        require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        $source = file_get_contents($root . '/core/di/application_controller_service_dependencies.php');
+        $creatorSource = file_get_contents($root . '/core/di/application_controller_service_creator.php');
+        $groupFiles = [
+            'core/di/application_controller_bootstrap_runtime_dependencies.php' => 1,
+            'core/di/application_controller_cache_runtime_dependencies.php' => 1,
+            'core/di/application_controller_config_cache_runtime_dependencies.php' => 0,
+            'core/di/application_controller_config_runtime_dependencies.php' => 1,
+            'core/di/application_controller_handler_dependencies.php' => 0,
+            'core/di/application_controller_header_plain_route_dependencies.php' => 1,
+            'core/di/application_controller_matcher_plain_route_dependencies.php' => 1,
+            'core/di/application_controller_obfuscator_factory_handler_dependencies.php' => 1,
+            'core/di/application_controller_obfuscator_handler_dependencies.php' => 0,
+            'core/di/application_controller_plain_config_dependencies.php' => 1,
+            'core/di/application_controller_plain_dependencies.php' => 0,
+            'core/di/application_controller_plain_file_handler_dependencies.php' => 1,
+            'core/di/application_controller_plain_route_dependencies.php' => 0,
+            'core/di/application_controller_request_handler_dependencies.php' => 1,
+            'core/di/application_controller_runtime_dependencies.php' => 0,
+        ];
+
+        $this->assertIsString($source);
+        $this->assertIsString($creatorSource);
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_controller_service_dependencies.php'));
+        $this->assertStringContainsString('final class application_controller_service_dependencies', $source);
+        $this->assertSame(0, substr_count($source, '$this->container->get('));
+        foreach ($groupFiles as $file => $expectedLookups) {
+            $groupSource = file_get_contents($root . '/' . $file);
+            $this->assertIsString($groupSource);
+            $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file($file));
+            if ($expectedLookups !== 0) {
+                $this->assertArrayHasKey($file, $map['dynamic_boundaries']['locations']);
+            }
+            $this->assertSame($expectedLookups, substr_count($groupSource, '$this->container->get('));
+        }
+        $this->assertSame(0, substr_count($creatorSource, '$container->get('));
+        $this->assertStringContainsString('controllerDependencies(container_interface $container): application_controller_service_dependencies', $creatorSource);
+        $this->assertStringContainsString('$controllerDependencies = $this->controllerDependencies($container);', $creatorSource);
+        $this->assertStringContainsString('$controllerDependencies->plainFileContext()', $creatorSource);
+    }
+
+    public function testControllerCreatorUsesNamedProjectServiceAvailabilityBoundary(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_controller_service_creator.php');
+
+        $this->assertIsString($source);
+        $this->assertSame(1, substr_count($source, 'class_exists($className)'));
+        $this->assertStringNotContainsString('if (!class_exists($className))', $source);
+        $this->assertStringContainsString('private \Closure $projectServiceClassExists;', $source);
+        $this->assertStringContainsString('?callable $projectServiceClassExists = null', $source);
+        $this->assertStringContainsString('private function projectServiceClassExists(string $className): bool', $source);
+        $this->assertStringContainsString('$this->projectServiceClassExists($className)', $source);
+    }
+
+    public function testClientCreatorUsesNamedProjectServiceAvailabilityBoundary(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_client_service_creator.php');
+
+        $this->assertIsString($source);
+        $this->assertSame(1, substr_count($source, 'class_exists($className)'));
+        $this->assertStringNotContainsString('if (!class_exists($className))', $source);
+        $this->assertStringContainsString('private \Closure $projectServiceClassExists;', $source);
+        $this->assertStringContainsString('?callable $projectServiceClassExists = null', $source);
+        $this->assertStringContainsString('private function projectServiceClassExists(string $className): bool', $source);
+        $this->assertSame(3, substr_count($source, '$this->projectServiceClassExists($className)'));
+    }
+
+    public function testSessionCreatorUsesNamedProjectServiceAvailabilityBoundary(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_session_service_creator.php');
+
+        $this->assertIsString($source);
+        $this->assertSame(1, substr_count($source, 'class_exists($className)'));
+        $this->assertStringNotContainsString('if (!class_exists($className))', $source);
+        $this->assertStringContainsString('private \Closure $projectServiceClassExists;', $source);
+        $this->assertStringContainsString('?callable $projectServiceClassExists = null', $source);
+        $this->assertStringContainsString('private function projectServiceClassExists(string $className): bool', $source);
+        $this->assertStringContainsString('$this->projectServiceClassExists($className)', $source);
+    }
+
+    public function testPagerCreatorUsesNamedProjectServiceAvailabilityBoundary(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_pager_service_creator.php');
+
+        $this->assertIsString($source);
+        $this->assertSame(1, substr_count($source, 'class_exists($className)'));
+        $this->assertStringNotContainsString('if (!class_exists($className))', $source);
+        $this->assertStringContainsString('private \Closure $projectServiceClassExists;', $source);
+        $this->assertStringContainsString('?callable $projectServiceClassExists = null', $source);
+        $this->assertStringContainsString('private function projectServiceClassExists(string $className): bool', $source);
+        $this->assertStringContainsString('$this->projectServiceClassExists($className)', $source);
+    }
+
+    public function testPagerServiceDependenciesAreCompositionRootOnly(): void
+    {
+        require_once dirname(__DIR__, 2) . '/tools/ai_map.php';
+
+        $root = dirname(__DIR__, 2);
+        $map = php_fan_ai_build_map($root);
+        $source = file_get_contents($root . '/core/di/application_pager_service_dependencies.php');
+        $creatorSource = file_get_contents($root . '/core/di/application_pager_service_creator.php');
+        $groupFiles = [
+            'core/di/application_pager_bootstrap_runtime_dependencies.php' => 1,
+            'core/di/application_pager_cache_factory_config_cache_runtime_dependencies.php' => 1,
+            'core/di/application_pager_config_cache_runtime_dependencies.php' => 0,
+            'core/di/application_pager_config_config_cache_runtime_dependencies.php' => 1,
+            'core/di/application_pager_context_dependencies.php' => 0,
+            'core/di/application_pager_entity_context_dependencies.php' => 1,
+            'core/di/application_pager_exception_dependencies.php' => 1,
+            'core/di/application_pager_request_context_dependencies.php' => 1,
+            'core/di/application_pager_runtime_dependencies.php' => 0,
+            'core/di/application_pager_service_dependencies.php' => 0,
+            'core/di/application_pager_tab_context_dependencies.php' => 1,
+        ];
+
+        $this->assertIsString($source);
+        $this->assertIsString($creatorSource);
+        $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file('core/di/application_pager_service_dependencies.php'));
+        $this->assertStringContainsString('final class application_pager_service_dependencies', $source);
+        foreach ($groupFiles as $file => $expectedLookups) {
+            $groupSource = file_get_contents($root . '/' . $file);
+            $this->assertIsString($groupSource);
+            $this->assertSame('composition_roots', php_fan_ai_dynamic_boundary_category_for_file($file));
+            if ($expectedLookups !== 0) {
+                $this->assertArrayHasKey($file, $map['dynamic_boundaries']['locations']);
+            }
+            $this->assertSame($expectedLookups, substr_count($groupSource, '$this->container->get('));
+        }
+        $this->assertStringContainsString('pagerDependencies(container_interface $container): application_pager_service_dependencies', $creatorSource);
+        $this->assertStringContainsString('$pagerDependencies = $this->pagerDependencies($container);', $creatorSource);
+        $this->assertStringContainsString('$pagerDependencies->tab()', $creatorSource);
+        $this->assertStringContainsString('$pagerDependencies->entityFactory()', $creatorSource);
+        $this->assertSame(0, substr_count($creatorSource, '$container->get('));
+    }
+
+    public function testNavigationCreatorUsesNamedProjectServiceAvailabilityBoundary(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_navigation_service_creator.php');
+
+        $this->assertIsString($source);
+        $this->assertSame(1, substr_count($source, 'class_exists($className)'));
+        $this->assertStringNotContainsString('if (!class_exists($className))', $source);
+        $this->assertStringContainsString('private \Closure $projectServiceClassExists;', $source);
+        $this->assertStringContainsString('?callable $projectServiceClassExists = null', $source);
+        $this->assertStringContainsString('private function projectServiceClassExists(string $className): bool', $source);
+        $this->assertStringContainsString('$this->projectServiceClassExists($className)', $source);
+    }
+
+    public function testUserCreatorUsesNamedProjectServiceAvailabilityBoundary(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_user_service_creator.php');
+
+        $this->assertIsString($source);
+        $this->assertSame(1, substr_count($source, 'class_exists($className)'));
+        $this->assertStringNotContainsString('if (!class_exists($className))', $source);
+        $this->assertStringContainsString('private \Closure $projectServiceClassExists;', $source);
+        $this->assertStringContainsString('?callable $projectServiceClassExists = null', $source);
+        $this->assertStringContainsString('private function projectServiceClassExists(string $className): bool', $source);
+        $this->assertStringContainsString('$this->projectServiceClassExists($className)', $source);
+    }
+
+    public function testUtilityCreatorUsesNamedProjectServiceAvailabilityBoundary(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_utility_service_creator.php');
+
+        $this->assertIsString($source);
+        $this->assertSame(1, substr_count($source, 'class_exists($className)'));
+        $this->assertStringNotContainsString('if (!class_exists($className))', $source);
+        $this->assertStringContainsString('private \Closure $projectServiceClassExists;', $source);
+        $this->assertStringContainsString('?callable $projectServiceClassExists = null', $source);
+        $this->assertStringContainsString('private function projectServiceClassExists(string $className): bool', $source);
+        $this->assertSame(4, substr_count($source, '$this->projectServiceClassExists($className)'));
+    }
+
     public function testModelServiceLocatorUsageIsPinnedToMigrationAllowlist(): void
     {
-        $allowedCounts = [
-            'core/base/model/file_data/row.php' => 1,
-            'core/base/model/row.php' => 1,
-            'core/base/model/spec_file/image/entity.php' => 1,
-            'core/base/model/spec_file/image/row.php' => 1,
-            'core/base/model/spec_file/row.php' => 1,
-        ];
+        $allowedCounts = [];
         $actualCounts = [];
 
         foreach ($this->productionPhpFiles() as $file) {
@@ -208,6 +1195,58 @@ final class LegacyDiSourceInventoryTest extends TestCase
         }
 
         $this->assertSame([], $violations, 'Model service property access outside entity constructor found in: ' . implode(', ', $violations));
+    }
+
+    public function testBaseServiceLayerDoesNotUseServiceStateLocatorAliases(): void
+    {
+        $violations = [];
+        foreach ($this->productionPhpFiles() as $file) {
+            $relativePath = $this->relativePath($file);
+            if (!str_starts_with($relativePath, 'core/base/service/')) {
+                continue;
+            }
+
+            $lines = file($file);
+            $this->assertIsArray($lines);
+            foreach ($lines as $lineNumber => $line) {
+                if (preg_match('/->\s*service\b|\$service\b/', $line) !== 1) {
+                    continue;
+                }
+
+                $violations[] = $relativePath . ':' . ($lineNumber + 1);
+            }
+        }
+
+        $this->assertSame([], $violations, 'Base service layer service-state locator aliases found in: ' . implode(', ', $violations));
+    }
+
+    public function testRootBaseServiceStateShapesArePinnedToInjectedStateBoundaries(): void
+    {
+        $source = file(dirname(__DIR__, 2) . '/core/base/service.php');
+        $this->assertIsArray($source);
+        $violations = [];
+
+        foreach ($source as $lineNumber => $line) {
+            if (preg_match('/service_listener_state|service_single_state|\$listeners\b|\$instances\b|->service\b|\$service\b/', $line) !== 1) {
+                continue;
+            }
+            if (preg_match('/^use fan\\\\core\\\\service\\\\service_(?:listener|single)_state;$/', trim($line)) === 1) {
+                continue;
+            }
+            if (preg_match('/private \?service_(?:listener|single)_state \$service(?:Listener|Single)State = null;/', $line) === 1) {
+                continue;
+            }
+            if (preg_match('/\?service_(?:listener|single)_state \$service(?:Listener|Single)State = null,?/', $line) === 1) {
+                continue;
+            }
+            if (preg_match('/protected function (?:_singleState|serviceListenerState)\(\): service_(?:listener|single)_state/', $line) === 1) {
+                continue;
+            }
+
+            $violations[] = 'core/base/service.php:' . ($lineNumber + 1);
+        }
+
+        $this->assertSame([], $violations, 'Root base service state shapes outside injected boundaries found in: ' . implode(', ', $violations));
     }
 
     public function testMigratedBlockArrayHelpersUseInjectedDependencies(): void
@@ -365,17 +1404,21 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $source = file_get_contents(dirname(__DIR__, 2) . '/core/exception/plain/fatal.php');
         $factorySource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/plain_exception_factory.php');
         $registrarSource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_service_registrar.php');
+        $classNameResolverDependencySource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_class_name_resolver_registrar_dependencies.php');
 
         $this->assertIsString($source);
         $this->assertIsString($factorySource);
         $this->assertIsString($registrarSource);
+        $this->assertIsString($classNameResolverDependencySource);
         $this->assertStringContainsString('?callable $classNameResolver = null', $source);
         $this->assertStringContainsString('private function className(object $object, \Closure $classNameResolver): string', $source);
         $this->assertStringContainsString('$this->className($controller, $classNameResolver)', $source);
         $this->assertStringNotContainsString('get_class_alt(', $source);
         $this->assertStringContainsString('private mixed $classNameResolver = null', $factorySource);
         $this->assertStringContainsString('static fn(object $object): string => \get_class_alt($object) ?? get_class($object)', $factorySource);
-        $this->assertStringContainsString('$container->get(service_id::CLASS_NAME_RESOLVER)', $registrarSource);
+        $this->assertStringContainsString('$dependencies->classNameResolver()', $registrarSource);
+        $this->assertStringNotContainsString('$container->get(service_id::CLASS_NAME_RESOLVER)', $registrarSource);
+        $this->assertStringContainsString('$this->container->get(service_id::CLASS_NAME_RESOLVER)', $classNameResolverDependencySource);
     }
 
     public function testProjectFatalExceptionConstructionIsLimitedToExplicitFactory(): void
@@ -601,6 +1644,62 @@ final class LegacyDiSourceInventoryTest extends TestCase
         );
     }
 
+    public function testConfiguredConstructionDefaultsUseSplitProviderBoundaries(): void
+    {
+        $allowedFiles = [
+            'core/factory/application_runtime_class_instantiator_provider.php',
+            'core/factory/application_runtime_configured_service_provider.php',
+            'core/factory/bootstrap_object_class_instantiator_provider.php',
+            'core/factory/bootstrap_object_configured_service_provider.php',
+        ];
+        $filesWithConfiguredConstruction = [];
+
+        foreach ($this->productionPhpFiles() as $file) {
+            $source = file_get_contents($file);
+            $this->assertIsString($source);
+            if (preg_match('/\bnew\s+(?:\\\\?fan\\\\core\\\\di\\\\)?configured_(?:service_factory|class_instantiator)\s*\(/', $this->codeWithoutCommentsAndStrings($source)) === 1) {
+                $filesWithConfiguredConstruction[] = $this->relativePath($file);
+            }
+        }
+
+        sort($filesWithConfiguredConstruction);
+        $expectedFiles = $allowedFiles;
+        sort($expectedFiles);
+
+        $this->assertSame($expectedFiles, $filesWithConfiguredConstruction);
+
+        $runtimeSource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/application_runtime_factory_defaults_provider_factory.php');
+        $bootstrapSource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/bootstrap_object_defaults_provider_factory.php');
+        $runtimeConfiguredSource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/application_runtime_configured_service_provider.php');
+        $runtimeClassInstantiatorSource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/application_runtime_class_instantiator_provider.php');
+        $bootstrapConfiguredSource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/bootstrap_object_configured_service_provider.php');
+        $bootstrapClassInstantiatorSource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/bootstrap_object_class_instantiator_provider.php');
+
+        foreach ([
+            $runtimeSource,
+            $bootstrapSource,
+            $runtimeConfiguredSource,
+            $runtimeClassInstantiatorSource,
+            $bootstrapConfiguredSource,
+            $bootstrapClassInstantiatorSource,
+        ] as $source) {
+            $this->assertIsString($source);
+            $this->assertDoesNotMatchRegularExpression(
+                '/new\s+configured_service_factory\s*\(\s*new\s+configured_class_instantiator/s',
+                $source
+            );
+        }
+
+        $this->assertStringContainsString('?? new application_runtime_configured_service_provider()', $runtimeSource);
+        $this->assertStringContainsString('?? new application_runtime_class_instantiator_provider()', $runtimeSource);
+        $this->assertStringContainsString('?? new bootstrap_object_configured_service_provider()', $bootstrapSource);
+        $this->assertStringContainsString('?? new bootstrap_object_class_instantiator_provider()', $bootstrapSource);
+        $this->assertStringContainsString('new configured_service_factory($classInstantiator)', $runtimeConfiguredSource);
+        $this->assertStringContainsString('new configured_class_instantiator(new reflection_class_factory())', $runtimeClassInstantiatorSource);
+        $this->assertStringContainsString('new configured_service_factory($classInstantiator)', $bootstrapConfiguredSource);
+        $this->assertStringContainsString('new configured_class_instantiator(new reflection_class_factory())', $bootstrapClassInstantiatorSource);
+    }
+
     public function testBootstrapLoaderFilesystemOperationsAreInjected(): void
     {
         $source = file_get_contents(dirname(__DIR__, 2) . '/core/application/loader.php');
@@ -774,9 +1873,9 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
         $this->assertStringContainsString('static fn(mixed ...$values): mixed => \array_merge_recursive_alt(...$values)', $factorySource);
         $this->assertStringContainsString('static fn(array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed => \array_val($array, $key, $default)', $factorySource);
-        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $creatorSource);
-        $this->assertStringContainsString('$container->get(service_id::RECURSIVE_MERGER)', $creatorSource);
-        $this->assertStringContainsString('$container->get(service_id::ARRAY_VALUE_READER)', $creatorSource);
+        $this->assertStringContainsString('$coreDependencies->arrayAdducer()', $creatorSource);
+        $this->assertStringContainsString('$coreDependencies->recursiveMerger()', $creatorSource);
+        $this->assertStringContainsString('$coreDependencies->arrayValueReader()', $creatorSource);
     }
 
     public function testServiceEngineFactoryDoesNotOwnConfiguredServiceDefault(): void
@@ -820,8 +1919,8 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('adduceToArray(', $source);
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
         $this->assertStringContainsString('static fn(array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed => \array_val($array, $key, $default)', $factorySource);
-        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $creatorSource);
-        $this->assertStringContainsString('$container->get(service_id::ARRAY_VALUE_READER)', $creatorSource);
+        $this->assertStringContainsString('$clientDependencies->arrayAdducer()', $creatorSource);
+        $this->assertStringContainsString('$clientDependencies->arrayValueReader()', $creatorSource);
     }
 
     public function testNativeCurlCallsAreLimitedToCurlAdapterBoundary(): void
@@ -891,8 +1990,8 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('method_exists($reflectionClassFactory, \'create\')', $factorySource);
         $this->assertStringNotContainsString('static fn(object|string $object): \ReflectionClass => new \ReflectionClass($object)', $factorySource);
         $this->assertStringNotContainsString('new \ReflectionClass($className)', $factorySource);
-        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $creatorSource);
-        $this->assertStringContainsString('$container->get(service_id::REFLECTION_CLASS_FACTORY)', $creatorSource);
+        $this->assertStringContainsString('$coreDependencies->arrayAdducer()', $creatorSource);
+        $this->assertStringContainsString('$coreDependencies->reflectionClassFactory()', $creatorSource);
         $this->assertStringNotContainsString('new \ReflectionClass($block)', $source);
         $this->assertDoesNotMatchRegularExpression(
             '/(?<!->)(?<!::)(?<!\\\\)\bis_file\s*\(/',
@@ -934,28 +2033,37 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('method_exists($reflectionClassFactory, \'create\')', $factorySource);
         $this->assertStringNotContainsString('new \ReflectionClass($className)', $factorySource);
         $this->assertStringNotContainsString('static fn(object|string $object): \ReflectionClass => new \ReflectionClass($object)', $factorySource);
-        $this->assertStringContainsString('$container->get(service_id::REFLECTION_CLASS_FACTORY)', $creatorSource);
+        $this->assertStringContainsString('$coreDependencies->reflectionClassFactory()', $creatorSource);
     }
 
     public function testModelEntityUsesInjectedReflectionClassFactory(): void
     {
         $source = file_get_contents(dirname(__DIR__, 2) . '/core/base/model/entity.php');
+        $dependenciesSource = file_get_contents(dirname(__DIR__, 2) . '/core/base/model/entity_dependencies.php');
         $factorySource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/model_entity_factory.php');
         $defaultsFactorySource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/application_model_factory_defaults_provider_factory.php');
 
         $this->assertIsString($source);
+        $this->assertIsString($dependenciesSource);
         $this->assertIsString($factorySource);
         $this->assertIsString($defaultsFactorySource);
         $this->assertStringContainsString('private ?object $reflectionClassFactory = null;', $source);
+        $this->assertStringContainsString('private \Closure $modelClassExists;', $source);
         $this->assertStringContainsString('?object $reflectionClassFactory = null', $source);
+        $this->assertStringContainsString('?callable $modelClassExists = null', $source);
         $this->assertStringContainsString('private function reflectionClass(object|string $className): \ReflectionClass', $source);
+        $this->assertStringContainsString('private function modelClassExists(string $className): bool', $source);
         $this->assertStringContainsString('$this->reflectionClassFactory->create($className)', $source);
+        $this->assertStringContainsString('$this->modelClassExists($className)', $source);
+        $this->assertStringContainsString('static fn(string $className): bool => class_exists($className)', $dependenciesSource);
         $this->assertStringContainsString('method_exists($this->reflectionClassFactory, \'create\')', $source);
         $this->assertStringNotContainsString('private function defaultReflectionClassFactory(): \Closure', $source);
         $this->assertStringNotContainsString('$this->reflectionClassFactory = $this->defaultReflectionClassFactory();', $source);
         $this->assertStringNotContainsString('($this->reflectionClassFactory())($className)', $source);
         $this->assertStringNotContainsString('private ?\Closure $reflectionClassFactory', $source);
         $this->assertStringNotContainsString('new \ReflectionClass($className)', $source);
+        $this->assertStringNotContainsString('!class_exists($className)', $source);
+        $this->assertStringNotContainsString('=> class_exists($className)', $source);
         $this->assertStringContainsString('private ?object $reflectionClassFactory = null;', $factorySource);
         $this->assertStringContainsString('?object $reflectionClassFactory = null', $factorySource);
         $this->assertStringNotContainsString('static fn(object|string $object): \ReflectionClass => new \ReflectionClass($object)', $factorySource);
@@ -966,22 +2074,39 @@ final class LegacyDiSourceInventoryTest extends TestCase
     {
         $source = file_get_contents(dirname(__DIR__, 2) . '/core/service/block_context.php');
         $registrarSource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_service_registrar.php');
+        $tabResolverDependencySource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_tab_resolver_registrar_dependencies.php');
+        $reflectionClassFactoryDependencySource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_reflection_class_factory_registrar_dependencies.php');
         $factorySource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/adapter/reflection_class_factory.php');
 
         $this->assertIsString($source);
         $this->assertIsString($registrarSource);
+        $this->assertIsString($tabResolverDependencySource);
+        $this->assertIsString($reflectionClassFactoryDependencySource);
         $this->assertIsString($factorySource);
         $this->assertStringContainsString('private object $reflectionClassFactory', $source);
+        $this->assertStringContainsString('private \Closure $tabFactory;', $source);
+        $this->assertStringContainsString('private \Closure $bootstrapRuntimeFactory;', $source);
+        $this->assertStringContainsString('private \Closure $projectTabClassExists;', $source);
+        $this->assertStringContainsString('private function tab(): object', $source);
+        $this->assertStringContainsString('private function bootstrapRuntime(): object', $source);
         $this->assertStringContainsString('private function reflectionClass(object|string $object): \ReflectionClass', $source);
+        $this->assertStringContainsString('private function projectTabClassExists(string $className): bool', $source);
         $this->assertStringContainsString('$this->reflectionClassFactory->create($object)', $source);
         $this->assertStringContainsString('method_exists($this->reflectionClassFactory, \'create\')', $source);
-        $this->assertStringNotContainsString('\Closure::fromCallable', $source);
+        $this->assertStringNotContainsString('container_interface', $source);
+        $this->assertStringNotContainsString('$this->container->get', $source);
         $this->assertStringNotContainsString('private ?\Closure $reflectionClassFactory', $source);
         $this->assertStringNotContainsString('$this->reflectionClassFactory !== null', $source);
+        $this->assertStringNotContainsString('class_exists(\'\fan\project\service\tab\', false)', $source);
         $this->assertStringNotContainsString('new \ReflectionClass($block)', $source);
         $this->assertStringContainsString('new block_context(', $registrarSource);
+        $this->assertStringContainsString('$dependencies->tabResolver()', $registrarSource);
+        $this->assertStringContainsString('$dependencies->bootstrapRuntimeResolver()', $registrarSource);
         $this->assertStringContainsString('service_id::REFLECTION_CLASS_FACTORY', $registrarSource);
-        $this->assertStringContainsString('$container->get(service_id::REFLECTION_CLASS_FACTORY)', $registrarSource);
+        $this->assertStringContainsString('$dependencies->reflectionClassFactory()', $registrarSource);
+        $this->assertStringNotContainsString('$container->get(service_id::REFLECTION_CLASS_FACTORY)', $registrarSource);
+        $this->assertStringContainsString('$this->container->get(service_id::TAB)', $tabResolverDependencySource);
+        $this->assertStringContainsString('$this->container->get(service_id::REFLECTION_CLASS_FACTORY)', $reflectionClassFactoryDependencySource);
         $this->assertStringContainsString('final class reflection_class_factory', $factorySource);
         $this->assertStringContainsString('return new \ReflectionClass($object);', $factorySource);
     }
@@ -1137,7 +2262,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('private mixed $recursiveMerger = null;', $source);
         $this->assertStringNotContainsString('$recursiveMerger === null ? null : \Closure::fromCallable($recursiveMerger)', $source);
         $this->assertStringContainsString('static fn(mixed ...$values): mixed => \array_merge_recursive_alt(...$values)', $factorySource);
-        $this->assertStringContainsString('$container->get(service_id::RECURSIVE_MERGER)', $creatorSource);
+        $this->assertStringContainsString('$coreDependencies->recursiveMerger()', $creatorSource);
         $this->assertStringNotContainsString('new fatalException', $source);
         $this->assertStringNotContainsString('use fan\project\exception\service\fatal as fatalException;', $source);
     }
@@ -1331,10 +2456,16 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $source = file_get_contents(dirname(__DIR__, 2) . '/core/service/user.php');
         $factorySource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/user_service_factory.php');
         $creatorSource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_user_service_creator.php');
+        $dependenciesSource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_user_service_dependencies.php');
+        $runtimeDependenciesSource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_user_runtime_dependencies.php');
+        $arrayRuntimeDependenciesSource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_user_array_runtime_dependencies.php');
 
         $this->assertIsString($source);
         $this->assertIsString($factorySource);
         $this->assertIsString($creatorSource);
+        $this->assertIsString($dependenciesSource);
+        $this->assertIsString($runtimeDependenciesSource);
+        $this->assertIsString($arrayRuntimeDependenciesSource);
         $this->assertStringContainsString('User state is not configured for user service.', $source);
         $this->assertStringContainsString('$this->userState = $userState ?? throw new \RuntimeException', $source);
         $this->assertStringContainsString('public function createUserFatalException(', $source);
@@ -1372,7 +2503,10 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('$this->arrayAdducer !== null', $source);
         $this->assertStringNotContainsString('adduceToArray(', $source);
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
-        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $creatorSource);
+        $this->assertStringContainsString('$userDependencies->arrayAdducer()', $creatorSource);
+        $this->assertStringContainsString('$this->runtime->arrayAdducer()', $dependenciesSource);
+        $this->assertStringContainsString('$this->array->arrayAdducer()', $runtimeDependenciesSource);
+        $this->assertStringContainsString('$this->container->get(service_id::ARRAY_ADDUCER)', $arrayRuntimeDependenciesSource);
         $this->assertStringNotContainsString('new user_state()', $source);
         $this->assertStringNotContainsString('new fatalException', $source);
         $this->assertStringNotContainsString('use fan\project\exception\service\fatal as fatalException;', $source);
@@ -1678,7 +2812,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('$this->arrayAdducer()($availableLng)', $source);
         $this->assertStringNotContainsString('adduceToArray(', $source);
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
-        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $creatorSource);
+        $this->assertStringContainsString('$coreDependencies->arrayAdducer()', $creatorSource);
     }
 
     public function testRestServiceFactoryDoesNotOwnConfiguredServiceDefault(): void
@@ -1770,7 +2904,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('$this->arrayAdducer !== null', $source);
         $this->assertStringNotContainsString('adduceToArray(', $source);
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
-        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $creatorSource);
+        $this->assertStringContainsString('$coreDependencies->arrayAdducer()', $creatorSource);
     }
 
     public function testBlockExceptionFactoryDoesNotOwnConfiguredServiceDefault(): void
@@ -1961,10 +3095,16 @@ final class LegacyDiSourceInventoryTest extends TestCase
     {
         $source = file_get_contents(dirname(__DIR__, 2) . '/core/factory/config_service_factory.php');
         $creatorSource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_infrastructure_service_creator.php');
+        $dependencySource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_infrastructure_config_cache_dependencies.php');
+        $supportDependencySource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_infrastructure_config_cache_support_dependencies.php');
+        $classHelperDependencySource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_infrastructure_config_cache_class_helper_dependencies.php');
         $supportRegistrarSource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_service_registrar.php');
 
         $this->assertIsString($source);
         $this->assertIsString($creatorSource);
+        $this->assertIsString($dependencySource);
+        $this->assertIsString($supportDependencySource);
+        $this->assertIsString($classHelperDependencySource);
         $this->assertIsString($supportRegistrarSource);
         $this->assertStringContainsString('object $sourceFileMetadata', $source);
         $this->assertStringContainsString('object $sourceFileStorage', $source);
@@ -1975,7 +3115,10 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('$this->reflectionClassFactory->create($className)', $source);
         $this->assertStringNotContainsString('method_exists($this->reflectionClassFactory, \'create\')', $source);
         $this->assertStringContainsString('static fn(object|string $object): string => \get_class_name($object)', $source);
-        $this->assertStringContainsString('$container->get(service_id::SHORT_CLASS_NAME_RESOLVER)', $creatorSource);
+        $this->assertStringContainsString('$infrastructureDependencies->shortClassNameResolver()', $creatorSource);
+        $this->assertStringContainsString('$this->support->shortClassNameResolver()', $dependencySource);
+        $this->assertStringContainsString('$this->classHelper->shortClassNameResolver()', $supportDependencySource);
+        $this->assertStringContainsString('$this->container->get(service_id::SHORT_CLASS_NAME_RESOLVER)', $classHelperDependencySource);
         $this->assertStringContainsString('service_id::SHORT_CLASS_NAME_RESOLVER', $supportRegistrarSource);
         $this->assertStringNotContainsString('defaultConfiguredServiceFactory', $source);
         $this->assertStringNotContainsString('new \ReflectionClass($className)', $source);
@@ -2098,12 +3241,32 @@ final class LegacyDiSourceInventoryTest extends TestCase
     {
         $source = file_get_contents(dirname(__DIR__, 2) . '/core/block/loader/base.php');
         $blockBaseSource = file_get_contents(dirname(__DIR__, 2) . '/core/block/base.php');
+        $blockDependencyResolverSource = file_get_contents(dirname(__DIR__, 2) . '/core/block/base_dependency_resolver.php');
+        $blockDependencyHelperSource = file_get_contents(dirname(__DIR__, 2) . '/core/block/base_dependency_helper_group.php');
+        $blockDependencyArrayHelperSource = file_get_contents(dirname(__DIR__, 2) . '/core/block/base_dependency_array_helper_group.php');
+        $blockDependencyArrayTransformHelperSource = file_get_contents(dirname(__DIR__, 2) . '/core/block/base_dependency_array_transform_helper_group.php');
+        $blockDependencyArrayAdducerHelperSource = file_get_contents(dirname(__DIR__, 2) . '/core/block/base_dependency_array_adducer_helper_group.php');
+        $blockDependencyRecursiveMergerHelperSource = file_get_contents(dirname(__DIR__, 2) . '/core/block/base_dependency_recursive_merger_helper_group.php');
+        $blockDependencyArrayReadHelperSource = file_get_contents(dirname(__DIR__, 2) . '/core/block/base_dependency_array_read_helper_group.php');
+        $blockDependencyArrayValueReaderHelperSource = file_get_contents(dirname(__DIR__, 2) . '/core/block/base_dependency_array_value_reader_helper_group.php');
+        $blockDependencyArrayLikeCheckerHelperSource = file_get_contents(dirname(__DIR__, 2) . '/core/block/base_dependency_array_like_checker_helper_group.php');
+        $blockDependencyClassHelperSource = file_get_contents(dirname(__DIR__, 2) . '/core/block/base_dependency_class_helper_group.php');
         $tabSource = file_get_contents(dirname(__DIR__, 2) . '/core/service/tab.php');
         $tabFactorySource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/tab_service_factory.php');
         $supportRegistrarSource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_service_registrar.php');
 
         $this->assertIsString($source);
         $this->assertIsString($blockBaseSource);
+        $this->assertIsString($blockDependencyResolverSource);
+        $this->assertIsString($blockDependencyHelperSource);
+        $this->assertIsString($blockDependencyArrayHelperSource);
+        $this->assertIsString($blockDependencyArrayTransformHelperSource);
+        $this->assertIsString($blockDependencyArrayAdducerHelperSource);
+        $this->assertIsString($blockDependencyRecursiveMergerHelperSource);
+        $this->assertIsString($blockDependencyArrayReadHelperSource);
+        $this->assertIsString($blockDependencyArrayValueReaderHelperSource);
+        $this->assertIsString($blockDependencyArrayLikeCheckerHelperSource);
+        $this->assertIsString($blockDependencyClassHelperSource);
         $this->assertIsString($tabSource);
         $this->assertIsString($tabFactorySource);
         $this->assertIsString($supportRegistrarSource);
@@ -2111,11 +3274,21 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('$this->recursiveMerger()', $source);
         $this->assertStringNotContainsString('adduceToArray(', $source);
         $this->assertStringNotContainsString('array_merge_recursive_alt(', $source);
-        $this->assertStringContainsString("'arrayAdducer' => \$container->get('array_adducer')", $blockBaseSource);
-        $this->assertStringContainsString("'recursiveMerger' => \$container->get('recursive_merger')", $blockBaseSource);
-        $this->assertStringContainsString("'arrayValueReader' => \$container->get('array_value_reader')", $blockBaseSource);
-        $this->assertStringContainsString("'arrayLikeChecker' => \$container->get('array_like_checker')", $blockBaseSource);
-        $this->assertStringContainsString("'shortClassNameResolver' => \$container->get('short_class_name_resolver')", $blockBaseSource);
+        $this->assertStringContainsString('new base_dependency_helper_group($container)', $blockDependencyResolverSource);
+        $this->assertStringContainsString('new base_dependency_array_helper_group($container)', $blockDependencyHelperSource);
+        $this->assertStringContainsString('new base_dependency_class_helper_group($container)', $blockDependencyHelperSource);
+        $this->assertStringContainsString('new base_dependency_array_transform_helper_group($container)', $blockDependencyArrayHelperSource);
+        $this->assertStringContainsString('new base_dependency_array_read_helper_group($container)', $blockDependencyArrayHelperSource);
+        $this->assertStringContainsString('new base_dependency_array_adducer_helper_group($container)', $blockDependencyArrayTransformHelperSource);
+        $this->assertStringContainsString('new base_dependency_recursive_merger_helper_group($container)', $blockDependencyArrayTransformHelperSource);
+        $this->assertStringContainsString('new base_dependency_array_value_reader_helper_group($container)', $blockDependencyArrayReadHelperSource);
+        $this->assertStringContainsString('new base_dependency_array_like_checker_helper_group($container)', $blockDependencyArrayReadHelperSource);
+        $this->assertStringContainsString("'arrayAdducer' => \$this->container->get('array_adducer')", $blockDependencyArrayAdducerHelperSource);
+        $this->assertStringContainsString("'recursiveMerger' => \$this->container->get('recursive_merger')", $blockDependencyRecursiveMergerHelperSource);
+        $this->assertStringContainsString("'arrayValueReader' => \$this->container->get('array_value_reader')", $blockDependencyArrayValueReaderHelperSource);
+        $this->assertStringContainsString("'arrayLikeChecker' => \$this->container->get('array_like_checker')", $blockDependencyArrayLikeCheckerHelperSource);
+        $this->assertStringContainsString("'shortClassNameResolver' => \$this->container->get('short_class_name_resolver')", $blockDependencyClassHelperSource);
+        $this->assertStringNotContainsString("'arrayAdducer' => \$container->get('array_adducer')", $blockBaseSource);
         $this->assertStringContainsString('private function shortClassName(object|string $object): string', $blockBaseSource);
         $this->assertStringContainsString('$this->shortClassName($class)', $blockBaseSource);
         $this->assertStringNotContainsString('get_class_name(', $blockBaseSource);
@@ -2172,10 +3345,14 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $source = file_get_contents(dirname(__DIR__, 2) . '/core/view/router.php');
         $factorySource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/view_router_factory.php');
         $supportRegistrarSource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_service_registrar.php');
+        $viewKeeperDependencySource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_view_keeper_factory_registrar_dependencies.php');
+        $arrayAdducerDependencySource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_array_adducer_registrar_dependencies.php');
 
         $this->assertIsString($source);
         $this->assertIsString($factorySource);
         $this->assertIsString($supportRegistrarSource);
+        $this->assertIsString($viewKeeperDependencySource);
+        $this->assertIsString($arrayAdducerDependencySource);
         $this->assertStringContainsString('private \Closure $keeperFactory;', $source);
         $this->assertStringContainsString('private \Closure $blockExceptionFactory;', $source);
         $this->assertStringContainsString('private \Closure $arrayAdducer;', $source);
@@ -2197,7 +3374,10 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('$this->arrayAdducer = $arrayAdducer === null ? null : \Closure::fromCallable($arrayAdducer);', $source);
         $this->assertStringContainsString('private \Closure $arrayAdducer;', $factorySource);
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
-        $this->assertStringContainsString('new view_router_factory($container->get(service_id::VIEW_KEEPER_FACTORY), $container->get(service_id::ARRAY_ADDUCER))', $supportRegistrarSource);
+        $this->assertStringContainsString('$dependencies->viewKeeperFactory()', $supportRegistrarSource);
+        $this->assertStringContainsString('$dependencies->arrayAdducer()', $supportRegistrarSource);
+        $this->assertStringContainsString('$this->container->get(service_id::VIEW_KEEPER_FACTORY)', $viewKeeperDependencySource);
+        $this->assertStringContainsString('$this->container->get(service_id::ARRAY_ADDUCER)', $arrayAdducerDependencySource);
     }
 
     public function testTemplateServiceLayerIsRemoved(): void
@@ -2406,10 +3586,16 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $source = file_get_contents(dirname(__DIR__, 2) . '/core/base/meta/maker.php');
         $factorySource = file_get_contents(dirname(__DIR__, 2) . '/core/factory/meta_maker_factory.php');
         $registrarSource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_service_registrar.php');
+        $recursiveMergerDependencySource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_recursive_merger_registrar_dependencies.php');
+        $arrayAdducerDependencySource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_array_adducer_registrar_dependencies.php');
+        $classNameResolverDependencySource = file_get_contents(dirname(__DIR__, 2) . '/core/di/application_support_class_name_resolver_registrar_dependencies.php');
 
         $this->assertIsString($source);
         $this->assertIsString($factorySource);
         $this->assertIsString($registrarSource);
+        $this->assertIsString($recursiveMergerDependencySource);
+        $this->assertIsString($arrayAdducerDependencySource);
+        $this->assertIsString($classNameResolverDependencySource);
         $this->assertStringContainsString('private ?object $fileStorage = null;', $source);
         $this->assertStringContainsString('$this->fileStorage()->exists($folderPath)', $source);
         $this->assertStringContainsString('$this->fileStorage()->exists($metaPath)', $source);
@@ -2437,9 +3623,15 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('static fn(mixed ...$values): mixed => \array_merge_recursive_alt(...$values)', $factorySource);
         $this->assertStringContainsString('static fn(mixed $value): array => \adduceToArray($value)', $factorySource);
         $this->assertStringContainsString('static fn(object $object): string => \get_class_alt($object) ?? get_class($object)', $factorySource);
-        $this->assertStringContainsString('$container->get(service_id::RECURSIVE_MERGER)', $registrarSource);
-        $this->assertStringContainsString('$container->get(service_id::ARRAY_ADDUCER)', $registrarSource);
-        $this->assertStringContainsString('$container->get(service_id::CLASS_NAME_RESOLVER)', $registrarSource);
+        $this->assertStringContainsString('$dependencies->recursiveMerger()', $registrarSource);
+        $this->assertStringContainsString('$dependencies->arrayAdducer()', $registrarSource);
+        $this->assertStringContainsString('$dependencies->classNameResolver()', $registrarSource);
+        $this->assertStringNotContainsString('$container->get(service_id::RECURSIVE_MERGER)', $registrarSource);
+        $this->assertStringNotContainsString('$container->get(service_id::ARRAY_ADDUCER)', $registrarSource);
+        $this->assertStringNotContainsString('$container->get(service_id::CLASS_NAME_RESOLVER)', $registrarSource);
+        $this->assertStringContainsString('$this->container->get(service_id::RECURSIVE_MERGER)', $recursiveMergerDependencySource);
+        $this->assertStringContainsString('$this->container->get(service_id::ARRAY_ADDUCER)', $arrayAdducerDependencySource);
+        $this->assertStringContainsString('$this->container->get(service_id::CLASS_NAME_RESOLVER)', $classNameResolverDependencySource);
         $this->assertDoesNotMatchRegularExpression(
             '/(?<!->)(?<!::)(?<!\\\\)\bfile_exists\s*\(/',
             $source
@@ -2544,7 +3736,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('$this->arrayValueReader()', $drawSource);
         $this->assertStringNotContainsString('array_val(', $drawSource);
         $this->assertStringContainsString('static fn(array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed => \array_val($array, $key, $default)', $factorySource);
-        $this->assertStringContainsString('$container->get(service_id::ARRAY_VALUE_READER)', $creatorSource);
+        $this->assertStringContainsString('$utilityDependencies->arrayValueReader()', $creatorSource);
     }
 
     public function testSpecFileImageRowFilesystemOperationsAreInjected(): void
@@ -2634,6 +3826,30 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('new configured_service_factory()', $source);
     }
 
+    public function testModelEntityFactoryUsesNamedEntityDependenciesInsteadOfPositionalTail(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2) . '/core/factory/model_entity_factory.php');
+
+        $this->assertIsString($source);
+        $this->assertStringContainsString('use fan\core\base\model\entity_dependencies;', $source);
+        $this->assertStringContainsString('$entityDependencies = new entity_dependencies(', $source);
+        $this->assertStringContainsString('$entityDependencies' . "\n" . '        ]);', $source);
+        $factoryCall = strstr($source, 'return ($this->configuredServiceFactory)(');
+        $this->assertIsString($factoryCall);
+        foreach ([
+            '$entityIdDecoder',
+            '$entityLookup',
+            '$designerFactory',
+            '$descriptionProvider',
+            '$rowDependenciesProvider',
+            '$fileDataRowDependenciesProvider',
+            '$specFileImageRowDependenciesProvider',
+            '$relatedEntityRowFactory',
+        ] as $positionalDependency) {
+            $this->assertStringNotContainsString($positionalDependency, $factoryCall);
+        }
+    }
+
     public function testBaseModelEntityFatalExceptionConstructionIsInjected(): void
     {
         $entitySource = file_get_contents(dirname(__DIR__, 2) . '/core/base/model/entity.php');
@@ -2651,7 +3867,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('public function createRequestFatalException(', $entitySource);
         $this->assertStringContainsString('public function createDesignerFatalException(', $entitySource);
         $this->assertStringContainsString('private \Closure $namespaceResolver;', $entitySource);
-        $this->assertStringContainsString('?callable $namespaceResolver = null', $entitySource);
+        $this->assertStringContainsString('callable|entity_dependencies|null $namespaceResolver = null', $entitySource);
         $this->assertStringContainsString('$this->namespaceResolver = $this->defaultNamespaceResolver();', $entitySource);
         $this->assertStringContainsString('$ns     = $this->namespaceName($this, 2);', $entitySource);
         $this->assertStringContainsString('private function namespaceName(object|string $object, int $depth = 1): string', $entitySource);
@@ -2660,7 +3876,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringNotContainsString('private ?\Closure $namespaceResolver', $entitySource);
         $this->assertStringNotContainsString('$this->namespaceResolver === null', $entitySource);
         $this->assertStringContainsString('$this->modelEntityExceptionFactory', $factorySource);
-        $this->assertStringContainsString('?callable $namespaceResolver = null', $factorySource);
+        $this->assertStringContainsString('new entity_dependencies(', $factorySource);
         $this->assertStringContainsString('$namespaceResolver', $factorySource);
         $this->assertStringContainsString('final class model_entity_exception_factory', $exceptionFactorySource);
         $this->assertStringContainsString('return ($this->configuredServiceFactory)($exceptionClass, [', $exceptionFactorySource);
@@ -2891,7 +4107,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('$arrayValueReader = $this->arrayValueReader();', $source);
         $this->assertStringNotContainsString('array_val(', $source);
         $this->assertStringContainsString('static fn(array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed => \array_val($array, $key, $default)', $factorySource);
-        $this->assertStringContainsString('$container->get(service_id::ARRAY_VALUE_READER)', $creatorSource);
+        $this->assertStringContainsString('$sessionDependencies->arrayValueReader()', $creatorSource);
     }
 
     public function testSoapServiceFactoryDoesNotOwnConfiguredServiceDefault(): void
@@ -2929,7 +4145,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertStringContainsString('protected function arrayValueReader(): callable', $source);
         $this->assertStringNotContainsString('array_val(', $source);
         $this->assertStringContainsString('static fn(array|\ArrayAccess $array, mixed $key, mixed $default = null): mixed => \array_val($array, $key, $default)', $factorySource);
-        $this->assertStringContainsString('$container->get(service_id::ARRAY_VALUE_READER)', $creatorSource);
+        $this->assertStringContainsString('$utilityDependencies->arrayValueReader()', $creatorSource);
     }
 
     public function testSoapRuntimeObjectsAreInjected(): void
@@ -3303,6 +4519,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
                 'core/adapter/php_array_file.php' => true,
                 'core/adapter/php_template_file.php' => true,
                 'core/adapter/project_tool_loader.php' => true,
+                'core/adapter/zend_autoloader.php' => true,
             ],
             'Variable file loading outside explicit boundaries'
         );
@@ -4352,6 +5569,434 @@ final class LegacyDiSourceInventoryTest extends TestCase
                 str_contains($pattern, '\\\\di\\\\entity_')
                 || str_contains($pattern, '\\\\di\\\\model_')
             );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function dynamicReflectionBoundaryInventoryFiles(): array
+    {
+        return [
+            'core/adapter/bootstrap_loader_file_storage.php',
+            'core/adapter/compiled_template_loader.php',
+            'core/adapter/pear_http_session.php',
+            'core/adapter/project_tool_loader.php',
+            'core/adapter/twig_template_service.php',
+            'core/adapter/zend_autoloader.php',
+            'core/base/model/entity_dependencies.php',
+            'core/base/transfer/int.php',
+            'core/block/base_dependency_defaults.php',
+            'core/block/base_dependency_application_data_factory_group.php',
+            'core/block/base_dependency_application_factory_group.php',
+            'core/block/base_dependency_application_runtime_factory_group.php',
+            'core/block/base_dependency_application_service_runtime_factory_group.php',
+            'core/block/base_dependency_application_support_factory_group.php',
+            'core/block/base_dependency_array_adducer_helper_group.php',
+            'core/block/base_dependency_array_helper_group.php',
+            'core/block/base_dependency_array_like_checker_helper_group.php',
+            'core/block/base_dependency_array_read_helper_group.php',
+            'core/block/base_dependency_array_transform_helper_group.php',
+            'core/block/base_dependency_array_value_reader_helper_group.php',
+            'core/block/base_dependency_block_exception_factory_group.php',
+            'core/block/base_dependency_block_factory_group.php',
+            'core/block/base_dependency_block_file_storage_block_group.php',
+            'core/block/base_dependency_block_file_storage_group.php',
+            'core/block/base_dependency_block_file_storage_meta_group.php',
+            'core/block/base_dependency_block_factory_context_group.php',
+            'core/block/base_dependency_class_helper_group.php',
+            'core/block/base_dependency_config_application_runtime_factory_group.php',
+            'core/block/base_dependency_context_group.php',
+            'core/block/base_dependency_data_core_factory_group.php',
+            'core/block/base_dependency_data_factory_group.php',
+            'core/block/base_dependency_data_loader_service_factory_group.php',
+            'core/block/base_dependency_data_loader_factory_group.php',
+            'core/block/base_dependency_date_application_support_factory_group.php',
+            'core/block/base_dependency_database_application_data_factory_group.php',
+            'core/block/base_dependency_entity_data_core_factory_group.php',
+            'core/block/base_dependency_error_log_media_error_helper_group.php',
+            'core/block/base_dependency_error_application_support_factory_group.php',
+            'core/block/base_dependency_factory_group.php',
+            'core/block/base_dependency_image_metadata_media_error_helper_group.php',
+            'core/block/base_dependency_image_modify_media_core_factory_group.php',
+            'core/block/base_dependency_json_data_core_factory_group.php',
+            'core/block/base_dependency_locale_factory_context_group.php',
+            'core/block/base_dependency_matcher_factory_context_group.php',
+            'core/block/base_dependency_helper_group.php',
+            'core/block/base_dependency_media_core_factory_group.php',
+            'core/block/base_dependency_media_error_helper_group.php',
+            'core/block/base_dependency_media_transfer_factory_group.php',
+            'core/block/base_dependency_meta_maker_factory_group.php',
+            'core/block/base_dependency_meta_maker_group.php',
+            'core/block/base_dependency_meta_maker_state_group.php',
+            'core/block/base_dependency_meta_loader_group.php',
+            'core/block/base_dependency_meta_row_factory_group.php',
+            'core/block/base_dependency_meta_row_loader_group.php',
+            'core/block/base_dependency_media_factory_group.php',
+            'core/block/base_dependency_navigation_context_group.php',
+            'core/block/base_dependency_obfuscator_media_core_factory_group.php',
+            'core/block/base_dependency_pager_data_loader_factory_group.php',
+            'core/block/base_dependency_php_array_file_loader_group.php',
+            'core/block/base_dependency_project_file_storage_group.php',
+            'core/block/base_dependency_project_tool_file_storage_group.php',
+            'core/block/base_dependency_reflector_context_group.php',
+            'core/block/base_dependency_request_factory_context_group.php',
+            'core/block/base_dependency_request_input_context_group.php',
+            'core/block/base_dependency_request_context_group.php',
+            'core/block/base_dependency_request_role_context_group.php',
+            'core/block/base_dependency_recursive_merger_helper_group.php',
+            'core/block/base_dependency_role_factory_context_group.php',
+            'core/block/base_dependency_route_locale_context_group.php',
+            'core/block/base_dependency_root_html_file_storage_group.php',
+            'core/block/base_dependency_resolver.php',
+            'core/block/base_dependency_runtime_context_group.php',
+            'core/block/base_dependency_session_context_group.php',
+            'core/block/base_dependency_storage_group.php',
+            'core/block/base_dependency_bootstrap_runtime_context_group.php',
+            'core/block/base_dependency_tab_service_runtime_context_group.php',
+            'core/block/base_dependency_tab_runtime_context_group.php',
+            'core/block/base_dependency_upload_limit_storage_group.php',
+            'core/block/base_dependency_user_application_data_factory_group.php',
+            'core/block/base_dependency_view_factory_loader_group.php',
+            'core/block/base_dependency_view_loader_group.php',
+            'core/block/base_dependency_view_parser_exception_factory_loader_group.php',
+            'core/block/base_dependency_view_router_factory_loader_group.php',
+            'core/block/base_dependency_view_state_loader_group.php',
+            'core/block/base_dependency_view_meta_group.php',
+            'core/di/application_client_array_adducer_payload_dependencies.php',
+            'core/di/application_client_array_payload_dependencies.php',
+            'core/di/application_client_array_value_reader_payload_dependencies.php',
+            'core/di/application_client_bootstrap_runtime_dependencies.php',
+            'core/di/application_client_cache_runtime_dependencies.php',
+            'core/di/application_client_config_cache_runtime_dependencies.php',
+            'core/di/application_client_config_runtime_dependencies.php',
+            'core/di/application_client_curl_adapter_transport_dependencies.php',
+            'core/di/application_client_curl_factory_transport_dependencies.php',
+            'core/di/application_client_curl_transport_dependencies.php',
+            'core/di/application_client_error_transport_dependencies.php',
+            'core/di/application_client_payload_dependencies.php',
+            'core/di/application_client_request_payload_dependencies.php',
+            'core/di/application_client_runtime_dependencies.php',
+            'core/di/application_client_cookie_writer_payload_dependencies.php',
+            'core/di/application_client_serialization_payload_dependencies.php',
+            'core/di/application_client_serialization_transport_dependencies.php',
+            'core/di/application_client_serializer_operations_payload_dependencies.php',
+            'core/di/application_client_service_dependencies.php',
+            'core/di/application_client_service_creator.php',
+            'core/di/application_client_transport_dependencies.php',
+            'core/di/application_content_bootstrap_runtime_dependencies.php',
+            'core/di/application_content_block_context_dependencies.php',
+            'core/di/application_content_cache_runtime_dependencies.php',
+            'core/di/application_content_config_cache_runtime_dependencies.php',
+            'core/di/application_content_config_runtime_dependencies.php',
+            'core/di/application_content_error_block_context_dependencies.php',
+            'core/di/application_content_error_context_dependencies.php',
+            'core/di/application_content_locale_context_dependencies.php',
+            'core/di/application_content_localization_context_dependencies.php',
+            'core/di/application_content_matcher_context_dependencies.php',
+            'core/di/application_content_request_input_context_dependencies.php',
+            'core/di/application_content_request_matcher_context_dependencies.php',
+            'core/di/application_content_tab_factory_context_dependencies.php',
+            'core/di/application_content_php_array_file_loader_storage_dependencies.php',
+            'core/di/application_content_translation_file_storage_dependencies.php',
+            'core/di/application_controller_bootstrap_runtime_dependencies.php',
+            'core/di/application_controller_cache_runtime_dependencies.php',
+            'core/di/application_controller_config_cache_runtime_dependencies.php',
+            'core/di/application_controller_config_runtime_dependencies.php',
+            'core/di/application_controller_handler_dependencies.php',
+            'core/di/application_controller_header_plain_route_dependencies.php',
+            'core/di/application_controller_matcher_plain_route_dependencies.php',
+            'core/di/application_controller_obfuscator_factory_handler_dependencies.php',
+            'core/di/application_controller_obfuscator_handler_dependencies.php',
+            'core/di/application_controller_plain_config_dependencies.php',
+            'core/di/application_controller_plain_dependencies.php',
+            'core/di/application_controller_plain_file_handler_dependencies.php',
+            'core/di/application_controller_plain_route_dependencies.php',
+            'core/di/application_controller_request_handler_dependencies.php',
+            'core/di/application_controller_runtime_dependencies.php',
+            'core/di/application_controller_service_dependencies.php',
+            'core/di/application_controller_service_creator.php',
+            'core/di/application_content_context_dependencies.php',
+            'core/di/application_content_runtime_dependencies.php',
+            'core/di/application_content_service_dependencies.php',
+            'core/di/application_content_service_creator.php',
+            'core/di/application_content_storage_dependencies.php',
+            'core/di/application_creator_bootstrap_runtime_dependencies.php',
+            'core/di/application_creator_cache_factory_dependencies.php',
+            'core/di/application_creator_common_dependencies.php',
+            'core/di/application_creator_config_dependencies.php',
+            'core/di/application_creator_config_cache_dependencies.php',
+            'core/di/application_core_project_application_context_dependencies.php',
+            'core/di/application_core_project_error_dependencies.php',
+            'core/di/application_core_project_error_context_dependencies.php',
+            'core/di/application_core_project_error_file_storage_dependencies.php',
+            'core/di/application_core_project_error_factory_service_dependencies.php',
+            'core/di/application_core_project_error_log_writer_storage_dependencies.php',
+            'core/di/application_core_project_error_service_dependencies.php',
+            'core/di/application_core_project_error_storage_dependencies.php',
+            'core/di/application_core_project_dependencies.php',
+            'core/di/application_core_project_header_writer_response_loader_dependencies.php',
+            'core/di/application_core_project_locale_context_dependencies.php',
+            'core/di/application_core_project_meta_file_storage_dependencies.php',
+            'core/di/application_core_project_php_array_file_loader_response_loader_dependencies.php',
+            'core/di/application_core_project_reflection_class_factory_meta_dependencies.php',
+            'core/di/application_core_project_reflection_meta_dependencies.php',
+            'core/di/application_core_project_route_storage_dependencies.php',
+            'core/di/application_core_project_response_loader_dependencies.php',
+            'core/di/application_core_project_storage_dependencies.php',
+            'core/di/application_core_project_tab_context_dependencies.php',
+            'core/di/application_core_project_tab_factory_service_context_dependencies.php',
+            'core/di/application_core_project_tab_instance_service_context_dependencies.php',
+            'core/di/application_core_project_tab_service_context_dependencies.php',
+            'core/di/application_core_project_tab_dependencies.php',
+            'core/di/application_core_request_array_adducer_transform_helper_dependencies.php',
+            'core/di/application_core_request_array_read_class_helper_dependencies.php',
+            'core/di/application_core_request_array_transform_helper_dependencies.php',
+            'core/di/application_core_request_array_value_reader_helper_dependencies.php',
+            'core/di/application_core_request_class_name_resolver_helper_dependencies.php',
+            'core/di/application_core_request_cookie_transport_factory_dependencies.php',
+            'core/di/application_core_request_dependencies.php',
+            'core/di/application_core_request_factory_dependencies.php',
+            'core/di/application_core_request_helper_dependencies.php',
+            'core/di/application_core_request_input_factory_dependencies.php',
+            'core/di/application_core_request_json_transport_factory_dependencies.php',
+            'core/di/application_core_request_matcher_factory_runtime_dependencies.php',
+            'core/di/application_core_request_recursive_merger_transform_helper_dependencies.php',
+            'core/di/application_core_request_request_factory_runtime_dependencies.php',
+            'core/di/application_core_request_runtime_factory_dependencies.php',
+            'core/di/application_core_request_transport_factory_dependencies.php',
+            'core/di/application_core_service_dependencies.php',
+            'core/di/application_core_service_creator.php',
+            'core/di/application_core_user_current_identity_dependencies.php',
+            'core/di/application_core_user_current_user_space_factory_session_space_dependencies.php',
+            'core/di/application_core_user_data_factory_dependencies.php',
+            'core/di/application_core_user_date_data_factory_dependencies.php',
+            'core/di/application_core_user_entity_data_factory_dependencies.php',
+            'core/di/application_core_user_identity_dependencies.php',
+            'core/di/application_core_user_session_factory_session_space_dependencies.php',
+            'core/di/application_core_user_session_space_dependencies.php',
+            'core/di/application_core_user_session_dependencies.php',
+            'core/di/application_infrastructure_config_cache_cache_factory_dependencies.php',
+            'core/di/application_infrastructure_config_cache_bootstrap_runtime_support_dependencies.php',
+            'core/di/application_infrastructure_config_cache_cache_source_file_metadata_storage_dependencies.php',
+            'core/di/application_infrastructure_config_cache_dependencies.php',
+            'core/di/application_infrastructure_config_cache_class_helper_dependencies.php',
+            'core/di/application_infrastructure_config_cache_config_cache_factory_dependencies.php',
+            'core/di/application_infrastructure_config_cache_config_factory_dependencies.php',
+            'core/di/application_infrastructure_config_cache_config_instance_dependencies.php',
+            'core/di/application_infrastructure_config_cache_config_source_file_storage_dependencies.php',
+            'core/di/application_infrastructure_config_cache_core_fatal_exception_factory_dependencies.php',
+            'core/di/application_infrastructure_config_cache_error_factory_runtime_support_dependencies.php',
+            'core/di/application_infrastructure_config_cache_exception_dependencies.php',
+            'core/di/application_infrastructure_config_cache_error500_exception_factory_dependencies.php',
+            'core/di/application_infrastructure_config_cache_exception_factory_dependencies.php',
+            'core/di/application_infrastructure_config_cache_factory_dependencies.php',
+            'core/di/application_infrastructure_config_cache_header_writer_dependencies.php',
+            'core/di/application_infrastructure_config_cache_loader_serializer_dependencies.php',
+            'core/di/application_infrastructure_config_cache_php_array_file_loader_dependencies.php',
+            'core/di/application_infrastructure_config_cache_request_input_dependencies.php',
+            'core/di/application_infrastructure_config_cache_request_header_dependencies.php',
+            'core/di/application_infrastructure_config_cache_runtime_support_dependencies.php',
+            'core/di/application_infrastructure_config_cache_serializer_operations_dependencies.php',
+            'core/di/application_infrastructure_config_cache_storage_dependencies.php',
+            'core/di/application_infrastructure_config_cache_support_dependencies.php',
+            'core/di/application_infrastructure_config_cache_type_cache_factory_dependencies.php',
+            'core/di/application_infrastructure_config_cache_typed_config_factory_dependencies.php',
+            'core/di/application_infrastructure_runtime_bootstrap_runtime_error_dependencies.php',
+            'core/di/application_infrastructure_runtime_cache_factory_dependencies.php',
+            'core/di/application_infrastructure_runtime_config_cache_dependencies.php',
+            'core/di/application_infrastructure_runtime_config_dependencies.php',
+            'core/di/application_infrastructure_runtime_dependencies.php',
+            'core/di/application_infrastructure_runtime_error_dependencies.php',
+            'core/di/application_infrastructure_runtime_error_factory_dependencies.php',
+            'core/di/application_infrastructure_service_dependencies.php',
+            'core/di/application_infrastructure_service_creator.php',
+            'core/di/application_infrastructure_storage_dependencies.php',
+            'core/di/application_navigation_service_creator.php',
+            'core/di/application_navigation_tab_alias_asset_dependencies.php',
+            'core/di/application_navigation_tab_application_factory_application_debug_dependencies.php',
+            'core/di/application_navigation_tab_block_file_storage_dependencies.php',
+            'core/di/application_navigation_tab_block_meta_file_storage_dependencies.php',
+            'core/di/application_navigation_tab_config_factory_config_header_dependencies.php',
+            'core/di/application_navigation_tab_cookie_payload_dependencies.php',
+            'core/di/application_navigation_tab_data_cookie_payload_dependencies.php',
+            'core/di/application_navigation_tab_data_loader_payload_dependencies.php',
+            'core/di/application_navigation_tab_data_model_factory_dependencies.php',
+            'core/di/application_navigation_tab_date_factory_user_time_model_factory_dependencies.php',
+            'core/di/application_navigation_tab_context_dependencies.php',
+            'core/di/application_navigation_tab_core_dependencies.php',
+            'core/di/application_navigation_tab_debug_factory_application_debug_dependencies.php',
+            'core/di/application_navigation_tab_dependencies.php',
+            'core/di/application_navigation_tab_entity_model_factory_dependencies.php',
+            'core/di/application_navigation_tab_error_factory_error_reflector_dependencies.php',
+            'core/di/application_navigation_tab_error_log_writer_asset_dependencies.php',
+            'core/di/application_navigation_tab_file_storage_dependencies.php',
+            'core/di/application_navigation_tab_header_factory_config_header_dependencies.php',
+            'core/di/application_navigation_tab_image_metadata_reader_asset_dependencies.php',
+            'core/di/application_navigation_tab_image_modify_model_factory_dependencies.php',
+            'core/di/application_navigation_tab_input_context_dependencies.php',
+            'core/di/application_navigation_tab_json_payload_dependencies.php',
+            'core/di/application_navigation_tab_locale_context_dependencies.php',
+            'core/di/application_navigation_tab_locale_session_context_dependencies.php',
+            'core/di/application_navigation_tab_matcher_routing_context_dependencies.php',
+            'core/di/application_navigation_tab_media_error_asset_dependencies.php',
+            'core/di/application_navigation_tab_media_model_factory_dependencies.php',
+            'core/di/application_navigation_tab_meta_file_storage_dependencies.php',
+            'core/di/application_navigation_tab_model_factory_dependencies.php',
+            'core/di/application_navigation_tab_obfuscator_model_factory_dependencies.php',
+            'core/di/application_navigation_tab_pager_model_factory_dependencies.php',
+            'core/di/application_navigation_tab_project_tool_storage_dependencies.php',
+            'core/di/application_navigation_tab_reflector_factory_error_reflector_dependencies.php',
+            'core/di/application_navigation_tab_request_routing_context_dependencies.php',
+            'core/di/application_navigation_tab_routing_context_dependencies.php',
+            'core/di/application_navigation_tab_root_html_file_storage_dependencies.php',
+            'core/di/application_navigation_tab_role_factory_role_transfer_dependencies.php',
+            'core/di/application_navigation_tab_session_factory_context_dependencies.php',
+            'core/di/application_navigation_tab_service_factory_application_debug_dependencies.php',
+            'core/di/application_navigation_tab_service_factory_application_dependencies.php',
+            'core/di/application_navigation_tab_service_factory_config_header_dependencies.php',
+            'core/di/application_navigation_tab_service_factory_dependencies.php',
+            'core/di/application_navigation_tab_service_factory_error_reflector_dependencies.php',
+            'core/di/application_navigation_tab_service_factory_payload_dependencies.php',
+            'core/di/application_navigation_tab_service_factory_role_transfer_dependencies.php',
+            'core/di/application_navigation_tab_service_factory_runtime_dependencies.php',
+            'core/di/application_navigation_tab_storage_dependencies.php',
+            'core/di/application_navigation_tab_array_adducer_transform_dependencies.php',
+            'core/di/application_navigation_tab_array_like_checker_read_check_dependencies.php',
+            'core/di/application_navigation_tab_array_value_reader_read_check_dependencies.php',
+            'core/di/application_navigation_tab_block_exception_factory_exception_meta_dependencies.php',
+            'core/di/application_navigation_tab_block_factory_instance_block_factory_dependencies.php',
+            'core/di/application_navigation_tab_meta_row_factory_exception_meta_dependencies.php',
+            'core/di/application_navigation_tab_recursive_merger_transform_dependencies.php',
+            'core/di/application_navigation_tab_support_array_read_check_dependencies.php',
+            'core/di/application_navigation_tab_support_array_helper_dependencies.php',
+            'core/di/application_navigation_tab_support_array_transform_dependencies.php',
+            'core/di/application_navigation_tab_support_asset_dependencies.php',
+            'core/di/application_navigation_tab_support_block_exception_meta_dependencies.php',
+            'core/di/application_navigation_tab_support_block_factory_dependencies.php',
+            'core/di/application_navigation_tab_support_block_dependencies.php',
+            'core/di/application_navigation_tab_class_name_resolver_class_helper_dependencies.php',
+            'core/di/application_navigation_tab_short_class_name_resolver_class_helper_dependencies.php',
+            'core/di/application_navigation_tab_support_class_helper_dependencies.php',
+            'core/di/application_navigation_tab_support_dependencies.php',
+            'core/di/application_navigation_tab_support_helper_dependencies.php',
+            'core/di/application_navigation_tab_support_loader_dependencies.php',
+            'core/di/application_navigation_tab_tab_state_block_factory_dependencies.php',
+            'core/di/application_navigation_tab_transfer_factory_role_transfer_dependencies.php',
+            'core/di/application_navigation_tab_upload_limit_storage_dependencies.php',
+            'core/di/application_navigation_tab_user_factory_user_time_model_factory_dependencies.php',
+            'core/di/application_navigation_tab_user_time_model_factory_dependencies.php',
+            'core/di/application_pager_bootstrap_runtime_dependencies.php',
+            'core/di/application_pager_cache_factory_config_cache_runtime_dependencies.php',
+            'core/di/application_pager_config_cache_runtime_dependencies.php',
+            'core/di/application_pager_config_config_cache_runtime_dependencies.php',
+            'core/di/application_pager_context_dependencies.php',
+            'core/di/application_pager_entity_context_dependencies.php',
+            'core/di/application_pager_exception_dependencies.php',
+            'core/di/application_pager_request_context_dependencies.php',
+            'core/di/application_pager_runtime_dependencies.php',
+            'core/di/application_pager_service_dependencies.php',
+            'core/di/application_pager_service_creator.php',
+            'core/di/application_pager_tab_context_dependencies.php',
+            'core/di/application_session_application_instance_application_context_dependencies.php',
+            'core/di/application_session_application_context_dependencies.php',
+            'core/di/application_session_array_runtime_dependencies.php',
+            'core/di/application_session_bootstrap_bootstrap_runtime_dependencies.php',
+            'core/di/application_session_bootstrap_runtime_dependencies.php',
+            'core/di/application_session_cache_factory_dependencies.php',
+            'core/di/application_session_config_application_context_dependencies.php',
+            'core/di/application_session_context_dependencies.php',
+            'core/di/application_session_cookie_factory_state_factory_dependencies.php',
+            'core/di/application_session_date_factory_support_factory_dependencies.php',
+            'core/di/application_session_error_factory_support_factory_dependencies.php',
+            'core/di/application_session_factory_dependencies.php',
+            'core/di/application_session_header_context_dependencies.php',
+            'core/di/application_session_native_session_native_runtime_dependencies.php',
+            'core/di/application_session_native_runtime_dependencies.php',
+            'core/di/application_session_pear_http_session_loader_native_runtime_dependencies.php',
+            'core/di/application_session_php_runtime_settings_bootstrap_runtime_dependencies.php',
+            'core/di/application_session_request_input_request_context_dependencies.php',
+            'core/di/application_session_request_instance_request_context_dependencies.php',
+            'core/di/application_session_request_context_dependencies.php',
+            'core/di/application_session_runtime_dependencies.php',
+            'core/di/application_session_service_dependencies.php',
+            'core/di/application_session_service_creator.php',
+            'core/di/application_session_session_factory_state_factory_dependencies.php',
+            'core/di/application_session_state_factory_dependencies.php',
+            'core/di/application_session_support_factory_dependencies.php',
+            'core/di/application_user_application_instance_application_request_context_dependencies.php',
+            'core/di/application_user_application_factory_application_request_input_factory_dependencies.php',
+            'core/di/application_user_application_request_input_factory_dependencies.php',
+            'core/di/application_user_application_factory_dependencies.php',
+            'core/di/application_user_application_request_context_dependencies.php',
+            'core/di/application_user_array_runtime_dependencies.php',
+            'core/di/application_user_bootstrap_runtime_bootstrap_cache_runtime_dependencies.php',
+            'core/di/application_user_bootstrap_cache_runtime_dependencies.php',
+            'core/di/application_user_cache_factory_bootstrap_cache_runtime_dependencies.php',
+            'core/di/application_user_config_serialization_config_context_dependencies.php',
+            'core/di/application_user_config_factory_dependencies.php',
+            'core/di/application_user_context_dependencies.php',
+            'core/di/application_user_current_user_factory_identity_factory_dependencies.php',
+            'core/di/application_user_error500_exception_factory_exception_session_context_dependencies.php',
+            'core/di/application_user_exception_session_context_dependencies.php',
+            'core/di/application_user_factory_dependencies.php',
+            'core/di/application_user_identity_factory_dependencies.php',
+            'core/di/application_user_request_input_factory_application_request_input_factory_dependencies.php',
+            'core/di/application_user_request_application_request_context_dependencies.php',
+            'core/di/application_user_runtime_dependencies.php',
+            'core/di/application_user_serializer_operations_serialization_config_context_dependencies.php',
+            'core/di/application_user_serialization_config_context_dependencies.php',
+            'core/di/application_user_service_dependencies.php',
+            'core/di/application_user_service_creator.php',
+            'core/di/application_user_session_exception_session_context_dependencies.php',
+            'core/di/application_user_session_factory_identity_factory_dependencies.php',
+            'core/di/application_user_support_factory_dependencies.php',
+            'core/di/application_user_error_factory_support_factory_dependencies.php',
+            'core/di/application_user_entity_factory_support_factory_dependencies.php',
+            'core/di/application_utility_array_value_reader_helper_error_core_dependencies.php',
+            'core/di/application_utility_cache_factory_config_cache_core_dependencies.php',
+            'core/di/application_utility_config_cache_core_dependencies.php',
+            'core/di/application_utility_config_config_cache_core_dependencies.php',
+            'core/di/application_utility_core_dependencies.php',
+            'core/di/application_utility_class_storage_dependencies.php',
+            'core/di/application_utility_file_storage_dependencies.php',
+            'core/di/application_utility_php_array_file_loader_file_storage_dependencies.php',
+            'core/di/application_utility_soap_wsdl_file_storage_file_storage_dependencies.php',
+            'core/di/application_utility_helper_error_core_dependencies.php',
+            'core/di/application_utility_error_factory_helper_error_core_dependencies.php',
+            'core/di/application_utility_image_canvas_output_dependencies.php',
+            'core/di/application_utility_image_canvas_operations_canvas_output_dependencies.php',
+            'core/di/application_utility_image_output_writer_canvas_output_dependencies.php',
+            'core/di/application_utility_image_dependencies.php',
+            'core/di/application_utility_image_metadata_resource_dependencies.php',
+            'core/di/application_utility_image_metadata_reader_metadata_resource_dependencies.php',
+            'core/di/application_utility_image_resource_factory_metadata_resource_dependencies.php',
+            'core/di/application_utility_image_storage_dependencies.php',
+            'core/di/application_utility_image_source_file_storage_image_storage_dependencies.php',
+            'core/di/application_utility_obfuscator_file_storage_image_storage_dependencies.php',
+            'core/di/application_utility_bootstrap_runtime_runtime_core_dependencies.php',
+            'core/di/application_utility_runtime_core_dependencies.php',
+            'core/di/application_utility_php_runtime_settings_runtime_core_dependencies.php',
+            'core/di/application_utility_service_dependencies.php',
+            'core/di/application_utility_storage_dependencies.php',
+            'core/di/application_utility_service_creator.php',
+            'core/di/configured_class_instantiator.php',
+            'core/factory/adapter/reflection_class_factory.php',
+            'core/factory/application_runtime_class_instantiator_provider.php',
+            'core/factory/application_runtime_configured_service_provider.php',
+            'core/factory/application_runtime_factory_defaults_provider_factory.php',
+            'core/factory/bootstrap_object_class_instantiator_provider.php',
+            'core/factory/bootstrap_object_configured_service_provider.php',
+            'core/factory/bootstrap_object_defaults_provider_factory.php',
+            'core/factory/cache_engine_factory.php',
+            'core/factory/configured_service_factory.php',
+            'core/service/block_context.php',
+            'core/service/locale.php',
+            'core/service/plain.php',
+            'core/service/tab.php',
+            'core/service/timer.php',
+            'core/service/translation.php',
+            'tools/composer_autoload.php',
+        ];
     }
 
     private function codeWithoutCommentsAndStrings(string $source): string

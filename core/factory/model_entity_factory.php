@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace fan\core\di;
 
+use fan\core\base\model\entity_dependencies;
+
 final class model_entity_factory
 {
     private \Closure $configuredServiceFactory;
@@ -48,6 +50,26 @@ final class model_entity_factory
         $namespacePrefixResolver = static fn(object $entity): string => $entityService->getNsPrefix();
         $collectionKeyProvider = static fn(object $entity): mixed => $entityService->getCollectionKey();
         $sqlDirectoryProvider = static fn(object $entity): string => $entityService->getSqlDir();
+        $rowDependenciesProvider = static fn(object $entity): array => method_exists($entityService, 'getRowDependencies') ? $entityService->getRowDependencies() : [];
+        $fileDataRowDependenciesProvider = static fn(object $entity): array => method_exists($entityService, 'getFileDataRowDependencies') ? $entityService->getFileDataRowDependencies() : [];
+        $specFileImageRowDependenciesProvider = static fn(object $entity): array => method_exists($entityService, 'getSpecFileImageRowDependencies') ? $entityService->getSpecFileImageRowDependencies() : [];
+        $relatedEntityRowFactory = static fn(object $entity, string $entityName): object => $entityService->get($entityName)->getNewRow();
+
+        $entityDependencies = new entity_dependencies(
+            $namespaceResolver,
+            $this->reflectionClassFactory,
+            $entityIdDecoder,
+            $entityLookup,
+            $designerFactory,
+            $descriptionProvider,
+            $namespacePrefixResolver,
+            $collectionKeyProvider,
+            $sqlDirectoryProvider,
+            $rowDependenciesProvider,
+            $fileDataRowDependenciesProvider,
+            $specFileImageRowDependenciesProvider,
+            $relatedEntityRowFactory
+        );
 
         return ($this->configuredServiceFactory)($entityClass, [
             $entityService,
@@ -60,15 +82,7 @@ final class model_entity_factory
             $rowsetFactory,
             $requestLoaderFactory,
             $this->modelEntityExceptionFactory,
-            $namespaceResolver,
-            $this->reflectionClassFactory,
-            $entityIdDecoder,
-            $entityLookup,
-            $designerFactory,
-            $descriptionProvider,
-            $namespacePrefixResolver,
-            $collectionKeyProvider,
-            $sqlDirectoryProvider
+            $entityDependencies
         ]);
     }
 

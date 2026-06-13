@@ -1129,8 +1129,10 @@ final class ApplicationContainerDependencyProviderTest extends TestCase
         $this->assertStringNotContainsString("configured_class_instantiator::class,\n            'configured_class_instantiator.php'", $source);
         $this->assertStringContainsString('new application_runtime_factory_defaults_provider(', $source);
         $this->assertStringContainsString('new application_runtime_factory_provider(', $source);
-        $this->assertStringContainsString('new configured_service_factory(', $source);
-        $this->assertStringContainsString('new configured_class_instantiator(new reflection_class_factory())', $source);
+        $this->assertStringContainsString('new application_runtime_configured_service_provider()', $source);
+        $this->assertStringContainsString('new application_runtime_class_instantiator_provider()', $source);
+        $this->assertStringNotContainsString('new configured_service_factory(', $source);
+        $this->assertStringNotContainsString('new configured_class_instantiator(', $source);
         $this->assertStringContainsString('new bootstrap_request_input_defaults_factory()->requestInputFactory()', $source);
         $this->assertStringContainsString('$adapterRegistry->phpArrayFileLoader()', $source);
         $this->assertStringContainsString('$adapterRegistry->serializerOperationsFactory()', $source);

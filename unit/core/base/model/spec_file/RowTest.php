@@ -34,7 +34,10 @@ class BaseModelSpecFileRowTest extends SourceFileContractTestCase
         $source = $this->sourceCode();
 
         $this->assertStringContainsString('$ns = $this->namespaceName($this, 2);', $source);
+        $this->assertStringContainsString('$this->getEntity()->createRelatedEntityRow(', $source);
+        $this->assertStringContainsString('Spec-file row factory returned', $source);
         $this->assertStringNotContainsString('get_ns_name(', $source);
+        $this->assertStringNotContainsString('->getService()', $source);
     }
 }
 

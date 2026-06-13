@@ -158,6 +158,56 @@ class ServicePlainTest extends SourceFileContractTestCase
         ], $factoryCalls);
     }
 
+    public function testSetControllerUsesInjectedControllerClassAvailabilityCheck(): void
+    {
+        $factoryCalled = false;
+        $checkedClasses = [];
+        $runtime = new ServicePlainRuntimeDouble();
+        $plain = new ServicePlainProbe(
+            controllerFactory: static function () use (&$factoryCalled): object {
+                $factoryCalled = true;
+
+                return new stdClass();
+            },
+            runtime: $runtime
+        );
+        $property = new ReflectionProperty(plain::class, 'controllerClassExists');
+        $property->setValue(
+            $plain,
+            \Closure::fromCallable(static function (string $controllerClass) use (&$checkedClasses): bool {
+                $checkedClasses[] = $controllerClass;
+
+                return false;
+            })
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Can\'t find class "MissingController" for plain content.');
+
+        try {
+            $plain->exposeSetController('missing', 'MissingController');
+        } finally {
+            $this->assertSame(['MissingController'], $checkedClasses);
+            $this->assertFalse($factoryCalled);
+            $this->assertSame(
+                ['\fan\project\exception\service\fatal', $plain, 'Can\'t find class "MissingController" for plain content.', E_USER_ERROR, null],
+                $runtime->serviceExceptionFactoryCalls[0]
+            );
+        }
+    }
+
+    public function testSourceKeepsControllerClassAvailabilityBehindNamedBoundary(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/core/service/plain.php');
+
+        $this->assertIsString($source);
+        $this->assertStringContainsString('private \Closure $controllerClassExists;', $source);
+        $this->assertStringContainsString('?callable $controllerClassExists = null', $source);
+        $this->assertStringContainsString('private function controllerClassExists(string $controllerClass): bool', $source);
+        $this->assertStringContainsString('if (!$this->controllerClassExists($controllerClass))', $source);
+        $this->assertStringNotContainsString('if (!class_exists($controllerClass))', $source);
+    }
+
     private function ensureBaseHelper(): void
     {
         if (function_exists('fan\core\base\get_class_name')) {

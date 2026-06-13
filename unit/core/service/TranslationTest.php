@@ -230,6 +230,57 @@ class ServiceTranslationTest extends SourceFileContractTestCase
         $this->assertSame('Open /uri/contact', $translation->getMessage('Open {contact}'));
     }
 
+    public function testFunctionTagUsesInjectedClassAvailabilityCheckForServiceTags(): void
+    {
+        $checkedClasses = [];
+        $translation = $this->translationService(
+            ['ENABLED' => false],
+            null,
+            new ServiceTranslationErrorLoggerDouble(),
+            static fn(): object => new ServiceTranslationTabDouble(),
+            [],
+            null,
+            null,
+            static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return $className === '\fan\project\service\tab';
+            }
+        );
+        $translation->setTags([
+            'contact' => [
+                'tag' => '{service|tab:getURI:/contact}',
+                'isFunc' => true,
+            ],
+        ]);
+
+        $this->assertSame('Open /uri/contact', $translation->getMessage('Open {contact}'));
+        $this->assertSame(['\fan\project\service\tab'], $checkedClasses);
+    }
+
+    public function testDebugTabAvailabilityUsesInjectedLoadedClassCheck(): void
+    {
+        $checkedClasses = [];
+        $translation = $this->translationService(
+            ['ENABLED' => true],
+            null,
+            new ServiceTranslationErrorLoggerDouble(),
+            null,
+            [],
+            null,
+            null,
+            null,
+            static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return false;
+            }
+        );
+
+        $this->assertFalse($translation->exposeTranslationDebugAllowed());
+        $this->assertSame(['\fan\core\service\tab'], $checkedClasses);
+    }
+
     public function testTranslationServiceNoLongerFallsBackToServiceLocator(): void
     {
         $source = $this->sourceCode();
@@ -237,6 +288,17 @@ class ServiceTranslationTest extends SourceFileContractTestCase
         $this->assertStringNotContainsString('getContainerService(', $source);
         $this->assertStringNotContainsString('containerService(', $source);
         $this->assertStringNotContainsString('serviceFactory', $source);
+        $this->assertStringContainsString('private \Closure $translationClassExists;', $source);
+        $this->assertStringContainsString('private \Closure $translationLoadedClassExists;', $source);
+        $this->assertStringContainsString('?callable $translationClassExists = null', $source);
+        $this->assertStringContainsString('?callable $translationLoadedClassExists = null', $source);
+        $this->assertStringContainsString('private function translationClassExists(string $className): bool', $source);
+        $this->assertStringContainsString('private function translationLoadedClassExists(string $className): bool', $source);
+        $this->assertStringContainsString('$this->translationClassExists(\'\fan\project\service\\\\\' . $matches2[1])', $source);
+        $this->assertStringContainsString('$this->translationLoadedClassExists(\'\fan\core\service\tab\')', $source);
+        $this->assertStringNotContainsString("class_exists('\\fan\\project\\service\\\\' . \$matches2[1])", $source);
+        $this->assertStringNotContainsString('elseif (class_exists($class))', $source);
+        $this->assertStringNotContainsString("!class_exists('\\fan\\core\\service\\tab', false)", $source);
     }
 
     private function ensureBaseHelper(): void
@@ -267,7 +329,9 @@ class ServiceTranslationTest extends SourceFileContractTestCase
         ?callable $tabFactory = null,
         array $messageTagFactories = [],
         ?callable $phpArrayLoader = null,
-        ?object $fileStorage = null
+        ?object $fileStorage = null,
+        ?callable $translationClassExists = null,
+        ?callable $translationLoadedClassExists = null
     ): ServiceTranslationProbe
     {
         $translation = new ServiceTranslationProbe();
@@ -282,7 +346,9 @@ class ServiceTranslationTest extends SourceFileContractTestCase
             null,
             null,
             $phpArrayLoader,
-            $fileStorage ?? new ServiceTranslationFileStorageDouble()
+            $fileStorage ?? new ServiceTranslationFileStorageDouble(),
+            $translationClassExists,
+            $translationLoadedClassExists
         );
 
         return $translation;
@@ -333,6 +399,13 @@ final class ServiceTranslationProbe extends translation
     public function exposeGetFilePath(string $key, ?array $repl = null): string
     {
         return $this->_getFilePath($key, $repl);
+    }
+
+    public function exposeTranslationDebugAllowed(): bool
+    {
+        $method = new ReflectionMethod(translation::class, 'translationDebugAllowed');
+
+        return $method->invoke($this);
     }
 }
 

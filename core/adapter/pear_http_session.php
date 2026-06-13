@@ -7,14 +7,19 @@ namespace fan\core\adapter;
 final class pear_http_session
 {
     private \Closure $staticCall;
+    private \Closure $httpSessionClassExists;
 
-    public function __construct(?callable $staticCall = null)
+    public function __construct(?callable $staticCall = null, ?callable $httpSessionClassExists = null)
     {
+        $this->httpSessionClassExists = \Closure::fromCallable(
+            $httpSessionClassExists
+                ?? static fn(string $className): bool => class_exists($className)
+        );
         $this->staticCall = \Closure::fromCallable(
             $staticCall
-                ?? static function (string $method, mixed ...$arguments): mixed {
+                ?? function (string $method, mixed ...$arguments): mixed {
                     $className = 'HTTP_Session';
-                    if (!class_exists($className)) {
+                    if (!$this->httpSessionClassExists($className)) {
                         throw new \RuntimeException('PEAR HTTP_Session class is not available.');
                     }
 
@@ -66,5 +71,10 @@ final class pear_http_session
     private function call(string $method, mixed ...$arguments): mixed
     {
         return ($this->staticCall)($method, ...$arguments);
+    }
+
+    private function httpSessionClassExists(string $className): bool
+    {
+        return ($this->httpSessionClassExists)($className);
     }
 }

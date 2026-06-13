@@ -6,6 +6,15 @@ namespace fan\core\di;
 
 final class application_client_service_creator
 {
+    private \Closure $projectServiceClassExists;
+
+    public function __construct(?callable $projectServiceClassExists = null)
+    {
+        $this->projectServiceClassExists = \Closure::fromCallable(
+            $projectServiceClassExists ?? static fn(string $className): bool => class_exists($className)
+        );
+    }
+
     public function createCurlService(
         container_interface $container,
         object $state,
@@ -16,21 +25,22 @@ final class application_client_service_creator
         $instance = $state->getInstance($index, $url);
         if ($instance === null) {
             $className = self::getProjectServiceClassName('curl');
-            if (!class_exists($className)) {
+            if (!$this->projectServiceClassExists($className)) {
                 throw new \InvalidArgumentException('Service "curl" does not expose a project class.');
             }
+            $clientDependencies = $this->clientDependencies($container);
 
             $instance = $curlServiceFactory(
                 $className,
                 $url,
                 $index,
                 $state,
-                $container->get(service_id::BOOTSTRAP_RUNTIME),
-                $container->get(service_id::CONFIG),
-                static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
-                $container->get(service_id::CURL_ADAPTER),
-                $container->get(service_id::ARRAY_ADDUCER),
-                $container->get(service_id::ARRAY_VALUE_READER)
+                $clientDependencies->bootstrapRuntime(),
+                $clientDependencies->config(),
+                $clientDependencies->cacheFactory(),
+                $clientDependencies->curlAdapter(),
+                $clientDependencies->arrayAdducer(),
+                $clientDependencies->arrayValueReader()
             );
             $state->setInstance($index, $url, $instance);
         }
@@ -44,24 +54,26 @@ final class application_client_service_creator
         callable $restServiceFactory,
         ?string $connectionName = null
     ): mixed {
-        $config = $container->get(service_id::CONFIG)->get('rest');
+        $clientDependencies = $this->clientDependencies($container);
+        $config = $clientDependencies->config();
+        $config = $config->get('rest');
         $connectionName = $state->resolveConnectionName($connectionName, (string)($config['DEFAULT_CONNECTION'] ?? ''));
         $instance = $state->getInstance($connectionName);
         if ($instance === null) {
             $className = self::getProjectServiceClassName('rest');
-            if (!class_exists($className)) {
+            if (!$this->projectServiceClassExists($className)) {
                 throw new \InvalidArgumentException('Service "rest" does not expose a project class.');
             }
 
             $instance = $restServiceFactory(
                 $className,
                 $connectionName,
-                static fn(): mixed => $container->get(service_id::JSON),
-                static fn(string $url): mixed => $container->get(service_id::CURL, $url),
-                static fn(): mixed => $container->get(service_id::ERROR),
-                $container->get(service_id::BOOTSTRAP_RUNTIME),
-                $container->get(service_id::CONFIG),
-                static fn(string $type): mixed => $container->get(service_id::CACHE, $type)
+                $clientDependencies->jsonFactory(),
+                $clientDependencies->curlFactory(),
+                $clientDependencies->errorFactory(),
+                $clientDependencies->bootstrapRuntime(),
+                $clientDependencies->config(),
+                $clientDependencies->cacheFactory()
             );
             $state->setInstance($connectionName, $instance);
         }
@@ -77,7 +89,9 @@ final class application_client_service_creator
         mixed $domain = null,
         bool $secure = false
     ): mixed {
-        $config = $container->get(service_id::CONFIG)->get('cookie');
+        $clientDependencies = $this->clientDependencies($container);
+        $config = $clientDependencies->config();
+        $config = $config->get('cookie');
         if ($path === null) {
             $path = $config->get('DEFAULT_PATH', '/');
         }
@@ -88,26 +102,26 @@ final class application_client_service_creator
         $instance = $state->getInstance($path, $domain);
         if ($instance === null) {
             $className = self::getProjectServiceClassName('cookie');
-            if (!class_exists($className)) {
+            if (!$this->projectServiceClassExists($className)) {
                 throw new \InvalidArgumentException('Service "cookie" does not expose a project class.');
             }
-            $serializerOperations = $container->get(service_id::SERIALIZER_OPERATIONS);
+            $serializerOperations = $clientDependencies->serializerOperations();
 
             $instance = $cookieServiceFactory(
                 $className,
                 $path,
                 $domain,
                 !empty($secure),
-                $container->get(service_id::REQUEST_INPUT),
-                static fn(): mixed => $container->get(service_id::ERROR),
+                $clientDependencies->requestInput(),
+                $clientDependencies->errorFactory(),
                 $serializerOperations->jsonPayloadEncoder(),
                 $serializerOperations->externalPayloadDecoder(),
                 $serializerOperations->externalPayloadChecker(),
-                $container->get(service_id::COOKIE_WRITER),
+                $clientDependencies->cookieWriter(),
                 $state,
-                $container->get(service_id::BOOTSTRAP_RUNTIME),
-                $container->get(service_id::CONFIG),
-                static fn(string $type): mixed => $container->get(service_id::CACHE, $type)
+                $clientDependencies->bootstrapRuntime(),
+                $clientDependencies->config(),
+                $clientDependencies->cacheFactory()
             );
             $state->setInstance($path, $domain, $instance);
         }
@@ -115,8 +129,18 @@ final class application_client_service_creator
         return $instance;
     }
 
+    private function clientDependencies(container_interface $container): application_client_service_dependencies
+    {
+        return new application_client_service_dependencies($container);
+    }
+
     private static function getProjectServiceClassName(string $serviceName): string
     {
         return '\fan\project\service\\' . trim($serviceName, " \t\n\r\0\x0B\\");
+    }
+
+    private function projectServiceClassExists(string $className): bool
+    {
+        return ($this->projectServiceClassExists)($className);
     }
 }

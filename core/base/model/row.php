@@ -173,13 +173,9 @@ class row implements \ArrayAccess
 
     protected function setDependenciesFromEntityService(entity $entity): void
     {
-        try {
-            $service = $entity->getService();
-        } catch (\Throwable) {
-            return;
-        }
-        if (method_exists($service, 'getRowDependencies')) {
-            $this->setRowDependencies(...$service->getRowDependencies());
+        $dependencies = $entity->rowDependencies();
+        if ($dependencies !== []) {
+            $this->setRowDependencies(...$dependencies);
         }
     }
 

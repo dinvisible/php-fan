@@ -288,7 +288,9 @@ class BaseModelRowTest extends SourceFileContractTestCase
         $this->assertStringNotContainsString('get_ns_name(', $code);
         $this->assertStringContainsString('$ett->findEntityByTable((string)$rel[\'ref_table\'], $ett->getConnectionName())', $code);
         $this->assertStringContainsString('$curEtt->findEntityByTable((string)$tableName, $curEtt->getConnectionName())', $code);
+        $this->assertStringContainsString('$dependencies = $entity->rowDependencies();', $code);
         $this->assertStringNotContainsString('getEntityByTable', $code);
+        $this->assertStringNotContainsString('->getService()', $code);
     }
 
 }

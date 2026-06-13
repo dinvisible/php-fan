@@ -18,6 +18,13 @@ use fan\project\base\meta\row as meta_row;
 
 final class application_support_service_registrar
 {
+    public function __construct(
+        private ?\Closure $serviceDependenciesFactory = null,
+        private ?\Closure $dependenciesFactory = null
+    )
+    {
+    }
+
     public function register(
         container $container,
         object $serializerOperations,
@@ -27,6 +34,9 @@ final class application_support_service_registrar
         callable $serviceEngineFactory,
         callable $blockExceptionFactory
     ): void {
+        $serviceDependenciesFactory = $this->serviceDependenciesFactory();
+        $dependenciesFactory = $this->dependenciesFactory();
+
         $container
             ->factory(service_id::PHP_RUNTIME_SETTINGS, static fn(container_interface $container): object => new php_runtime_settings())
             ->factory(service_id::SERIALIZER_OPERATIONS, static fn(container_interface $container): object => $serializerOperations)
@@ -41,17 +51,21 @@ final class application_support_service_registrar
             ->factory(service_id::CORE_FATAL_EXCEPTION_FACTORY, static fn(container_interface $container): callable => new core_fatal_exception_factory())
             ->factory(
                 service_id::SERVICE_DEPENDENCIES,
-                static fn(container_interface $container): object => new service_dependencies(
-                    $container->get(service_id::BOOTSTRAP_RUNTIME),
-                    $container->get(service_id::CONFIG),
-                    static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
-                    null,
-                    null,
-                    $container->get(service_id::BOOTSTRAP_RUNTIME)->serviceEngineFactory(),
-                    $container->get(service_id::BOOTSTRAP_RUNTIME)->serviceExceptionFactory(),
-                    $container->get(service_id::CLASS_NAME_RESOLVER),
-                    $container->get(service_id::ARRAY_VALUE_READER)
-                )
+                static function (container_interface $container) use ($serviceDependenciesFactory): object {
+                    $dependencies = $serviceDependenciesFactory($container);
+
+                    return new service_dependencies(
+                        $dependencies->bootstrapRuntime(),
+                        $dependencies->config(),
+                        $dependencies->cacheFactory(),
+                        null,
+                        null,
+                        $dependencies->serviceEngineFactory(),
+                        $dependencies->serviceExceptionFactory(),
+                        $dependencies->classNameResolver(),
+                        $dependencies->arrayValueReader()
+                    );
+                }
             )
             ->factory(
                 service_id::REQUEST_INPUT,
@@ -64,17 +78,30 @@ final class application_support_service_registrar
                     return $requestInput;
                 }
             )
-            ->factory(service_id::ERROR_DEMONSTRATOR_FACTORY, static fn(container_interface $container): object => new error_demonstrator_factory($container->get(service_id::HEADER_WRITER), $container->get(service_id::ERROR_LOG_WRITER), $container->get(service_id::ERROR_DEMONSTRATOR_FILE_STORAGE), $container->get(service_id::ERROR_DEMONSTRATOR_LOADER)))
+            ->factory(
+                service_id::ERROR_DEMONSTRATOR_FACTORY,
+                static function (container_interface $container) use ($dependenciesFactory): object {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return new error_demonstrator_factory(
+                        $dependencies->headerWriter(),
+                        $dependencies->errorLogWriter(),
+                        $dependencies->errorDemonstratorFileStorage(),
+                        $dependencies->errorDemonstratorLoader()
+                    );
+                }
+            )
             ->factory(
                 service_id::BLOCK_EXCEPTION_FACTORY,
-                static function (container_interface $container) use ($blockExceptionFactory): callable {
+                static function (container_interface $container) use ($blockExceptionFactory, $dependenciesFactory): callable {
                     if (method_exists($blockExceptionFactory, 'setExceptionDependencies')) {
+                        $dependencies = $dependenciesFactory($container);
                         $blockExceptionFactory->setExceptionDependencies(
                             null,
-                            $container->get(service_id::BOOTSTRAP_RUNTIME),
-                            $container->get(service_id::REQUEST),
-                            $container->get(service_id::ERROR),
-                            $container->get(service_id::HEADER_WRITER)
+                            $dependencies->bootstrapRuntime(),
+                            $dependencies->request(),
+                            $dependencies->error(),
+                            $dependencies->headerWriter()
                         );
                     }
 
@@ -83,13 +110,15 @@ final class application_support_service_registrar
             )
             ->factory(
                 service_id::ERROR500_EXCEPTION_FACTORY,
-                static function (container_interface $container): callable {
+                static function (container_interface $container) use ($dependenciesFactory): callable {
+                    $dependencies = $dependenciesFactory($container);
+
                     return (new error500_exception_factory())->setExceptionDependencies(
                         null,
-                        $container->get(service_id::BOOTSTRAP_RUNTIME),
-                        $container->get(service_id::REQUEST),
-                        $container->get(service_id::ERROR),
-                        $container->get(service_id::HEADER_WRITER)
+                        $dependencies->bootstrapRuntime(),
+                        $dependencies->request(),
+                        $dependencies->error(),
+                        $dependencies->headerWriter()
                     );
                 }
             )
@@ -106,52 +135,80 @@ final class application_support_service_registrar
             ->factory(service_id::DELAYED_META_FACTORY, static fn(container_interface $container): callable => new delayed_meta_factory())
             ->factory(
                 service_id::META_MAKER_FACTORY,
-                static fn(container_interface $container): callable => new meta_maker_factory(
-                    $container->get(service_id::DELAYED_META_FACTORY),
-                    $container->get(service_id::RECURSIVE_MERGER),
-                    $container->get(service_id::ARRAY_ADDUCER),
-                    $container->get(service_id::CLASS_NAME_RESOLVER)
-                )
+                static function (container_interface $container) use ($dependenciesFactory): callable {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return new meta_maker_factory(
+                        $dependencies->delayedMetaFactory(),
+                        $dependencies->recursiveMerger(),
+                        $dependencies->arrayAdducer(),
+                        $dependencies->classNameResolver()
+                    );
+                }
             )
             ->factory(service_id::VIEW_KEEPER_FACTORY, static fn(container_interface $container): callable => new view_keeper_factory())
             ->factory(service_id::VIEW_LOADER_JSON_KEEPER_FACTORY, static fn(container_interface $container): callable => new view_loader_json_keeper_factory())
             ->factory(service_id::VIEW_LOADER_TEXT_KEEPER_FACTORY, static fn(container_interface $container): callable => new view_loader_text_keeper_factory())
             ->factory(
                 service_id::VIEW_LOADER_STATE_FACTORY,
-                static fn(container_interface $container): callable => new view_loader_state_factory(
-                    $container->get(service_id::VIEW_LOADER_JSON_KEEPER_FACTORY),
-                    $container->get(service_id::VIEW_LOADER_TEXT_KEEPER_FACTORY)
-                )
-            )
-            ->factory(service_id::VIEW_ROUTER_FACTORY, static fn(container_interface $container): callable => new view_router_factory($container->get(service_id::VIEW_KEEPER_FACTORY), $container->get(service_id::ARRAY_ADDUCER)))
-            ->factory(service_id::TRANSFER_EXCEPTION_FACTORY, static fn(container_interface $container): callable => new transfer_exception_factory())
-            ->factory(
-                service_id::PLAIN_EXCEPTION_FACTORY,
-                static function (container_interface $container): callable {
-                    return (new plain_exception_factory())->setExceptionDependencies(
-                        null,
-                        $container->get(service_id::BOOTSTRAP_RUNTIME),
-                        $container->get(service_id::REQUEST),
-                        $container->get(service_id::ERROR),
-                        $container->get(service_id::HEADER_WRITER)
+                static function (container_interface $container) use ($dependenciesFactory): callable {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return new view_loader_state_factory(
+                        $dependencies->viewLoaderJsonKeeperFactory(),
+                        $dependencies->viewLoaderTextKeeperFactory()
                     );
                 }
             )
-            ->factory(service_id::UPLOAD_SIZE_LIMIT_PROVIDER, static fn(container_interface $container): object => new upload_size_limit_provider($container->get(service_id::PHP_RUNTIME_SETTINGS)))
+            ->factory(
+                service_id::VIEW_ROUTER_FACTORY,
+                static function (container_interface $container) use ($dependenciesFactory): callable {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return new view_router_factory(
+                        $dependencies->viewKeeperFactory(),
+                        $dependencies->arrayAdducer()
+                    );
+                }
+            )
+            ->factory(service_id::TRANSFER_EXCEPTION_FACTORY, static fn(container_interface $container): callable => new transfer_exception_factory())
+            ->factory(
+                service_id::PLAIN_EXCEPTION_FACTORY,
+                static function (container_interface $container) use ($dependenciesFactory): callable {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return (new plain_exception_factory())->setExceptionDependencies(
+                        null,
+                        $dependencies->bootstrapRuntime(),
+                        $dependencies->request(),
+                        $dependencies->error(),
+                        $dependencies->headerWriter()
+                    );
+                }
+            )
+            ->factory(
+                service_id::UPLOAD_SIZE_LIMIT_PROVIDER,
+                static function (container_interface $container) use ($dependenciesFactory): object {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return new upload_size_limit_provider($dependencies->phpRuntimeSettings());
+                }
+            )
             ->factory(
                 service_id::BOOTSTRAP_RUNTIME,
-                static function (container_interface $container) use ($bootstrapOperationsFactory, $bootstrapRuntimeServiceFactory, $serviceEngineFactory): object {
+                static function (container_interface $container) use ($bootstrapOperationsFactory, $bootstrapRuntimeServiceFactory, $dependenciesFactory, $serviceEngineFactory): object {
                     $bootstrapOperations = $bootstrapOperationsFactory();
                     if (!is_array($bootstrapOperations)) {
                         throw new \RuntimeException('Bootstrap operations factory must return an array.');
                     }
+                    $dependencies = $dependenciesFactory($container);
 
                     return $bootstrapRuntimeServiceFactory(
-                        $container->get(service_id::SERVICE_LISTENER_STATE),
-                        $container->get(service_id::SERVICE_SINGLE_STATE),
-                        $container->get(service_id::VIEW_LOADER_STATE),
-                        $container->get(service_id::META_MAKER_STATE),
-                        $container->get(service_id::SPEC_FILE_IMAGE_ROW_STATE),
+                        $dependencies->serviceListenerState(),
+                        $dependencies->serviceSingleState(),
+                        $dependencies->viewLoaderState(),
+                        $dependencies->metaMakerState(),
+                        $dependencies->specFileImageRowState(),
                         $serviceEngineFactory,
                         $bootstrapOperations
                     );
@@ -159,33 +216,55 @@ final class application_support_service_registrar
             )
             ->factory(
                 service_id::BLOCK_CONTEXT,
-                static fn(container_interface $container): object => new block_context(
-                    $container,
-                    $container->get(service_id::REFLECTION_CLASS_FACTORY)
-                )
+                static function (container_interface $container) use ($dependenciesFactory): object {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return new block_context(
+                        $dependencies->tabResolver(),
+                        $dependencies->bootstrapRuntimeResolver(),
+                        $dependencies->reflectionClassFactory()
+                    );
+                }
             )
             ->factory(
                 service_id::PLAIN_FILE_CONTEXT,
-                static fn(container_interface $container): object => new plain_file_context(
-                    $container->get(service_id::REQUEST),
-                    $container->get(service_id::APPLICATION),
-                    null,
-                    $container->get(service_id::TRANSLATION),
-                    static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
-                    $container->get(service_id::BOOTSTRAP_RUNTIME),
-                    $container->get(service_id::ENTITY),
-                    static fn(string $sourcePath): mixed => $container->get(service_id::IMAGE_MODIFY, $sourcePath),
-                    $container->get(service_id::IMAGE_METADATA_READER),
-                    $container->get(service_id::PLAIN_FILE_STORAGE),
-                    $container->get(service_id::PLAIN_EXCEPTION_FACTORY)
-                )
+                static function (container_interface $container) use ($dependenciesFactory): object {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return new plain_file_context(
+                        $dependencies->request(),
+                        $dependencies->application(),
+                        null,
+                        $dependencies->translation(),
+                        $dependencies->cacheFactory(),
+                        $dependencies->bootstrapRuntime(),
+                        $dependencies->entity(),
+                        $dependencies->imageModifyFactory(),
+                        $dependencies->imageMetadataReader(),
+                        $dependencies->plainFileStorage(),
+                        $dependencies->plainExceptionFactory()
+                    );
+                }
             )
             ->factory(
                 service_id::TRANSFER,
-                static fn(container_interface $container): object => new transfer(
-                    null,
-                    $container->get(service_id::TRANSFER_EXCEPTION_FACTORY)
-                )
+                static function (container_interface $container) use ($dependenciesFactory): object {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return new transfer(null, $dependencies->transferExceptionFactory());
+                }
             );
+    }
+
+    private function serviceDependenciesFactory(): \Closure
+    {
+        return $this->serviceDependenciesFactory
+            ?? static fn(container_interface $container): application_support_service_dependencies_registrar_dependencies => new application_support_service_dependencies_registrar_dependencies($container);
+    }
+
+    private function dependenciesFactory(): \Closure
+    {
+        return $this->dependenciesFactory
+            ?? static fn(container_interface $container): application_support_service_registrar_dependencies => new application_support_service_registrar_dependencies($container);
     }
 }

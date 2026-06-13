@@ -78,6 +78,8 @@ class timer extends single
      */
     private $timerProgramFactory = null;
 
+    private ?\Closure $timerClassExists = null;
+
     public function __construct(
         ?object $runtime = null,
         ?callable $dateFactory = null,
@@ -88,10 +90,11 @@ class timer extends single
         ?callable $programFactory = null,
         ?object $serviceBootstrapRuntime = null,
         ?object $serviceConfigurator = null,
-        ?callable $serviceCacheFactory = null
+        ?callable $serviceCacheFactory = null,
+        ?callable $classExists = null
     )
     {
-        $this->setTimerDependencies($runtime, $dateFactory, $entityFactory, $errorFactory, $logFactory, $emailFactory, $programFactory);
+        $this->setTimerDependencies($runtime, $dateFactory, $entityFactory, $errorFactory, $logFactory, $emailFactory, $programFactory, $classExists);
         parent::__construct(true, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
         $this->ettName  = (string)$this->getConfig('ENTITY', 'timer_program');
         $this->basePath = $this->timerRuntime()->parsePath((string)$this->getConfig('TIMER_DIR', '{PROJECT}/timer/'));
@@ -105,7 +108,8 @@ class timer extends single
         ?callable $errorFactory = null,
         ?callable $logFactory = null,
         ?callable $emailFactory = null,
-        ?callable $programFactory = null
+        ?callable $programFactory = null,
+        ?callable $classExists = null
     ): static
     {
         $this->timerRuntime = $runtime;
@@ -115,6 +119,9 @@ class timer extends single
         $this->timerLogFactory = $logFactory;
         $this->timerEmailFactory = $emailFactory;
         $this->timerProgramFactory = $programFactory;
+        if ($classExists !== null) {
+            $this->timerClassExists = \Closure::fromCallable($classExists);
+        }
 
         return $this;
     }
@@ -299,7 +306,7 @@ class timer extends single
         $timerRow->getEntity()->getConnection()->commit();
 
         $className = '\\' . trim((string)$this->baseNS, '\\') . '\\' . (string)$className;
-        if (!class_exists($className)) {
+        if (!$this->timerClassExists($className)) {
             $error->logErrorMessage('Class "'. $className . '" for timer doesn\'t exists.', 'Error run timer proggamm');
             return $this;
         }
@@ -422,6 +429,13 @@ class timer extends single
         }
 
         return ($this->timerProgramFactory)($className);
+    }
+
+    private function timerClassExists(string $className): bool
+    {
+        $this->timerClassExists ??= static fn(string $timerClassName): bool => class_exists($timerClassName);
+
+        return ($this->timerClassExists)($className);
     }
 
 }

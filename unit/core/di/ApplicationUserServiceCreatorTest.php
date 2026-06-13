@@ -170,6 +170,165 @@ final class ApplicationUserServiceCreatorTest extends TestCase
         }
     }
 
+    public function testProjectServiceClassAvailabilityCheckIsInjected(): void
+    {
+        $checkedClasses = [];
+        $creator = new application_user_service_creator(
+            static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return false;
+            }
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Service "user" does not expose a project class.');
+
+        try {
+            $creator->createUserService(
+                $this->containerWithUserDependencies(),
+                new user_state(),
+                static fn(): object => new stdClass(),
+                static fn(): object => new stdClass(),
+                7,
+                'main'
+            );
+        } finally {
+            $this->assertSame(['\fan\project\service\user'], $checkedClasses);
+        }
+    }
+
+    public function testUserCreatorUsesDependencyBundle(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_service_creator.php');
+        $dependenciesSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_service_dependencies.php');
+        $contextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_context_dependencies.php');
+        $serializationConfigContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_serialization_config_context_dependencies.php');
+        $serializerOperationsSerializationConfigContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_serializer_operations_serialization_config_context_dependencies.php');
+        $configSerializationConfigContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_config_serialization_config_context_dependencies.php');
+        $applicationRequestContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_application_request_context_dependencies.php');
+        $requestApplicationRequestContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_request_application_request_context_dependencies.php');
+        $applicationInstanceApplicationRequestContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_application_instance_application_request_context_dependencies.php');
+        $exceptionSessionContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_exception_session_context_dependencies.php');
+        $error500ExceptionFactoryExceptionSessionContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_error500_exception_factory_exception_session_context_dependencies.php');
+        $sessionExceptionSessionContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_session_exception_session_context_dependencies.php');
+        $factorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_factory_dependencies.php');
+        $applicationFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_application_factory_dependencies.php');
+        $configFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_config_factory_dependencies.php');
+        $applicationRequestInputFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_application_request_input_factory_dependencies.php');
+        $applicationFactoryApplicationRequestInputFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_application_factory_application_request_input_factory_dependencies.php');
+        $requestInputFactoryApplicationRequestInputFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_request_input_factory_application_request_input_factory_dependencies.php');
+        $identityFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_identity_factory_dependencies.php');
+        $sessionFactoryIdentityFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_session_factory_identity_factory_dependencies.php');
+        $currentUserFactoryIdentityFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_current_user_factory_identity_factory_dependencies.php');
+        $supportFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_support_factory_dependencies.php');
+        $errorFactorySupportFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_error_factory_support_factory_dependencies.php');
+        $entityFactorySupportFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_entity_factory_support_factory_dependencies.php');
+        $runtimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_runtime_dependencies.php');
+        $bootstrapCacheRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_bootstrap_cache_runtime_dependencies.php');
+        $bootstrapRuntimeBootstrapCacheRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_bootstrap_runtime_bootstrap_cache_runtime_dependencies.php');
+        $cacheFactoryBootstrapCacheRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_cache_factory_bootstrap_cache_runtime_dependencies.php');
+        $arrayRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_user_array_runtime_dependencies.php');
+
+        $this->assertIsString($source);
+        $this->assertIsString($dependenciesSource);
+        $this->assertIsString($contextSource);
+        $this->assertIsString($serializationConfigContextSource);
+        $this->assertIsString($serializerOperationsSerializationConfigContextSource);
+        $this->assertIsString($configSerializationConfigContextSource);
+        $this->assertIsString($applicationRequestContextSource);
+        $this->assertIsString($requestApplicationRequestContextSource);
+        $this->assertIsString($applicationInstanceApplicationRequestContextSource);
+        $this->assertIsString($exceptionSessionContextSource);
+        $this->assertIsString($error500ExceptionFactoryExceptionSessionContextSource);
+        $this->assertIsString($sessionExceptionSessionContextSource);
+        $this->assertIsString($factorySource);
+        $this->assertIsString($applicationFactorySource);
+        $this->assertIsString($configFactorySource);
+        $this->assertIsString($applicationRequestInputFactorySource);
+        $this->assertIsString($applicationFactoryApplicationRequestInputFactorySource);
+        $this->assertIsString($requestInputFactoryApplicationRequestInputFactorySource);
+        $this->assertIsString($identityFactorySource);
+        $this->assertIsString($sessionFactoryIdentityFactorySource);
+        $this->assertIsString($currentUserFactoryIdentityFactorySource);
+        $this->assertIsString($supportFactorySource);
+        $this->assertIsString($errorFactorySupportFactorySource);
+        $this->assertIsString($entityFactorySupportFactorySource);
+        $this->assertIsString($runtimeSource);
+        $this->assertIsString($bootstrapCacheRuntimeSource);
+        $this->assertIsString($bootstrapRuntimeBootstrapCacheRuntimeSource);
+        $this->assertIsString($cacheFactoryBootstrapCacheRuntimeSource);
+        $this->assertIsString($arrayRuntimeSource);
+        $this->assertStringContainsString('private static function userDependencies(container_interface $container): application_user_service_dependencies', $source);
+        $this->assertStringContainsString('return new application_user_service_dependencies($container);', $source);
+        $this->assertStringContainsString('$userDependencies = self::userDependencies($container);', $source);
+        $this->assertStringContainsString('$userDependencies->serializerOperations()', $source);
+        $this->assertStringContainsString('$userDependencies->sessionFactory()', $source);
+        $this->assertStringContainsString('$userDependencies->cacheFactory()', $source);
+        $this->assertStringContainsString('final class application_user_service_dependencies', $dependenciesSource);
+        $this->assertStringContainsString('$this->context = new application_user_context_dependencies($container);', $dependenciesSource);
+        $this->assertStringContainsString('$this->factory = new application_user_factory_dependencies($container);', $dependenciesSource);
+        $this->assertStringContainsString('$this->runtime = new application_user_runtime_dependencies($container);', $dependenciesSource);
+        $this->assertStringContainsString('$this->serializationConfig = new application_user_serialization_config_context_dependencies($container);', $contextSource);
+        $this->assertStringContainsString('$this->applicationRequest = new application_user_application_request_context_dependencies($container);', $contextSource);
+        $this->assertStringContainsString('$this->exceptionSession = new application_user_exception_session_context_dependencies($container);', $contextSource);
+        $this->assertStringContainsString('new application_user_serializer_operations_serialization_config_context_dependencies($container)', $serializationConfigContextSource);
+        $this->assertStringContainsString('new application_user_config_serialization_config_context_dependencies($container)', $serializationConfigContextSource);
+        $this->assertStringContainsString('return $this->serializerOperations->serializerOperations();', $serializationConfigContextSource);
+        $this->assertStringContainsString('return $this->config->config();', $serializationConfigContextSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::SERIALIZER_OPERATIONS);', $serializerOperationsSerializationConfigContextSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::CONFIG);', $configSerializationConfigContextSource);
+        $this->assertStringContainsString('new application_user_request_application_request_context_dependencies($container)', $applicationRequestContextSource);
+        $this->assertStringContainsString('new application_user_application_instance_application_request_context_dependencies($container)', $applicationRequestContextSource);
+        $this->assertStringContainsString('return $this->request->request();', $applicationRequestContextSource);
+        $this->assertStringContainsString('return $this->application->application();', $applicationRequestContextSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::REQUEST);', $requestApplicationRequestContextSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::APPLICATION);', $applicationInstanceApplicationRequestContextSource);
+        $this->assertStringContainsString('new application_user_error500_exception_factory_exception_session_context_dependencies($container)', $exceptionSessionContextSource);
+        $this->assertStringContainsString('new application_user_session_exception_session_context_dependencies($container)', $exceptionSessionContextSource);
+        $this->assertStringContainsString('return $this->error500ExceptionFactory->error500ExceptionFactory();', $exceptionSessionContextSource);
+        $this->assertStringContainsString('return $this->session->session($namespace, $group);', $exceptionSessionContextSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::ERROR500_EXCEPTION_FACTORY);', $error500ExceptionFactoryExceptionSessionContextSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::SESSION, $namespace, $group);', $sessionExceptionSessionContextSource);
+        $this->assertStringContainsString('$this->application = new application_user_application_factory_dependencies($container);', $factorySource);
+        $this->assertStringContainsString('$this->identity = new application_user_identity_factory_dependencies($container);', $factorySource);
+        $this->assertStringContainsString('$this->support = new application_user_support_factory_dependencies($container);', $factorySource);
+        $this->assertStringContainsString('new application_user_config_factory_dependencies($container)', $applicationFactorySource);
+        $this->assertStringContainsString('new application_user_application_request_input_factory_dependencies($container)', $applicationFactorySource);
+        $this->assertStringContainsString('return $this->config->configFactory();', $applicationFactorySource);
+        $this->assertStringContainsString('return $this->applicationRequestInput->requestInputFactory();', $applicationFactorySource);
+        $this->assertStringContainsString('return fn(string $configType = \'service\', string $sourceType = \'arr\'): mixed => $this->container->get(service_id::CONFIG, $configType, $sourceType);', $configFactorySource);
+        $this->assertStringContainsString('new application_user_application_factory_application_request_input_factory_dependencies($container)', $applicationRequestInputFactorySource);
+        $this->assertStringContainsString('new application_user_request_input_factory_application_request_input_factory_dependencies($container)', $applicationRequestInputFactorySource);
+        $this->assertStringContainsString('return $this->applicationFactory->applicationFactory();', $applicationRequestInputFactorySource);
+        $this->assertStringContainsString('return $this->requestInputFactory->requestInputFactory();', $applicationRequestInputFactorySource);
+        $this->assertStringContainsString('return fn(): mixed => $this->container->get(service_id::APPLICATION);', $applicationFactoryApplicationRequestInputFactorySource);
+        $this->assertStringContainsString('return fn(): mixed => $this->container->get(service_id::REQUEST_INPUT);', $requestInputFactoryApplicationRequestInputFactorySource);
+        $this->assertStringContainsString('new application_user_session_factory_identity_factory_dependencies($container)', $identityFactorySource);
+        $this->assertStringContainsString('new application_user_current_user_factory_identity_factory_dependencies($container)', $identityFactorySource);
+        $this->assertStringContainsString('return $this->sessionFactory->sessionFactory();', $identityFactorySource);
+        $this->assertStringContainsString('return $this->currentUserFactory->currentUserFactory();', $identityFactorySource);
+        $this->assertStringContainsString('return fn(string $namespace, string $group): mixed => $this->container->get(service_id::SESSION, $namespace, $group);', $sessionFactoryIdentityFactorySource);
+        $this->assertStringContainsString('return fn(): mixed => $this->container->get(service_id::CURRENT_USER);', $currentUserFactoryIdentityFactorySource);
+        $this->assertStringContainsString('new application_user_error_factory_support_factory_dependencies($container)', $supportFactorySource);
+        $this->assertStringContainsString('new application_user_entity_factory_support_factory_dependencies($container)', $supportFactorySource);
+        $this->assertStringContainsString('return $this->errorFactory->errorFactory();', $supportFactorySource);
+        $this->assertStringContainsString('return $this->entityFactory->entityFactory();', $supportFactorySource);
+        $this->assertStringContainsString('return fn(): mixed => $this->container->get(service_id::ERROR);', $errorFactorySupportFactorySource);
+        $this->assertStringContainsString('return fn(): mixed => $this->container->get(service_id::ENTITY);', $entityFactorySupportFactorySource);
+        $this->assertStringContainsString('new application_user_bootstrap_cache_runtime_dependencies($container)', $runtimeSource);
+        $this->assertStringContainsString('new application_user_array_runtime_dependencies($container)', $runtimeSource);
+        $this->assertStringContainsString('return $this->bootstrapCache->cacheFactory();', $runtimeSource);
+        $this->assertStringContainsString('return $this->array->arrayAdducer();', $runtimeSource);
+        $this->assertStringContainsString('new application_user_bootstrap_runtime_bootstrap_cache_runtime_dependencies($container)', $bootstrapCacheRuntimeSource);
+        $this->assertStringContainsString('new application_user_cache_factory_bootstrap_cache_runtime_dependencies($container)', $bootstrapCacheRuntimeSource);
+        $this->assertStringContainsString('return $this->bootstrapRuntime->bootstrapRuntime();', $bootstrapCacheRuntimeSource);
+        $this->assertStringContainsString('return $this->cacheFactory->cacheFactory();', $bootstrapCacheRuntimeSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::BOOTSTRAP_RUNTIME);', $bootstrapRuntimeBootstrapCacheRuntimeSource);
+        $this->assertStringContainsString('return fn(string $type): mixed => $this->container->get(service_id::CACHE, $type);', $cacheFactoryBootstrapCacheRuntimeSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::ARRAY_ADDUCER);', $arrayRuntimeSource);
+    }
+
     private function containerWithUserDependencies(
         ?ApplicationUserSessionDouble $session = null,
         string $appName = 'crm',

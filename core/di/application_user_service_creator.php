@@ -8,6 +8,15 @@ use fan\core\service\user;
 
 final class application_user_service_creator
 {
+    private \Closure $projectServiceClassExists;
+
+    public function __construct(?callable $projectServiceClassExists = null)
+    {
+        $this->projectServiceClassExists = \Closure::fromCallable(
+            $projectServiceClassExists ?? static fn(string $className): bool => class_exists($className)
+        );
+    }
+
     public function createUserService(
         container_interface $container,
         object $userState,
@@ -19,18 +28,19 @@ final class application_user_service_creator
         ?object $serviceConfigurator = null,
         ?callable $serviceCacheFactory = null
     ): mixed {
-        $userSpace = $this->verifyUserSpace($container, $userState, $reqSpace);
-        $serializerOperations = $container->get(service_id::SERIALIZER_OPERATIONS);
+        $userDependencies = self::userDependencies($container);
+        $userSpace = $this->verifyUserSpace($container, $userState, $reqSpace, $userDependencies);
+        $serializerOperations = $userDependencies->serializerOperations();
         $instanceKeyEncoder = $serializerOperations->stableKeyEncoder();
         $instanceKey = self::normalizeUserInstanceKey($identifyer, $instanceKeyEncoder);
         if ($userState->getCurrentUsers() === null) {
-            self::loadCurrentUsers($container, $userState);
+            self::loadCurrentUsers($container, $userState, $userDependencies);
         }
 
         $user = $userState->getInstance($userSpace, $instanceKey);
         if ($user === null) {
             $className = self::getProjectServiceClassName('user');
-            if (!class_exists($className)) {
+            if (!$this->projectServiceClassExists($className)) {
                 throw new \InvalidArgumentException('Service "user" does not expose a project class.');
             }
 
@@ -38,22 +48,22 @@ final class application_user_service_creator
                 $className,
                 $identifyer,
                 $userSpace,
-                static fn(string $configType = 'service', string $sourceType = 'arr'): mixed => $container->get(service_id::CONFIG, $configType, $sourceType),
-                static fn(string $namespace, string $group): mixed => $container->get(service_id::SESSION, $namespace, $group),
-                static fn(): mixed => $container->get(service_id::CURRENT_USER),
-                static fn(): mixed => $container->get(service_id::APPLICATION),
-                static fn(): mixed => $container->get(service_id::ERROR),
-                static fn(): mixed => $container->get(service_id::REQUEST_INPUT),
-                static fn(): mixed => $container->get(service_id::ENTITY),
+                $userDependencies->configFactory(),
+                $userDependencies->sessionFactory(),
+                $userDependencies->currentUserFactory(),
+                $userDependencies->applicationFactory(),
+                $userDependencies->errorFactory(),
+                $userDependencies->requestInputFactory(),
+                $userDependencies->entityFactory(),
                 $userEngineFactory,
-                $serviceBootstrapRuntime ?? $container->get(service_id::BOOTSTRAP_RUNTIME),
-                $serviceConfigurator ?? $container->get(service_id::CONFIG),
-                $serviceCacheFactory ?? static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+                $serviceBootstrapRuntime ?? $userDependencies->bootstrapRuntime(),
+                $serviceConfigurator ?? $userDependencies->config(),
+                $serviceCacheFactory ?? $userDependencies->cacheFactory(),
                 $userState,
                 $instanceKeyEncoder,
                 $serializerOperations->phpSnapshotEncoder(),
                 $serializerOperations->phpSnapshotDecoder(),
-                $container->get(service_id::ARRAY_ADDUCER)
+                $userDependencies->arrayAdducer()
             );
         }
 
@@ -81,7 +91,7 @@ final class application_user_service_creator
         }
 
         $order = (string)$user->getConfig('LOGOUT_ORDER', 'GP');
-        $logout = $container->get(service_id::REQUEST)->get((string)$field, $order);
+        $logout = self::userDependencies($container)->request()->get((string)$field, $order);
         if (empty($logout)) {
             return $user;
         }
@@ -99,9 +109,10 @@ final class application_user_service_creator
 
     public function getCurrentUserSpace(container_interface $container, object $userState): string
     {
-        $config = $container->get(service_id::CONFIG)->get('user');
-        $appName = $container->get(service_id::APPLICATION)->getAppName();
-        $currentUsers = self::loadCurrentUsers($container, $userState);
+        $userDependencies = self::userDependencies($container);
+        $config = $userDependencies->config()->get('user');
+        $appName = $userDependencies->application()->getAppName();
+        $currentUsers = self::loadCurrentUsers($container, $userState, $userDependencies);
         $prioritySpace = $userState->getPrioritySpace() ?? [];
 
         if (isset($prioritySpace[$appName])) {
@@ -144,13 +155,19 @@ final class application_user_service_creator
         return $userSpace;
     }
 
-    private function verifyUserSpace(container_interface $container, object $userState, ?string $userSpace): string
+    private function verifyUserSpace(
+        container_interface $container,
+        object $userState,
+        ?string $userSpace,
+        ?application_user_service_dependencies $userDependencies = null
+    ): string
     {
         if (empty($userSpace)) {
             return $this->getCurrentUserSpace($container, $userState);
         }
         $userSpace = (string)$userSpace;
-        $config = $container->get(service_id::CONFIG);
+        $userDependencies ??= self::userDependencies($container);
+        $config = $userDependencies->config();
         if (!$config->get('user', ['space', $userSpace])) {
             throw $this->createError500Exception($container, 'Incorrect identifyer of user space - "' . $userSpace . '".');
         }
@@ -164,7 +181,7 @@ final class application_user_service_creator
         int $code = E_USER_ERROR,
         ?\Throwable $previous = null
     ): \Throwable {
-        $factory = $container->get(service_id::ERROR500_EXCEPTION_FACTORY);
+        $factory = self::userDependencies($container)->error500ExceptionFactory();
         if (!is_callable($factory)) {
             throw new \RuntimeException('Error500 exception factory must be callable.');
         }
@@ -177,20 +194,25 @@ final class application_user_service_creator
         return $exception;
     }
 
-    private static function loadCurrentUsers(container_interface $container, object $userState): array
+    private static function loadCurrentUsers(
+        container_interface $container,
+        object $userState,
+        ?application_user_service_dependencies $userDependencies = null
+    ): array
     {
         $currentUsers = $userState->getCurrentUsers();
         if ($currentUsers !== null) {
             return $currentUsers;
         }
 
-        $session = self::getUserSession($container, $userState);
+        $userDependencies ??= self::userDependencies($container);
+        $session = self::getUserSession($container, $userState, $userDependencies);
         $currentUsers = $session->get('currents', []);
         $prioritySpace = $session->get('priority', []);
-        $serviceBootstrapRuntime = $container->get(service_id::BOOTSTRAP_RUNTIME);
-        $serviceConfigurator = $container->get(service_id::CONFIG);
-        $serviceCacheFactory = static fn(string $type): mixed => $container->get(service_id::CACHE, $type);
-        $serializerOperations = $container->get(service_id::SERIALIZER_OPERATIONS);
+        $serviceBootstrapRuntime = $userDependencies->bootstrapRuntime();
+        $serviceConfigurator = $userDependencies->config();
+        $serviceCacheFactory = $userDependencies->cacheFactory();
+        $serializerOperations = $userDependencies->serializerOperations();
         $instanceKeyEncoder = $serializerOperations->stableKeyEncoder();
         foreach ($currentUsers as $key => $value) {
             self::setUserServiceDependencies(
@@ -202,7 +224,8 @@ final class application_user_service_creator
                 $userState,
                 $instanceKeyEncoder,
                 $serializerOperations->phpSnapshotEncoder(),
-                $serializerOperations->phpSnapshotDecoder()
+                $serializerOperations->phpSnapshotDecoder(),
+                $userDependencies
             );
             $instanceKey = self::normalizeUserInstanceKey(self::getObjectPropertyValue($value, 'identifyer'), $instanceKeyEncoder);
             if ($userState->getInstance((string)$key, $instanceKey) === null) {
@@ -224,40 +247,52 @@ final class application_user_service_creator
         ?object $userState = null,
         ?callable $instanceKeyEncoder = null,
         ?callable $snapshotEncoder = null,
-        ?callable $snapshotDecoder = null
+        ?callable $snapshotDecoder = null,
+        ?application_user_service_dependencies $userDependencies = null
     ): void {
         if (!is_object($user) || !method_exists($user, 'setUserDependencies')) {
             return;
         }
 
+        $userDependencies ??= self::userDependencies($container);
         $user->setUserDependencies(
-            static fn(string $configType = 'service', string $sourceType = 'arr'): mixed => $container->get(service_id::CONFIG, $configType, $sourceType),
-            static fn(string $namespace, string $group): mixed => $container->get(service_id::SESSION, $namespace, $group),
-            static fn(): mixed => $container->get(service_id::CURRENT_USER),
-            static fn(): mixed => $container->get(service_id::APPLICATION),
-            static fn(): mixed => $container->get(service_id::ERROR),
-            static fn(): mixed => $container->get(service_id::REQUEST_INPUT),
-            static fn(): mixed => $container->get(service_id::ENTITY),
-            $serviceBootstrapRuntime ?? $container->get(service_id::BOOTSTRAP_RUNTIME),
-            $serviceConfigurator ?? $container->get(service_id::CONFIG),
-            $serviceCacheFactory ?? static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
+            $userDependencies->configFactory(),
+            $userDependencies->sessionFactory(),
+            $userDependencies->currentUserFactory(),
+            $userDependencies->applicationFactory(),
+            $userDependencies->errorFactory(),
+            $userDependencies->requestInputFactory(),
+            $userDependencies->entityFactory(),
+            $serviceBootstrapRuntime ?? $userDependencies->bootstrapRuntime(),
+            $serviceConfigurator ?? $userDependencies->config(),
+            $serviceCacheFactory ?? $userDependencies->cacheFactory(),
             $userState,
-            $instanceKeyEncoder ?? $container->get(service_id::SERIALIZER_OPERATIONS)->stableKeyEncoder(),
-            $snapshotEncoder ?? $container->get(service_id::SERIALIZER_OPERATIONS)->phpSnapshotEncoder(),
-            $snapshotDecoder ?? $container->get(service_id::SERIALIZER_OPERATIONS)->phpSnapshotDecoder(),
-            $container->get(service_id::ARRAY_ADDUCER)
+            $instanceKeyEncoder ?? $userDependencies->serializerOperations()->stableKeyEncoder(),
+            $snapshotEncoder ?? $userDependencies->serializerOperations()->phpSnapshotEncoder(),
+            $snapshotDecoder ?? $userDependencies->serializerOperations()->phpSnapshotDecoder(),
+            $userDependencies->arrayAdducer()
         );
     }
 
-    private static function getUserSession(container_interface $container, object $userState): mixed
+    private static function getUserSession(
+        container_interface $container,
+        object $userState,
+        ?application_user_service_dependencies $userDependencies = null
+    ): mixed
     {
         $session = $userState->getSession();
         if (empty($session)) {
-            $session = $container->get(service_id::SESSION, user::SES_NAMESPACE, 'system');
+            $userDependencies ??= self::userDependencies($container);
+            $session = $userDependencies->session(user::SES_NAMESPACE, 'system');
             $userState->setSession($session);
         }
 
         return $session;
+    }
+
+    private static function userDependencies(container_interface $container): application_user_service_dependencies
+    {
+        return new application_user_service_dependencies($container);
     }
 
     private static function normalizeUserInstanceKey(mixed $identifyer, callable $instanceKeyEncoder): int|string
@@ -298,5 +333,10 @@ final class application_user_service_creator
     private static function getProjectServiceClassName(string $serviceName): string
     {
         return '\fan\project\service\\' . trim($serviceName, " \t\n\r\0\x0B\\");
+    }
+
+    private function projectServiceClassExists(string $className): bool
+    {
+        return ($this->projectServiceClassExists)($className);
     }
 }

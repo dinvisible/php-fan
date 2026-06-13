@@ -6,6 +6,31 @@ namespace fan\core\adapter;
 
 final class bootstrap_loader_file_storage
 {
+    private \Closure $symbolExists;
+    private \Closure $fileLoader;
+
+    public function __construct(?callable $symbolExists = null, ?callable $fileLoader = null)
+    {
+        $this->symbolExists = \Closure::fromCallable(
+            $symbolExists
+                ?? static fn(string $name): bool => class_exists($name, false) || interface_exists($name, false) || trait_exists($name, false)
+        );
+        $this->fileLoader = \Closure::fromCallable($fileLoader ?? static function (string $path, int $way = 3): mixed {
+            switch ($way) {
+            case 0:
+                return include      $path;
+            case 1:
+                return include_once $path;
+            case 2:
+                return require      $path;
+            case 3:
+                return require_once $path;
+            }
+
+            throw new \InvalidArgumentException('Set incorrect way "' . $way . '" for load file');
+        });
+    }
+
     public function exists(string $path): bool
     {
         return file_exists($path);
@@ -33,18 +58,7 @@ final class bootstrap_loader_file_storage
 
     public function load(string $path, int $way = 3): mixed
     {
-        switch ($way) {
-        case 0:
-            return include      $path;
-        case 1:
-            return include_once $path;
-        case 2:
-            return require      $path;
-        case 3:
-            return require_once $path;
-        }
-
-        throw new \InvalidArgumentException('Set incorrect way "' . $way . '" for load file');
+        return ($this->fileLoader)($path, $way);
     }
 
     /**
@@ -76,6 +90,6 @@ final class bootstrap_loader_file_storage
 
     public function symbolExists(string $name): bool
     {
-        return class_exists($name, false) || interface_exists($name, false) || trait_exists($name, false);
+        return ($this->symbolExists)($name);
     }
 }

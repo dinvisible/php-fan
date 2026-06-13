@@ -25,7 +25,8 @@ final class plain_service_factory
         callable $controllerFactory,
         object $serviceBootstrapRuntime,
         object $serviceConfigurator,
-        callable $serviceCacheFactory
+        callable $serviceCacheFactory,
+        ?callable $controllerClassExists = null
     ): mixed {
         $arguments = [
             $allowIni,
@@ -36,7 +37,8 @@ final class plain_service_factory
             $controllerFactory,
             $serviceBootstrapRuntime,
             $serviceConfigurator,
-            $serviceCacheFactory
+            $serviceCacheFactory,
+            $controllerClassExists
         ];
 
         return $this->serviceFactoryMap->create(

@@ -125,7 +125,7 @@ abstract class entity extends spec_file_entity
         if ($linkTbl) {
             foreach ($matches[$pos['num']] as $k => $n) {
                 if ($n) {
-                    $row = $this->getService()->get($linkTbl[0])->getNewRow()->loadByParam([
+                    $row = $this->createRelatedEntityRow($linkTbl[0])->loadByParam([
                         $linkTbl[1] => $linkTbl[2],
                         'order_num'  => $n,
                     ]);

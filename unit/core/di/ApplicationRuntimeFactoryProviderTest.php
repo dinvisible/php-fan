@@ -122,8 +122,10 @@ final class ApplicationRuntimeFactoryProviderTest extends TestCase
         $this->assertStringNotContainsString('new configured_service_factory(new configured_class_instantiator())', $defaultsProviderSource);
         $this->assertStringNotContainsString("require_once dirname(__DIR__) . '/bootstrap/bootstrap_request_input_defaults_factory.php';", $defaultsProviderSource);
         $this->assertStringNotContainsString("require_once dirname(__DIR__) . '/adapter/request_input_native_environment.php';", $dependencyProviderSource);
-        $this->assertStringContainsString('new configured_service_factory(', $defaultsProviderFactorySource);
-        $this->assertStringContainsString('new configured_class_instantiator(new reflection_class_factory())', $defaultsProviderFactorySource);
+        $this->assertStringContainsString('new application_runtime_configured_service_provider()', $defaultsProviderFactorySource);
+        $this->assertStringContainsString('new application_runtime_class_instantiator_provider()', $defaultsProviderFactorySource);
+        $this->assertStringNotContainsString('new configured_service_factory(', $defaultsProviderFactorySource);
+        $this->assertStringNotContainsString('new configured_class_instantiator(', $defaultsProviderFactorySource);
         $this->assertStringNotContainsString("require_once dirname(__DIR__) . '/bootstrap/' . \$fileName;", $defaultsProviderFactorySource);
         $this->assertStringContainsString('new bootstrap_request_input_defaults_factory()->requestInputFactory()', $defaultsProviderFactorySource);
         $this->assertStringNotContainsString('new configured_service_factory(new configured_class_instantiator())', $factoryProviderDefaultsProviderFactorySource);

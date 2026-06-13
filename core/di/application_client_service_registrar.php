@@ -6,6 +6,10 @@ namespace fan\core\di;
 
 final class application_client_service_registrar
 {
+    public function __construct(private ?\Closure $dependenciesFactory = null)
+    {
+    }
+
     public function register(
         container $container,
         application_service_graph_registration_context $context
@@ -14,13 +18,14 @@ final class application_client_service_registrar
         $cookieServiceFactory = $context->cookieServiceFactory;
         $curlServiceFactory = $context->curlServiceFactory;
         $restServiceFactory = $context->restServiceFactory;
+        $dependenciesFactory = $this->dependenciesFactory();
 
         return $container
             ->factory(
                 service_id::COOKIE,
                 static fn(container_interface $container, mixed $path = null, mixed $domain = null, bool $secure = false): mixed => $clientServiceCreator->createCookieService(
                     $container,
-                    $container->get(service_id::COOKIE_STATE),
+                    $dependenciesFactory($container)->cookieState(),
                     $cookieServiceFactory,
                     $path,
                     $domain,
@@ -32,7 +37,7 @@ final class application_client_service_registrar
                 service_id::CURL,
                 static fn(container_interface $container, string $url, int|float|string $index = 0): mixed => $clientServiceCreator->createCurlService(
                     $container,
-                    $container->get(service_id::CURL_STATE),
+                    $dependenciesFactory($container)->curlState(),
                     $curlServiceFactory,
                     $url,
                     $index
@@ -43,11 +48,17 @@ final class application_client_service_registrar
                 service_id::REST,
                 static fn(container_interface $container, ?string $connectionName = null): mixed => $clientServiceCreator->createRestService(
                     $container,
-                    $container->get(service_id::REST_STATE),
+                    $dependenciesFactory($container)->restState(),
                     $restServiceFactory,
                     $connectionName
                 ),
                 false
             );
+    }
+
+    private function dependenciesFactory(): \Closure
+    {
+        return $this->dependenciesFactory
+            ?? static fn(container_interface $container): application_client_service_registrar_dependencies => new application_client_service_registrar_dependencies($container);
     }
 }

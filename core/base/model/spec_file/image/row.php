@@ -69,13 +69,9 @@ abstract class row extends spec_file_row
     protected function setDependenciesFromEntityService(model_entity $entity): void
     {
         parent::setDependenciesFromEntityService($entity);
-        try {
-            $service = $entity->getService();
-        } catch (\Throwable) {
-            return;
-        }
-        if (method_exists($service, 'getSpecFileImageRowDependencies')) {
-            $this->setSpecFileImageRowDependencies(...$service->getSpecFileImageRowDependencies());
+        $dependencies = $entity->specFileImageRowDependencies();
+        if ($dependencies !== []) {
+            $this->setSpecFileImageRowDependencies(...$dependencies);
         }
     }
 

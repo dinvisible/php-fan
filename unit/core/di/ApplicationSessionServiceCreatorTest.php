@@ -10,7 +10,132 @@ use fan\project\service\session;
 
 
 final class ApplicationSessionServiceCreatorTest extends TestCase
-{    public function testSessionCreatorPassesExplicitDependenciesToInjectedFactory(): void
+{
+    public function testSessionCreatorUsesDependencyBundle(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_service_creator.php');
+        $dependenciesSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_service_dependencies.php');
+        $contextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_context_dependencies.php');
+        $factorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_factory_dependencies.php');
+        $runtimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_runtime_dependencies.php');
+        $applicationContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_application_context_dependencies.php');
+        $configApplicationContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_config_application_context_dependencies.php');
+        $applicationInstanceApplicationContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_application_instance_application_context_dependencies.php');
+        $requestContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_request_context_dependencies.php');
+        $requestInputRequestContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_request_input_request_context_dependencies.php');
+        $requestInstanceRequestContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_request_instance_request_context_dependencies.php');
+        $headerContextSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_header_context_dependencies.php');
+        $supportFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_support_factory_dependencies.php');
+        $errorFactorySupportFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_error_factory_support_factory_dependencies.php');
+        $dateFactorySupportFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_date_factory_support_factory_dependencies.php');
+        $stateFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_state_factory_dependencies.php');
+        $sessionFactoryStateFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_session_factory_state_factory_dependencies.php');
+        $cookieFactoryStateFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_cookie_factory_state_factory_dependencies.php');
+        $cacheFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_cache_factory_dependencies.php');
+        $nativeRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_native_runtime_dependencies.php');
+        $pearHttpSessionLoaderNativeRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_pear_http_session_loader_native_runtime_dependencies.php');
+        $nativeSessionNativeRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_native_session_native_runtime_dependencies.php');
+        $bootstrapRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_bootstrap_runtime_dependencies.php');
+        $bootstrapBootstrapRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_bootstrap_bootstrap_runtime_dependencies.php');
+        $phpRuntimeSettingsBootstrapRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_php_runtime_settings_bootstrap_runtime_dependencies.php');
+        $arrayRuntimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_session_array_runtime_dependencies.php');
+
+        $this->assertIsString($source);
+        $this->assertIsString($dependenciesSource);
+        $this->assertIsString($contextSource);
+        $this->assertIsString($factorySource);
+        $this->assertIsString($runtimeSource);
+        $this->assertIsString($applicationContextSource);
+        $this->assertIsString($configApplicationContextSource);
+        $this->assertIsString($applicationInstanceApplicationContextSource);
+        $this->assertIsString($requestContextSource);
+        $this->assertIsString($requestInputRequestContextSource);
+        $this->assertIsString($requestInstanceRequestContextSource);
+        $this->assertIsString($headerContextSource);
+        $this->assertIsString($supportFactorySource);
+        $this->assertIsString($errorFactorySupportFactorySource);
+        $this->assertIsString($dateFactorySupportFactorySource);
+        $this->assertIsString($stateFactorySource);
+        $this->assertIsString($sessionFactoryStateFactorySource);
+        $this->assertIsString($cookieFactoryStateFactorySource);
+        $this->assertIsString($cacheFactorySource);
+        $this->assertIsString($nativeRuntimeSource);
+        $this->assertIsString($pearHttpSessionLoaderNativeRuntimeSource);
+        $this->assertIsString($nativeSessionNativeRuntimeSource);
+        $this->assertIsString($bootstrapRuntimeSource);
+        $this->assertIsString($bootstrapBootstrapRuntimeSource);
+        $this->assertIsString($phpRuntimeSettingsBootstrapRuntimeSource);
+        $this->assertIsString($arrayRuntimeSource);
+        $this->assertStringContainsString('private function sessionDependencies(container_interface $container): application_session_service_dependencies', $source);
+        $this->assertStringContainsString('return new application_session_service_dependencies($container);', $source);
+        $this->assertStringContainsString('$sessionDependencies = $this->sessionDependencies($container);', $source);
+        $this->assertStringContainsString('$sessionDependencies->requestInput()', $source);
+        $this->assertStringContainsString('$sessionDependencies->headerWriter()', $source);
+        $this->assertStringContainsString('$sessionDependencies->cacheFactory()', $source);
+        $this->assertStringContainsString('final class application_session_service_dependencies', $dependenciesSource);
+        $this->assertStringContainsString('$this->context = new application_session_context_dependencies($container);', $dependenciesSource);
+        $this->assertStringContainsString('$this->factory = new application_session_factory_dependencies($container);', $dependenciesSource);
+        $this->assertStringContainsString('$this->runtime = new application_session_runtime_dependencies($container);', $dependenciesSource);
+        $this->assertStringContainsString('new application_session_application_context_dependencies($container)', $contextSource);
+        $this->assertStringContainsString('new application_session_request_context_dependencies($container)', $contextSource);
+        $this->assertStringContainsString('new application_session_header_context_dependencies($container)', $contextSource);
+        $this->assertStringContainsString('return $this->applicationContext->config();', $contextSource);
+        $this->assertStringContainsString('return $this->requestContext->requestInput();', $contextSource);
+        $this->assertStringContainsString('return $this->headerContext->headerWriter();', $contextSource);
+        $this->assertStringContainsString('new application_session_config_application_context_dependencies($container)', $applicationContextSource);
+        $this->assertStringContainsString('new application_session_application_instance_application_context_dependencies($container)', $applicationContextSource);
+        $this->assertStringContainsString('return $this->config->config();', $applicationContextSource);
+        $this->assertStringContainsString('return $this->application->application();', $applicationContextSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::CONFIG);', $configApplicationContextSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::APPLICATION);', $applicationInstanceApplicationContextSource);
+        $this->assertStringContainsString('new application_session_request_input_request_context_dependencies($container)', $requestContextSource);
+        $this->assertStringContainsString('new application_session_request_instance_request_context_dependencies($container)', $requestContextSource);
+        $this->assertStringContainsString('return $this->requestInput->requestInput();', $requestContextSource);
+        $this->assertStringContainsString('return $this->request->request();', $requestContextSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::REQUEST_INPUT);', $requestInputRequestContextSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::REQUEST);', $requestInstanceRequestContextSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::HEADER_WRITER);', $headerContextSource);
+        $this->assertStringContainsString('new application_session_support_factory_dependencies($container)', $factorySource);
+        $this->assertStringContainsString('new application_session_state_factory_dependencies($container)', $factorySource);
+        $this->assertStringContainsString('new application_session_cache_factory_dependencies($container)', $factorySource);
+        $this->assertStringContainsString('return $this->support->errorFactory();', $factorySource);
+        $this->assertStringContainsString('return $this->state->sessionFactory();', $factorySource);
+        $this->assertStringContainsString('return $this->cache->cacheFactory();', $factorySource);
+        $this->assertStringContainsString('new application_session_error_factory_support_factory_dependencies($container)', $supportFactorySource);
+        $this->assertStringContainsString('new application_session_date_factory_support_factory_dependencies($container)', $supportFactorySource);
+        $this->assertStringContainsString('return $this->errorFactory->errorFactory();', $supportFactorySource);
+        $this->assertStringContainsString('return $this->dateFactory->dateFactory();', $supportFactorySource);
+        $this->assertStringContainsString('return fn(): mixed => $this->container->get(service_id::ERROR);', $errorFactorySupportFactorySource);
+        $this->assertStringContainsString('return fn(string $date): mixed => $this->container->get(service_id::DATE, $date);', $dateFactorySupportFactorySource);
+        $this->assertStringContainsString('new application_session_session_factory_state_factory_dependencies($container)', $stateFactorySource);
+        $this->assertStringContainsString('new application_session_cookie_factory_state_factory_dependencies($container)', $stateFactorySource);
+        $this->assertStringContainsString('return $this->sessionFactory->sessionFactory();', $stateFactorySource);
+        $this->assertStringContainsString('return $this->cookieFactory->cookieFactory();', $stateFactorySource);
+        $this->assertStringContainsString('return fn(string $namespace, string $group): mixed => $this->container->get(service_id::SESSION, $namespace, $group);', $sessionFactoryStateFactorySource);
+        $this->assertStringContainsString('return fn(mixed $path, mixed $domain): mixed => $this->container->get(service_id::COOKIE, $path, $domain);', $cookieFactoryStateFactorySource);
+        $this->assertStringContainsString('return fn(string $type): mixed => $this->container->get(service_id::CACHE, $type);', $cacheFactorySource);
+        $this->assertStringContainsString('new application_session_native_runtime_dependencies($container)', $runtimeSource);
+        $this->assertStringContainsString('new application_session_bootstrap_runtime_dependencies($container)', $runtimeSource);
+        $this->assertStringContainsString('new application_session_array_runtime_dependencies($container)', $runtimeSource);
+        $this->assertStringContainsString('return $this->native->pearHttpSessionLoader();', $runtimeSource);
+        $this->assertStringContainsString('return $this->bootstrap->bootstrapRuntime();', $runtimeSource);
+        $this->assertStringContainsString('return $this->array->arrayValueReader();', $runtimeSource);
+        $this->assertStringContainsString('new application_session_pear_http_session_loader_native_runtime_dependencies($container)', $nativeRuntimeSource);
+        $this->assertStringContainsString('new application_session_native_session_native_runtime_dependencies($container)', $nativeRuntimeSource);
+        $this->assertStringContainsString('return $this->pearHttpSessionLoader->pearHttpSessionLoader();', $nativeRuntimeSource);
+        $this->assertStringContainsString('return $this->nativeSession->nativeSession();', $nativeRuntimeSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::PEAR_HTTP_SESSION_LOADER);', $pearHttpSessionLoaderNativeRuntimeSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::NATIVE_SESSION);', $nativeSessionNativeRuntimeSource);
+        $this->assertStringContainsString('new application_session_bootstrap_bootstrap_runtime_dependencies($container)', $bootstrapRuntimeSource);
+        $this->assertStringContainsString('new application_session_php_runtime_settings_bootstrap_runtime_dependencies($container)', $bootstrapRuntimeSource);
+        $this->assertStringContainsString('return $this->bootstrapRuntime->bootstrapRuntime();', $bootstrapRuntimeSource);
+        $this->assertStringContainsString('return $this->phpRuntimeSettings->phpRuntimeSettings();', $bootstrapRuntimeSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::BOOTSTRAP_RUNTIME);', $bootstrapBootstrapRuntimeSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::PHP_RUNTIME_SETTINGS);', $phpRuntimeSettingsBootstrapRuntimeSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::ARRAY_VALUE_READER);', $arrayRuntimeSource);
+    }
+
+    public function testSessionCreatorPassesExplicitDependenciesToInjectedFactory(): void
     {
         $container = $this->containerWithSessionDependencies();
         $state = self::sessionState();
@@ -72,6 +197,35 @@ final class ApplicationSessionServiceCreatorTest extends TestCase
 
         $this->assertSame('shop-replaced', $received[1] ?? null);
         $this->assertSame('app', $received[2] ?? null);
+    }
+
+    public function testProjectServiceClassAvailabilityCheckIsInjected(): void
+    {
+        $checkedClasses = [];
+        $creator = new application_session_service_creator(
+            null,
+            static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return false;
+            }
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Service "session" does not expose a project class.');
+
+        try {
+            $creator->createSessionService(
+                $this->containerWithSessionDependencies(),
+                self::sessionState(),
+                static fn(): object => new stdClass(),
+                static fn(): object => new stdClass(),
+                'profile',
+                'custom'
+            );
+        } finally {
+            $this->assertSame(['\fan\project\service\session'], $checkedClasses);
+        }
     }
 
     public function testNullGroupUsesInjectedFatalExceptionFactory(): void

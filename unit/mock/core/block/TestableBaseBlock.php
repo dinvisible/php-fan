@@ -108,6 +108,11 @@ class TestableBaseBlock extends base
         return $this->_setTemplate($templateName);
     }
 
+    public function exposeTemplateService(mixed ...$arguments): object
+    {
+        return $this->templateService(...$arguments);
+    }
+
     public function exposeGetTplSuffixes($separator = '_'): array
     {
         return $this->_getTplSuffixes($separator);

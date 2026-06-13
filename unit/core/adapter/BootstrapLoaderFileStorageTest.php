@@ -53,6 +53,55 @@ final class BootstrapLoaderFileStorageTest extends TestCase
             $storage->unregisterAutoload($loader);
         }
     }
+
+    public function testSymbolAvailabilityCheckIsInjected(): void
+    {
+        $checkedSymbols = [];
+        $storage = new bootstrap_loader_file_storage(
+            static function (string $name) use (&$checkedSymbols): bool {
+                $checkedSymbols[] = $name;
+
+                return $name === 'KnownSymbol';
+            }
+        );
+
+        $this->assertTrue($storage->symbolExists('KnownSymbol'));
+        $this->assertFalse($storage->symbolExists('MissingSymbol'));
+        $this->assertSame(['KnownSymbol', 'MissingSymbol'], $checkedSymbols);
+    }
+
+    public function testFileLoadingIsInjected(): void
+    {
+        $loadCalls = [];
+        $storage = new bootstrap_loader_file_storage(
+            null,
+            static function (string $path, int $way) use (&$loadCalls): array {
+                $loadCalls[] = [$path, $way];
+
+                return ['loaded' => $path, 'way' => $way];
+            }
+        );
+
+        $this->assertSame(
+            ['loaded' => '/virtual/load.php', 'way' => 2],
+            $storage->load('/virtual/load.php', 2)
+        );
+        $this->assertSame([['/virtual/load.php', 2]], $loadCalls);
+    }
+
+    public function testSourceKeepsSymbolAvailabilityBehindNamedBoundary(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/core/adapter/bootstrap_loader_file_storage.php');
+
+        $this->assertIsString($source);
+        $this->assertStringContainsString('private \Closure $symbolExists;', $source);
+        $this->assertStringContainsString('private \Closure $fileLoader;', $source);
+        $this->assertStringContainsString('public function __construct(?callable $symbolExists = null, ?callable $fileLoader = null)', $source);
+        $this->assertStringContainsString('public function symbolExists(string $name): bool', $source);
+        $this->assertStringContainsString('return ($this->symbolExists)($name);', $source);
+        $this->assertStringContainsString('return ($this->fileLoader)($path, $way);', $source);
+        $this->assertStringNotContainsString('return class_exists($name, false)', $source);
+    }
 }
 
 final class BootstrapLoaderFileStorageAliasSource

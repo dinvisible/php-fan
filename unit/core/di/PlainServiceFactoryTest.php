@@ -110,6 +110,7 @@ final class PlainServiceFactoryTest extends TestCase
             $runtime,
             $configurator,
             $cacheFactory,
+            null,
         ], $configuredCalls[0][1] ?? null);
     }
 
@@ -135,7 +136,8 @@ final class PlainServiceFactoryProbe
         public $controllerFactory,
         public object $serviceBootstrapRuntime,
         public object $serviceConfigurator,
-        public $serviceCacheFactory
+        public $serviceCacheFactory,
+        public $controllerClassExists = null
     ) {
     }
 }
@@ -213,5 +215,4 @@ final class PlainServiceFactoryConfigDouble
         return $default;
     }
 }
-
 

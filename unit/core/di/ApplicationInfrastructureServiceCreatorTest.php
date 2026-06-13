@@ -134,6 +134,33 @@ final class ApplicationInfrastructureServiceCreatorTest extends TestCase
         $this->assertSame($container->get('file_system_storage'), $fileSystemCalls[0][2] ?? null);
     }
 
+    public function testProjectServiceClassAvailabilityCheckIsInjected(): void
+    {
+        $checkedClasses = [];
+        $creator = new application_infrastructure_service_creator(
+            null,
+            static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return false;
+            }
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Service "json" does not expose a project class.');
+
+        try {
+            $creator->createJsonService(
+                $this->containerWithInfrastructureDependencies(),
+                new ApplicationInfrastructureStateDouble(),
+                static fn(): object => (object)['service' => 'json'],
+                true
+            );
+        } finally {
+            $this->assertSame(['\\' . json::class], $checkedClasses);
+        }
+    }
+
     public function testCacheCreatorUsesInjectedServiceExceptionFactoryWhenDefaultTypeIsMissing(): void
     {
         $calls = [];
@@ -237,6 +264,171 @@ final class ApplicationInfrastructureServiceCreatorTest extends TestCase
                 ['It\'s inpossible to get config-Instance by usual way.', E_USER_ERROR, null],
             ], $calls);
         }
+    }
+
+    public function testInfrastructureCreatorUsesConfigCacheDependencyBundle(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_service_creator.php');
+        $dependenciesSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_dependencies.php');
+        $factorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_factory_dependencies.php');
+        $configFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_config_factory_dependencies.php');
+        $configInstanceSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_config_instance_dependencies.php');
+        $typedConfigFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_typed_config_factory_dependencies.php');
+        $cacheFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_cache_factory_dependencies.php');
+        $configCacheFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_config_cache_factory_dependencies.php');
+        $typeCacheFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_type_cache_factory_dependencies.php');
+        $supportSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_support_dependencies.php');
+        $runtimeSupportSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_runtime_support_dependencies.php');
+        $bootstrapRuntimeSupportSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_bootstrap_runtime_support_dependencies.php');
+        $errorFactoryRuntimeSupportSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_error_factory_runtime_support_dependencies.php');
+        $loaderSerializerSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_loader_serializer_dependencies.php');
+        $phpArrayFileLoaderSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_php_array_file_loader_dependencies.php');
+        $serializerOperationsSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_serializer_operations_dependencies.php');
+        $classHelperSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_class_helper_dependencies.php');
+        $storageSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_storage_dependencies.php');
+        $cacheSourceFileMetadataStorageSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_cache_source_file_metadata_storage_dependencies.php');
+        $configSourceFileStorageSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_config_source_file_storage_dependencies.php');
+        $exceptionSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_exception_dependencies.php');
+        $exceptionFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_exception_factory_dependencies.php');
+        $coreFatalExceptionFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_core_fatal_exception_factory_dependencies.php');
+        $error500ExceptionFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_error500_exception_factory_dependencies.php');
+        $requestHeaderSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_request_header_dependencies.php');
+        $requestInputSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_request_input_dependencies.php');
+        $headerWriterSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_config_cache_header_writer_dependencies.php');
+        $serviceDependenciesSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_service_dependencies.php');
+        $runtimeSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_runtime_dependencies.php');
+        $runtimeErrorSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_runtime_error_dependencies.php');
+        $runtimeErrorFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_runtime_error_factory_dependencies.php');
+        $runtimeBootstrapRuntimeErrorSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_runtime_bootstrap_runtime_error_dependencies.php');
+        $runtimeConfigCacheSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_runtime_config_cache_dependencies.php');
+        $runtimeConfigSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_runtime_config_dependencies.php');
+        $runtimeCacheFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_runtime_cache_factory_dependencies.php');
+        $serviceStorageSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_infrastructure_storage_dependencies.php');
+
+        $this->assertIsString($source);
+        $this->assertIsString($dependenciesSource);
+        $this->assertIsString($factorySource);
+        $this->assertIsString($configFactorySource);
+        $this->assertIsString($configInstanceSource);
+        $this->assertIsString($typedConfigFactorySource);
+        $this->assertIsString($cacheFactorySource);
+        $this->assertIsString($configCacheFactorySource);
+        $this->assertIsString($typeCacheFactorySource);
+        $this->assertIsString($supportSource);
+        $this->assertIsString($runtimeSupportSource);
+        $this->assertIsString($bootstrapRuntimeSupportSource);
+        $this->assertIsString($errorFactoryRuntimeSupportSource);
+        $this->assertIsString($loaderSerializerSource);
+        $this->assertIsString($phpArrayFileLoaderSource);
+        $this->assertIsString($serializerOperationsSource);
+        $this->assertIsString($classHelperSource);
+        $this->assertIsString($storageSource);
+        $this->assertIsString($cacheSourceFileMetadataStorageSource);
+        $this->assertIsString($configSourceFileStorageSource);
+        $this->assertIsString($exceptionSource);
+        $this->assertIsString($exceptionFactorySource);
+        $this->assertIsString($coreFatalExceptionFactorySource);
+        $this->assertIsString($error500ExceptionFactorySource);
+        $this->assertIsString($requestHeaderSource);
+        $this->assertIsString($requestInputSource);
+        $this->assertIsString($headerWriterSource);
+        $this->assertIsString($serviceDependenciesSource);
+        $this->assertIsString($runtimeSource);
+        $this->assertIsString($runtimeErrorSource);
+        $this->assertIsString($runtimeErrorFactorySource);
+        $this->assertIsString($runtimeBootstrapRuntimeErrorSource);
+        $this->assertIsString($runtimeConfigCacheSource);
+        $this->assertIsString($runtimeConfigSource);
+        $this->assertIsString($runtimeCacheFactorySource);
+        $this->assertIsString($serviceStorageSource);
+        $this->assertStringContainsString('private static function serviceDependencies(container_interface $container): application_infrastructure_service_dependencies', $source);
+        $this->assertStringContainsString('return new application_infrastructure_service_dependencies($container);', $source);
+        $this->assertStringContainsString('private static function configCacheDependencies(container_interface $container): application_infrastructure_config_cache_dependencies', $source);
+        $this->assertStringContainsString('return new application_infrastructure_config_cache_dependencies($container);', $source);
+        $this->assertStringContainsString('$infrastructureDependencies = self::configCacheDependencies($container);', $source);
+        $this->assertStringContainsString('$infrastructureDependencies = self::serviceDependencies($container);', $source);
+        $this->assertStringContainsString('$infrastructureDependencies->configFactory()', $source);
+        $this->assertStringContainsString('$infrastructureDependencies->cacheSourceFileMetadata()', $source);
+        $this->assertStringContainsString('$infrastructureDependencies->fileSystemStorage()', $source);
+        $this->assertStringContainsString('final class application_infrastructure_config_cache_dependencies', $dependenciesSource);
+        $this->assertStringContainsString('$this->factory = new application_infrastructure_config_cache_factory_dependencies($container);', $dependenciesSource);
+        $this->assertStringContainsString('$this->support = new application_infrastructure_config_cache_support_dependencies($container);', $dependenciesSource);
+        $this->assertStringContainsString('$this->storage = new application_infrastructure_config_cache_storage_dependencies($container);', $dependenciesSource);
+        $this->assertStringContainsString('$this->exception = new application_infrastructure_config_cache_exception_dependencies($container);', $dependenciesSource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_config_factory_dependencies($container)', $factorySource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_cache_factory_dependencies($container)', $factorySource);
+        $this->assertStringContainsString('return $this->config->configFactory();', $factorySource);
+        $this->assertStringContainsString('return $this->cache->cacheFactory();', $factorySource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_config_instance_dependencies($container)', $configFactorySource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_typed_config_factory_dependencies($container)', $configFactorySource);
+        $this->assertStringContainsString('return $this->config->config();', $configFactorySource);
+        $this->assertStringContainsString('return $this->configFactory->configFactory();', $configFactorySource);
+        $this->assertStringContainsString('return $this->container->get(service_id::CONFIG);', $configInstanceSource);
+        $this->assertStringContainsString('return fn(string $configType = \'service\', string $sourceType = \'arr\'): mixed => $this->container->get(service_id::CONFIG, $configType, $sourceType);', $typedConfigFactorySource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_config_cache_factory_dependencies($container)', $cacheFactorySource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_type_cache_factory_dependencies($container)', $cacheFactorySource);
+        $this->assertStringContainsString('return $this->configCacheFactory->configCacheFactory();', $cacheFactorySource);
+        $this->assertStringContainsString('return $this->cacheFactory->cacheFactory();', $cacheFactorySource);
+        $this->assertStringContainsString('return fn(): mixed => $this->container->get(service_id::CONFIG_CACHE);', $configCacheFactorySource);
+        $this->assertStringContainsString('return fn(string $type): mixed => $this->container->get(service_id::CACHE, $type);', $typeCacheFactorySource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_runtime_support_dependencies($container)', $supportSource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_loader_serializer_dependencies($container)', $supportSource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_class_helper_dependencies($container)', $supportSource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_bootstrap_runtime_support_dependencies($container)', $runtimeSupportSource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_error_factory_runtime_support_dependencies($container)', $runtimeSupportSource);
+        $this->assertStringContainsString('return $this->bootstrapRuntime->bootstrapRuntime();', $runtimeSupportSource);
+        $this->assertStringContainsString('return $this->errorFactory->errorFactory();', $runtimeSupportSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::BOOTSTRAP_RUNTIME);', $bootstrapRuntimeSupportSource);
+        $this->assertStringContainsString('return fn(): mixed => $this->container->get(service_id::ERROR);', $errorFactoryRuntimeSupportSource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_php_array_file_loader_dependencies($container)', $loaderSerializerSource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_serializer_operations_dependencies($container)', $loaderSerializerSource);
+        $this->assertStringContainsString('return $this->phpArrayFileLoader->phpArrayFileLoader();', $loaderSerializerSource);
+        $this->assertStringContainsString('return $this->serializerOperations->serializerOperations();', $loaderSerializerSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::PHP_ARRAY_FILE_LOADER);', $phpArrayFileLoaderSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::SERIALIZER_OPERATIONS);', $serializerOperationsSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::SHORT_CLASS_NAME_RESOLVER);', $classHelperSource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_cache_source_file_metadata_storage_dependencies($container)', $storageSource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_config_source_file_storage_dependencies($container)', $storageSource);
+        $this->assertStringContainsString('return $this->cacheSourceFileMetadata->cacheSourceFileMetadata();', $storageSource);
+        $this->assertStringContainsString('return $this->configSourceFileStorage->configSourceFileStorage();', $storageSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::CACHE_SOURCE_FILE_METADATA);', $cacheSourceFileMetadataStorageSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::CONFIG_SOURCE_FILE_STORAGE);', $configSourceFileStorageSource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_exception_factory_dependencies($container)', $exceptionSource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_request_header_dependencies($container)', $exceptionSource);
+        $this->assertStringContainsString('return $this->exceptionFactory->coreFatalExceptionFactory();', $exceptionSource);
+        $this->assertStringContainsString('return $this->requestHeader->headerWriter();', $exceptionSource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_core_fatal_exception_factory_dependencies($container)', $exceptionFactorySource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_error500_exception_factory_dependencies($container)', $exceptionFactorySource);
+        $this->assertStringContainsString('return $this->coreFatalExceptionFactory->coreFatalExceptionFactory();', $exceptionFactorySource);
+        $this->assertStringContainsString('return $this->error500ExceptionFactory->error500ExceptionFactory();', $exceptionFactorySource);
+        $this->assertStringContainsString('return $this->container->get(service_id::CORE_FATAL_EXCEPTION_FACTORY);', $coreFatalExceptionFactorySource);
+        $this->assertStringContainsString('return $this->container->get(service_id::ERROR500_EXCEPTION_FACTORY);', $error500ExceptionFactorySource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_request_input_dependencies($container)', $requestHeaderSource);
+        $this->assertStringContainsString('new application_infrastructure_config_cache_header_writer_dependencies($container)', $requestHeaderSource);
+        $this->assertStringContainsString('return $this->requestInput->requestInput();', $requestHeaderSource);
+        $this->assertStringContainsString('return $this->headerWriter->headerWriter();', $requestHeaderSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::REQUEST_INPUT);', $requestInputSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::HEADER_WRITER);', $headerWriterSource);
+        $this->assertStringContainsString('final class application_infrastructure_service_dependencies', $serviceDependenciesSource);
+        $this->assertStringContainsString('new application_infrastructure_runtime_dependencies($container)', $serviceDependenciesSource);
+        $this->assertStringContainsString('new application_infrastructure_storage_dependencies($container)', $serviceDependenciesSource);
+        $this->assertStringContainsString('new application_infrastructure_runtime_error_dependencies($container)', $runtimeSource);
+        $this->assertStringContainsString('new application_infrastructure_runtime_config_cache_dependencies($container)', $runtimeSource);
+        $this->assertStringContainsString('return $this->runtimeError->bootstrapRuntime();', $runtimeSource);
+        $this->assertStringContainsString('return $this->configCache->cacheFactory();', $runtimeSource);
+        $this->assertStringContainsString('new application_infrastructure_runtime_error_factory_dependencies($container)', $runtimeErrorSource);
+        $this->assertStringContainsString('new application_infrastructure_runtime_bootstrap_runtime_error_dependencies($container)', $runtimeErrorSource);
+        $this->assertStringContainsString('return $this->errorFactory->errorFactory();', $runtimeErrorSource);
+        $this->assertStringContainsString('return $this->bootstrapRuntime->bootstrapRuntime();', $runtimeErrorSource);
+        $this->assertStringContainsString('return fn(): mixed => $this->container->get(service_id::ERROR);', $runtimeErrorFactorySource);
+        $this->assertStringContainsString('return $this->container->get(service_id::BOOTSTRAP_RUNTIME);', $runtimeBootstrapRuntimeErrorSource);
+        $this->assertStringContainsString('new application_infrastructure_runtime_config_dependencies($container)', $runtimeConfigCacheSource);
+        $this->assertStringContainsString('new application_infrastructure_runtime_cache_factory_dependencies($container)', $runtimeConfigCacheSource);
+        $this->assertStringContainsString('return $this->config->config();', $runtimeConfigCacheSource);
+        $this->assertStringContainsString('return $this->cacheFactory->cacheFactory();', $runtimeConfigCacheSource);
+        $this->assertStringContainsString('return $this->container->get(service_id::CONFIG);', $runtimeConfigSource);
+        $this->assertStringContainsString('return fn(string $type): mixed => $this->container->get(service_id::CACHE, $type);', $runtimeCacheFactorySource);
+        $this->assertStringContainsString('return $this->container->get(service_id::FILE_SYSTEM_STORAGE);', $serviceStorageSource);
     }
 
     private function containerWithInfrastructureDependencies(

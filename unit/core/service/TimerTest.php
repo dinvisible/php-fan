@@ -236,6 +236,45 @@ class ServiceTimerTest extends SourceFileContractTestCase
         $this->assertSame([], $error->messages);
     }
 
+    public function testRunProgramUsesInjectedClassAvailabilityCheck(): void
+    {
+        $checkedClasses = [];
+        $factoryCalls = [];
+        $error = new ServiceTimerErrorDouble();
+        $row = new row('UnavailableProgram', 'run', []);
+        $timer = $this->timer();
+        $timer->setBaseNamespace('\fan\project\timer');
+        $timer->setTimerDependencies(
+            new ServiceTimerRuntimeDouble(),
+            static fn(?string $date = null, mixed $format = null): object => new ServiceTimerDateDouble(),
+            static fn(): object => new stdClass(),
+            static fn(): object => $error,
+            static fn(): object => new ServiceTimerLogDouble(),
+            static fn(string $name): object => (object)['name' => $name],
+            static function (string $className) use (&$factoryCalls): object {
+                $factoryCalls[] = $className;
+
+                return new stdClass();
+            },
+            static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return false;
+            }
+        );
+
+        $timer->exposeRunProgram($row);
+
+        $this->assertSame(['\fan\project\timer\UnavailableProgram'], $checkedClasses);
+        $this->assertSame([], $factoryCalls);
+        $this->assertSame([
+            [
+                'Class "\fan\project\timer\UnavailableProgram" for timer doesn\'t exists.',
+                'Error run timer proggamm',
+            ],
+        ], $error->messages);
+    }
+
     public function testConstructorUsesInjectedBaseServiceDependencies(): void
     {
         $this->ensureBaseFunctionAliases();
@@ -299,7 +338,10 @@ class ServiceTimerTest extends SourceFileContractTestCase
         $this->assertStringContainsString('parent::__construct(true, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);', $this->sourceCode());
         $this->assertStringNotContainsString('parent::__construct();', $this->sourceCode());
         $this->assertStringContainsString('$timerProgramFactory', $this->sourceCode());
+        $this->assertStringContainsString('private ?\Closure $timerClassExists = null;', $this->sourceCode());
+        $this->assertStringContainsString('$this->timerClassExists($className)', $this->sourceCode());
         $this->assertStringNotContainsString('new $className()', $this->sourceCode());
+        $this->assertStringNotContainsString('if (!class_exists($className))', $this->sourceCode());
     }
 
     private function ensureBaseFunctionAliases(): void

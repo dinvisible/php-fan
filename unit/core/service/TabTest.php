@@ -414,6 +414,23 @@ class GeneratedPendingServiceTabTest extends SourceFileContractTestCase
         $tab->getViewDefiner();
     }
 
+    public function testViewClassAvailabilityUsesInjectedChecker(): void
+    {
+        $checkedClasses = [];
+        $tab = $this->makeTabService();
+        $tab->setTabDependencies(
+            viewClassExists: static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return true;
+            }
+        );
+
+        $this->assertSame($tab, $tab->exposeSetViewClass('Json'));
+        $this->assertSame(['\fan\project\view\parser\Json'], $checkedClasses);
+        $this->assertSame('\fan\project\view\parser\Json', $tab->getViewClass());
+    }
+
     public function testSourceNoLongerCallsContainerServiceDirectly(): void
     {
         $source = $this->sourceCode();
@@ -421,6 +438,9 @@ class GeneratedPendingServiceTabTest extends SourceFileContractTestCase
         $this->assertStringNotContainsString('containerService(', $source);
         $this->assertStringNotContainsString('resolveService(', $source);
         $this->assertStringNotContainsString('serviceFactory', $source);
+        $this->assertStringContainsString('protected mixed $viewClassExists = null;', $source);
+        $this->assertStringContainsString('$this->viewClassExists($class)', $source);
+        $this->assertStringNotContainsString('if (!class_exists($class, true))', $source);
     }
 
     public function testErrorTransferStateIsInjectedInsteadOfStaticStorage(): void
@@ -487,6 +507,11 @@ class GeneratedPendingServiceTabTest extends SourceFileContractTestCase
             public function exposeGetRootMeta(): array
             {
                 return $this->_getRootMeta();
+            }
+
+            public function exposeSetViewClass(string $viewClass): static
+            {
+                return $this->_setViewClass($viewClass);
             }
         };
 

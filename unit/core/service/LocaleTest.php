@@ -174,12 +174,48 @@ class ServiceLocaleTest extends SourceFileContractTestCase
         $this->assertSame(['lng', 'fr', 3600], $cookieFactory->cookie->lastSetByTime);
     }
 
+    public function testSessionAvailabilityUsesInjectedLoadedClassCheck(): void
+    {
+        $checkedClasses = [];
+        $sessionFactoryCalls = 0;
+        $locale = $this->localeService();
+        $locale->setLocaleDependencies(
+            null,
+            null,
+            static function () use (&$sessionFactoryCalls): object {
+                $sessionFactoryCalls++;
+
+                return new ServiceLocaleSessionDouble();
+            },
+            null,
+            null,
+            null,
+            null,
+            static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return false;
+            }
+        );
+
+        $method = new ReflectionMethod(locale::class, '_getSession');
+
+        $this->assertNull($method->invoke($locale, false));
+        $this->assertSame(['\fan\core\service\session'], $checkedClasses);
+        $this->assertSame(0, $sessionFactoryCalls);
+    }
+
     public function testLocaleServiceNoLongerFallsBackToServiceLocator(): void
     {
         $source = $this->sourceCode();
 
         $this->assertStringNotContainsString('getContainerService(', $source);
         $this->assertStringNotContainsString('containerService(', $source);
+        $this->assertStringContainsString('private ?\Closure $localeLoadedClassExists = null;', $source);
+        $this->assertStringContainsString('$this->localeLoadedClassExists(\'\fan\core\service\session\')', $source);
+        $this->assertStringContainsString('$this->localeLoadedClassExists(\'\fan\core\service\matcher\')', $source);
+        $this->assertStringNotContainsString('class_exists(\'\fan\core\service\session\', false)', $source);
+        $this->assertStringNotContainsString('class_exists(\'\fan\core\service\matcher\', false)', $source);
     }
 
     private function ensureBaseHelper(): void

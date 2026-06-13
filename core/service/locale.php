@@ -106,6 +106,8 @@ class locale extends single
      */
     private $arrayAdducer = null;
 
+    private ?\Closure $localeLoadedClassExists = null;
+
     /**
      * If is locale defined
      * @var boolean
@@ -124,11 +126,12 @@ class locale extends single
         ?object $serviceConfigurator = null,
         ?callable $serviceCacheFactory = null,
         ?callable $arrayAdducer = null,
-        ?callable $classNameResolver = null
+        ?callable $classNameResolver = null,
+        ?callable $loadedClassExists = null
     )
     {
         parent::__construct($allowIni, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory, null, null, $classNameResolver);
-        $this->setLocaleDependencies($entityFactory, $tabFactory, $sessionFactory, $requestFactory, $cookieFactory, $matcherFactory, $arrayAdducer);
+        $this->setLocaleDependencies($entityFactory, $tabFactory, $sessionFactory, $requestFactory, $cookieFactory, $matcherFactory, $arrayAdducer, $loadedClassExists);
         $this->_setBasicProp();
 
         $this->_subscribeForService('application', 'setAppName',   [$this, 'onAppChange']);
@@ -147,7 +150,8 @@ class locale extends single
         ?callable $requestFactory = null,
         ?callable $cookieFactory = null,
         ?callable $matcherFactory = null,
-        ?callable $arrayAdducer = null
+        ?callable $arrayAdducer = null,
+        ?callable $loadedClassExists = null
     ): static
     {
         $this->localeEntityFactory = $entityFactory;
@@ -158,6 +162,9 @@ class locale extends single
         $this->localeMatcherFactory = $matcherFactory;
         if ($arrayAdducer !== null) {
             $this->arrayAdducer = \Closure::fromCallable($arrayAdducer);
+        }
+        if ($loadedClassExists !== null) {
+            $this->localeLoadedClassExists = \Closure::fromCallable($loadedClassExists);
         }
 
         return $this;
@@ -355,7 +362,7 @@ class locale extends single
 
     protected function _getSession(bool $forse = true): ?object
     {
-        if (empty($this->session) && (class_exists('\fan\core\service\session', false) || $forse)) {
+        if (empty($this->session) && ($this->localeLoadedClassExists('\fan\core\service\session') || $forse)) {
             $this->session = $this->localeSession('locale', 'service');
         }
         return $this->session;
@@ -396,7 +403,7 @@ class locale extends single
     protected function _defineLanguage(bool $forse = false): int
     {
         // Define by request in the matcher
-        if (class_exists('\fan\core\service\matcher', false)) {
+        if ($this->localeLoadedClassExists('\fan\core\service\matcher')) {
             if ($this->_setCurrentLanguage($this->_getLanguageByMatcher(), $forse)) {
                 return 1;
             }
@@ -564,6 +571,13 @@ class locale extends single
         }
 
         return $this->arrayAdducer;
+    }
+
+    private function localeLoadedClassExists(string $className): bool
+    {
+        $this->localeLoadedClassExists ??= static fn(string $loadedClassName): bool => class_exists($loadedClassName, false);
+
+        return ($this->localeLoadedClassExists)($className);
     }
 
     // ======== The magic methods ======== \\

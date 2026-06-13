@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use fan\core\di\application_support_service_registrar;
+use fan\core\di\application_support_service_dependencies_registrar_dependencies;
+use fan\core\di\application_support_service_registrar_dependencies;
 use fan\core\di\container;
 use PHPUnit\Framework\TestCase;
 use fan\core\di\plain_exception_factory;
@@ -39,13 +41,34 @@ final class ApplicationSupportServiceRegistrarTest extends TestCase
     public function testRegistrarOwnsSupportServiceGraphRegistrations(): void
     {
         $source = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_support_service_registrar.php');
+        $serviceDependenciesSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_support_service_dependencies_registrar_dependencies.php');
+        $registrarDependenciesSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_support_service_registrar_dependencies.php');
+        $bootstrapRuntimeDependencySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_support_bootstrap_runtime_registrar_dependencies.php');
+        $errorDemonstratorLoaderDependencySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_support_error_demonstrator_loader_registrar_dependencies.php');
+        $plainFileStorageDependencySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_support_plain_file_storage_registrar_dependencies.php');
         $containerSource = file_get_contents(dirname(__DIR__, 3) . '/core/factory/application_container_factory.php');
         $bundleSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_container_dependency_bundle.php');
 
         $this->assertIsString($source);
+        $this->assertIsString($serviceDependenciesSource);
+        $this->assertIsString($registrarDependenciesSource);
+        $this->assertIsString($bootstrapRuntimeDependencySource);
+        $this->assertIsString($errorDemonstratorLoaderDependencySource);
+        $this->assertIsString($plainFileStorageDependencySource);
         $this->assertIsString($containerSource);
         $this->assertIsString($bundleSource);
         $this->assertStringContainsString('final class application_support_service_registrar', $source);
+        $this->assertStringContainsString('final class application_support_service_dependencies_registrar_dependencies', $serviceDependenciesSource);
+        $this->assertStringContainsString('final class application_support_service_registrar_dependencies', $registrarDependenciesSource);
+        $this->assertStringContainsString('final class application_support_bootstrap_runtime_registrar_dependencies', $bootstrapRuntimeDependencySource);
+        $this->assertInstanceOf(
+            application_support_service_dependencies_registrar_dependencies::class,
+            new application_support_service_dependencies_registrar_dependencies($this->createStub(\fan\core\di\container_interface::class))
+        );
+        $this->assertInstanceOf(
+            application_support_service_registrar_dependencies::class,
+            new application_support_service_registrar_dependencies($this->createStub(\fan\core\di\container_interface::class))
+        );
         $this->assertStringNotContainsString("->factory('database_pool'", $source);
         $this->assertStringNotContainsString("->factory('database_connections'", $source);
         $this->assertStringContainsString('service_id::ARRAY_ADDUCER', $source);
@@ -58,27 +81,50 @@ final class ApplicationSupportServiceRegistrarTest extends TestCase
         $this->assertStringContainsString('service_id::REFLECTION_CLASS_FACTORY', $source);
         $this->assertStringContainsString('service_id::REQUEST_INPUT,', $source);
         $this->assertStringContainsString('service_id::CORE_FATAL_EXCEPTION_FACTORY', $source);
+        $this->assertStringContainsString('service_id::SERVICE_DEPENDENCIES', $source);
+        $this->assertStringContainsString('$dependencies->bootstrapRuntime()', $source);
+        $this->assertStringContainsString('$dependencies->config()', $source);
+        $this->assertStringContainsString('$dependencies->cacheFactory()', $source);
+        $this->assertStringContainsString('$dependencies->serviceEngineFactory()', $source);
+        $this->assertStringContainsString('$dependencies->serviceExceptionFactory()', $source);
+        $this->assertStringContainsString('$dependencies->classNameResolver()', $source);
+        $this->assertStringContainsString('$dependencies->arrayValueReader()', $source);
+        $this->assertStringContainsString('$dependencies->errorDemonstratorLoader()', $source);
+        $this->assertStringContainsString('$dependencies->plainFileStorage()', $source);
+        $this->assertStringContainsString('$dependencies->transferExceptionFactory()', $source);
+        $this->assertStringNotContainsString('$container->get(service_id::', $source);
+        $this->assertStringNotContainsString("new service_dependencies(\n                    \$container->get", $source);
+        $this->assertStringContainsString('return $this->container->get(service_id::BOOTSTRAP_RUNTIME);', $bootstrapRuntimeDependencySource);
+        $this->assertStringContainsString('return $this->container->get(service_id::ERROR_DEMONSTRATOR_LOADER);', $errorDemonstratorLoaderDependencySource);
+        $this->assertStringContainsString('return $this->container->get(service_id::PLAIN_FILE_STORAGE);', $plainFileStorageDependencySource);
         $this->assertStringContainsString('service_id::BOOTSTRAP_RUNTIME,', $source);
         $this->assertStringContainsString('service_id::DELAYED_META_FACTORY', $source);
         $this->assertStringContainsString('service_id::META_MAKER_FACTORY', $source);
-        $this->assertStringContainsString("new meta_maker_factory(\n                    \$container->get(service_id::DELAYED_META_FACTORY),\n                    \$container->get(service_id::RECURSIVE_MERGER),\n                    \$container->get(service_id::ARRAY_ADDUCER),\n                    \$container->get(service_id::CLASS_NAME_RESOLVER)", $source);
+        $this->assertStringContainsString('$dependencies->delayedMetaFactory()', $source);
+        $this->assertStringContainsString('$dependencies->recursiveMerger()', $source);
+        $this->assertStringContainsString('$dependencies->arrayAdducer()', $source);
         $this->assertStringContainsString('service_id::VIEW_KEEPER_FACTORY', $source);
         $this->assertStringContainsString('service_id::VIEW_LOADER_JSON_KEEPER_FACTORY', $source);
         $this->assertStringContainsString('service_id::VIEW_LOADER_TEXT_KEEPER_FACTORY', $source);
         $this->assertStringContainsString('service_id::VIEW_LOADER_STATE_FACTORY', $source);
         $this->assertStringContainsString('service_id::VIEW_ROUTER_FACTORY', $source);
-        $this->assertStringContainsString('new view_router_factory($container->get(service_id::VIEW_KEEPER_FACTORY), $container->get(service_id::ARRAY_ADDUCER))', $source);
+        $this->assertStringContainsString('$dependencies->viewLoaderJsonKeeperFactory()', $source);
+        $this->assertStringContainsString('$dependencies->viewLoaderTextKeeperFactory()', $source);
+        $this->assertStringContainsString('$dependencies->viewKeeperFactory()', $source);
         $this->assertStringContainsString('service_id::TRANSFER_EXCEPTION_FACTORY', $source);
         $this->assertStringNotContainsString("'template_exception_factory'", $source);
         $this->assertStringContainsString('service_id::ERROR500_EXCEPTION_FACTORY', $source);
         $this->assertStringContainsString('service_id::PLAIN_EXCEPTION_FACTORY', $source);
         $this->assertStringContainsString('new plain_exception_factory()', $source);
-        $this->assertStringContainsString('$container->get(service_id::CLASS_NAME_RESOLVER)', $source);
         $this->assertStringContainsString('service_id::BLOCK_CONTEXT,', $source);
         $this->assertStringContainsString('new block_context(', $source);
-        $this->assertStringContainsString('$container->get(service_id::REFLECTION_CLASS_FACTORY)', $source);
+        $this->assertStringContainsString('$dependencies->tabResolver()', $source);
+        $this->assertStringContainsString('$dependencies->bootstrapRuntimeResolver()', $source);
+        $this->assertStringContainsString('$dependencies->reflectionClassFactory()', $source);
         $this->assertStringContainsString('service_id::PLAIN_FILE_CONTEXT,', $source);
-        $this->assertStringContainsString('$container->get(service_id::PLAIN_EXCEPTION_FACTORY)', $source);
+        $this->assertStringContainsString('$dependencies->cacheFactory()', $source);
+        $this->assertStringContainsString('$dependencies->imageModifyFactory()', $source);
+        $this->assertStringContainsString('$dependencies->plainExceptionFactory()', $source);
         $this->assertStringNotContainsString('new \fan\project\exception\plain\fatal', $source);
         $this->assertStringContainsString('service_id::TRANSFER,', $source);
         $this->assertStringContainsString('public application_support_service_registrar $supportServiceRegistrar,', $bundleSource);

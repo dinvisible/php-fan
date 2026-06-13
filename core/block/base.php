@@ -174,8 +174,10 @@ abstract class base
     private mixed $metaMakerFactory = null;
     private mixed $phpArrayFileLoader = null;
     private mixed $metaRowFactory = null;
+    private \Closure $delayedMetaClassExists;
     private mixed $blockFactory = null;
     private mixed $blockExceptionFactory = null;
+    private \Closure $blockExceptionClassExists;
     private ?object $errorLogWriter = null;
     private mixed $uploadSizeLimitProviderDependency = null;
     private ?object $fileStorage = null;
@@ -230,6 +232,8 @@ abstract class base
 
     public function setBlockDependencies(array $dependencies): static
     {
+        $dependencies = array_merge((new base_dependency_defaults())->dependencies(), $dependencies);
+
         if (isset($dependencies['tab'])) {
             $this->tab = $dependencies['tab'];
         }
@@ -271,11 +275,17 @@ abstract class base
         if (isset($dependencies['metaRowFactory'])) {
             $this->metaRowFactory = $dependencies['metaRowFactory'];
         }
+        if (isset($dependencies['delayedMetaClassExists'])) {
+            $this->delayedMetaClassExists = \Closure::fromCallable($dependencies['delayedMetaClassExists']);
+        }
         if (isset($dependencies['blockFactory'])) {
             $this->blockFactory = $dependencies['blockFactory'];
         }
         if (isset($dependencies['blockExceptionFactory'])) {
             $this->blockExceptionFactory = $dependencies['blockExceptionFactory'];
+        }
+        if (isset($dependencies['blockExceptionClassExists'])) {
+            $this->blockExceptionClassExists = \Closure::fromCallable($dependencies['blockExceptionClassExists']);
         }
         if (isset($dependencies['imageMetadataReader'])) {
             $this->imageMetadataReader = $dependencies['imageMetadataReader'];
@@ -311,6 +321,7 @@ abstract class base
             'arrayLikeChecker',
             'shortClassNameResolver',
             'pagerFactory',
+            'templateFactory',
             'applicationFactory',
             'obfuscatorFactory',
             'imageModifyFactory',
@@ -333,60 +344,7 @@ abstract class base
 
     private function resolveBlockDependencies(?object $tab, ?container_interface $container): array
     {
-        if ($tab !== null && method_exists($tab, 'getBlockDependencies')) {
-            return $tab->getBlockDependencies();
-        }
-
-        if ($container === null) {
-            return [];
-        }
-
-        return [
-            'tab' => $container->get('tab'),
-            'requestFactory' => static fn(): mixed => $container->get('request'),
-            'roleFactory' => static fn(): mixed => $container->get('role'),
-            'sessionFactory' => static fn(string $nameSpace, string $group = 'block'): mixed => $container->get('session', $nameSpace, $group),
-            'reflectorFactory' => static fn(): mixed => $container->get('reflector'),
-            'runtime' => $container->get('bootstrap_runtime'),
-            'localeFactory' => static fn(): mixed => $container->get('locale'),
-            'entityFactory' => static fn(mixed ...$arguments): mixed => $container->get('entity', ...$arguments),
-            'matcherFactory' => static fn(): mixed => $container->get('matcher'),
-            'requestInputFactory' => static fn(): mixed => $container->get('request_input'),
-            'jsonFactory' => static fn(mixed ...$arguments): mixed => $container->get('json', ...$arguments),
-            'dataLoaderFactory' => static fn(): mixed => $container->get('data_loader'),
-            'arrayAdducer' => $container->get('array_adducer'),
-            'recursiveMerger' => $container->get('recursive_merger'),
-            'arrayValueReader' => $container->get('array_value_reader'),
-            'arrayLikeChecker' => $container->get('array_like_checker'),
-            'shortClassNameResolver' => $container->get('short_class_name_resolver'),
-            'pagerFactory' => static fn(mixed ...$arguments): mixed => $container->get('pager', ...$arguments),
-            'applicationFactory' => static fn(): mixed => $container->get('application'),
-            'obfuscatorFactory' => static fn(mixed ...$arguments): mixed => $container->get('obfuscator', ...$arguments),
-            'imageModifyFactory' => static fn(mixed ...$arguments): mixed => $container->get('image_modify', ...$arguments),
-            'imageMetadataReader' => $container->get('image_metadata_reader'),
-            'errorLogWriter' => $container->get('error_log_writer'),
-            'blockFileStorage' => $container->has('block_file_storage') ? $container->get('block_file_storage') : null,
-            'metaFileStorage' => $container->has('meta_file_storage') ? $container->get('meta_file_storage') : null,
-            'projectToolFileStorage' => $container->has('project_tool_file_storage') ? $container->get('project_tool_file_storage') : null,
-            'rootHtmlFileStorage' => $container->has('root_html_file_storage') ? $container->get('root_html_file_storage') : null,
-            'configFactory' => static fn(mixed ...$arguments): mixed => $container->get('config', ...$arguments),
-            'databaseFactory' => static fn(mixed ...$arguments): mixed => $container->get('database', ...$arguments),
-            'userFactory' => static fn(mixed ...$arguments): mixed => $container->get('user', ...$arguments),
-            'logFactory' => null,
-            'transferFactory' => static fn(mixed ...$arguments): mixed => $container->get('transfer', ...$arguments),
-            'errorFactory' => static fn(): mixed => $container->get('error'),
-            'dateFactory' => static fn(mixed ...$arguments): mixed => $container->get('date', ...$arguments),
-            'viewParserExceptionFactory' => $container->get('error500_exception_factory'),
-            'viewRouterFactory' => $container->get('view_router_factory'),
-            'viewLoaderState' => $container->get('view_loader_state'),
-            'metaMakerState' => $container->get('meta_maker_state'),
-            'metaMakerFactory' => $container->get('meta_maker_factory'),
-            'phpArrayFileLoader' => $container->get('php_array_file_loader'),
-            'metaRowFactory' => $container->get('meta_row_factory'),
-            'blockFactory' => $container->get('block_factory'),
-            'blockExceptionFactory' => $container->get('block_exception_factory'),
-            'uploadSizeLimitProvider' => $container->has('upload_size_limit_provider') ? $container->get('upload_size_limit_provider') : null,
-        ];
+        return (new base_dependency_resolver())->resolve($tab, $container);
     }
 
     protected function getBlockDependencyArguments(): array
@@ -762,11 +720,20 @@ abstract class base
     public function setDynamicMeta(): static
     {
         //ToDo: Replace \fan\core\base\meta\delayed to special Flag in \fan\core\base\meta\row
-        if (class_exists('\fan\core\base\meta\delayed', false)) {
+        if ($this->delayedMetaClassExists('\fan\core\base\meta\delayed')) {
             $this->makeDelayedMeta($this->meta);
         }
         $this->_makeDynamicMeta(true);
         return $this;
+    }
+
+    private function delayedMetaClassExists(string $className): bool
+    {
+        if (!isset($this->delayedMetaClassExists)) {
+            throw new \RuntimeException('Delayed meta class availability checker is not configured for block.');
+        }
+
+        return ($this->delayedMetaClassExists)($className);
     }
 
     public function getRoleCondition(): ?array
@@ -1237,11 +1204,20 @@ abstract class base
     protected function _makeBlockException(string $logErrMsg, string $type = 'local', ?string $exceptionDbOper = null, int $code = E_USER_NOTICE, ?\Exception $previous = null): never
     {
         $class = '\fan\project\exception\block\\' . $type;
-        if (!class_exists($class)) {
+        if (!$this->blockExceptionClassExists($class)) {
             $class = '\fan\project\exception\block\fatal';
         }
         $this->exceptionDbOper = empty($exceptionDbOper) ? ($class === '\fan\project\exception\block\local' ? 'nothing' : 'rollback' ) : $exceptionDbOper;
         throw $this->createBlockException($class, $logErrMsg, $code, $previous);
+    }
+
+    private function blockExceptionClassExists(string $class): bool
+    {
+        if (!isset($this->blockExceptionClassExists)) {
+            throw new \RuntimeException('Block exception class availability checker is not configured for block.');
+        }
+
+        return ($this->blockExceptionClassExists)($class);
     }
 
     private function createBlockException(string $class, string $logErrMsg, int $code, ?\Exception $previous): \Throwable

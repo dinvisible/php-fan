@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use fan\core\di\application_pager_service_registrar;
+use fan\core\di\application_pager_service_registrar_dependencies;
 use PHPUnit\Framework\TestCase;
 
 final class ApplicationPagerServiceRegistrarTest extends TestCase
@@ -11,17 +12,23 @@ final class ApplicationPagerServiceRegistrarTest extends TestCase
     {
         $source = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_service_registrar.php');
         $graphSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_service_graph_registrar.php');
+        $dependencySource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_pager_service_registrar_dependencies.php');
         $dependencyProviderSource = file_get_contents(dirname(__DIR__, 3) . '/core/di/application_container_dependency_provider.php');
         $registrarDefaultsProviderFactorySource = file_get_contents(dirname(__DIR__, 3) . '/core/factory/application_service_registrar_defaults_provider_factory.php');
 
         $this->assertIsString($source);
         $this->assertIsString($graphSource);
+        $this->assertIsString($dependencySource);
         $this->assertIsString($dependencyProviderSource);
         $this->assertIsString($registrarDefaultsProviderFactorySource);
         $this->assertStringContainsString('final class application_pager_service_registrar', $source);
+        $this->assertStringContainsString('final class application_pager_service_registrar_dependencies', $dependencySource);
         $this->assertStringContainsString('service_id::PAGER,', $source);
         $this->assertStringNotContainsString("'form',", $source);
         $this->assertStringContainsString('$pagerServiceCreator->createPagerService(', $source);
+        $this->assertStringContainsString('$dependenciesFactory($container)->pagerState()', $source);
+        $this->assertStringNotContainsString('->get(service_id::PAGER_STATE)', $source);
+        $this->assertStringContainsString('return $this->container->get(service_id::PAGER_STATE);', $dependencySource);
         $this->assertStringNotContainsString('createFormService(', $source);
         $this->assertStringContainsString('private application_pager_service_registrar $pagerServiceRegistrar', $graphSource);
         $this->assertStringContainsString('$this->pagerServiceRegistrar->register(', $graphSource);
@@ -34,5 +41,9 @@ final class ApplicationPagerServiceRegistrarTest extends TestCase
     public function testPagerRegistrarClassIsInstantiable(): void
     {
         $this->assertInstanceOf(application_pager_service_registrar::class, new application_pager_service_registrar());
+        $this->assertInstanceOf(
+            application_pager_service_registrar_dependencies::class,
+            new application_pager_service_registrar_dependencies($this->createStub(\fan\core\di\container_interface::class))
+        );
     }
 }

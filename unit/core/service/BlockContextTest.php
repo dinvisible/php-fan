@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use fan\core\service\block_context;
 use FanTest\core\SourceFileContractTestCase;
-use fan\core\di\container_interface;
 
 
 final class ServiceBlockContextTest extends SourceFileContractTestCase
@@ -14,25 +13,31 @@ final class ServiceBlockContextTest extends SourceFileContractTestCase
     public function testReturnsEmptyContextBeforeProjectTabClassIsLoaded(): void
     {
         $context = new block_context(
-            new class implements container_interface {
-                public function has(string $id): bool
-                {
-                    return false;
-                }
-
-                public function get(string $id, mixed ...$arguments): mixed
-                {
-                    throw new \LogicException('The tab service should not be requested.');
-                }
-            },
-            new ServiceBlockContextReflectionClassFactoryDouble()
+            static fn(): object => throw new \LogicException('The tab service should not be requested.'),
+            static fn(): object => throw new \LogicException('The bootstrap runtime service should not be requested.'),
+            new ServiceBlockContextReflectionClassFactoryDouble(),
+            static fn(string $className): bool => false
         );
 
-        if (!class_exists('\fan\project\service\tab', false)) {
-            $this->assertSame([null, null], $context->getCurrentBlockInfo());
-        } else {
-            $this->expectNotToPerformAssertions();
-        }
+        $this->assertSame([null, null], $context->getCurrentBlockInfo());
+    }
+
+    public function testProjectTabAvailabilityCheckIsInjected(): void
+    {
+        $checkedClasses = [];
+        $context = new block_context(
+            static fn(): object => throw new \LogicException('The tab service should not be requested.'),
+            static fn(): object => throw new \LogicException('The bootstrap runtime service should not be requested.'),
+            new ServiceBlockContextReflectionClassFactoryDouble(),
+            static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return false;
+            }
+        );
+
+        $this->assertSame([null, null], $context->getCurrentBlockInfo());
+        $this->assertSame(['\fan\project\service\tab'], $checkedClasses);
     }
 
     public function testCurrentBlockPathUsesInjectedReflectionClassFactory(): void
@@ -42,13 +47,10 @@ final class ServiceBlockContextTest extends SourceFileContractTestCase
         $block = new ServiceBlockContextBlockDouble();
         $tab = new ServiceBlockContextTabDouble($block, 'main');
         $loader = new ServiceBlockContextLoaderDouble('/virtual/project');
-        $container = new ServiceBlockContextContainerDouble([
-            'tab' => $tab,
-            'bootstrap_runtime' => new ServiceBlockContextRuntimeDouble($loader),
-        ]);
         $factory = new ServiceBlockContextReflectionClassFactoryDouble();
         $context = new block_context(
-            $container,
+            static fn(): object => $tab,
+            static fn(): object => new ServiceBlockContextRuntimeDouble($loader),
             $factory
         );
 
@@ -61,10 +63,8 @@ final class ServiceBlockContextTest extends SourceFileContractTestCase
         $this->ensureProjectTabClassLoaded();
 
         $context = new block_context(
-            new ServiceBlockContextContainerDouble([
-                'tab' => new ServiceBlockContextTabDouble(new ServiceBlockContextBlockDouble(), 'main'),
-                'bootstrap_runtime' => new ServiceBlockContextRuntimeDouble(new ServiceBlockContextLoaderDouble('/virtual/project')),
-            ]),
+            static fn(): object => new ServiceBlockContextTabDouble(new ServiceBlockContextBlockDouble(), 'main'),
+            static fn(): object => new ServiceBlockContextRuntimeDouble(new ServiceBlockContextLoaderDouble('/virtual/project')),
             new stdClass()
         );
 
@@ -79,12 +79,20 @@ final class ServiceBlockContextTest extends SourceFileContractTestCase
         $source = $this->sourceCode();
 
         $this->assertStringContainsString('private object $reflectionClassFactory', $source);
+        $this->assertStringContainsString('private \Closure $tabFactory;', $source);
+        $this->assertStringContainsString('private \Closure $bootstrapRuntimeFactory;', $source);
+        $this->assertStringContainsString('private \Closure $projectTabClassExists;', $source);
+        $this->assertStringContainsString('private function tab(): object', $source);
+        $this->assertStringContainsString('private function bootstrapRuntime(): object', $source);
         $this->assertStringContainsString('private function reflectionClass(object|string $object): \ReflectionClass', $source);
+        $this->assertStringContainsString('private function projectTabClassExists(string $className): bool', $source);
         $this->assertStringContainsString('$this->reflectionClassFactory->create($object)', $source);
         $this->assertStringContainsString('method_exists($this->reflectionClassFactory, \'create\')', $source);
-        $this->assertStringNotContainsString('\Closure::fromCallable', $source);
+        $this->assertStringNotContainsString('container_interface', $source);
+        $this->assertStringNotContainsString('$this->container->get', $source);
         $this->assertStringNotContainsString('private ?\Closure $reflectionClassFactory', $source);
         $this->assertStringNotContainsString('$this->reflectionClassFactory !== null', $source);
+        $this->assertStringNotContainsString('class_exists(\'\fan\project\service\tab\', false)', $source);
         $this->assertStringNotContainsString('new \ReflectionClass($block)', $source);
     }
 
@@ -95,23 +103,6 @@ final class ServiceBlockContextTest extends SourceFileContractTestCase
         }
 
         eval('namespace fan\project\service; class tab {}');
-    }
-}
-
-final class ServiceBlockContextContainerDouble implements container_interface
-{
-    public function __construct(private array $services)
-    {
-    }
-
-    public function has(string $id): bool
-    {
-        return array_key_exists($id, $this->services);
-    }
-
-    public function get(string $id, mixed ...$arguments): mixed
-    {
-        return $this->services[$id] ?? throw new LogicException('Unexpected service "' . $id . '".');
     }
 }
 

@@ -66,6 +66,8 @@ class plain extends single
 
     protected mixed $controllerFactory = null;
 
+    private \Closure $controllerClassExists;
+
     public function __construct(
         bool $allowIni = true,
         ?object $matcher = null,
@@ -75,7 +77,8 @@ class plain extends single
         ?callable $controllerFactory = null,
         ?object $serviceBootstrapRuntime = null,
         ?object $serviceConfigurator = null,
-        ?callable $serviceCacheFactory = null
+        ?callable $serviceCacheFactory = null,
+        ?callable $controllerClassExists = null
     )
     {
         $this->matcher = $matcher;
@@ -83,6 +86,9 @@ class plain extends single
         $this->header = $header;
         $this->controllerDependenciesFactory = $controllerDependenciesFactory;
         $this->controllerFactory = $controllerFactory;
+        if ($controllerClassExists !== null) {
+            $this->controllerClassExists = \Closure::fromCallable($controllerClassExists);
+        }
         parent::__construct($allowIni, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
     }
 
@@ -179,7 +185,7 @@ class plain extends single
      */
     protected function _setController(int|string $controllerKey, string $controllerClass): static
     {
-        if (!class_exists($controllerClass)) {
+        if (!$this->controllerClassExists($controllerClass)) {
             throw $this->createServiceFatalException('Can\'t find class "' . $controllerClass . '" for plain content.');
         }
         $this->controller = $this->createController(
@@ -217,6 +223,17 @@ class plain extends single
         }
 
         return $controller;
+    }
+
+    private function controllerClassExists(string $controllerClass): bool
+    {
+        if (!isset($this->controllerClassExists)) {
+            $this->controllerClassExists = \Closure::fromCallable(
+                static fn(string $controllerClass): bool => class_exists($controllerClass)
+            );
+        }
+
+        return ($this->controllerClassExists)($controllerClass);
     }
 
     protected function _assignHeaders(): static

@@ -68,6 +68,10 @@ class translation extends single
 
     private ?object $translationFileStorage = null;
 
+    private \Closure $translationClassExists;
+
+    private \Closure $translationLoadedClassExists;
+
     public function __construct(
         bool $allowIni = true,
         ?object $locale = null,
@@ -82,11 +86,13 @@ class translation extends single
         ?object $serviceConfigurator = null,
         ?callable $serviceCacheFactory = null,
         ?callable $phpArrayLoader = null,
-        ?object $fileStorage = null
+        ?object $fileStorage = null,
+        ?callable $translationClassExists = null,
+        ?callable $translationLoadedClassExists = null
     )
     {
         parent::__construct($allowIni, $serviceBootstrapRuntime, $serviceConfigurator, $serviceCacheFactory);
-        $this->setTranslationDependencies($locale, $runtime, $tabFactory, $messageTagFactories, $errorLogger, $blockContext, $matcher, $requestInput, $phpArrayLoader, $fileStorage);
+        $this->setTranslationDependencies($locale, $runtime, $tabFactory, $messageTagFactories, $errorLogger, $blockContext, $matcher, $requestInput, $phpArrayLoader, $fileStorage, $translationClassExists, $translationLoadedClassExists);
         $this->locale      = $this->translationLocale();
         $this->editableLng = array_keys((array)$this->locale->getAvailableLanguages());
     }
@@ -112,7 +118,9 @@ class translation extends single
         ?object $matcher = null,
         ?object $requestInput = null,
         ?callable $phpArrayLoader = null,
-        ?object $fileStorage = null
+        ?object $fileStorage = null,
+        ?callable $translationClassExists = null,
+        ?callable $translationLoadedClassExists = null
     ): static
     {
         $this->locale = $locale;
@@ -125,6 +133,12 @@ class translation extends single
         $this->translationRequestInput = $requestInput;
         $this->translationPhpArrayLoader = $phpArrayLoader;
         $this->translationFileStorage = $fileStorage;
+        if ($translationClassExists !== null) {
+            $this->translationClassExists = \Closure::fromCallable($translationClassExists);
+        }
+        if ($translationLoadedClassExists !== null) {
+            $this->translationLoadedClassExists = \Closure::fromCallable($translationLoadedClassExists);
+        }
 
         return $this;
     }
@@ -431,10 +445,11 @@ class translation extends single
         $matches1 = $matches2 = null;
         if (!empty($this->tags[$key]['isFunc']) && preg_match_all('/\{([^\}]+)\}/', $ret, $matches1)) {
             foreach ($matches1[1] as $k => $v) {
+                $callback = null;
                 [$class, $method, $arg] = array_pad(explode(':', (string)$v, 3), 3, '');
-                if (preg_match('/^service\|(\w+)$/', $class, $matches2) && class_exists('\fan\project\service\\' . $matches2[1])) {
+                if (preg_match('/^service\|(\w+)$/', $class, $matches2) && $this->translationClassExists('\fan\project\service\\' . $matches2[1])) {
                     $callback = [$this->translationService((string)$matches2[1]), $method];
-                } elseif (class_exists($class)) {
+                } elseif ($this->translationClassExists($class)) {
                     $callback = [$class, $method];
                 }
                 if (!empty($callback) && is_callable($callback)) {
@@ -542,7 +557,7 @@ return ' . var_export($this->referers, true) . ';
 
     private function translationDebugAllowed(): bool
     {
-        if ($this->translationTabFactory === null && !class_exists('\fan\core\service\tab', false)) {
+        if ($this->translationTabFactory === null && !$this->translationLoadedClassExists('\fan\core\service\tab')) {
             return false;
         }
         if (!is_callable($this->translationTabFactory)) {
@@ -552,6 +567,28 @@ return ' . var_export($this->referers, true) . ';
         $tab = ($this->translationTabFactory)();
 
         return is_object($tab) && method_exists($tab, 'isDebugAllowed') && (bool)$tab->isDebugAllowed();
+    }
+
+    private function translationClassExists(string $className): bool
+    {
+        if (!isset($this->translationClassExists)) {
+            $this->translationClassExists = \Closure::fromCallable(
+                static fn(string $className): bool => class_exists($className)
+            );
+        }
+
+        return ($this->translationClassExists)($className);
+    }
+
+    private function translationLoadedClassExists(string $className): bool
+    {
+        if (!isset($this->translationLoadedClassExists)) {
+            $this->translationLoadedClassExists = \Closure::fromCallable(
+                static fn(string $className): bool => class_exists($className, false)
+            );
+        }
+
+        return ($this->translationLoadedClassExists)($className);
     }
 
     private function loadPhpArrayFile(string $path, mixed $default = null): mixed

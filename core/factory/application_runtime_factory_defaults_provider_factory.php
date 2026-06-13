@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 namespace fan\core\di;
-use fan\core\adapter\reflection_class_factory;
 use fan\core\di\bootstrap_request_input_defaults_factory;
 
 
@@ -11,6 +10,8 @@ final class application_runtime_factory_defaults_provider_factory
 {
     private \Closure $runtimeFactoryProviderFactory;
     private \Closure $configuredConstructionBoundaryFactory;
+    private \Closure $configuredServiceFactoryProvider;
+    private \Closure $classInstantiatorProvider;
     private \Closure $requestInputFactoryFactory;
     private \Closure $phpArrayFileLoaderFactory;
     private \Closure $serializerOperationsFactoryFactory;
@@ -20,7 +21,9 @@ final class application_runtime_factory_defaults_provider_factory
         ?callable $configuredConstructionBoundaryFactory = null,
         ?callable $requestInputFactoryFactory = null,
         ?callable $phpArrayFileLoaderFactory = null,
-        ?callable $serializerOperationsFactoryFactory = null
+        ?callable $serializerOperationsFactoryFactory = null,
+        ?callable $configuredServiceFactoryProvider = null,
+        ?callable $classInstantiatorProvider = null
     )
     {
         $this->runtimeFactoryProviderFactory = \Closure::fromCallable(
@@ -29,11 +32,17 @@ final class application_runtime_factory_defaults_provider_factory
                     ...$factories
                 )
         );
+        $this->configuredServiceFactoryProvider = \Closure::fromCallable(
+            $configuredServiceFactoryProvider
+                ?? new application_runtime_configured_service_provider()
+        );
+        $this->classInstantiatorProvider = \Closure::fromCallable(
+            $classInstantiatorProvider
+                ?? new application_runtime_class_instantiator_provider()
+        );
         $this->configuredConstructionBoundaryFactory = \Closure::fromCallable(
             $configuredConstructionBoundaryFactory
-                ?? static fn(): callable => new configured_service_factory(
-                    new configured_class_instantiator(new reflection_class_factory())
-                )
+                ?? fn(): callable => ($this->configuredServiceFactoryProvider)(($this->classInstantiatorProvider)())
         );
         $this->requestInputFactoryFactory = \Closure::fromCallable(
             $requestInputFactoryFactory

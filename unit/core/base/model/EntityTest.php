@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use fan\core\base\model\entity;
+use fan\core\base\model\entity_dependencies;
 use FanTest\core\SourceFileContractTestCase;
 
 class BaseModelEntityTest extends SourceFileContractTestCase
@@ -121,6 +122,129 @@ class BaseModelEntityTest extends SourceFileContractTestCase
             ],
             $calls
         );
+    }
+
+    public function testRowDependencyProvidersAndRelatedRowFactoryUseInjectedCollaborators(): void
+    {
+        $entity = new BaseModelEntityProbe('users', 'users_table', primaryKey: 'id');
+        $row = new stdClass();
+        $calls = [];
+        $entity->setEntityDependencies(
+            rowDependenciesProvider: static function (entity $modelEntity) use (&$calls, $entity): array {
+                $calls[] = ['row-dependencies', $modelEntity];
+
+                return ['row'];
+            },
+            fileDataRowDependenciesProvider: static function (entity $modelEntity) use (&$calls, $entity): array {
+                $calls[] = ['file-data-row-dependencies', $modelEntity];
+
+                return ['file-data'];
+            },
+            specFileImageRowDependenciesProvider: static function (entity $modelEntity) use (&$calls, $entity): array {
+                $calls[] = ['spec-file-image-row-dependencies', $modelEntity];
+
+                return ['spec-image'];
+            },
+            relatedEntityRowFactory: static function (entity $modelEntity, string $entityName) use (&$calls, $entity, $row): object {
+                $calls[] = ['related-row', $modelEntity, $entityName];
+
+                return $row;
+            }
+        );
+
+        $this->assertSame(['row'], $entity->rowDependencies());
+        $this->assertSame(['file-data'], $entity->fileDataRowDependencies());
+        $this->assertSame(['spec-image'], $entity->specFileImageRowDependencies());
+        $this->assertSame($row, $entity->createRelatedEntityRow('\Project\file_data'));
+        $this->assertSame([
+            ['row-dependencies', $entity],
+            ['file-data-row-dependencies', $entity],
+            ['spec-file-image-row-dependencies', $entity],
+            ['related-row', $entity, '\Project\file_data'],
+        ], $calls);
+    }
+
+    public function testEntityDependenciesObjectAppliesNamedCollaborators(): void
+    {
+        $entity = new BaseModelEntityProbe('users', 'users_table', primaryKey: 'id');
+        $row = new stdClass();
+        $dependencies = new entity_dependencies(
+            entityIdDecoder: static fn(string $rowId): int => 91,
+            entityLookup: static fn(string $tableName, ?string $connectionName = null): object => (object)[
+                'tableName' => $tableName,
+                'connectionName' => $connectionName,
+            ],
+            collectionKeyProvider: static fn(entity $modelEntity): string => 'named-dependencies',
+            rowDependenciesProvider: static fn(entity $modelEntity): array => ['row-from-object'],
+            fileDataRowDependenciesProvider: static fn(entity $modelEntity): array => ['file-data-from-object'],
+            specFileImageRowDependenciesProvider: static fn(entity $modelEntity): array => ['spec-image-from-object'],
+            relatedEntityRowFactory: static fn(entity $modelEntity, string $entityName): object => $row
+        );
+
+        $entity->setEntityDependencies(entityDependencies: $dependencies);
+
+        $linkedEntity = $entity->findEntityByTable('roles', 'main');
+
+        $this->assertSame(['id' => 91], $entity->getParamById('encrypted-91', true));
+        $this->assertSame('roles', $linkedEntity->tableName);
+        $this->assertSame('main', $linkedEntity->connectionName);
+        $this->assertSame('named-dependencies', $entity->getMainParam()['collection']);
+        $this->assertSame(['row-from-object'], $entity->rowDependencies());
+        $this->assertSame(['file-data-from-object'], $entity->fileDataRowDependencies());
+        $this->assertSame(['spec-image-from-object'], $entity->specFileImageRowDependencies());
+        $this->assertSame($row, $entity->createRelatedEntityRow('photos'));
+    }
+
+    public function testRowDependencyProviderRejectsNonArrayResult(): void
+    {
+        $entity = new BaseModelEntityProbe('users', 'users_table', primaryKey: 'id');
+        $entity->setEntityDependencies(
+            rowDependenciesProvider: static fn(entity $modelEntity): string => 'invalid'
+        );
+
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('Entity row dependencies provider returned "string".');
+
+        $entity->rowDependencies();
+    }
+
+    public function testFileDataRowDependencyProviderRejectsNonArrayResult(): void
+    {
+        $entity = new BaseModelEntityProbe('users', 'users_table', primaryKey: 'id');
+        $entity->setEntityDependencies(
+            fileDataRowDependenciesProvider: static fn(entity $modelEntity): int => 15
+        );
+
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('Entity file-data row dependencies provider returned "integer".');
+
+        $entity->fileDataRowDependencies();
+    }
+
+    public function testSpecFileImageRowDependencyProviderRejectsNonArrayResult(): void
+    {
+        $entity = new BaseModelEntityProbe('users', 'users_table', primaryKey: 'id');
+        $entity->setEntityDependencies(
+            specFileImageRowDependenciesProvider: static fn(entity $modelEntity): object => new stdClass()
+        );
+
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('Entity spec-file image row dependencies provider returned "stdClass".');
+
+        $entity->specFileImageRowDependencies();
+    }
+
+    public function testRelatedEntityRowFactoryRejectsNonObjectResult(): void
+    {
+        $entity = new BaseModelEntityProbe('users', 'users_table', primaryKey: 'id');
+        $entity->setEntityDependencies(
+            relatedEntityRowFactory: static fn(entity $modelEntity, string $entityName): array => []
+        );
+
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('Related entity row factory returned "array".');
+
+        $entity->createRelatedEntityRow('photos');
     }
 
     public function testGetCheckKeyHashesTableStatusAndCanReduceOutput(): void
@@ -272,6 +396,25 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertSame(['\fan\project\base\model\entity'], $factory->calls);
     }
 
+    public function testGetClassNameUsesInjectedModelClassAvailabilityChecker(): void
+    {
+        $entity = new BaseModelEntityProbe('users', 'users_table');
+        $factory = new BaseModelEntityReflectionClassFactoryDouble(entity::class);
+        $checkedClasses = [];
+        $entity->setEntityDependencies(
+            reflectionClassFactory: $factory,
+            modelClassExists: static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return true;
+            }
+        );
+
+        $this->assertSame('\Project\users\entity', $entity->exposeClassName('entity'));
+        $this->assertSame(['\Project\users\entity'], $checkedClasses);
+        $this->assertSame(['\Project\users\entity'], $factory->calls);
+    }
+
     public function testGetClassNameRejectsInvalidInjectedReflectionClassFactoryResult(): void
     {
         $entity = new BaseModelEntityProbe('users', 'users_table');
@@ -298,6 +441,9 @@ class BaseModelEntityTest extends SourceFileContractTestCase
     public function testSourceNoLongerCallsContainerServiceDirectly(): void
     {
         $code = $this->sourceCode();
+        $dependenciesCode = file_get_contents(dirname(__DIR__, 4) . '/core/base/model/entity_dependencies.php');
+
+        $this->assertIsString($dependenciesCode);
 
         $this->assertStringNotContainsString('containerService(', $code);
         $this->assertStringNotContainsString('container_aware_trait', $code);
@@ -323,7 +469,12 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertStringContainsString('private mixed $namespacePrefixResolver = null;', $code);
         $this->assertStringContainsString('private mixed $collectionKeyProvider = null;', $code);
         $this->assertStringContainsString('private mixed $sqlDirectoryProvider = null;', $code);
-        $this->assertStringContainsString('?callable $namespaceResolver = null', $code);
+        $this->assertStringContainsString('private mixed $rowDependenciesProvider = null;', $code);
+        $this->assertStringContainsString('private mixed $fileDataRowDependenciesProvider = null;', $code);
+        $this->assertStringContainsString('private mixed $specFileImageRowDependenciesProvider = null;', $code);
+        $this->assertStringContainsString('private mixed $relatedEntityRowFactory = null;', $code);
+        $this->assertStringContainsString('private \Closure $modelClassExists;', $code);
+        $this->assertStringContainsString('callable|entity_dependencies|null $namespaceResolver = null', $code);
         $this->assertStringContainsString('?object $reflectionClassFactory = null', $code);
         $this->assertStringContainsString('?callable $entityIdDecoder = null', $code);
         $this->assertStringContainsString('?callable $entityLookup = null', $code);
@@ -332,6 +483,14 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertStringContainsString('?callable $namespacePrefixResolver = null', $code);
         $this->assertStringContainsString('?callable $collectionKeyProvider = null', $code);
         $this->assertStringContainsString('?callable $sqlDirectoryProvider = null', $code);
+        $this->assertStringContainsString('?callable $rowDependenciesProvider = null', $code);
+        $this->assertStringContainsString('?callable $fileDataRowDependenciesProvider = null', $code);
+        $this->assertStringContainsString('?callable $specFileImageRowDependenciesProvider = null', $code);
+        $this->assertStringContainsString('?callable $relatedEntityRowFactory = null', $code);
+        $this->assertStringContainsString('?callable $modelClassExists = null', $code);
+        $this->assertStringContainsString('?entity_dependencies $entityDependencies = null', $code);
+        $this->assertStringContainsString('private function applyEntityDependencies(entity_dependencies $dependencies): void', $code);
+        $this->assertStringContainsString('entityDependencies: new entity_dependencies(', $code);
         $this->assertStringContainsString('public function decodeEntityId(string $rowId): mixed', $code);
         $this->assertStringContainsString('public function findEntityByTable(string $tableName, ?string $connectionName = null): ?object', $code);
         $this->assertStringContainsString('return ($this->entityIdDecoder)($rowId);', $code);
@@ -341,6 +500,11 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertStringContainsString('private function entityNamespacePrefix(): string', $code);
         $this->assertStringContainsString('private function entityCollectionKey(): mixed', $code);
         $this->assertStringContainsString('private function entitySqlDirectory(): string', $code);
+        $this->assertStringContainsString('public function rowDependencies(): array', $code);
+        $this->assertStringContainsString('public function fileDataRowDependencies(): array', $code);
+        $this->assertStringContainsString('public function specFileImageRowDependencies(): array', $code);
+        $this->assertStringContainsString('public function createRelatedEntityRow(string $entityName): object', $code);
+        $this->assertStringContainsString('private function entityDependencyList(mixed $provider, string $label): array', $code);
         $this->assertStringNotContainsString('->getService()->', $code);
         $this->assertStringNotContainsString('string|designer', $code);
         $this->assertStringNotContainsString('instanceof designer', $code);
@@ -349,12 +513,17 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertStringContainsString('private function namespaceName(object|string $object, int $depth = 1): string', $code);
         $this->assertStringContainsString('private function namespaceResolver(): callable', $code);
         $this->assertStringContainsString('private function reflectionClass(object|string $className): \ReflectionClass', $code);
+        $this->assertStringContainsString('private function modelClassExists(string $className): bool', $code);
         $this->assertStringContainsString('private function defaultNamespaceResolver(): \Closure', $code);
         $this->assertStringContainsString('$this->reflectionClassFactory->create($className)', $code);
+        $this->assertStringContainsString('$this->modelClassExists($className)', $code);
+        $this->assertStringContainsString('static fn(string $className): bool => class_exists($className)', $dependenciesCode);
         $this->assertStringContainsString('method_exists($this->reflectionClassFactory, \'create\')', $code);
         $this->assertStringNotContainsString('private ?\Closure $namespaceResolver', $code);
         $this->assertStringNotContainsString('private ?\Closure $reflectionClassFactory', $code);
         $this->assertStringNotContainsString('$this->namespaceResolver === null', $code);
+        $this->assertStringNotContainsString('!class_exists($className)', $code);
+        $this->assertStringNotContainsString('=> class_exists($className)', $code);
         $this->assertStringNotContainsString('get_ns_name(', $code);
         $this->assertStringNotContainsString('new \ReflectionClass($className)', $code);
         $this->assertStringNotContainsString('new fatalException', $code);
@@ -384,7 +553,10 @@ final class BaseModelEntityProbe extends entity
             entityIdDecoder: static fn(string $rowId): int => (int)str_replace('encrypted-', '', $rowId),
             collectionKeyProvider: static fn(entity $entity): string => 'default',
             namespacePrefixResolver: static fn(entity $entity): string => '\Project\\',
-            sqlDirectoryProvider: static fn(entity $entity): string => '/sql'
+            sqlDirectoryProvider: static fn(entity $entity): string => '/sql',
+            rowDependenciesProvider: static fn(entity $entity): array => [],
+            fileDataRowDependenciesProvider: static fn(entity $entity): array => [],
+            specFileImageRowDependenciesProvider: static fn(entity $entity): array => []
         );
     }
 

@@ -100,12 +100,39 @@ final class AdapterPearHttpSessionTest extends SourceFileContractTestCase
         ], HTTP_Session::$calls);
     }
 
+    public function testAdapterUsesInjectedHttpSessionAvailabilityCheck(): void
+    {
+        $checkedClasses = [];
+        $adapter = new pear_http_session(
+            httpSessionClassExists: static function (string $className) use (&$checkedClasses): bool {
+                $checkedClasses[] = $className;
+
+                return false;
+            }
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('PEAR HTTP_Session class is not available.');
+
+        try {
+            $adapter->id();
+        } finally {
+            $this->assertSame(['HTTP_Session'], $checkedClasses);
+            $this->assertSame([], HTTP_Session::$calls);
+        }
+    }
+
     public function testSourceKeepsPearStaticAccessInsideAdapterBoundary(): void
     {
         $source = $this->sourceCode();
 
         $this->assertStringContainsString('private \Closure $staticCall;', $source);
+        $this->assertStringContainsString('private \Closure $httpSessionClassExists;', $source);
+        $this->assertStringContainsString('?callable $httpSessionClassExists = null', $source);
+        $this->assertStringContainsString('private function httpSessionClassExists(string $className): bool', $source);
+        $this->assertStringContainsString('if (!$this->httpSessionClassExists($className))', $source);
         $this->assertStringContainsString('$className::$method(...$arguments)', $source);
         $this->assertStringNotContainsString('HTTP_Session::', $source);
+        $this->assertStringNotContainsString('if (!class_exists($className))', $source);
     }
 }

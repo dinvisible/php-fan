@@ -7,11 +7,16 @@ namespace fan\core\di;
 final class application_utility_service_creator
 {
     private \Closure $dateExceptionFactory;
+    private \Closure $projectServiceClassExists;
 
     public function __construct(
-        callable $dateExceptionFactory
+        callable $dateExceptionFactory,
+        ?callable $projectServiceClassExists = null
     ) {
         $this->dateExceptionFactory = \Closure::fromCallable($dateExceptionFactory);
+        $this->projectServiceClassExists = \Closure::fromCallable(
+            $projectServiceClassExists ?? static fn(string $className): bool => class_exists($className)
+        );
     }
 
     public function createObfuscatorService(
@@ -24,18 +29,19 @@ final class application_utility_service_creator
         $instance = $state->getInstance($type);
         if ($instance === null) {
             $className = self::getProjectServiceClassName('obfuscator');
-            if (!class_exists($className)) {
+            if (!$this->projectServiceClassExists($className)) {
                 throw new \InvalidArgumentException('Service "obfuscator" does not expose a project class.');
             }
+            $utilityDependencies = $this->utilityDependencies($container);
 
             $instance = $obfuscatorServiceFactory(
                 $className,
                 $type,
-                $container->get(service_id::BOOTSTRAP_RUNTIME),
-                $container->get(service_id::CONFIG),
-                static fn(string $cacheType): mixed => $container->get(service_id::CACHE, $cacheType),
-                $container->get(service_id::PHP_ARRAY_FILE_LOADER),
-                $container->get(service_id::OBFUSCATOR_FILE_STORAGE)
+                $utilityDependencies->bootstrapRuntime(),
+                $utilityDependencies->config(),
+                $utilityDependencies->cacheFactory(),
+                $utilityDependencies->phpArrayFileLoader(),
+                $utilityDependencies->obfuscatorFileStorage()
             );
             $state->setInstance($type, $instance);
         }
@@ -55,25 +61,26 @@ final class application_utility_service_creator
         $className = self::getProjectServiceClassName($serviceName);
         $instance = $state->getInstance($className);
         if (!$saveInstance || $instance === null) {
-            if (!class_exists($className)) {
+            if (!$this->projectServiceClassExists($className)) {
                 throw new \InvalidArgumentException('Service "' . $serviceName . '" does not expose a project class.');
             }
+            $utilityDependencies = $this->utilityDependencies($container);
 
             $instance = $imageModifyServiceFactory(
                 $className,
                 $sourcePath,
                 $createParam,
                 $state,
-                $container->get(service_id::BOOTSTRAP_RUNTIME),
-                $container->get(service_id::BOOTSTRAP_RUNTIME),
-                $container->get(service_id::CONFIG),
-                static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
-                $container->get(service_id::IMAGE_METADATA_READER),
-                $container->get(service_id::IMAGE_RESOURCE_FACTORY),
-                $container->get(service_id::IMAGE_CANVAS_OPERATIONS),
-                $container->get(service_id::IMAGE_OUTPUT_WRITER),
-                $container->get(service_id::IMAGE_SOURCE_FILE_STORAGE),
-                $container->get(service_id::ARRAY_VALUE_READER)
+                $utilityDependencies->bootstrapRuntime(),
+                $utilityDependencies->bootstrapRuntime(),
+                $utilityDependencies->config(),
+                $utilityDependencies->cacheFactory(),
+                $utilityDependencies->imageMetadataReader(),
+                $utilityDependencies->imageResourceFactory(),
+                $utilityDependencies->imageCanvasOperations(),
+                $utilityDependencies->imageOutputWriter(),
+                $utilityDependencies->imageSourceFileStorage(),
+                $utilityDependencies->arrayValueReader()
             );
             if (!$saveInstance) {
                 return $instance;
@@ -92,22 +99,23 @@ final class application_utility_service_creator
         bool $logEnabled = true
     ): mixed {
         $className = self::getProjectServiceClassName('soap');
-        if (!class_exists($className)) {
+        if (!$this->projectServiceClassExists($className)) {
             throw new \InvalidArgumentException('Service "soap" does not expose a project class.');
         }
+        $utilityDependencies = $this->utilityDependencies($container);
 
         $soap = $soapServiceFactory(
             $className,
             (bool)$logEnabled,
-            static fn(): mixed => $container->get(service_id::ERROR),
-            $container->get(service_id::BOOTSTRAP_RUNTIME),
-            $container->get(service_id::BOOTSTRAP_RUNTIME),
-            $container->get(service_id::CONFIG),
-            static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
-            $container->get(service_id::PHP_RUNTIME_SETTINGS),
-            $container->get(service_id::SOAP_WSDL_FILE_STORAGE),
-            $container->get(service_id::ARRAY_VALUE_READER),
-            $container->get(service_id::CLASS_NAME_RESOLVER)
+            $utilityDependencies->errorFactory(),
+            $utilityDependencies->bootstrapRuntime(),
+            $utilityDependencies->bootstrapRuntime(),
+            $utilityDependencies->config(),
+            $utilityDependencies->cacheFactory(),
+            $utilityDependencies->phpRuntimeSettings(),
+            $utilityDependencies->soapWsdlFileStorage(),
+            $utilityDependencies->arrayValueReader(),
+            $utilityDependencies->classNameResolver()
         );
         $soap->initializeSoapObject($wsdlFile, $param);
 
@@ -123,9 +131,11 @@ final class application_utility_service_creator
         mixed $timezone = null,
         bool $save = true
     ): mixed {
+        $utilityDependencies = $this->utilityDependencies($container);
         $config = $state->getGlobalConfig();
         if (empty($config)) {
-            $config = $container->get(service_id::CONFIG)->get('date');
+            $config = $utilityDependencies->config();
+            $config = $config->get('date');
             $state->setGlobalConfig($config);
         }
 
@@ -160,7 +170,7 @@ final class application_utility_service_creator
         $instance = $state->getInstance((bool)$isTime, (string)$timezone, (string)$format, $key3);
         if (!$save || $instance === null) {
             $className = self::getProjectServiceClassName('date');
-            if (!class_exists($className)) {
+            if (!$this->projectServiceClassExists($className)) {
                 throw new \InvalidArgumentException('Service "date" does not expose a project class.');
             }
 
@@ -176,11 +186,11 @@ final class application_utility_service_creator
                 $state,
                 static fn(?string $date = null, mixed $format = null, mixed $timezone = null, bool $save = true): mixed =>
                     $creator->createDateService($container, $state, $dateServiceFactory, $date, $format, $timezone, $save),
-                $container->get(service_id::BOOTSTRAP_RUNTIME),
-                $container->get(service_id::CONFIG),
-                static fn(string $type): mixed => $container->get(service_id::CACHE, $type),
-                $container->get(service_id::CLASS_NAME_RESOLVER),
-                $container->get(service_id::ARRAY_VALUE_READER)
+                $utilityDependencies->bootstrapRuntime(),
+                $utilityDependencies->config(),
+                $utilityDependencies->cacheFactory(),
+                $utilityDependencies->classNameResolver(),
+                $utilityDependencies->arrayValueReader()
             );
         }
 
@@ -219,8 +229,18 @@ final class application_utility_service_creator
         return $exception;
     }
 
+    private function utilityDependencies(container_interface $container): application_utility_service_dependencies
+    {
+        return new application_utility_service_dependencies($container);
+    }
+
     private static function getProjectServiceClassName(string $serviceName): string
     {
         return '\fan\project\service\\' . trim($serviceName, " \t\n\r\0\x0B\\");
+    }
+
+    private function projectServiceClassExists(string $className): bool
+    {
+        return ($this->projectServiceClassExists)($className);
     }
 }

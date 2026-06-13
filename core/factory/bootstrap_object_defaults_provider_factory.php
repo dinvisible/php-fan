@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace fan\core\di;
 use fan\core\di\bootstrap_object_defaults_factory;
 use fan\core\bootstrap\bootstrap_object_factory;
-use fan\core\adapter\reflection_class_factory;
 
 
 final class bootstrap_object_defaults_provider_factory
@@ -31,13 +30,11 @@ final class bootstrap_object_defaults_provider_factory
         );
         $this->configuredServiceFactoryProvider = \Closure::fromCallable(
             $configuredServiceFactoryProvider
-                ?? static fn(callable $classInstantiator): callable => new configured_service_factory($classInstantiator)
+                ?? new bootstrap_object_configured_service_provider()
         );
         $this->classInstantiatorProvider = \Closure::fromCallable(
             $classInstantiatorProvider
-                ?? static fn(): callable => new configured_class_instantiator(
-                    new reflection_class_factory()
-                )
+                ?? new bootstrap_object_class_instantiator_provider()
         );
         $this->objectFactoryFactory = \Closure::fromCallable(
             $objectFactoryFactory
