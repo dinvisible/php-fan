@@ -16,6 +16,7 @@ function php_fan_bootstrap_smoke(string $root): array
     $checks[] = php_fan_bootstrap_smoke_index_source($root);
     $checks[] = php_fan_bootstrap_smoke_load_file($root, 'vendor_autoload', 'vendor/autoload.php');
     $checks[] = php_fan_bootstrap_smoke_load_file($root, 'composer_autoload_helper', 'tools/composer_autoload.php');
+    $checks[] = php_fan_bootstrap_smoke_function('array_val');
     $checks[] = php_fan_bootstrap_smoke_class(
         $root,
         'web_initializer_factory_class',
@@ -89,6 +90,15 @@ function php_fan_bootstrap_smoke_load_file(string $root, string $name, string $r
     require_once $path;
 
     return php_fan_bootstrap_smoke_check($name, 'pass', $relativePath . ' loaded.');
+}
+
+function php_fan_bootstrap_smoke_function(string $function): array
+{
+    if (!function_exists($function)) {
+        return php_fan_bootstrap_smoke_check($function . '_function', 'fail', $function . '() is not loaded.');
+    }
+
+    return php_fan_bootstrap_smoke_check($function . '_function', 'pass', $function . '() is loaded.');
 }
 
 function php_fan_bootstrap_smoke_class(string $root, string $name, string $class, string $relativePath): array

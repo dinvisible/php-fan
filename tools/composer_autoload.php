@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__) . '/core/functions.php';
+
 function php_fan_composer_autoload_symbol_exists(string $symbol, bool $autoload = false): bool
 {
     $symbolExists = static fn(string $name, bool $autoloadFlag): bool => class_exists($name, $autoloadFlag)

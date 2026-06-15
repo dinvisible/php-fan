@@ -18,6 +18,7 @@ final class BootstrapSmokeTest extends TestCase
                 'index_source',
                 'vendor_autoload',
                 'composer_autoload_helper',
+                'array_val_function',
                 'web_initializer_factory_class',
                 'context_factory_class',
                 'service_listener_state_class',
@@ -51,6 +52,13 @@ final class BootstrapSmokeTest extends TestCase
             $root . '/core/service/service_listener_state.php',
             php_fan_composer_autoload_path_for('fan\\core\\service\\service_listener_state')
         );
+    }
+
+    public function testComposerFallbackLoadsCoreFunctions(): void
+    {
+        php_fan_bootstrap_smoke(dirname(__DIR__, 2));
+
+        $this->assertTrue(function_exists('array_val'));
     }
 
     public function testBootstrapSmokeRendersTextSummary(): void
