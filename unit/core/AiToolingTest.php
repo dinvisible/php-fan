@@ -287,12 +287,13 @@ final class AiToolingTest extends TestCase
             'core/adapter/zend_autoloader.php',
         ], $map['source_inventory']['queues']['intentional_loading_boundaries']['files']);
         $this->assertSame('tooling_support', $map['source_inventory']['queues']['tooling_loading_statements']['classification']);
-        $this->assertSame(8, $map['source_inventory']['queues']['tooling_loading_statements']['count']);
+        $this->assertSame(9, $map['source_inventory']['queues']['tooling_loading_statements']['count']);
         $this->assertSame([
             'tools/ai_explain.php',
             'tools/ai_map.php',
             'tools/ai_static_check.php',
             'tools/ai_verify.php',
+            'tools/bootstrap_smoke.php',
             'tools/composer_autoload.php',
         ], $map['source_inventory']['queues']['tooling_loading_statements']['files']);
         $this->assertSame('entrypoint_boundary', $map['source_inventory']['queues']['entrypoint_loading_statements']['classification']);
