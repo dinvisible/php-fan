@@ -69,13 +69,17 @@ final class WebApplicationInitializerDefaultsFactoryTest extends TestCase
         $this->assertStringContainsString('$projectPrefix = \'fan\\\\project\\\\\';', $composerAutoloadSource);
         $this->assertStringContainsString('function php_fan_composer_autoload_symbol_exists(string $symbol, bool $autoload = false): bool', $composerAutoloadSource);
         $this->assertStringContainsString('function php_fan_composer_autoload_path_for(string $class): ?string', $composerAutoloadSource);
+        $this->assertStringContainsString('function php_fan_composer_autoload_file_declares(string $path, string $namespace, string $class): bool', $composerAutoloadSource);
         $this->assertStringContainsString("'fan\\\\core\\\\bootstrap\\\\' => [", $composerAutoloadSource);
         $this->assertStringContainsString('$root . \'/core/application\',', $composerAutoloadSource);
+        $this->assertStringContainsString('$root . \'/core/factory\',', $composerAutoloadSource);
         $this->assertStringContainsString("'fan\\\\core\\\\di\\\\' => [", $composerAutoloadSource);
         $this->assertStringContainsString('$root . \'/core/factory\',', $composerAutoloadSource);
+        $this->assertStringContainsString('php_fan_composer_autoload_file_declares($path, rtrim($prefix, \'\\\\\'), $class)', $composerAutoloadSource);
         $this->assertStringContainsString('php_fan_composer_autoload_symbol_exists($class, false)', $composerAutoloadSource);
         $this->assertStringContainsString('php_fan_composer_autoload_symbol_exists($coreClass, true)', $composerAutoloadSource);
         $this->assertStringContainsString('require_once $path;', $composerAutoloadSource);
+        $this->assertStringContainsString('}, true, true);', $composerAutoloadSource);
         $this->assertStringNotContainsString('$phpFanRoot', $composerAutoloadSource);
         $this->assertStringNotContainsString('$bootstrapApplicationRoots', $composerAutoloadSource);
         $this->assertStringNotContainsString('$factoryRoots', $composerAutoloadSource);

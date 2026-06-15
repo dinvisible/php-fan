@@ -16,7 +16,18 @@ function php_fan_bootstrap_smoke(string $root): array
     $checks[] = php_fan_bootstrap_smoke_index_source($root);
     $checks[] = php_fan_bootstrap_smoke_load_file($root, 'vendor_autoload', 'vendor/autoload.php');
     $checks[] = php_fan_bootstrap_smoke_load_file($root, 'composer_autoload_helper', 'tools/composer_autoload.php');
-    $checks[] = php_fan_bootstrap_smoke_factory_class($root);
+    $checks[] = php_fan_bootstrap_smoke_class(
+        $root,
+        'web_initializer_factory_class',
+        'fan\\core\\di\\web_application_initializer_defaults_factory',
+        'core/factory/web_application_initializer_defaults_factory.php'
+    );
+    $checks[] = php_fan_bootstrap_smoke_class(
+        $root,
+        'context_factory_class',
+        'fan\\core\\bootstrap\\context_factory',
+        'core/factory/context_factory.php'
+    );
 
     $ok = array_reduce(
         $checks,
@@ -74,30 +85,29 @@ function php_fan_bootstrap_smoke_load_file(string $root, string $name, string $r
     return php_fan_bootstrap_smoke_check($name, 'pass', $relativePath . ' loaded.');
 }
 
-function php_fan_bootstrap_smoke_factory_class(string $root): array
+function php_fan_bootstrap_smoke_class(string $root, string $name, string $class, string $relativePath): array
 {
-    $class = 'fan\\core\\di\\web_application_initializer_defaults_factory';
     if (!function_exists('php_fan_composer_autoload_path_for') || !function_exists('php_fan_composer_autoload_symbol_exists')) {
-        return php_fan_bootstrap_smoke_check('factory_class', 'fail', 'tools/composer_autoload.php does not expose fallback helpers.');
+        return php_fan_bootstrap_smoke_check($name, 'fail', 'tools/composer_autoload.php does not expose fallback helpers.');
     }
 
     $path = php_fan_composer_autoload_path_for($class);
-    $expected = $root . '/core/factory/web_application_initializer_defaults_factory.php';
+    $expected = $root . '/' . $relativePath;
     if ($path !== $expected) {
-        return php_fan_bootstrap_smoke_check('factory_class', 'fail', 'Bootstrap factory fallback path is wrong.', [
+        return php_fan_bootstrap_smoke_check($name, 'fail', $class . ' fallback path is wrong.', [
             'expected' => $expected,
             'actual' => $path,
         ]);
     }
 
     if (!php_fan_composer_autoload_symbol_exists($class, true)) {
-        return php_fan_bootstrap_smoke_check('factory_class', 'fail', 'Bootstrap factory class is not autoloadable.', [
+        return php_fan_bootstrap_smoke_check($name, 'fail', $class . ' is not autoloadable.', [
             'class' => $class,
             'path' => $path,
         ]);
     }
 
-    return php_fan_bootstrap_smoke_check('factory_class', 'pass', 'Bootstrap factory class is autoloadable.', [
+    return php_fan_bootstrap_smoke_check($name, 'pass', $class . ' is autoloadable.', [
         'class' => $class,
         'path' => $path,
     ]);

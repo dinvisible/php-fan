@@ -14,8 +14,29 @@ final class BootstrapSmokeTest extends TestCase
 
         $this->assertSame('pass', $result['status']);
         $this->assertSame(
-            ['index_source', 'vendor_autoload', 'composer_autoload_helper', 'factory_class'],
+            [
+                'index_source',
+                'vendor_autoload',
+                'composer_autoload_helper',
+                'web_initializer_factory_class',
+                'context_factory_class',
+            ],
             array_column($result['checks'], 'name')
+        );
+    }
+
+    public function testComposerFallbackResolvesBootstrapFactoryNamespaceExactly(): void
+    {
+        $root = dirname(__DIR__, 2);
+
+        php_fan_bootstrap_smoke($root);
+
+        $this->assertSame(
+            $root . '/core/factory/context_factory.php',
+            php_fan_composer_autoload_path_for('fan\\core\\bootstrap\\context_factory')
+        );
+        $this->assertNull(
+            php_fan_composer_autoload_path_for('fan\\core\\bootstrap\\web_application_initializer_defaults_factory')
         );
     }
 

@@ -21,6 +21,7 @@ function php_fan_composer_autoload_path_for(string $class): ?string
         ],
         'fan\\core\\bootstrap\\' => [
             $root . '/core/application',
+            $root . '/core/factory',
         ],
         'fan\\core\\di\\' => [
             $root . '/core/di',
@@ -40,13 +41,30 @@ function php_fan_composer_autoload_path_for(string $class): ?string
         $relativePath = str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
         foreach ($roots as $directory) {
             $path = $directory . '/' . $relativePath;
-            if (is_file($path)) {
+            if (php_fan_composer_autoload_file_declares($path, rtrim($prefix, '\\'), $class)) {
                 return $path;
             }
         }
     }
 
     return null;
+}
+
+function php_fan_composer_autoload_file_declares(string $path, string $namespace, string $class): bool
+{
+    if (!is_file($path)) {
+        return false;
+    }
+
+    $source = file_get_contents($path);
+    if (!is_string($source)) {
+        return false;
+    }
+
+    $shortName = substr($class, (int)strrpos($class, '\\') + 1);
+
+    return preg_match('/^\s*namespace\s+' . preg_quote($namespace, '/') . '\s*;/m', $source) === 1
+        && preg_match('/\b(?:final\s+|abstract\s+)?(?:class|interface|trait|enum)\s+' . preg_quote($shortName, '/') . '\b/', $source) === 1;
 }
 
 spl_autoload_register(static function (string $class): void {
@@ -60,7 +78,7 @@ spl_autoload_register(static function (string $class): void {
     }
 
     require_once $path;
-});
+}, true, true);
 
 spl_autoload_register(static function (string $class): void {
     $projectPrefix = 'fan\\project\\';
