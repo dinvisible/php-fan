@@ -55,6 +55,7 @@ final class WebApplicationInitializerDefaultsFactoryTest extends TestCase
         $this->assertStringNotContainsString('require_once', $source);
 
         $this->assertStringContainsString("require_once __DIR__ . '/../vendor/autoload.php';", $entrypointSource);
+        $this->assertStringContainsString("require_once __DIR__ . '/../tools/composer_autoload.php';", $entrypointSource);
         $this->assertStringContainsString('((new web_application_initializer_defaults_factory())())->run();', $entrypointSource);
         $this->assertStringNotContainsString('new request_runner_defaults_factory()', $entrypointSource);
         $this->assertFileDoesNotExist(dirname(__DIR__, 3) . '/htdocs/autoload.php');
@@ -67,13 +68,18 @@ final class WebApplicationInitializerDefaultsFactoryTest extends TestCase
 
         $this->assertStringContainsString('$projectPrefix = \'fan\\\\project\\\\\';', $composerAutoloadSource);
         $this->assertStringContainsString('function php_fan_composer_autoload_symbol_exists(string $symbol, bool $autoload = false): bool', $composerAutoloadSource);
+        $this->assertStringContainsString('function php_fan_composer_autoload_path_for(string $class): ?string', $composerAutoloadSource);
+        $this->assertStringContainsString("'fan\\\\core\\\\bootstrap\\\\' => [", $composerAutoloadSource);
+        $this->assertStringContainsString('$root . \'/core/application\',', $composerAutoloadSource);
+        $this->assertStringContainsString("'fan\\\\core\\\\di\\\\' => [", $composerAutoloadSource);
+        $this->assertStringContainsString('$root . \'/core/factory\',', $composerAutoloadSource);
         $this->assertStringContainsString('php_fan_composer_autoload_symbol_exists($class, false)', $composerAutoloadSource);
         $this->assertStringContainsString('php_fan_composer_autoload_symbol_exists($coreClass, true)', $composerAutoloadSource);
+        $this->assertStringContainsString('require_once $path;', $composerAutoloadSource);
         $this->assertStringNotContainsString('$phpFanRoot', $composerAutoloadSource);
         $this->assertStringNotContainsString('$bootstrapApplicationRoots', $composerAutoloadSource);
         $this->assertStringNotContainsString('$factoryRoots', $composerAutoloadSource);
         $this->assertStringNotContainsString("if (!function_exists('array_val'))", $composerAutoloadSource);
-        $this->assertStringNotContainsString('require_once', $composerAutoloadSource);
     }
 }
 

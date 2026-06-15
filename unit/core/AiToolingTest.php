@@ -287,15 +287,16 @@ final class AiToolingTest extends TestCase
             'core/adapter/zend_autoloader.php',
         ], $map['source_inventory']['queues']['intentional_loading_boundaries']['files']);
         $this->assertSame('tooling_support', $map['source_inventory']['queues']['tooling_loading_statements']['classification']);
-        $this->assertSame(7, $map['source_inventory']['queues']['tooling_loading_statements']['count']);
+        $this->assertSame(8, $map['source_inventory']['queues']['tooling_loading_statements']['count']);
         $this->assertSame([
             'tools/ai_explain.php',
             'tools/ai_map.php',
             'tools/ai_static_check.php',
             'tools/ai_verify.php',
+            'tools/composer_autoload.php',
         ], $map['source_inventory']['queues']['tooling_loading_statements']['files']);
         $this->assertSame('entrypoint_boundary', $map['source_inventory']['queues']['entrypoint_loading_statements']['classification']);
-        $this->assertSame(1, $map['source_inventory']['queues']['entrypoint_loading_statements']['count']);
+        $this->assertSame(2, $map['source_inventory']['queues']['entrypoint_loading_statements']['count']);
         $this->assertSame(['htdocs/index.php'], $map['source_inventory']['queues']['entrypoint_loading_statements']['files']);
         $this->assertSame('intentional_compatibility', $map['source_inventory']['queues']['explicit_native_construction_boundaries']['classification']);
         $this->assertSame(0, $map['source_inventory']['queues']['explicit_native_construction_boundaries']['count']);

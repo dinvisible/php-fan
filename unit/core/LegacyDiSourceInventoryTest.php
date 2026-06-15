@@ -1760,6 +1760,7 @@ final class LegacyDiSourceInventoryTest extends TestCase
         $this->assertIsString($runnerSource);
         $this->assertIsString($defaultsSource);
         $this->assertStringContainsString("require_once __DIR__ . '/../vendor/autoload.php';", $source);
+        $this->assertStringContainsString("require_once __DIR__ . '/../tools/composer_autoload.php';", $source);
         $this->assertStringContainsString('((new web_application_initializer_defaults_factory())())->run();', $source);
         $this->assertStringNotContainsString("require_once __DIR__ . '/autoload.php';", $source);
         $this->assertStringNotContainsString('$requestRunnerDefaults = new request_runner_defaults_factory();', $source);

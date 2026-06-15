@@ -12,6 +12,7 @@ final class IndexSourceTest extends TestCase
 
         $this->assertIsString($source);
         $this->assertStringContainsString("require_once __DIR__ . '/../vendor/autoload.php';", $source);
+        $this->assertStringContainsString("require_once __DIR__ . '/../tools/composer_autoload.php';", $source);
         $this->assertStringContainsString('use fan\core\di\web_application_initializer_defaults_factory;', $source);
         $this->assertStringContainsString('((new web_application_initializer_defaults_factory())())->run();', $source);
         $this->assertStringNotContainsString("require_once __DIR__ . '/autoload.php';", $source);
