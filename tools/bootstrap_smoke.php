@@ -28,6 +28,12 @@ function php_fan_bootstrap_smoke(string $root): array
         'fan\\core\\bootstrap\\context_factory',
         'core/factory/context_factory.php'
     );
+    $checks[] = php_fan_bootstrap_smoke_class(
+        $root,
+        'service_listener_state_class',
+        'fan\\core\\service\\service_listener_state',
+        'core/service/service_listener_state.php'
+    );
 
     $ok = array_reduce(
         $checks,

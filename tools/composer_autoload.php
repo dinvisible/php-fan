@@ -31,6 +31,9 @@ function php_fan_composer_autoload_path_for(string $class): ?string
             $root . '/core/runtime',
             $root . '/core/factory/runtime',
         ],
+        'fan\\core\\' => [
+            $root . '/core',
+        ],
     ];
 
     foreach ($prefixRoots as $prefix => $roots) {
@@ -41,13 +44,23 @@ function php_fan_composer_autoload_path_for(string $class): ?string
         $relativePath = str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
         foreach ($roots as $directory) {
             $path = $directory . '/' . $relativePath;
-            if (php_fan_composer_autoload_file_declares($path, rtrim($prefix, '\\'), $class)) {
+            if (php_fan_composer_autoload_file_declares($path, php_fan_composer_autoload_namespace_for($class), $class)) {
                 return $path;
             }
         }
     }
 
     return null;
+}
+
+function php_fan_composer_autoload_namespace_for(string $class): string
+{
+    $separatorPosition = strrpos($class, '\\');
+    if ($separatorPosition === false) {
+        return '';
+    }
+
+    return substr($class, 0, $separatorPosition);
 }
 
 function php_fan_composer_autoload_file_declares(string $path, string $namespace, string $class): bool

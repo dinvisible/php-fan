@@ -20,6 +20,7 @@ final class BootstrapSmokeTest extends TestCase
                 'composer_autoload_helper',
                 'web_initializer_factory_class',
                 'context_factory_class',
+                'service_listener_state_class',
             ],
             array_column($result['checks'], 'name')
         );
@@ -37,6 +38,18 @@ final class BootstrapSmokeTest extends TestCase
         );
         $this->assertNull(
             php_fan_composer_autoload_path_for('fan\\core\\bootstrap\\web_application_initializer_defaults_factory')
+        );
+    }
+
+    public function testComposerFallbackResolvesGenericCoreNamespace(): void
+    {
+        $root = dirname(__DIR__, 2);
+
+        php_fan_bootstrap_smoke($root);
+
+        $this->assertSame(
+            $root . '/core/service/service_listener_state.php',
+            php_fan_composer_autoload_path_for('fan\\core\\service\\service_listener_state')
         );
     }
 
