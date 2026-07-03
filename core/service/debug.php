@@ -34,7 +34,7 @@ class debug extends single {
 
     private ?object $input = null;
     private ?object $metaFileStorage = null;
-    private \Closure $arrayAdducer;
+    private ?\Closure $arrayAdducer = null;
     private ?object $reflectionClassFactory = null;
 
     public function __construct(

@@ -41,7 +41,8 @@ class obfuscator
         $this->request = $request;
 
         $handle = $handler->getHandleData();
-        $this->obfuscator = $this->createObfuscator((string)$handle['reqKey'], $obfuscatorFactory);
+        $type = (string)($handle['reqKey'] ?? $key);
+        $this->obfuscator = $this->createObfuscator($type, $obfuscatorFactory);
     }
 
     // ======== Static methods ======== \\

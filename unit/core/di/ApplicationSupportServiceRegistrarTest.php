@@ -174,7 +174,7 @@ final class ApplicationSupportServiceRegistrarTest extends TestCase
         $this->assertTrue($container->has('short_class_name_resolver'));
         $this->assertTrue($container->has('namespace_resolver'));
         $this->assertTrue($container->has('reflection_class_factory'));
-        $this->assertFalse($container->has('database_connections'));
+        $this->assertTrue($container->has('database_connections'));
         $this->assertTrue($container->has('core_fatal_exception_factory'));
         $this->assertTrue($container->has('request_input'));
         $this->assertTrue($container->has('error_demonstrator_loader'));
@@ -249,6 +249,7 @@ final class ApplicationSupportServiceRegistrarTest extends TestCase
             ->set('entity', (object)['name' => 'entity'])
             ->set('image_metadata_reader', (object)['name' => 'image-metadata-reader'])
             ->set('plain_file_storage', (object)['name' => 'plain-file-storage'])
+            ->set('database_connections', new ApplicationSupportDatabaseConnectionsDouble())
             ->factory('cache', static fn(container $container, string $type): object => (object)['type' => $type], false)
             ->factory('image_modify', static fn(container $container, string $sourcePath): object => (object)['sourcePath' => $sourcePath], false);
 
@@ -276,5 +277,16 @@ final class ApplicationSupportBlockExceptionFactoryDouble
     public function setExceptionDependencies(mixed ...$dependencies): void
     {
         $this->dependenciesSet = $dependencies !== [];
+    }
+}
+
+final class ApplicationSupportDatabaseConnectionsDouble
+{
+    public function fixAll(string $operation, bool $setError = true): void
+    {
+    }
+
+    public function close(): void
+    {
     }
 }

@@ -112,7 +112,7 @@ final class ApplicationSessionServiceCreatorTest extends TestCase
         $this->assertStringContainsString('return $this->sessionFactory->sessionFactory();', $stateFactorySource);
         $this->assertStringContainsString('return $this->cookieFactory->cookieFactory();', $stateFactorySource);
         $this->assertStringContainsString('return fn(string $namespace, string $group): mixed => $this->container->get(service_id::SESSION, $namespace, $group);', $sessionFactoryStateFactorySource);
-        $this->assertStringContainsString('return fn(mixed $path, mixed $domain): mixed => $this->container->get(service_id::COOKIE, $path, $domain);', $cookieFactoryStateFactorySource);
+        $this->assertStringContainsString('return fn(mixed $path, mixed $domain, bool $secure = true): mixed => $this->container->get(', $cookieFactoryStateFactorySource);
         $this->assertStringContainsString('return fn(string $type): mixed => $this->container->get(service_id::CACHE, $type);', $cacheFactorySource);
         $this->assertStringContainsString('new application_session_native_runtime_dependencies($container)', $runtimeSource);
         $this->assertStringContainsString('new application_session_bootstrap_runtime_dependencies($container)', $runtimeSource);

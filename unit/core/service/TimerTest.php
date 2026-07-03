@@ -145,6 +145,15 @@ class ServiceTimerTest extends SourceFileContractTestCase
         $this->assertSame([], $timer->executedCommands);
     }
 
+    public function testBackgroundExecutionEscapesEveryArgument(): void
+    {
+        $source = $this->sourceCode();
+
+        $this->assertStringContainsString("array_map('escapeshellarg', \$arguments)", $source);
+        $this->assertStringContainsString("getConfig('EXECUTABLE_ALLOWLIST', [])", $source);
+        $this->assertStringNotContainsString("exec(\$cmd . ' > /dev/null &')", $source);
+    }
+
     public function testExecBackPhpChargesProgramWithoutBackgroundWhenExecutionIsDisabled(): void
     {
         $timer = $this->timer([

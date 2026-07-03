@@ -241,17 +241,40 @@ class timer extends single
     public function execBackBin(string $cmd): bool
     {
         if ($this->getConfig('ENABLE_EXEC')) {
-            if (substr(php_uname(), 0, 7) === 'Windows'){ // || !function_exists('exec')
+            $safeCommand = $this->safeBackgroundCommand($cmd);
+            if (substr(php_uname(), 0, 7) === 'Windows') {
                 if (function_exists('popen') && function_exists('pclose')) {
-                    pclose(popen('start /B ' . $cmd, 'r'));
+                    pclose(popen('start /B ' . $safeCommand, 'r'));
                     return true;
                 }
             } elseif (function_exists('exec')) {
-                exec($cmd . ' > /dev/null &');
+                exec($safeCommand . ' > /dev/null 2>&1 &');
                 return true;
             }
         }
         return false;
+    }
+
+    private function safeBackgroundCommand(string $command): string
+    {
+        if ($command === '' || str_contains($command, "\0") || preg_match('/[\r\n]/', $command) === 1) {
+            throw new \InvalidArgumentException('Background command is empty or contains forbidden control characters.');
+        }
+
+        $arguments = array_values(array_filter(
+            str_getcsv(trim($command), ' ', '"', '\\'),
+            static fn(string $argument): bool => $argument !== ''
+        ));
+        if ($arguments === []) {
+            throw new \InvalidArgumentException('Background command has no executable.');
+        }
+
+        $allowlist = (array)$this->getConfig('EXECUTABLE_ALLOWLIST', []);
+        if ($allowlist !== [] && !in_array($arguments[0], $allowlist, true)) {
+            throw new \InvalidArgumentException('Background executable is not allowed: ' . $arguments[0]);
+        }
+
+        return implode(' ', array_map('escapeshellarg', $arguments));
     }
 
     // =========================================================== \\

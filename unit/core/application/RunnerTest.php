@@ -75,6 +75,27 @@ final class BootstrapRunnerTest extends SourceFileContractTestCase
         $this->assertTrue($header->sent);
     }
 
+    public function testRunHandlesTypeErrorsAsServerErrors(): void
+    {
+        $runtime = new BootstrapRunnerRuntimeDouble();
+        $input = new BootstrapRunnerInputDouble();
+        $runner = new runner(
+            [],
+            self::phpArrayFileLoader(),
+            self::errorDemonstratorFactory(),
+            input: $input,
+            runtime: $runtime
+        );
+        $procedure = new BootstrapRunnerProcedureDouble();
+
+        $result = $runner->run(false, [$procedure, 'brokenType']);
+
+        $this->assertNull($result);
+        $this->assertCount(1, $runtime->messages);
+        $this->assertStringContainsString('TypeError', $runtime->messages[0]);
+        $this->assertStringContainsString('broken type', $runtime->messages[0]);
+    }
+
     public function testLogExceptionUsesInjectedRuntime(): void
     {
         $runtime = new BootstrapRunnerRuntimeDouble();
@@ -159,7 +180,7 @@ final class BootstrapRunnerTest extends SourceFileContractTestCase
 
 final class BootstrapRunnerProbe extends runner
 {
-    public function exposeLogException(Exception $exception): void
+    public function exposeLogException(Throwable $exception): void
     {
         $this->_logException($exception);
     }
@@ -200,6 +221,11 @@ final class BootstrapRunnerProcedureDouble
     public function payload(): string
     {
         return 'payload';
+    }
+
+    public function brokenType(): never
+    {
+        throw new TypeError('broken type');
     }
 }
 

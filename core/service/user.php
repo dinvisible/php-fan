@@ -113,15 +113,15 @@ class user extends multi
 
     private ?object $userState = null;
 
-    private \Closure $userEngineFactory;
+    private ?\Closure $userEngineFactory = null;
 
-    private \Closure $instanceKeyEncoder;
+    private ?\Closure $instanceKeyEncoder = null;
 
-    private \Closure $snapshotEncoder;
+    private ?\Closure $snapshotEncoder = null;
 
-    private \Closure $snapshotDecoder;
+    private ?\Closure $snapshotDecoder = null;
 
-    private \Closure $arrayAdducer;
+    private ?\Closure $arrayAdducer = null;
 
     protected array $delegateRule = [
         'userData' => [

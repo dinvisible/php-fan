@@ -236,7 +236,7 @@ class ServiceCookieTest extends SourceFileContractTestCase
         $this->assertSame([['compact' => true]], $encoded);
         $this->assertSame('encoded-cookie', $state->getData('prefs'));
         $this->assertSame([
-            ['prefs', 'encoded-cookie', 0, '/app', 'example.test', true, false],
+            ['prefs', 'encoded-cookie', 0, '/app', 'example.test', true, true, 'Lax'],
         ], $cookieWriter->writes);
     }
 
@@ -401,9 +401,10 @@ final class ServiceCookieWriterDouble
         string $path,
         string $domain,
         bool $secure,
-        bool $httpOnly
+        bool $httpOnly,
+        string $sameSite = 'Lax'
     ): bool {
-        $this->writes[] = [$name, $value, $expires, $path, $domain, $secure, $httpOnly];
+        $this->writes[] = [$name, $value, $expires, $path, $domain, $secure, $httpOnly, $sameSite];
 
         return $this->result;
     }

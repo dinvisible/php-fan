@@ -36,6 +36,7 @@ class upload_image extends base
     public function finishConstruct(?block_base $container = null, array $containerMeta = [], bool $allowSetEmbedded = true): void
     {
         parent::finishConstruct($container, $containerMeta, $allowSetEmbedded);
+        $par = null;
         $this->image = $this->requestService()->get('image', 'F');
         if (!is_array($this->image)) {
             $this->image = null;
@@ -67,7 +68,7 @@ class upload_image extends base
 
             $color = $this->getMeta('b_color', 0XFFFFFF);
             $img = $this->imageModifyService((string)$this->image['tmp_name']);
-            if ($par[0] > $w || $par[1] > $h) {
+            if ($par !== null && (($w !== null && $par[0] > $w) || ($h !== null && $par[1] > $h))) {
                 $img->scal($w, $h, (int)$this->getMeta('mode', 1), is_array($color) ? $color : (int)$color);
             } elseif ($this->getMeta('allow_relocate', false)) {
                 $img->relocate($w, $h, is_array($color) ? $color : (int)$color);

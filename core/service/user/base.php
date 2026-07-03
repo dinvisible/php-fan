@@ -109,15 +109,15 @@ abstract class base
 
     private ?object $requestInput = null;
 
-    private \Closure $snapshotEncoder;
+    private ?\Closure $snapshotEncoder = null;
 
-    private \Closure $snapshotDecoder;
+    private ?\Closure $snapshotDecoder = null;
 
-    private \Closure $arrayValueReader;
+    private ?\Closure $arrayValueReader = null;
 
-    private \Closure $arrayAdducer;
+    private ?\Closure $arrayAdducer = null;
 
-    private \Closure $classNameResolver;
+    private ?\Closure $classNameResolver = null;
 
     public function __construct(
         mixed $identifyer,
@@ -203,9 +203,6 @@ abstract class base
     public function setConfig(row $config): static
     {
         if (empty($this->config)) {
-            if (empty($config)) {
-                throw $this->createUserFatalException('User Engine has empty config!');
-            }
             $this->config = $config;
         }
         return $this;
@@ -269,8 +266,12 @@ abstract class base
 
     public function checkPassword(string $password): bool
     {
-        $hash = $this->makePasswordHash($password);
-        $this->isValid = !empty($this->data['password']) && (string)$this->data['password'] === $hash;
+        $storedHash = (string)($this->data['password'] ?? '');
+        $this->isValid = $storedHash !== '' && $this->verifyPasswordHash($password, $storedHash);
+
+        if ($this->isValid && $this->passwordHashNeedsUpgrade($storedHash)) {
+            $this->setPassword($password);
+        }
 
         // Log Error Authentication if it is allowed
         if (!$this->isValid && $this->config['LOG_ERR_AUTH']) {
@@ -279,13 +280,29 @@ abstract class base
                 $note   = '';
             } else {
                 $errMsg = 'Error password for "' . $this->identifyer . '".';
-                $note   = 'Hash: ' . $hash . "\n" . 'NS: ' . $this->facade->getUserSpace();
+                $note = 'Stored hash algorithm: ' . (password_get_info($storedHash)['algoName'] ?? 'unknown')
+                    . "\n" . 'NS: ' . $this->facade->getUserSpace();
             }
             $errMsg .= "\nTime: " . date('Y-m-d H:i:s') . "\nClient IP: " . $this->requestInput()->serverValue('REMOTE_ADDR', '');
             $this->errorLogger()->logErrorMessage($errMsg, 'Error authentication', $note);
         }
 
         return $this->isValid;
+    }
+
+    protected function verifyPasswordHash(string $password, string $storedHash): bool
+    {
+        if ((password_get_info($storedHash)['algo'] ?? null) !== null) {
+            return password_verify($password, $storedHash);
+        }
+
+        return hash_equals($storedHash, $this->makePasswordHash($password));
+    }
+
+    protected function passwordHashNeedsUpgrade(string $storedHash): bool
+    {
+        return (password_get_info($storedHash)['algo'] ?? null) !== null
+            && password_needs_rehash($storedHash, PASSWORD_DEFAULT);
     }
 
     public function load(): ?user

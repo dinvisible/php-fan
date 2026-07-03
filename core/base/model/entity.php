@@ -112,7 +112,7 @@ abstract class entity
 
     private mixed $modelEntityExceptionFactory = null;
 
-    private \Closure $namespaceResolver;
+    private ?\Closure $namespaceResolver = null;
 
     private ?object $reflectionClassFactory = null;
 
@@ -637,6 +637,7 @@ abstract class entity
      */
     public function getParamById(mixed $rowId, bool $idIsEncrypt = false): array
     {
+        $param = [];
         $idName = $this->description->getPrimeryKey();
         if (is_scalar($idName)) {
             if (is_scalar($rowId)) {
@@ -694,7 +695,7 @@ abstract class entity
      */
     public function &getDataByQuery(string|object $query, mixed $param = null, int|float $qtt = -1, int|float $offset = -1, bool $onlyOne = false): array
     {
-        list($query, $newParam) = $this->_getSqlAsString($query, $param, false);
+        list($query, $newParam) = $this->_getSqlAsString($query, $param);
         $data = $this->getConnection()->getAllLimit($query, $newParam, $qtt, $offset);
         // ToDo: link Result to array as the property of this object
         if (!empty($data) && $onlyOne) {

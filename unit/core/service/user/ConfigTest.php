@@ -19,16 +19,25 @@ class ServiceUserConfigTest extends SourceFileContractTestCase
 {
     protected const SOURCE_FILE = 'core/service/user/config.php';
 
-    public function testPasswordHashUsesLoginFromDataOrIdentifierAndEngineKey(): void
+    public function testPasswordHashUsesModernPasswordApi(): void
     {
         $engine = new ServiceUserConfigProbe('alice');
         $engine->setConfig(new row(['ENGINE_KEY' => 'pepper']));
 
-        $this->assertSame(md5('alicesecretpepper'), $engine->makePasswordHash('secret'));
+        $hash = $engine->makePasswordHash('secret');
 
-        $engine->setLogin('bob');
+        $this->assertTrue(password_verify('secret', $hash));
+        $this->assertFalse(password_verify('wrong', $hash));
+    }
 
-        $this->assertSame(md5('bobsecretpepper'), $engine->makePasswordHash('secret'));
+    public function testLegacyMd5PasswordIsAcceptedAndRehashed(): void
+    {
+        $engine = new ServiceUserConfigProbe('alice');
+        $engine->setConfig(new row(['ENGINE_KEY' => 'pepper', 'LOG_ERR_AUTH' => false]));
+        $engine->setData(['login' => 'alice', 'password' => md5('alicesecretpepper')]);
+
+        $this->assertTrue($engine->checkPassword('secret'));
+        $this->assertTrue(password_verify('secret', $engine->getPassword()));
     }
 
     public function testMergeRolesAcceptsStringArrayAndDataObject(): void
@@ -136,6 +145,11 @@ final class ServiceUserConfigProbe extends config
     {
         $property = new ReflectionProperty(config::class, 'authConfig');
         $property->setValue($this, $config);
+    }
+
+    public function setData(array $data): void
+    {
+        $this->data = $data;
     }
 
     public function accessRule(): mixed

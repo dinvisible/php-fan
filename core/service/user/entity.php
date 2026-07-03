@@ -47,7 +47,28 @@ class entity extends base
 
     public function makePasswordHash(string $password): string
     {
+        return password_hash($password, PASSWORD_DEFAULT);
+    }
+
+    protected function verifyPasswordHash(string $password, string $storedHash): bool
+    {
+        if ((password_get_info($storedHash)['algo'] ?? null) !== null) {
+            return parent::verifyPasswordHash($password, $storedHash);
+        }
+
+        return hash_equals($storedHash, $this->legacyPasswordHash($password));
+    }
+
+    protected function passwordHashNeedsUpgrade(string $storedHash): bool
+    {
+        return (password_get_info($storedHash)['algo'] ?? null) === null
+            || parent::passwordHashNeedsUpgrade($storedHash);
+    }
+
+    private function legacyPasswordHash(string $password): string
+    {
         $login = $this->arrayValueReader()($this->data, 'login', $this->identifyer);
+
         return $login ? md5((string)$login . $password . (string)$this->config->get('ENGINE_KEY')) : '';
     }
 

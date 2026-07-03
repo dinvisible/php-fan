@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/ai_map.php';
 
-function php_fan_ai_explain_file(string $root, string $path): array
+function php_fan_ai_explain_file(string $root, string $path, ?array $projectMap = null): array
 {
     $root = rtrim($root, DIRECTORY_SEPARATOR);
     $relativeFile = php_fan_ai_explain_relative_path($root, $path);
@@ -24,7 +24,7 @@ function php_fan_ai_explain_file(string $root, string $path): array
 
     $source = (string)file_get_contents($absoluteFile);
     $constants = php_fan_ai_service_id_constants($root);
-    $map = php_fan_ai_build_map($root);
+    $map = $projectMap ?? php_fan_ai_build_map($root);
     $relatedServiceIds = php_fan_ai_explain_related_service_ids_from_map($map, $relativeFile);
 
     return [
@@ -368,5 +368,5 @@ function php_fan_ai_explain_main(array $argv): int
 }
 
 if (PHP_SAPI === 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
-    exit(php_fan_ai_explain_main($argv));
+    exit(php_fan_ai_explain_main($_SERVER['argv'] ?? []));
 }

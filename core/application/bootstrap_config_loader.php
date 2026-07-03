@@ -34,7 +34,7 @@ final class bootstrap_config_loader
                     'check_adv_1' => 'mbstring.func_overload: 0',
                     'check_adv_2' => 'session.auto_start: 0',
                     'session_1' => 'session.use_trans_sid: 0',
-                    'session_2' => 'session.use_only_cookies: 0',
+                    'session_2' => 'session.use_only_cookies: 1',
                 ],
             ],
             'loader' => [

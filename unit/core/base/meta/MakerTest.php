@@ -109,9 +109,9 @@ class MetaMakerTest extends TestCase
         $this->assertStringContainsString('private $delayedFactory = null;', $source);
         $this->assertStringContainsString('private $blockExceptionFactory = null;', $source);
         $this->assertStringContainsString('private ?object $fileStorage = null;', $source);
-        $this->assertStringContainsString('private \Closure $recursiveMerger;', $source);
-        $this->assertStringContainsString('private \Closure $arrayAdducer;', $source);
-        $this->assertStringContainsString('private \Closure $classNameResolver;', $source);
+        $this->assertStringContainsString('private ?\Closure $recursiveMerger = null;', $source);
+        $this->assertStringContainsString('private ?\Closure $arrayAdducer = null;', $source);
+        $this->assertStringContainsString('private ?\Closure $classNameResolver = null;', $source);
         $this->assertStringContainsString('$this->recursiveMerger = \Closure::fromCallable(', $source);
         $this->assertStringContainsString('$this->arrayAdducer = \Closure::fromCallable(', $source);
         $this->assertStringContainsString('$this->classNameResolver = \Closure::fromCallable(', $source);

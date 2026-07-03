@@ -55,7 +55,7 @@ final class application_navigation_service_creator
             $tabDependencies->pagerFactory(),
             $tabDependencies->obfuscatorFactory(),
             $tabDependencies->imageModifyFactory(),
-            static fn(mixed ...$arguments): mixed => throw new \RuntimeException('Database service is not configured.'),
+            $tabDependencies->databaseFactory(),
             $tabDependencies->userFactory(),
             $tabDependencies->dateFactory(),
             $tabDependencies->tabState(),

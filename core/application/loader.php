@@ -102,19 +102,19 @@ class loader implements \ArrayAccess
 
     private ?object $fileStorage = null;
 
-    private \Closure $fatalExceptionFactory;
+    private ?\Closure $fatalExceptionFactory = null;
 
     private \Closure $arrayValueReader;
 
-    private \Closure $fileLoader;
+    private ?\Closure $fileLoader = null;
 
-    private \Closure $autoloadRegistrar;
+    private ?\Closure $autoloadRegistrar = null;
 
-    private \Closure $autoloadUnregistrar;
+    private ?\Closure $autoloadUnregistrar = null;
 
-    private \Closure $classAliaser;
+    private ?\Closure $classAliaser = null;
 
-    private \Closure $symbolExists;
+    private ?\Closure $symbolExists = null;
 
     public function __construct(
         $config,

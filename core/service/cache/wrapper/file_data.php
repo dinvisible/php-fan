@@ -49,9 +49,9 @@ class file_data
      */
     protected ?object $cache = null;
 
-    private \Closure $cacheFactory;
+    private ?\Closure $cacheFactory = null;
 
-    private \Closure $entityFactory;
+    private ?\Closure $entityFactory = null;
 
     private ?object $runtime = null;
 

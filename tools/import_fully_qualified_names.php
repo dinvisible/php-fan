@@ -590,4 +590,4 @@ final class fully_qualified_name_importer
     }
 }
 
-exit((new fully_qualified_name_importer($argv))->run());
+exit((new fully_qualified_name_importer($_SERVER['argv'] ?? []))->run());

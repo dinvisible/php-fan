@@ -223,6 +223,25 @@ class ServiceHeaderTest extends SourceFileContractTestCase
         ], $writer->headers);
     }
 
+    public function testSecurityHeadersRejectResponseSplitting(): void
+    {
+        $writer = new ServiceHeaderWriterDouble();
+        $header = new ServiceHeaderProbe(headerWriter: $writer);
+
+        $header->sendSecurityHeaders([
+            'X-Content-Type-Options' => 'nosniff',
+            'Referrer-Policy' => 'strict-origin-when-cross-origin',
+        ]);
+
+        $this->assertSame([
+            ['X-Content-Type-Options: nosniff', true, 0],
+            ['Referrer-Policy: strict-origin-when-cross-origin', true, 0],
+        ], $writer->headers);
+
+        $this->expectException(InvalidArgumentException::class);
+        $header->sendSecurityHeaders(['X-Test' => "ok\r\nInjected: value"]);
+    }
+
     private function ensureBaseHelper(): void
     {
         if (function_exists('fan\core\base\get_class_name')) {

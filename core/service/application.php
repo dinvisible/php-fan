@@ -31,7 +31,7 @@ class application extends single
     protected ?array $usedNames = null;
 
     private ?object $runtime = null;
-    private \Closure $arrayAdducer;
+    private ?\Closure $arrayAdducer = null;
 
     public function __construct(
         bool $allowIni = true,

@@ -23,6 +23,7 @@ final class application_support_bootstrap_context_registrar_dependencies
     private application_support_plain_file_storage_registrar_dependencies $plainFileStorage;
     private application_support_plain_exception_factory_registrar_dependencies $plainExceptionFactory;
     private application_support_transfer_exception_factory_registrar_dependencies $transferExceptionFactory;
+    private application_support_database_connections_registrar_dependencies $databaseConnections;
 
     public function __construct(container_interface $container)
     {
@@ -43,6 +44,7 @@ final class application_support_bootstrap_context_registrar_dependencies
         $this->plainFileStorage = new application_support_plain_file_storage_registrar_dependencies($container);
         $this->plainExceptionFactory = new application_support_plain_exception_factory_registrar_dependencies($container);
         $this->transferExceptionFactory = new application_support_transfer_exception_factory_registrar_dependencies($container);
+        $this->databaseConnections = new application_support_database_connections_registrar_dependencies($container);
     }
 
     public function serviceListenerState(): object
@@ -128,5 +130,10 @@ final class application_support_bootstrap_context_registrar_dependencies
     public function transferExceptionFactory(): callable
     {
         return $this->transferExceptionFactory->transferExceptionFactory();
+    }
+
+    public function databaseConnections(): object
+    {
+        return $this->databaseConnections->databaseConnections();
     }
 }

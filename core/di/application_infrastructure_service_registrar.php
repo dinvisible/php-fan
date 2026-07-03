@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace fan\core\di;
 
+use fan\core\service\database_connections;
+
 final class application_infrastructure_service_registrar
 {
     public function __construct(private ?\Closure $dependenciesFactory = null)
@@ -80,6 +82,20 @@ final class application_infrastructure_service_registrar
                 static fn(container_interface $container): object => (new eloquent_manager_factory())(
                     $dependenciesFactory($container)->config()->get('eloquent', [])
                 )
+            )
+            ->factory(
+                service_id::DATABASE_CONNECTIONS,
+                static function (container_interface $container) use ($dependenciesFactory): object {
+                    $dependencies = $dependenciesFactory($container);
+
+                    return new database_connections($dependencies->eloquent(), $dependencies->databaseConfig());
+                }
+            )
+            ->factory(
+                service_id::DATABASE,
+                static fn(container_interface $container, ?string $connectionName = null, mixed $extraKey = 0): object =>
+                    $dependenciesFactory($container)->databaseConnections()->connection($connectionName, $extraKey),
+                false
             );
     }
 

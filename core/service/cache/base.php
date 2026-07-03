@@ -81,11 +81,11 @@ abstract class base
 
     private ?object $runtime = null;
 
-    private \Closure $payloadEncoder;
+    private ?\Closure $payloadEncoder = null;
 
-    private \Closure $payloadDecoder;
+    private ?\Closure $payloadDecoder = null;
 
-    private \Closure $jsonPayloadChecker;
+    private ?\Closure $jsonPayloadChecker = null;
 
     public function __construct(
         cache $facade,

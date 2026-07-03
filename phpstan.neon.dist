@@ -2,7 +2,9 @@ includes:
     - phpstan-baseline.neon
 
 parameters:
-    level: 0
+    level: 1
+    bootstrapFiles:
+        - tools/phpstan_bootstrap.php
     paths:
         - core
         - project

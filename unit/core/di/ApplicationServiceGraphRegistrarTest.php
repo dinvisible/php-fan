@@ -89,7 +89,7 @@ final class ApplicationServiceGraphRegistrarTest extends TestCase
         foreach (['service_id::REQUEST,', 'service_id::ROLE,', 'service_id::TIMER,'] as $registration) {
             $this->assertStringContainsString($registration, $coreRegistrarSource);
         }
-        foreach (['service_id::CONFIG', 'service_id::CACHE', 'service_id::JSON', 'service_id::FILE_SYSTEM'] as $registration) {
+        foreach (['service_id::CONFIG', 'service_id::CACHE', 'service_id::JSON', 'service_id::FILE_SYSTEM', 'service_id::DATABASE', 'service_id::DATABASE_CONNECTIONS'] as $registration) {
             $this->assertStringContainsString($registration, $infrastructureRegistrarSource);
         }
         foreach (['service_id::TRANSLATION', 'service_id::BLOCK_FACTORY'] as $registration) {

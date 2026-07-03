@@ -87,7 +87,7 @@ final class application_client_service_creator
         callable $cookieServiceFactory,
         mixed $path = null,
         mixed $domain = null,
-        bool $secure = false
+        ?bool $secure = null
     ): mixed {
         $clientDependencies = $this->clientDependencies($container);
         $config = $clientDependencies->config();
@@ -98,6 +98,9 @@ final class application_client_service_creator
         if ($domain === null) {
             $domain = $config->get('DEFAULT_DOMAIN');
         }
+        $secure ??= (bool)$config->get('DEFAULT_SECURE', true);
+        $httpOnly = (bool)$config->get('DEFAULT_HTTP_ONLY', true);
+        $sameSite = (string)$config->get('DEFAULT_SAME_SITE', 'Lax');
 
         $instance = $state->getInstance($path, $domain);
         if ($instance === null) {
@@ -124,6 +127,15 @@ final class application_client_service_creator
                 $clientDependencies->cacheFactory()
             );
             $state->setInstance($path, $domain, $instance);
+        }
+        if (method_exists($instance, 'setSecureFlag')) {
+            $instance->setSecureFlag($secure);
+        }
+        if (method_exists($instance, 'setHttpOnlyFlag')) {
+            $instance->setHttpOnlyFlag($httpOnly);
+        }
+        if (method_exists($instance, 'setSameSite')) {
+            $instance->setSameSite($sameSite);
         }
 
         return $instance;

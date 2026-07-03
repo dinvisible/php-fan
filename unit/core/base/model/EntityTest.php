@@ -460,7 +460,7 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertStringContainsString('public function createRequestFatalException(', $code);
         $this->assertStringContainsString('public function createDesignerFatalException(', $code);
         $this->assertStringContainsString('private mixed $modelEntityExceptionFactory = null;', $code);
-        $this->assertStringContainsString('private \Closure $namespaceResolver;', $code);
+        $this->assertStringContainsString('private ?\Closure $namespaceResolver = null;', $code);
         $this->assertStringContainsString('private ?object $reflectionClassFactory = null;', $code);
         $this->assertStringContainsString('private mixed $entityIdDecoder = null;', $code);
         $this->assertStringContainsString('private mixed $entityLookup = null;', $code);
@@ -519,7 +519,7 @@ class BaseModelEntityTest extends SourceFileContractTestCase
         $this->assertStringContainsString('$this->modelClassExists($className)', $code);
         $this->assertStringContainsString('static fn(string $className): bool => class_exists($className)', $dependenciesCode);
         $this->assertStringContainsString('method_exists($this->reflectionClassFactory, \'create\')', $code);
-        $this->assertStringNotContainsString('private ?\Closure $namespaceResolver', $code);
+        $this->assertStringNotContainsString('private mixed $namespaceResolver', $code);
         $this->assertStringNotContainsString('private ?\Closure $reflectionClassFactory', $code);
         $this->assertStringNotContainsString('$this->namespaceResolver === null', $code);
         $this->assertStringNotContainsString('!class_exists($className)', $code);

@@ -26,6 +26,10 @@ abstract class html_nav_db extends html_nav
 
     protected array $srcElements = [];
 
+    abstract protected function getMenuURL(string $value, string $type, string $protocol): string;
+
+    abstract protected function checkCurrentElement(string $key): bool;
+
     protected function _getNav(mixed $groupKey = null): array
     {
         $rowset = $this->entityService()->getMenuElement($groupKey);

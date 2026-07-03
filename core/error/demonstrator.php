@@ -18,7 +18,7 @@ namespace fan\core\error;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.001 (10.03.2014)
  */
-class demonstrator
+class demonstrator implements error_template_context
 {
 
     public const CORE_TEMPLATE    = '{CORE_DIR}/error/template/{TPL_NAME}.html';
@@ -245,7 +245,11 @@ class demonstrator
         if (empty($this->tplFile)) {
             return null;
         }
-        $data   = empty($this->dataFile) || !$this->fileStorage()->exists($this->dataFile) ? [] : (array)$this->loadPhpArrayFile($this->dataFile, []);
+        $data = [];
+        if (!empty($this->dataFile) && $this->fileStorage()->exists($this->dataFile)) {
+            $dataProvider = $this->loadPhpArrayFile($this->dataFile, []);
+            $data = is_callable($dataProvider) ? (array)$dataProvider($this) : (array)$dataProvider;
+        }
         $result = (string)$this->fileStorage()->read($this->tplFile);
         foreach ($data as $k => $v) {
             $result = str_replace('{{' . strtoupper((string)$k) . '}}', (string)$v, $result);

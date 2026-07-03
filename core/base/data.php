@@ -75,13 +75,13 @@ abstract class data implements \ArrayAccess, \Iterator, \Countable
 
     protected ?object $errorLogger = null;
 
-    private \Closure $subDataFactory;
+    private ?\Closure $subDataFactory = null;
 
     private mixed $snapshotEncoder = null;
 
     private mixed $snapshotDecoder = null;
 
-    private \Closure $classNameResolver;
+    private ?\Closure $classNameResolver = null;
 
     public function __construct(
         mixed $data = null,
@@ -237,6 +237,7 @@ abstract class data implements \ArrayAccess, \Iterator, \Countable
             return true;
         }
         $trace = debug_backtrace();
+        $link = [];
         // Skip calling from this class
         do {
             foreach ($trace as $link) {

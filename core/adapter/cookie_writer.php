@@ -13,8 +13,16 @@ final class cookie_writer
         string $path,
         string $domain,
         bool $secure,
-        bool $httpOnly
+        bool $httpOnly,
+        string $sameSite = 'Lax'
     ): bool {
-        return setcookie($name, $value, $expires, $path, $domain, $secure, $httpOnly);
+        return setcookie($name, $value, [
+            'expires' => $expires,
+            'path' => $path,
+            'domain' => $domain,
+            'secure' => $secure,
+            'httponly' => $httpOnly,
+            'samesite' => $sameSite,
+        ]);
     }
 }

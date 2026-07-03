@@ -159,9 +159,9 @@ class ViewRouterTest extends SourceFileContractTestCase
         $source = file_get_contents(dirname(__DIR__, 3) . '/core/view/router.php');
 
         $this->assertIsString($source);
-        $this->assertStringContainsString('private \Closure $keeperFactory;', $source);
-        $this->assertStringContainsString('private \Closure $blockExceptionFactory;', $source);
-        $this->assertStringContainsString('private \Closure $arrayAdducer;', $source);
+        $this->assertStringContainsString('private ?\Closure $keeperFactory = null;', $source);
+        $this->assertStringContainsString('private ?\Closure $blockExceptionFactory = null;', $source);
+        $this->assertStringContainsString('private ?\Closure $arrayAdducer = null;', $source);
         $this->assertStringContainsString('$this->keeperFactory = \Closure::fromCallable(', $source);
         $this->assertStringContainsString('$this->blockExceptionFactory = \Closure::fromCallable(', $source);
         $this->assertStringContainsString('$this->arrayAdducer = \Closure::fromCallable(', $source);

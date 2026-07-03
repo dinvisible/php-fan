@@ -92,7 +92,7 @@ final class ApplicationClientServiceCreatorTest extends TestCase
         $this->assertSame('\\' . cookie::class, $received[0] ?? null);
         $this->assertSame('/app', $received[1] ?? null);
         $this->assertSame('example.test', $received[2] ?? null);
-        $this->assertFalse($received[3] ?? true);
+        $this->assertTrue($received[3] ?? false);
         $this->assertSame($container->get('request_input'), $received[4] ?? null);
         $this->assertSame($container->get('error'), ($received[5])());
         $this->assertSame('encoded', ($received[6])(['value' => true]));

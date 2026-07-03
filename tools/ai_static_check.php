@@ -93,5 +93,5 @@ function php_fan_ai_static_check_main(array $argv): int
 }
 
 if (PHP_SAPI === 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
-    exit(php_fan_ai_static_check_main($argv));
+    exit(php_fan_ai_static_check_main($_SERVER['argv'] ?? []));
 }

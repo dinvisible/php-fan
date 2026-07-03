@@ -27,11 +27,11 @@ class rest extends multi
 
     private ?string $errorMessage = null;
 
-    private \Closure $jsonFactory;
+    private ?\Closure $jsonFactory = null;
 
-    private \Closure $curlFactory;
+    private ?\Closure $curlFactory = null;
 
-    private \Closure $errorFactory;
+    private ?\Closure $errorFactory = null;
 
     public function __construct(
         ?string $connectionName,

@@ -27,6 +27,11 @@ final class application_navigation_tab_model_factory_dependencies
         return $this->data->pagerFactory();
     }
 
+    public function databaseFactory(): callable
+    {
+        return $this->data->databaseFactory();
+    }
+
     public function obfuscatorFactory(): callable
     {
         return $this->media->obfuscatorFactory();

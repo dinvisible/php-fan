@@ -178,4 +178,9 @@ final class application_support_service_registrar_dependencies
     {
         return $this->bootstrapContext->transferExceptionFactory();
     }
+
+    public function databaseConnections(): object
+    {
+        return $this->bootstrapContext->databaseConnections();
+    }
 }

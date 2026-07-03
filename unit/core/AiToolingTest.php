@@ -260,8 +260,8 @@ final class AiToolingTest extends TestCase
             'core/factory/application_registry_defaults_provider_factory.php',
         ], $map['source_inventory']['queues']['bootstrap_container_lookups']['files']);
         $this->assertSame('composition_boundary', $map['source_inventory']['queues']['composition_container_lookups']['classification']);
-        $this->assertSame(272, $map['source_inventory']['queues']['composition_container_lookups']['count']);
-        $this->assertCount(272, $map['source_inventory']['queues']['composition_container_lookups']['files']);
+        $this->assertSame(277, $map['source_inventory']['queues']['composition_container_lookups']['count']);
+        $this->assertCount(277, $map['source_inventory']['queues']['composition_container_lookups']['files']);
         $this->assertContains('core/di/application_pager_service_registrar_dependencies.php', $map['source_inventory']['queues']['composition_container_lookups']['files']);
         $this->assertContains('core/di/application_session_service_registrar_dependencies.php', $map['source_inventory']['queues']['composition_container_lookups']['files']);
         $this->assertContains('core/di/application_client_cookie_state_registrar_dependencies.php', $map['source_inventory']['queues']['composition_container_lookups']['files']);
@@ -536,7 +536,7 @@ PHP);
         }
 
         $file = 'core/di/application_infrastructure_service_creator.php';
-        $explanation = php_fan_ai_explain_file($root, $file);
+        $explanation = php_fan_ai_explain_file($root, $file, $map);
         foreach ($explanation['service_reference_locations'] as $id => $locations) {
             $expected = array_values(array_filter(
                 $map['services']['referenced_locations'][$id] ?? [],
@@ -566,7 +566,7 @@ PHP);
                 );
             }
 
-            $explanation = php_fan_ai_explain_file($root, $file);
+            $explanation = php_fan_ai_explain_file($root, $file, $map);
             $this->assertSame($locations, $explanation['dynamic_boundary_details']['locations'] ?? null, 'Explain dynamic locations drifted for: ' . $file);
         }
     }
@@ -904,7 +904,7 @@ PHP);
         $this->assertSame('bootstrap_boundary', $sourceInventory['queues']['bootstrap_container_lookups']['classification']);
         $this->assertSame(25, $sourceInventory['queues']['bootstrap_container_lookups']['count']);
         $this->assertSame('composition_boundary', $sourceInventory['queues']['composition_container_lookups']['classification']);
-        $this->assertSame(272, $sourceInventory['queues']['composition_container_lookups']['count']);
+        $this->assertSame(277, $sourceInventory['queues']['composition_container_lookups']['count']);
         $this->assertSame('intentional_compatibility', $sourceInventory['queues']['intentional_loading_boundaries']['classification']);
         $this->assertSame(12, $sourceInventory['queues']['intentional_loading_boundaries']['count']);
         $this->assertSame('clean', $sourceInventory['queues']['unmanaged_container_lookups']['classification']);

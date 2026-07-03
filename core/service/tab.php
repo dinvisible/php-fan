@@ -27,11 +27,11 @@ use fan\core\view\parser;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.006 (20.04.2015)
  *
- * @method boolean isUseHttps() isUseHttps(array|string $key)
- * @method string getCurrentURI() getCurrentURI(boolean $corLng, boolean $addExt, boolean $addQueryStr, boolean $addFirstSlash)
- * @method string getURI() getURI(string $urn, string $type, boolean $useSid, boolean $protocol)
- * @method string addQuery() addQuery(string $urn, string $key, string $val)
- * @method string getDefaultExtension() getDefaultExtension()
+ * @method bool isUseHttps(array|string $key)
+ * @method string getCurrentURI(mixed $corLanguage = true, bool $addExt = true, bool $addQueryStr = true, mixed $addSid = null, mixed $separator = null)
+ * @method string getURI(string $urn = '', string $type = 'link', mixed $addSid = null, mixed $protocol = null)
+ * @method string addQuery(string $urn, string $key, string $val)
+ * @method string getDefaultExtension()
  */
 class tab extends single
 {

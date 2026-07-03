@@ -75,6 +75,9 @@ return array (
   'cookie' => 
   array (
     'DEFAULT_PATH' => '/',
+    'DEFAULT_SECURE' => getenv('PHP_FAN_COOKIE_SECURE') === '0' ? '0' : '1',
+    'DEFAULT_HTTP_ONLY' => '1',
+    'DEFAULT_SAME_SITE' => 'Lax',
   ),
   'database' => 
   array (
@@ -90,18 +93,18 @@ return array (
       array (
         'ENGINE' => 'mysql',
         'PERSISTENT' => '0',
-        'HOST' => 'localhost',
-        'DATABASE' => 'php_fan_test',
-        'USER' => 'test_fan',
-        'PASSWORD' => '123',
+        'HOST' => getenv('PHP_FAN_DB_HOST') ?: 'localhost',
+        'DATABASE' => getenv('PHP_FAN_DB_NAME') ?: 'php_fan',
+        'USER' => getenv('PHP_FAN_DB_USER') ?: '',
+        'PASSWORD' => getenv('PHP_FAN_DB_PASSWORD') ?: '',
       ),
       'test' => 
       array (
         'ENGINE' => 'mysql',
-        'HOST' => 'localhost',
-        'DATABASE' => 'test',
-        'USER' => 'test_fan',
-        'PASSWORD' => '123',
+        'HOST' => getenv('PHP_FAN_TEST_DB_HOST') ?: 'localhost',
+        'DATABASE' => getenv('PHP_FAN_TEST_DB_NAME') ?: 'php_fan_test',
+        'USER' => getenv('PHP_FAN_TEST_DB_USER') ?: '',
+        'PASSWORD' => getenv('PHP_FAN_TEST_DB_PASSWORD') ?: '',
         'SCENARIO' => 'autocommit',
       ),
     ),
@@ -138,10 +141,10 @@ return array (
       'common' =>
       array (
         'driver' => 'mysql',
-        'host' => 'localhost',
-        'database' => 'php_fan_test',
-        'username' => 'test_fan',
-        'password' => '123',
+        'host' => getenv('PHP_FAN_DB_HOST') ?: 'localhost',
+        'database' => getenv('PHP_FAN_DB_NAME') ?: 'php_fan',
+        'username' => getenv('PHP_FAN_DB_USER') ?: '',
+        'password' => getenv('PHP_FAN_DB_PASSWORD') ?: '',
         'charset' => 'utf8mb4',
         'collation' => 'utf8mb4_unicode_ci',
         'prefix' => '',
@@ -149,10 +152,10 @@ return array (
       'test' =>
       array (
         'driver' => 'mysql',
-        'host' => 'localhost',
-        'database' => 'test',
-        'username' => 'test_fan',
-        'password' => '123',
+        'host' => getenv('PHP_FAN_TEST_DB_HOST') ?: 'localhost',
+        'database' => getenv('PHP_FAN_TEST_DB_NAME') ?: 'php_fan_test',
+        'username' => getenv('PHP_FAN_TEST_DB_USER') ?: '',
+        'password' => getenv('PHP_FAN_TEST_DB_PASSWORD') ?: '',
         'charset' => 'utf8mb4',
         'collation' => 'utf8mb4_unicode_ci',
         'prefix' => '',
@@ -166,7 +169,7 @@ return array (
       0 => 'euro',
       1 => 'mysql',
     ),
-    'CURRENT_TIMEZONE' => 'Europe/Kiev',
+    'CURRENT_TIMEZONE' => getenv('PHP_FAN_TIMEZONE') ?: 'UTC',
     'THIS_CENTURY_TO' => '50',
     'FORMAT' => 
     array (
@@ -189,7 +192,7 @@ return array (
   ),
   'debug' => 
   array (
-    'ENABLED' => '1',
+    'ENABLED' => getenv('PHP_FAN_DEBUG') === '1' ? '1' : '',
     'DEBUG_IP' => '/^(127\\.0\\.0\\.1|192\\.168\\.\\d{1,3}\\.\\d{1,3})$/',
     'BORDER_OUT' => '#FFFFFF',
     'BORDER_INT' => '#7F7971',
@@ -224,6 +227,14 @@ return array (
   ),
   'header' => 
   array (
+    'SECURITY_HEADERS' =>
+    array (
+      'Content-Security-Policy' => "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
+      'Permissions-Policy' => 'camera=(), geolocation=(), microphone=()',
+      'Referrer-Policy' => 'strict-origin-when-cross-origin',
+      'X-Content-Type-Options' => 'nosniff',
+      'X-Frame-Options' => 'SAMEORIGIN',
+    ),
   ),
   'json' => 
   array (
@@ -417,8 +428,9 @@ return array (
     'ENGINE' => 'inbuilt',
     'SESSION_NAME' => 'SID',
     'MAXLIFETIME' => '1800',
-    'COOKIE_SECURE' => '',
+    'COOKIE_SECURE' => getenv('PHP_FAN_COOKIE_SECURE') === '0' ? '0' : '1',
     'COOKIE_HTTPONLY' => '1',
+    'COOKIE_SAMESITE' => 'Lax',
     'CACHE_LIMITER' => 'none',
     'CHECK_SYSTEM' => 
     array (
@@ -427,7 +439,6 @@ return array (
       2 => 'HTTP_X_REAL_IP',
     ),
     'KILL_BY_TIMEOUT' => '',
-    'IS_GET_PRIORITY' => '',
   ),
   'soap' => 
   array (
@@ -513,12 +524,16 @@ return array (
   ),
   'timer' => 
   array (
-    'ENABLE_EXEC' => '1',
+    'ENABLE_EXEC' => getenv('PHP_FAN_TIMER_EXEC') === '1' ? '1' : '',
     'ENTITY' => 'mysql\\common\\timer_program',
     'JOINTLY_LIMIT' => '10',
     'TIMER_DIR' => '{PROJECT}/timer/',
     'BASE_NS' => '\\fan\\project\\timer',
-    'PHP_INTERPRETER' => 'C:\\app\\web_server\\PHP\\php.exe',
+    'PHP_INTERPRETER' => getenv('PHP_FAN_PHP_BINARY') ?: PHP_BINARY,
+    'EXECUTABLE_ALLOWLIST' => array_values(array_filter([
+      getenv('PHP_FAN_PHP_BINARY') ?: PHP_BINARY,
+      substr(php_uname(), 0, 7) === 'Windows' ? 'at' : null,
+    ])),
     'CRON_FILE' => '{PROJECT}/timer/crontab.php',
     'BGR_FILE' => '{PROJECT}/timer/background.php',
     'IS_AT_COMMAND' => '1',

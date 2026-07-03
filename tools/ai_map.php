@@ -182,6 +182,11 @@ function php_fan_ai_dynamic_boundaries_map(?string $root = null, ?array $product
                 'core/service/translation.php',
             ],
             'composition_roots' => [
+                'core/di/application_infrastructure_eloquent_registrar_dependencies.php',
+                'core/di/application_infrastructure_database_config_registrar_dependencies.php',
+                'core/di/application_infrastructure_database_connections_registrar_dependencies.php',
+                'core/di/application_navigation_tab_database_model_factory_dependencies.php',
+                'core/di/application_support_database_connections_registrar_dependencies.php',
                 'core/di/application_client_service_dependencies.php',
                 'core/di/application_client_service_creator.php',
                 'core/di/application_client_array_adducer_payload_dependencies.php',
@@ -2329,5 +2334,5 @@ function php_fan_ai_main(array $argv): int
 }
 
 if (PHP_SAPI === 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
-    exit(php_fan_ai_main($argv));
+    exit(php_fan_ai_main($_SERVER['argv'] ?? []));
 }

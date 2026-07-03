@@ -90,7 +90,7 @@ class runner
             }
 
             return $ret;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
         }
         $this->_logException($e);
         ob_end_clean();
@@ -142,10 +142,11 @@ class runner
             $input = $this->input();
             $host = $input->serverValue('HTTP_HOST', '');
             $requestUri = $input->serverValue('REQUEST_URI', '');
+            $adminEmail = defined('ADMIN_EMAIL') ? (string)constant('ADMIN_EMAIL') : 'admin@example.invalid';
             //ToDo: make this message by special file
             $errMsg = [
                 'errMsg' => [
-                    'Please could you send a message about this error to <a href="mailto:' . ADMIN_EMAIL . '?subject=Error%20reporting&amp;body=Fatal%20Error%20at%20the%20request%20' . urlencode('http://' . $host . $requestUri) . '">' . ADMIN_EMAIL . '</a>',
+                    'Please could you send a message about this error to <a href="mailto:' . $adminEmail . '?subject=Error%20reporting&amp;body=Fatal%20Error%20at%20the%20request%20' . urlencode('http://' . $host . $requestUri) . '">' . $adminEmail . '</a>',
                     'We will do everything we can to get this fixed ASAP.'
                 ]
             ];
@@ -166,7 +167,7 @@ class runner
         return $demonstrator->getTplContent();
     }
 
-    protected function _logException(\Exception $e): static
+    protected function _logException(\Throwable $e): static
     {
         $errMsg  = 'Uncaught exception "' . get_class($e) . '" with message:' . "\n";
         if (!($e instanceof base)) {
@@ -186,7 +187,7 @@ class runner
         return $this;
     }
 
-    public function _showExceptionError(\Exception $e, bool $isEcho): void
+    public function _showExceptionError(\Throwable $e, bool $isEcho): void
     {
         if (method_exists($e, 'getMessageForShow')) {
             $errMsg = $e->getMessageForShow();

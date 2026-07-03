@@ -33,6 +33,8 @@ class image_draw extends image_modify
     public function drawText(string $string, array $coord, int|float $fontNumber = 1, int|string|array $fntColor = 0x000000, string $txtAlign = 'left', string $vertAlign = 'top'): static
     {
         $fontNumber = (int)$fontNumber;
+        $top = $this->_getCoord($coord, 'top');
+        $left = $this->_getCoord($coord, 'left');
 
         //Calculating of top y coordinate for text
         if ($vertAlign === 'top') {
@@ -58,7 +60,7 @@ class image_draw extends image_modify
     public function drawTextTtf(string $string, array $coord, string $fontFile = '', int|string|array $fntColor = 0X000000, string $txtAlign = 'left', string $vertAlign = 'top',  array $info = ['linespacing' => 1]): static
     {
         if (!$fontFile) {
-            $fontFile = (string)$this->get_config('FONT_FILE', 'arial.ttf');
+            $fontFile = (string)$this->getConfig('FONT_FILE', 'arial.ttf');
         }
         $fontFile = (string)$this->runtime()->parsePath((string)$this->getConfig('FONT_PATH', '{PROJECT}/data/font/')) . $fontFile;
 
@@ -66,6 +68,9 @@ class image_draw extends image_modify
         $stringSize = $this->imageCanvasOperations()->trueTypeBoundingBox($fontHeight, 0, $fontFile, $string, $info);
         $strWidth  = $stringSize[4];
         $strHeight = -$stringSize[5];
+
+        $top = $this->_getCoord($coord, 'top');
+        $left = $this->_getCoord($coord, 'left');
 
         //calculating of top y coordinate for text
         if ($vertAlign === 'top') {

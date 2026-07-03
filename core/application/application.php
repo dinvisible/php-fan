@@ -11,7 +11,7 @@ use fan\core\di\service_id;
 
 final class application
 {
-    public const MIN_PHP_VERSION = '8.0.0';
+    public const MIN_PHP_VERSION = '8.3.0';
 
     private ?context_registry_state $contextState;
 

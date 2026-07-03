@@ -141,7 +141,7 @@ class session extends multi
                     } elseif (is_callable($this->errorFactory)) {
                         ($this->errorFactory)()->logErrorMessage($erMsg, 'Session is not compared');
                     }
-                    $this->setSessionId(md5($this->getSessionId() . microtime()));
+                    $this->setSessionId(bin2hex(random_bytes(16)));
                     $this->_killAll();
                 }
 
@@ -347,44 +347,45 @@ class session extends multi
     protected function _prepareParameters(): ?string
     {
         $config = $this->config->toArray();
+        $cookieSecure = !empty($config['COOKIE_SECURE']);
+        $cookieHttpOnly = !isset($config['COOKIE_HTTPONLY']) || !empty($config['COOKIE_HTTPONLY']);
+        $cookieSameSite = (string)($config['COOKIE_SAMESITE'] ?? 'Lax');
         // Check conf - Session MAXLIFETIME
         if ($config['MAXLIFETIME']){
             $this->phpRuntimeSettings()->set('session.gc_maxlifetime', (string)$config['MAXLIFETIME']);
         }
 
         // Check conf - Session COOKIE_SECURE
-        $this->phpRuntimeSettings()->set('session.cookie_secure', !empty($config['COOKIE_SECURE']) ? '1' : '0');
+        $this->phpRuntimeSettings()->set('session.cookie_secure', $cookieSecure ? '1' : '0');
 
         // Check conf - Session COOKIE_HTTPONLY
-        $this->phpRuntimeSettings()->set('session.cookie_httponly', !isset($config['COOKIE_HTTPONLY']) || !empty($config['COOKIE_HTTPONLY']) ? '1' : '0');
+        $this->phpRuntimeSettings()->set('session.cookie_httponly', $cookieHttpOnly ? '1' : '0');
+        $this->phpRuntimeSettings()->set('session.cookie_samesite', $cookieSameSite);
 
         // Set main session parameters
-        if (empty($config['COOKIE_DOMAIN'])) {
-            $this->nativeSession()->setCookieParams(0, '/');
-        } else {
-            $this->nativeSession()->setCookieParams(0, '/', (string)$config['COOKIE_DOMAIN']);
-        }
+        $this->nativeSession()->setCookieParams(
+            0,
+            '/',
+            empty($config['COOKIE_DOMAIN']) ? null : (string)$config['COOKIE_DOMAIN'],
+            $cookieSecure,
+            $cookieHttpOnly,
+            $cookieSameSite
+        );
         $this->nativeSession()->cacheLimiter((string)$config['CACHE_LIMITER']);
 
-        // ---- Define sessin by Cookie/GET/POST ---- \\
+        // Session identifiers are accepted from cookies only. URL-provided IDs
+        // enable fixation attacks and can leak through logs and referrers.
         $request = $this->state()->getRequestService();
-        $sesName   = (string)$this->config->get('SESSION_NAME', 'SID');
-        $cookieSid = $request->get($sesName, 'C');
-        $this->state()->setByCookie(!empty($cookieSid));
-
-        // Check session ID by GET/POST
-        $sid = $request->get(strtoupper($sesName), 'GP', $request->get(strtolower($sesName), 'GP'));
-        if ($this->_checkSessionId($sid, $sesName) && (!$this->state()->isByCookie() || $this->config->get('IS_GET_PRIORITY', false))) {
-            $this->state()->setByCookie($this->state()->isByCookie() && (string)$cookieSid === (string)$sid);
-            $this->_setCookie($sesName, (string)$sid);
-        } elseif ($this->state()->isByCookie() && !$this->_checkSessionId($cookieSid)) {
-            $sid = md5((string)$cookieSid . microtime());
-            $this->state()->setByCookie(false);
-            $this->_setCookie($sesName, $sid);
+        $sesName = (string)$this->config->get('SESSION_NAME', 'SID');
+        foreach (array_unique([$sesName, strtolower($sesName), strtoupper($sesName)]) as $urlSessionKey) {
+            $request->remove($urlSessionKey, 'GPR', true);
         }
+        $cookieSid = $request->get($sesName, 'C');
+        $hasValidCookieId = $this->_checkSessionId($cookieSid);
+        $this->state()->setByCookie($hasValidCookieId);
         $this->nativeSession()->name($sesName);
 
-        return $this->state()->isByCookie() ? (string)$cookieSid : (is_null($sid) ? null : (string)$sid);
+        return $hasValidCookieId ? (string)$cookieSid : null;
     }
 
     private function phpRuntimeSettings(): object
@@ -403,7 +404,15 @@ class session extends multi
 
     protected function _setCookie(string $var, string $val): static
     {
-        $this->sessionCookie('/', $this->config['COOKIE_DOMAIN'])->set($var, $val);
+        $cookie = $this->sessionCookie('/', $this->config['COOKIE_DOMAIN'], !empty($this->config['COOKIE_SECURE']));
+        if (method_exists($cookie, 'setHttpOnlyFlag')) {
+            $cookie->setHttpOnlyFlag(!isset($this->config['COOKIE_HTTPONLY']) || !empty($this->config['COOKIE_HTTPONLY']));
+        }
+        if (method_exists($cookie, 'setSameSite')) {
+            $cookie->setSameSite((string)$this->config->get('COOKIE_SAMESITE', 'Lax'));
+        }
+        $cookie->set($var, $val);
+
         return $this;
     }
 
@@ -414,9 +423,8 @@ class session extends multi
 
     protected function _checkSessionId(mixed &$sid, ?string $sesName = null): bool
     {
-        $sidSrc = $sid;
-        $sid = substr((string)preg_replace('/\W/', '', (string)$sid), 0, 32);
-        if ((string)$sidSrc === $sid && strlen($sid) > 16) {
+        $sid = is_string($sid) ? $sid : null;
+        if ($sid !== null && preg_match('/^[A-Za-z0-9,-]{17,128}$/D', $sid) === 1) {
             return true;
         }
         if ($sesName) { // ToDo: Make this by service request
@@ -537,13 +545,13 @@ class session extends multi
         return ($this->dateFactory)($date);
     }
 
-    private function sessionCookie(mixed $path, mixed $domain): object
+    private function sessionCookie(mixed $path, mixed $domain, bool $secure): object
     {
         if (!is_callable($this->cookieFactory)) {
             throw new \RuntimeException('Cookie service factory is not configured for session service.');
         }
 
-        return ($this->cookieFactory)($path, $domain);
+        return ($this->cookieFactory)($path, $domain, $secure);
     }
 
     private function sessionEngine(string $class, ?string $sid, object $state): object

@@ -225,6 +225,7 @@ class item implements \ArrayAccess
         $regexpLanguage = implode('|', array_keys($languages));
 
         $prefix  = '';
+        $way = 'request';
         $matches = null;
         foreach ($this->facade->getConfig('app', []) as $k => $v) {
             $regexp = str_replace('{LANGUAGE}', $regexpLanguage, $v['regexp']);

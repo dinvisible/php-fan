@@ -97,7 +97,7 @@ final class application_support_service_registrar
                     if (method_exists($blockExceptionFactory, 'setExceptionDependencies')) {
                         $dependencies = $dependenciesFactory($container);
                         $blockExceptionFactory->setExceptionDependencies(
-                            null,
+                            $dependencies->databaseConnections(),
                             $dependencies->bootstrapRuntime(),
                             $dependencies->request(),
                             $dependencies->error(),
@@ -114,7 +114,7 @@ final class application_support_service_registrar
                     $dependencies = $dependenciesFactory($container);
 
                     return (new error500_exception_factory())->setExceptionDependencies(
-                        null,
+                        $dependencies->databaseConnections(),
                         $dependencies->bootstrapRuntime(),
                         $dependencies->request(),
                         $dependencies->error(),
@@ -178,7 +178,7 @@ final class application_support_service_registrar
                     $dependencies = $dependenciesFactory($container);
 
                     return (new plain_exception_factory())->setExceptionDependencies(
-                        null,
+                        $dependencies->databaseConnections(),
                         $dependencies->bootstrapRuntime(),
                         $dependencies->request(),
                         $dependencies->error(),
@@ -234,7 +234,7 @@ final class application_support_service_registrar
                     return new plain_file_context(
                         $dependencies->request(),
                         $dependencies->application(),
-                        null,
+                        $dependencies->databaseConnections(),
                         $dependencies->translation(),
                         $dependencies->cacheFactory(),
                         $dependencies->bootstrapRuntime(),
@@ -251,7 +251,7 @@ final class application_support_service_registrar
                 static function (container_interface $container) use ($dependenciesFactory): object {
                     $dependencies = $dependenciesFactory($container);
 
-                    return new transfer(null, $dependencies->transferExceptionFactory());
+                    return new transfer($dependencies->databaseConnections(), $dependencies->transferExceptionFactory());
                 }
             );
     }

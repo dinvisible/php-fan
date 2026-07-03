@@ -84,9 +84,9 @@ class row implements \ArrayAccess
 
     private mixed $entityFactory = null;
 
-    private \Closure $snapshotEncoder;
+    private ?\Closure $snapshotEncoder = null;
 
-    private \Closure $snapshotDecoder;
+    private ?\Closure $snapshotDecoder = null;
 
     private mixed $modelRowExceptionFactory = null;
 
@@ -106,6 +106,7 @@ class row implements \ArrayAccess
         ?callable $namespaceResolver = null
     )
     {
+        unset($serviceContainer); // Kept in the signature for legacy constructor compatibility.
         $this->entity = $entity;
         $this->rowset = $rowset;
         $this->snapshotEncoder = \Closure::fromCallable(
@@ -470,6 +471,7 @@ class row implements \ArrayAccess
         $ett = $this->entity;
         $tmp = $ett->description->relations;
         $rel = null;
+        $v = [];
         foreach ($tmp as $v) {
             if ((string)$v['field'] === (string)$byField) {
                 $rel = $v;
@@ -504,6 +506,7 @@ class row implements \ArrayAccess
 
         $tmp = $bottomEtt->description->relations;
         $rel = null;
+        $v = [];
         foreach ($tmp as $v) {
             if ((string)$v['ref_table'] === (string)$curEtt->getTableName()) {
                 $rel = $v;

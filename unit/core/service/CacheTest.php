@@ -322,8 +322,8 @@ class ServiceCacheTest extends SourceFileContractTestCase
         $this->assertStringNotContainsString('new \Exception', $source);
         $this->assertStringNotContainsString('use fan\project\exception\service\fatal as fatalException;', $source);
         $this->assertStringNotContainsString('new $class(...$arguments)', $source);
-        $this->assertStringNotContainsString('private ?\Closure $errorFactory', $source);
-        $this->assertStringNotContainsString('private ?\Closure $configCacheFatalExceptionFactory', $source);
+        $this->assertStringContainsString('private ?\Closure $errorFactory = null;', $source);
+        $this->assertStringContainsString('private ?\Closure $configCacheFatalExceptionFactory = null;', $source);
         $this->assertStringNotContainsString('$this->errorFactory === null', $source);
         $this->assertStringNotContainsString('$this->configCacheFatalExceptionFactory === null', $source);
         $this->assertDoesNotMatchRegularExpression(

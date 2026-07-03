@@ -30,6 +30,7 @@ class data_form extends data
 
     public function validateData(array &$edit, array &$insert): bool
     {
+        $err = [];
         if ($edit) {
             $err = $this->doValidate($edit, 'edit');
         } elseif ($insert) {
@@ -73,8 +74,8 @@ class data_form extends data
     protected function getMainData(array $data, array $force = []): array
     {
         $json = parent::getMainData($data, $force);
-        $ett  = $this->getCurrentRow(true);
-        $json['ei_mode'] = !empty($ett) && $ett->checkIsLoad() ? 'edit' : 'ins';
+        $row = $this->getCurrentRow(true);
+        $json['ei_mode'] = $row->checkIsLoad() ? 'edit' : 'ins';
         return $json;
     }
 

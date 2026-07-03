@@ -32,18 +32,18 @@ class soap extends multi
     private ?object $soapFault = null;
     private ?bool $logEnabled = null;
 
-    private \Closure $errorFactory;
+    private ?\Closure $errorFactory = null;
 
     private ?object $runtime = null;
 
     private ?object $phpRuntimeSettings = null;
     private ?object $wsdlFileStorage = null;
-    private \Closure $arrayValueReader;
-    private \Closure $soapHeaderFactory;
-    private \Closure $soapClientFactory;
-    private \Closure $soapVarFactory;
-    private \Closure $domDocumentFactory;
-    private \Closure $streamContextFactory;
+    private ?\Closure $arrayValueReader = null;
+    private ?\Closure $soapHeaderFactory = null;
+    private ?\Closure $soapClientFactory = null;
+    private ?\Closure $soapVarFactory = null;
+    private ?\Closure $domDocumentFactory = null;
+    private ?\Closure $streamContextFactory = null;
 
     /**
      * Soap Headers

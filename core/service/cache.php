@@ -49,7 +49,7 @@ class cache extends multi
 
     private ?object $runtime = null;
 
-    private \Closure $errorFactory;
+    private ?\Closure $errorFactory = null;
 
     private ?object $cacheState = null;
 
@@ -59,7 +59,7 @@ class cache extends multi
 
     private ?object $sourceFileMetadata = null;
 
-    private \Closure $configCacheFatalExceptionFactory;
+    private ?\Closure $configCacheFatalExceptionFactory = null;
 
     public function __construct(
         string $type,

@@ -28,14 +28,16 @@ class cookie extends multi
 
     protected bool $secure = false;
 
-    protected bool $httpOnly = false;
+    protected bool $httpOnly = true;
+
+    protected string $sameSite = 'Lax';
 
     private ?object $input = null;
 
     private mixed $errorFactory = null;
     private ?object $state = null;
-    private \Closure $cookieValueEncoder;
-    private \Closure $cookieValueDecoder;
+    private ?\Closure $cookieValueEncoder = null;
+    private ?\Closure $cookieValueDecoder = null;
     private \Closure $cookieValueChecker;
     private ?object $cookieWriter = null;
 
@@ -148,7 +150,16 @@ class cookie extends multi
     {
         $cookieValue = $time < 0 ? '' : $this->encodeCookieValue($value);
 
-        if ($this->cookieWriter()->write($name, $cookieValue, ($time ? $time + time() : 0), (string)$this->path, (string)$this->domain, $this->secure, $this->httpOnly)) {
+        if ($this->cookieWriter()->write(
+            $name,
+            $cookieValue,
+            ($time ? $time + time() : 0),
+            (string)$this->path,
+            (string)$this->domain,
+            $this->secure,
+            $this->httpOnly,
+            $this->sameSite
+        )) {
             if ($time < 0) {
                 $this->state()->deleteData($name);
             } elseif (!$this->secure || !empty($this->input()->serverValue('HTTPS'))) {
@@ -194,6 +205,26 @@ class cookie extends multi
     public function setHttpOnlyFlag(bool $httpOnly): void
     {
         $this->httpOnly = !empty($httpOnly);
+    }
+
+    public function setSecureFlag(bool $secure): void
+    {
+        // A shared cookie instance may be requested by several consumers. Once
+        // upgraded to Secure it must never be downgraded later in the request.
+        $this->secure = $this->secure || $secure;
+    }
+
+    public function setSameSite(string $sameSite): void
+    {
+        $sameSite = ucfirst(strtolower(trim($sameSite)));
+        if (!in_array($sameSite, ['Lax', 'Strict', 'None'], true)) {
+            throw new \InvalidArgumentException('Cookie SameSite must be Lax, Strict, or None.');
+        }
+        if ($sameSite === 'None' && !$this->secure) {
+            throw new \InvalidArgumentException('Cookie SameSite=None requires the Secure flag.');
+        }
+
+        $this->sameSite = $sameSite;
     }
 
     private function input(): object

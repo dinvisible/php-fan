@@ -130,11 +130,12 @@ abstract class entity extends spec_file_entity
                         'order_num'  => $n,
                     ]);
                     if ($row->checkIsLoad()) {
-                        $repl[$row->id_file_data][1] = [$matches[0][$k], $matches[$pos['class']][$k]];
+                        $id = $row->id_file_data;
+                        $repl[$id][1] = [$matches[0][$k], $matches[$pos['class']][$k]];
                         if ($adv){
-                            $repl[$id][0][2] = $matches[$pos['type']];
-                            $repl[$id][0][3] = $matches[$pos['width']] ?? null;
-                            $repl[$id][0][4] = $matches[$pos['height']] ?? null;
+                            $repl[$id][1][2] = $matches[$pos['type']][$k];
+                            $repl[$id][1][3] = $matches[$pos['width']][$k] ?? null;
+                            $repl[$id][1][4] = $matches[$pos['height']][$k] ?? null;
                         }
                     }
                 }

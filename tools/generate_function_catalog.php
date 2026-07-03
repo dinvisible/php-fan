@@ -124,7 +124,7 @@ function collectFunctions(string $file, string $root): array
             'signature' => normalizeWhitespace($signature),
             'visibility' => readVisibility($tokens, $i),
             'doc' => parseDocBlock($docBlock),
-            'summary' => inferSummary($name, $className, $docBlock, $body),
+            'summary' => php_fan_catalog_infer_summary($name, $className, $docBlock, $body),
             'effects' => inferEffects($body),
         ];
     }
@@ -387,7 +387,7 @@ function parseDocBlock(string $docBlock): array
  *
  * @return string Returns the string representation produced by the operation.
  */
-function inferSummary(string $name, ?string $className, string $docBlock, string $body): string
+function php_fan_catalog_infer_summary(string $name, ?string $className, string $docBlock, string $body): string
 {
     $doc = parseDocBlock($docBlock);
     if ($doc['summary'] !== '' && !preg_match('/^(Description of|Method for|Get|Set)$/i', $doc['summary'])) {

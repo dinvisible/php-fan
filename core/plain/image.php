@@ -103,6 +103,9 @@ class image extends db_file
     protected function _getNailFileData(?bool $idIsEncrypt = null): ?array
     {
         $mainData = parent::_getFileData($idIsEncrypt);
+        $cache = null;
+        $cacheKey = null;
+        $data = null;
 
         $isSize = !empty($this->width) || !empty($this->height);
         if ($isSize && !empty($this->nailDir)) {
@@ -116,7 +119,7 @@ class image extends db_file
         if (!empty($mainData)) {
             if ($isSize) {
                 $resultData = $this->_getNailData($mainData);
-                if (!empty($resultData['filePath'])) {
+                if (!empty($resultData['filePath']) && $cache !== null && $cacheKey !== null) {
                     $cache->set($cacheKey, $resultData);
                 }
                 $this->plainContent = $resultData['content'];
@@ -125,7 +128,7 @@ class image extends db_file
             }
             return $resultData;
         }
-        if (!empty($data)) {
+        if (!empty($data) && $cache !== null && $cacheKey !== null) {
             $cache->delete($cacheKey);
         }
         return null;

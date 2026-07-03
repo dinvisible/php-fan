@@ -38,7 +38,7 @@ class header extends single
 
     protected ?object $headerWriter = null;
 
-    private \Closure $recursiveMerger;
+    private ?\Closure $recursiveMerger = null;
 
     /**
      * Mapping of methods for send headers
@@ -61,6 +61,8 @@ class header extends single
         'expired'     => ['sendTime', 1],
 
         'cacheLimit'  => ['sendCache', 0],
+
+        'security'    => ['sendSecurityHeaders', 0],
 
         //'' => ['', 0],
     ];
@@ -176,6 +178,10 @@ class header extends single
         $this->headerData = [
             'protocol' => (string)$this->input()->serverValue('SERVER_PROTOCOL', 'HTTP/1.1'),
         ];
+        $securityHeaders = $this->getConfig('SECURITY_HEADERS', []);
+        if (is_array($securityHeaders) && $securityHeaders !== []) {
+            $this->headerData['security'] = $securityHeaders;
+        }
         $this->setResponseType();
         return $ret;
     }
@@ -312,6 +318,23 @@ class header extends single
     public function sendArbitrary(string $type, string $value, string $extraData = ''): static
     {
         $this->sendHeader($type . ': ' . $value . (empty($extraData) ? '' : '; ' . $extraData));
+        return $this;
+    }
+
+    public function sendSecurityHeaders(array $headers): static
+    {
+        foreach ($headers as $name => $value) {
+            if (
+                !is_string($name)
+                || !is_scalar($value)
+                || preg_match('/[^A-Za-z0-9-]/', $name)
+                || strpbrk((string)$value, "\r\n") !== false
+            ) {
+                throw new \InvalidArgumentException('Invalid security response header.');
+            }
+            $this->sendHeader($name . ': ' . (string)$value);
+        }
+
         return $this;
     }
 

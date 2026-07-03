@@ -107,6 +107,11 @@ final class application_navigation_tab_dependencies
         return $this->core->pagerFactory();
     }
 
+    public function databaseFactory(): callable
+    {
+        return $this->core->databaseFactory();
+    }
+
     public function obfuscatorFactory(): callable
     {
         return $this->core->obfuscatorFactory();

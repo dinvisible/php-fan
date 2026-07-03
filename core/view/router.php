@@ -39,11 +39,11 @@ abstract class router implements \ArrayAccess, \Countable
      */
     protected ?string $defaultKey = null;
 
-    private \Closure $keeperFactory;
+    private ?\Closure $keeperFactory = null;
 
-    private \Closure $blockExceptionFactory;
+    private ?\Closure $blockExceptionFactory = null;
 
-    private \Closure $arrayAdducer;
+    private ?\Closure $arrayAdducer = null;
 
     public function __construct(
         base $block,

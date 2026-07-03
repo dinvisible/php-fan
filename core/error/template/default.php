@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-return [
-    0      => $this->setResponseHeader(200) . $this->setContentType('text'),
-    'text' => $this->convArrayToSting($this->getTplVar()),
+use fan\core\error\error_template_context;
+
+return static fn(error_template_context $demonstrator): array => [
+    0      => $demonstrator->setResponseHeader(200) . $demonstrator->setContentType('text'),
+    'text' => $demonstrator->convArrayToSting($demonstrator->getTplVar()),
 ];

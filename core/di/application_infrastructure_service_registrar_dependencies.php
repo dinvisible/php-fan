@@ -14,6 +14,7 @@ final class application_infrastructure_service_registrar_dependencies
     private application_infrastructure_bootstrap_runtime_registrar_dependencies $bootstrapRuntime;
     private application_infrastructure_config_registrar_dependencies $config;
     private application_infrastructure_cache_factory_registrar_dependencies $cacheFactory;
+    private application_infrastructure_database_registrar_dependencies $database;
 
     public function __construct(container_interface $container)
     {
@@ -25,6 +26,7 @@ final class application_infrastructure_service_registrar_dependencies
         $this->bootstrapRuntime = new application_infrastructure_bootstrap_runtime_registrar_dependencies($container);
         $this->config = new application_infrastructure_config_registrar_dependencies($container);
         $this->cacheFactory = new application_infrastructure_cache_factory_registrar_dependencies($container);
+        $this->database = new application_infrastructure_database_registrar_dependencies($container);
     }
 
     public function configState(): object
@@ -65,5 +67,20 @@ final class application_infrastructure_service_registrar_dependencies
     public function cacheFactory(): callable
     {
         return $this->cacheFactory->cacheFactory();
+    }
+
+    public function eloquent(): object
+    {
+        return $this->database->eloquent();
+    }
+
+    public function databaseConfig(): array|object
+    {
+        return $this->database->databaseConfig();
+    }
+
+    public function databaseConnections(): \fan\core\service\database_connections
+    {
+        return $this->database->databaseConnections();
     }
 }

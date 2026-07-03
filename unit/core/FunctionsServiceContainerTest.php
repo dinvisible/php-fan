@@ -95,14 +95,14 @@ final class FunctionsServiceContainerTest extends TestCase
         }
 
         $this->assertFalse($container->has('legacy_global_functions'));
-        $this->assertFalse($container->has('database'));
+        $this->assertTrue($container->has('database'));
         $this->assertFalse($container->has('adodb_connection_factory'));
         $this->assertFalse($container->has('adodb_session_support_loader'));
         $this->assertFalse($container->has('adodb_session_globals'));
         $this->assertFalse($container->has('adodb_session_environment'));
         $this->assertFalse($container->has('database_by_param'));
         $this->assertFalse($container->has('database_pool'));
-        $this->assertFalse($container->has('database_connections'));
+        $this->assertTrue($container->has('database_connections'));
         $this->assertFalse($container->has('email'));
         $this->assertFalse($container->has('log'));
     }

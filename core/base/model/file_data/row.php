@@ -21,6 +21,21 @@ use fan\core\base\model\rowset;
  *
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.004 (25.12.2014)
+ *
+ * @method mixed get_is_accessible(mixed $default = null, bool $allowException = true)
+ * @method mixed get_is_deleted(mixed $default = null, bool $allowException = true)
+ * @method mixed get_src_name(mixed $default = null, bool $allowException = true)
+ * @method mixed get_mime_type(mixed $default = null, bool $allowException = true)
+ * @method mixed get_id_file_access_type(mixed $default = null, bool $allowException = true)
+ * @method static set_is_deleted(mixed $value)
+ * @method static set_id_file_access_type(mixed $value)
+ * @method static set_src_name(mixed $value)
+ * @method static set_mime_type(mixed $value)
+ * @method static set_file_type(mixed $value)
+ * @method static set_description(mixed $value)
+ * @method static set_is_accessible(mixed $value)
+ * @method static set_create_date(mixed $value)
+ * @method static set_update_date(mixed $value)
  */
 abstract class row extends model_row
 {
@@ -219,6 +234,11 @@ abstract class row extends model_row
     protected function saveInfoFile(mixed $path, mixed $addCond = true): bool
     {
         return false;
+    }
+
+    protected function setMainProperty(array $row): void
+    {
+        $this->_fixLoadedData($row);
     }
 
     /**

@@ -23,7 +23,7 @@ final class application_client_service_registrar
         return $container
             ->factory(
                 service_id::COOKIE,
-                static fn(container_interface $container, mixed $path = null, mixed $domain = null, bool $secure = false): mixed => $clientServiceCreator->createCookieService(
+                static fn(container_interface $container, mixed $path = null, mixed $domain = null, ?bool $secure = null): mixed => $clientServiceCreator->createCookieService(
                     $container,
                     $dependenciesFactory($container)->cookieState(),
                     $cookieServiceFactory,

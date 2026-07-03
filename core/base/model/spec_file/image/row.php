@@ -20,6 +20,14 @@ use fan\core\base\model\spec_file\row as spec_file_row;
  * @author: Alexandr Nosov (alex@4n.com.ua)
  * @version of file: 05.02.006 (20.04.2015)
  * @abstract
+ *
+ * @method mixed get_width(mixed $default = null, bool $allowException = true)
+ * @method mixed get_height(mixed $default = null, bool $allowException = true)
+ * @method mixed get_alt(mixed $default = null, bool $allowException = true)
+ * @method static set_width(mixed $value)
+ * @method static set_height(mixed $value)
+ * @method static set_img_type(mixed $value)
+ * @method static set_alt(mixed $value)
  */
 abstract class row extends spec_file_row
 {
@@ -178,8 +186,8 @@ abstract class row extends spec_file_row
         // ----- Set link-param ----- \\
         if (substr($type, 0, 6) === 'blowup') {
             $this->setUrl($param['link'], 'blowup', '/blowup/id-', '.html');
-            if (!isset($tmp['target'])) {
-                $tmp['target'] = '_blank';
+            if (!isset($param['link']['target'])) {
+                $param['link']['target'] = '_blank';
             }
         }
 

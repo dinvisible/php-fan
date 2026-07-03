@@ -117,11 +117,16 @@ class ServiceSessionTest extends SourceFileContractTestCase
         $session = $this->session(new ServiceSessionEngineDouble('SID', 'oldsessionidentifier'), 'user', 'app');
         $session->setBaseConfig(new ServiceSessionConfigDouble([
             'COOKIE_DOMAIN' => 'example.test',
+            'COOKIE_SECURE' => true,
+            'COOKIE_HTTPONLY' => true,
+            'COOKIE_SAMESITE' => 'Strict',
         ]));
         $session->setSessionDependencies(null, null, null, null, $cookieFactory);
 
         $this->assertSame($session, $session->exposeSetCookie('SID', 'newsessionidentifier12345'));
-        $this->assertSame([['/', 'example.test']], $cookieFactory->calls);
+        $this->assertSame([['/', 'example.test', true]], $cookieFactory->calls);
+        $this->assertTrue($cookieFactory->cookies[0]->httpOnly);
+        $this->assertSame('Strict', $cookieFactory->cookies[0]->sameSite);
         $this->assertSame([['SID', 'newsessionidentifier12345']], $cookieFactory->cookies[0]->setCalls);
     }
 
@@ -282,10 +287,10 @@ class ServiceSessionTest extends SourceFileContractTestCase
             'MAXLIFETIME' => 0,
             'COOKIE_SECURE' => false,
             'COOKIE_HTTPONLY' => true,
+            'COOKIE_SAMESITE' => 'Lax',
             'COOKIE_DOMAIN' => '',
             'CACHE_LIMITER' => '',
             'SESSION_NAME' => 'SID',
-            'IS_GET_PRIORITY' => false,
             'CHECK_SYSTEM' => [],
             'KILL_BY_TIMEOUT' => false,
         ]));
@@ -348,12 +353,17 @@ class ServiceSessionTest extends SourceFileContractTestCase
         $this->assertSame([
             ['session.cookie_secure', '0'],
             ['session.cookie_httponly', '1'],
+            ['session.cookie_samesite', 'Lax'],
         ], $settings->sets);
         $this->assertSame([
-            ['setCookieParams', 0, '/', null],
+            ['setCookieParams', 0, '/', null, false, true, 'Lax'],
             ['cacheLimiter', ''],
             ['name', 'SID'],
         ], $nativeSession->calls);
+        $this->assertSame([
+            ['SID', 'GPR', true],
+            ['sid', 'GPR', true],
+        ], $request->removed);
     }
 
     public function testDestroyClearsEngineAndCookieMode(): void
@@ -720,9 +730,9 @@ final class ServiceSessionCookieFactoryDouble
     public array $calls = [];
     public array $cookies = [];
 
-    public function __invoke(mixed $path, mixed $domain): ServiceSessionCookieDouble
+    public function __invoke(mixed $path, mixed $domain, bool $secure): ServiceSessionCookieDouble
     {
-        $this->calls[] = [$path, $domain];
+        $this->calls[] = [$path, $domain, $secure];
         $cookie = new ServiceSessionCookieDouble();
         $this->cookies[] = $cookie;
 
@@ -733,6 +743,20 @@ final class ServiceSessionCookieFactoryDouble
 final class ServiceSessionCookieDouble
 {
     public array $setCalls = [];
+
+    public bool $httpOnly = false;
+
+    public string $sameSite = '';
+
+    public function setHttpOnlyFlag(bool $httpOnly): void
+    {
+        $this->httpOnly = $httpOnly;
+    }
+
+    public function setSameSite(string $sameSite): void
+    {
+        $this->sameSite = $sameSite;
+    }
 
     public function set(string $var, string $val): void
     {
@@ -829,9 +853,16 @@ final class ServiceSessionServiceNativeSessionDouble
 {
     public array $calls = [];
 
-    public function setCookieParams(int $lifetime, string $path, ?string $domain = null): bool
+    public function setCookieParams(
+        int $lifetime,
+        string $path,
+        ?string $domain = null,
+        bool $secure = true,
+        bool $httpOnly = true,
+        string $sameSite = 'Lax'
+    ): bool
     {
-        $this->calls[] = ['setCookieParams', $lifetime, $path, $domain];
+        $this->calls[] = ['setCookieParams', $lifetime, $path, $domain, $secure, $httpOnly, $sameSite];
 
         return true;
     }

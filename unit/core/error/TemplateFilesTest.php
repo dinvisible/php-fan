@@ -49,7 +49,7 @@ class TemplateFilesTest extends TestCase
     }
 }
 
-class ErrorTemplateRenderer
+class ErrorTemplateRenderer implements \fan\core\error\error_template_context
 {
     public function __construct(private array $tplVars = [])
     {
@@ -57,15 +57,17 @@ class ErrorTemplateRenderer
 
     public function render(string $file): array
     {
-        return require dirname(__DIR__, 3) . '/' . $file;
+        $provider = require dirname(__DIR__, 3) . '/' . $file;
+
+        return $provider($this);
     }
 
-    public function setResponseHeader(int $code): string
+    public function setResponseHeader(mixed $code): string
     {
         return 'header:' . $code . ';';
     }
 
-    public function setContentType(string $type): string
+    public function setContentType(mixed $type): string
     {
         return 'type:' . $type;
     }
@@ -75,15 +77,15 @@ class ErrorTemplateRenderer
         return '<!doctype html>';
     }
 
-    public function getTplVar(): array
+    public function getTplVar(?string $key = null): mixed
     {
-        return $this->tplVars;
+        return $key === null ? $this->tplVars : ($this->tplVars[$key] ?? '');
     }
 
-    public function convArrayToSting(array $data, string $separator = "\n"): string
+    public function convArrayToSting(mixed $data, string $separator = "\n"): string
     {
         $result = [];
-        foreach ($data as $key => $value) {
+        foreach ((array)$data as $key => $value) {
             $result[] = $key . '=' . $value;
         }
 

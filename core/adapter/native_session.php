@@ -21,11 +21,23 @@ final class native_session
         return $name === null ? session_name() : session_name($name);
     }
 
-    public function setCookieParams(int $lifetime, string $path, ?string $domain = null): bool
+    public function setCookieParams(
+        int $lifetime,
+        string $path,
+        ?string $domain = null,
+        bool $secure = true,
+        bool $httpOnly = true,
+        string $sameSite = 'Lax'
+    ): bool
     {
-        return $domain === null
-            ? session_set_cookie_params($lifetime, $path)
-            : session_set_cookie_params($lifetime, $path, $domain);
+        return session_set_cookie_params([
+            'lifetime' => $lifetime,
+            'path' => $path,
+            'domain' => $domain ?? '',
+            'secure' => $secure,
+            'httponly' => $httpOnly,
+            'samesite' => $sameSite,
+        ]);
     }
 
     public function cacheLimiter(string $value): string|false

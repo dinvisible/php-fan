@@ -184,7 +184,7 @@ class db_file
         if (!empty($data)) {
             if (!$this->context()->fileStorage()->isReadable($data['filePath'])) {
                 $cache->delete($cacheKey);
-            } elseif (!empty($data) && (int)$data['fileDate'] === (int)$this->context()->fileStorage()->modifiedTime($data['filePath']) && (int)$data['headers']['length'] === (int)$this->context()->fileStorage()->size($data['filePath'])) {
+            } elseif ((int)$data['fileDate'] === (int)$this->context()->fileStorage()->modifiedTime($data['filePath']) && (int)$data['headers']['length'] === (int)$this->context()->fileStorage()->size($data['filePath'])) {
                 return $data;
             }
         }

@@ -38,6 +38,7 @@ final class service_id
     public const CURRENT_USER_CHECKED = 'current_user_checked';
     public const CURRENT_USER_SPACE = 'current_user_space';
     public const DATABASE = 'database';
+    public const DATABASE_CONNECTIONS = 'database_connections';
     public const DATA_LOADER = 'data_loader';
     public const DATE = 'date';
     public const DATE_STATE = 'date_state';

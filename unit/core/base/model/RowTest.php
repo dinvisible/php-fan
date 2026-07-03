@@ -263,8 +263,8 @@ class BaseModelRowTest extends SourceFileContractTestCase
         $this->assertStringContainsString('$substringFunction = $isUtf8 ? \'mb_substr\' : \'substr\';', $code);
         $this->assertStringNotContainsString('call_user_func($isUtf8 ? \'mb_strlen\' : \'strlen\'', $code);
         $this->assertStringNotContainsString('call_user_func($isUtf8 ? \'mb_substr\' : \'substr\'', $code);
-        $this->assertStringContainsString('private \Closure $snapshotEncoder;', $code);
-        $this->assertStringContainsString('private \Closure $snapshotDecoder;', $code);
+        $this->assertStringContainsString('private ?\Closure $snapshotEncoder = null;', $code);
+        $this->assertStringContainsString('private ?\Closure $snapshotDecoder = null;', $code);
         $this->assertStringContainsString('$this->snapshotEncoder = \Closure::fromCallable(', $code);
         $this->assertStringContainsString('$this->snapshotDecoder = \Closure::fromCallable(', $code);
         $this->assertStringContainsString('if (!isset($this->snapshotEncoder)) {', $code);

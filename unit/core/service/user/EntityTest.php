@@ -52,16 +52,25 @@ class ServiceUserEntityTest extends SourceFileContractTestCase
 {
     protected const SOURCE_FILE = 'core/service/user/entity.php';
 
-    public function testPasswordHashUsesEntityEngineKey(): void
+    public function testPasswordHashUsesModernPasswordApi(): void
     {
         $engine = new ServiceUserEntityProbe('alice');
         $engine->setConfig(new row(['ENGINE_KEY' => 'pepper']));
 
-        $this->assertSame(md5('alicesecretpepper'), $engine->makePasswordHash('secret'));
+        $hash = $engine->makePasswordHash('secret');
 
-        $engine->setLogin('bob');
+        $this->assertTrue(password_verify('secret', $hash));
+        $this->assertFalse(password_verify('wrong', $hash));
+    }
 
-        $this->assertSame(md5('bobsecretpepper'), $engine->makePasswordHash('secret'));
+    public function testLegacyMd5PasswordIsAcceptedAndRehashed(): void
+    {
+        $engine = new ServiceUserEntityProbe('alice');
+        $engine->setConfig(new row(['ENGINE_KEY' => 'pepper', 'LOG_ERR_AUTH' => false]));
+        $engine->setData(['login' => 'alice', 'password' => md5('alicesecretpepper')]);
+
+        $this->assertTrue($engine->checkPassword('secret'));
+        $this->assertTrue(password_verify('secret', $engine->getPassword()));
     }
 
     public function testEntityDataUsesGettingMapAndRequiredKeys(): void

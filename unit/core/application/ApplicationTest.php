@@ -196,7 +196,7 @@ final class BootstrapApplicationTest extends TestCase
         $this->assertFalse($application->init(null, static function (): void {
         }));
         $this->assertSame([
-            'PHP-FAN can\'t work with version less than "8.0.0". Actually your version is "7.4.33".',
+            'PHP-FAN can\'t work with version less than "8.3.0". Actually your version is "7.4.33".',
         ], $runtimeSettings->terminatedMessages);
         $this->assertFalse($state->isInit());
     }

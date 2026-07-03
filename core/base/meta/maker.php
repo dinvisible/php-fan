@@ -114,11 +114,11 @@ class maker implements \IteratorAggregate
 
     private ?object $fileStorage = null;
 
-    private \Closure $recursiveMerger;
+    private ?\Closure $recursiveMerger = null;
 
-    private \Closure $arrayAdducer;
+    private ?\Closure $arrayAdducer = null;
 
-    private \Closure $classNameResolver;
+    private ?\Closure $classNameResolver = null;
 
     public function __construct(
         base $block,
